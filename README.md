@@ -30,3 +30,26 @@ http-server -p 5173
 
 # oppure con Python
 python3 -m http.server 5173
+Poi vai su 👉 http://localhost:5173
+
+🌐 Deploy online (GitHub Pages)
+
+La repo include un workflow (.github/workflows/pages.yml).
+Ogni volta che fai push su main, GitHub pubblica automaticamente il sito.
+
+Trovi l’URL sotto Settings → Pages → Environments → github-pages.
+
+📧 Contatti
+
+Coordinamento Master
+Virgilio Maretto – virgilio.maretto@posti.world
+
+Università degli Studi della Tuscia – www.unitus.it
+
+✅ TODO
+
+ Aggiungere immagini ufficiali (logo, foto faculty, ecc.)
+
+ Collegare i form a un backend (es. Netlify Forms / Google Apps Script)
+
+ Ottimizzare performance (CSS critico, lazy-loading immagini)

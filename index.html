@@ -349,24 +349,13 @@
 
         .faculty-image {
             width: 100%;
-            height: 200px;
-            background: linear-gradient(135deg, #f0f0f0, #e0e0e0);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #999;
-            font-size: 3rem;
-            position: relative;
+            height: auto;
+            display: block;
+            object-fit: cover;
         }
 
         .faculty-image::after {
-            content: "FOTO";
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            font-size: 0.7rem;
-            color: #bbb;
-            font-weight: normal;
+            content: none;
         }
 
         .faculty-role-badge {
@@ -1719,7 +1708,7 @@
             
             <div class="faculty-grid">
                 <div class="faculty-card">
-                    <div class="faculty-image">👨‍🔬</div>
+                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
                     <div class="faculty-info">
                         <div class="faculty-role-badge">Direttore Scientifico</div>
                         <h3 class="faculty-name">
@@ -1730,7 +1719,7 @@
                 </div>
                 
                 <div class="faculty-card">
-                    <div class="faculty-image">💼</div>
+                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
                     <div class="faculty-info">
                         <div class="faculty-role-badge">Coordinatore</div>
                         <h3 class="faculty-name">
@@ -1741,7 +1730,7 @@
                 </div>
                 
                 <div class="faculty-card">
-                    <div class="faculty-image">👩‍🔬</div>
+                    <img class="faculty-image" src="assets/img/faculty-female.png" alt="Docente donna" loading="lazy">
                     <div class="faculty-info">
                         <h3 class="faculty-name">
                             <a href="https://www.cmcc.it/people/chiriaco-maria-vincenza" target="_blank">Dr.ssa Maria Vincenza Chiriacò</a>
@@ -1751,7 +1740,7 @@
                 </div>
                 
                 <div class="faculty-card">
-                    <div class="faculty-image">👨‍🌾</div>
+                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
                     <div class="faculty-info">
                         <h3 class="faculty-name">
                             <a href="https://www.unitus.it/personale/docente/emanuele-blasi/" target="_blank">Prof. Emanuele Blasi</a>
@@ -1761,7 +1750,7 @@
                 </div>
                 
                 <div class="faculty-card">
-                    <div class="faculty-image">👨‍🔬</div>
+                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
                     <div class="faculty-info">
                         <h3 class="faculty-name">
                             <a href="https://www.unitus.it/personale/docente/tommaso-chiti/" target="_blank">Prof. Tommaso Chiti</a>
@@ -1771,7 +1760,7 @@
                 </div>
                 
                 <div class="faculty-card">
-                    <div class="faculty-image">👨‍💻</div>
+                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
                     <div class="faculty-info">
                         <h3 class="faculty-name">
                             <a href="https://www.unitus.it/personale/docente/dario-papale/" target="_blank">Prof. Dario Papale</a>
@@ -1781,7 +1770,7 @@
                 </div>
                 
                 <div class="faculty-card">
-                    <div class="faculty-image">👨‍🌾</div>
+                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
                     <div class="faculty-info">
                         <h3 class="faculty-name">
                             <a href="https://www.unitus.it/personale/docente/raffaele-casa/" target="_blank">Prof. Raffaele Casa</a>
@@ -1791,7 +1780,7 @@
                 </div>
                 
                 <div class="faculty-card">
-                    <div class="faculty-image">👨‍🔬</div>
+                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
                     <div class="faculty-info">
                         <h3 class="faculty-name">
                             <a href="https://www.unitus.it/personale/docente/andrea-vannini/" target="_blank">Prof. Andrea Vannini</a>
@@ -1801,7 +1790,7 @@
                 </div>
                 
                 <div class="faculty-card">
-                    <div class="faculty-image">👩‍🌳</div>
+                    <img class="faculty-image" src="assets/img/faculty-female.png" alt="Docente donna" loading="lazy">
                     <div class="faculty-info">
                         <h3 class="faculty-name">
                             <a href="https://www.unitus.it/personale/docente/anna-barbati/" target="_blank">Prof.ssa Anna Barbati</a>
@@ -1811,7 +1800,7 @@
                 </div>
                 
                 <div class="faculty-card">
-                    <div class="faculty-image">👨‍💼</div>
+                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
                     <div class="faculty-info">
                         <h3 class="faculty-name">
                             <a href="https://www.crea.gov.it/web/foreste-e-legno/-/piermaria-corona-1" target="_blank">Prof. Pier Maria Corona</a>
@@ -1821,7 +1810,7 @@
                 </div>
                 
                 <div class="faculty-card">
-                    <div class="faculty-image">🏛️</div>
+                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
                     <div class="faculty-info">
                         <h3 class="faculty-name no-link">Francesco Rutelli</h3>
                         <p class="faculty-role">Esperto in politiche ambientali e governance della sostenibilità, ex Ministro per i Beni e le Attività Culturali</p>
@@ -1829,7 +1818,7 @@
                 </div>
                 
                 <div class="faculty-card">
-                    <div class="faculty-image">💡</div>
+                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
                     <div class="faculty-info">
                         <h3 class="faculty-name">
                             <a href="https://www.linkedin.com/in/luca-buonocore-24b49b2/" target="_blank">Luca Buonocore</a>

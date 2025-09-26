@@ -2530,19 +2530,12 @@
             const formData = new FormData(event.target);
             const data = Object.fromEntries(formData);
 
-            const subject = encodeURIComponent('Richiesta informazioni Master in Carbon Farming');
-            const bodyLines = [
-                `Nome e Cognome: ${data.nome || ''}`,
-                `Email: ${data.email || ''}`,
-                `Telefono: ${data.telefono || ''}`,
-                `Titolo di Studio: ${data.titolo || ''}`,
-                `Interessi specifici: ${data.interessi || ''}`
-            ];
-            const body = encodeURIComponent(bodyLines.join('\n'));
-            const mailtoLink = `mailto:virgilio.maretto@posti.world?subject=${subject}&body=${body}`;
-
-            window.location.href = mailtoLink;
-            alert(`Grazie ${data.nome}! La tua richiesta è stata inviata con successo.`);
+            const subject = encodeURIComponent("Richiesta informazioni - Master Carbon Farming");
+            const body = encodeURIComponent(
+                `Nome: ${data.nome}\nEmail: ${data.email}\nTelefono: ${data.telefono || "-"}\nTitolo: ${data.titolo}\nInteressi: ${data.interessi || "-"}`
+            );
+            window.location.href = `mailto:virgilio.maretto@posti.world?subject=${subject}&body=${body}`;
+            alert(`Grazie ${data.nome}! La tua richiesta è stata inviata. Ti contatteremo all'indirizzo ${data.email}.`);
             closeStudentModal();
             event.target.reset();
         }
@@ -2551,9 +2544,13 @@
             event.preventDefault();
             const formData = new FormData(event.target);
             const data = Object.fromEntries(formData);
-            
-            // Simula l'invio del form
-            alert(`Grazie ${data.referente} di ${data.azienda}! La vostra richiesta di partnership è stata ricevuta. Il nostro team vi contatterà entro 24 ore per discutere le opportunità di collaborazione.`);
+
+            const subject = encodeURIComponent("Richiesta partnership - Master Carbon Farming");
+            const body = encodeURIComponent(
+                `Azienda/Ente: ${data.azienda}\nReferente: ${data.referente}\nEmail: ${data.email}\nTelefono: ${data.telefono || "-"}\nPacchetto: ${data.pacchetto || "-"}\nNote: ${data.note || "-"}`
+            );
+            window.location.href = `mailto:virgilio.maretto@posti.world?subject=${subject}&body=${body}`;
+            alert(`Grazie ${data.referente} di ${data.azienda}! La vostra richiesta è stata inviata. Vi contatteremo a ${data.email}.`);
             closeSponsorModal();
             event.target.reset();
         }

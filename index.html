@@ -1388,17 +1388,75 @@
             .academy-name {
                 font-size: 0.8rem;
             }
-            
+
             .stats-container {
                 grid-template-columns: 1fr;
             }
-            
+
             .module-card {
                 min-width: 280px;
             }
 
             .sdgs-grid {
                 grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        .cookie-banner {
+            position: fixed;
+            left: 20px;
+            right: 20px;
+            bottom: 20px;
+            z-index: 2000;
+            background: rgba(255, 255, 255, 0.97);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            padding: 16px 20px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .cookie-text {
+            color: #333;
+            font-size: 0.95rem;
+        }
+
+        .cookie-text a {
+            color: #2c5f2d;
+            text-decoration: underline;
+        }
+
+        .cookie-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .cookie-btn {
+            border: none;
+            border-radius: 8px;
+            padding: 10px 14px;
+            cursor: pointer;
+            font-weight: 600;
+            background: #2c5f2d;
+            color: #fff;
+        }
+
+        .cookie-btn.ghost {
+            background: #e9efe9;
+            color: #2c5f2d;
+        }
+
+        @media (max-width: 560px) {
+            .cookie-banner {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+
+            .cookie-actions {
+                justify-content: flex-end;
             }
         }
     </style>
@@ -2487,8 +2545,8 @@
                     <h3>Link utili</h3>
                     <p><a href="https://www.unitus.it">Università della Tuscia</a><br>
                     <span style="color: #999;">Calendario accademico</span><br><br>
-                    <a href="https://www.unitus.it/ateneo/privacy/" target="_blank">Privacy Policy</a><br>
-                    <a href="https://www.unitus.it/ateneo/privacy/" target="_blank">Cookie Policy</a></p>
+                    <a href="https://www.unitus.it/ateneo/privacy/" target="_blank" rel="noopener">Privacy Policy</a><br>
+                    <a href="https://www.unitus.it/ateneo/privacy/" target="_blank" rel="noopener">Cookie Policy</a></p>
                 </div>
             </div>
             
@@ -2622,6 +2680,33 @@
             section.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
             observer.observe(section);
         });
+
+        (function () {
+            const KEY = 'cookieConsent';
+            const banner = document.getElementById('cookieBanner');
+            if (!banner) return;
+            const show = () => (banner.style.display = 'flex');
+            const hide = () => (banner.style.display = 'none');
+
+            const saved = localStorage.getItem(KEY);
+            if (!saved) show();
+
+            const acc = document.getElementById('cookieAccept');
+            const rej = document.getElementById('cookieReject');
+            if (acc) acc.addEventListener('click', () => { localStorage.setItem(KEY, 'accepted'); hide(); });
+            if (rej) rej.addEventListener('click', () => { localStorage.setItem(KEY, 'rejected'); hide(); });
+        })();
     </script>
+
+    <div id="cookieBanner" class="cookie-banner" style="display:none;">
+        <div class="cookie-text">
+            Questo sito utilizza cookie per migliorare l'esperienza. Leggi la
+            <a href="https://www.unitus.it/ateneo/privacy/" target="_blank" rel="noopener">Cookie Policy</a>.
+        </div>
+        <div class="cookie-actions">
+            <button id="cookieAccept" class="cookie-btn">Accetta</button>
+            <button id="cookieReject" class="cookie-btn ghost">Rifiuta</button>
+        </div>
+    </div>
 </body>
 </html>

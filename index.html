@@ -1479,8 +1479,8 @@
         <div class="modal-content">
             <span class="close-modal" onclick="closeStudentModal()">&times;</span>
             <h2>Informazioni per Studenti</h2>
-            
-            <form class="info-form" method="POST" action="https://formsubmit.co/virgilio.maretto@posti.world">
+
+            <form class="info-form" method="POST" action="https://formsubmit.co/virgilio.maretto@posti.world" onsubmit="submitStudentForm(event)">
                 <input type="hidden" name="_subject" value="Richiesta informazioni - Master Carbon Farming">
                 <input type="hidden" name="_captcha" value="false">
                 <input type="hidden" name="_template" value="table">
@@ -1523,7 +1523,8 @@
                 <div class="form-group checkbox-group">
                     <label>
                         <input type="checkbox" name="privacy" required>
-                        Accetto il trattamento dei dati personali secondo il GDPR
+                        Accetto il trattamento dei dati personali secondo il GDPR –
+                        <a href="https://www.unitus.it/ateneo/privacy/" target="_blank" rel="noopener">Privacy Policy</a>
                     </label>
                 </div>
                 
@@ -1591,7 +1592,7 @@
                 </div>
             </div>
             
-            <form class="sponsor-contact-form" method="POST" action="https://formsubmit.co/virgilio.maretto@posti.world">
+            <form class="sponsor-contact-form" method="POST" action="https://formsubmit.co/virgilio.maretto@posti.world" onsubmit="submitSponsorForm(event)">
                 <input type="hidden" name="_subject" value="Richiesta partnership - Master Carbon Farming">
                 <input type="hidden" name="_captcha" value="false">
                 <input type="hidden" name="_template" value="table">
@@ -1638,7 +1639,15 @@
                     <label>Note e richieste specifiche</label>
                     <textarea name="note" placeholder="Descrivi i tuoi obiettivi e interessi di collaborazione..."></textarea>
                 </div>
-                
+
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input type="checkbox" name="privacy" required>
+                        Accetto il trattamento dei dati personali secondo il GDPR –
+                        <a href="https://www.unitus.it/ateneo/privacy/" target="_blank" rel="noopener">Privacy Policy</a>
+                    </label>
+                </div>
+
                 <button type="submit" class="cta-button">Richiedi Informazioni</button>
             </form>
         </div>
@@ -2585,6 +2594,69 @@
             document.getElementById('sponsorInfoModal').style.display = 'none';
         }
 
+        // ====== FormSubmit AJAX helpers ======
+        const FORMSUBMIT_EMAIL = 'virgilio.maretto@posti.world';
+        const FORMSUBMIT_URL = `https://formsubmit.co/ajax/${FORMSUBMIT_EMAIL}`;
+
+        function showThankYouModal() {
+            const m = document.getElementById('thankYouModal');
+            if (m) m.style.display = 'flex';
+        }
+
+        function closeThankYouModal() {
+            const m = document.getElementById('thankYouModal');
+            if (m) m.style.display = 'none';
+        }
+
+        async function sendWithFormSubmitAJAX(form, subject) {
+            // Raccogli campi del form
+            const fd = new FormData(form);
+            // Meta campi per FormSubmit
+            fd.append('_subject', subject || 'Richiesta informazioni - Master Carbon Farming');
+            fd.append('_template', 'table');
+            fd.append('_captcha', 'false');
+
+            const resp = await fetch(FORMSUBMIT_URL, {
+                method: 'POST',
+                body: fd,
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!resp.ok) throw new Error('FormSubmit response not OK');
+            const data = await resp.json().catch(() => ({}));
+            return data;
+        }
+
+        // ====== Handlers ======
+        async function submitStudentForm(event) {
+            event.preventDefault();
+            const form = event.target;
+            if (!form.checkValidity()) { form.reportValidity(); return; }
+            try {
+                await sendWithFormSubmitAJAX(form, 'Richiesta Informazioni - Studente/Privato');
+                showThankYouModal();
+                closeStudentModal();
+                form.reset();
+            } catch (e) {
+                alert('Si è verificato un problema durante l\'invio. Riprova più tardi.');
+                console.error(e);
+            }
+        }
+
+        async function submitSponsorForm(event) {
+            event.preventDefault();
+            const form = event.target;
+            if (!form.checkValidity()) { form.reportValidity(); return; }
+            try {
+                await sendWithFormSubmitAJAX(form, 'Richiesta Informazioni - Azienda/Sponsor');
+                showThankYouModal();
+                closeSponsorModal();
+                form.reset();
+            } catch (e) {
+                alert('Si è verificato un problema durante l\'invio. Riprova più tardi.');
+                console.error(e);
+            }
+        }
+
         function downloadBrochure() {
             alert('📄 La brochure del Master in Carbon Farming sarà disponibile per il download a breve. Contatta master.carbonfarming@unitus.it per ricevere il materiale informativo completo.');
         }
@@ -2684,8 +2756,7 @@
         (function () {
             const params = new URLSearchParams(window.location.search);
             if (params.get('sent') === '1') {
-                const box = document.getElementById('grazie');
-                if (box) box.style.display = 'block';
+                showThankYouModal();
                 if (typeof closeStudentModal === 'function') closeStudentModal();
                 if (typeof closeSponsorModal === 'function') closeSponsorModal();
                 if (history.replaceState) {
@@ -2694,6 +2765,12 @@
                 }
             }
         })();
+
+        // Chiudi il modal “grazie” cliccando fuori
+        window.addEventListener('click', (ev) => {
+            const m = document.getElementById('thankYouModal');
+            if (ev.target === m) closeThankYouModal();
+        });
     </script>
 
     <div id="cookieBanner" class="cookie-banner" style="display:none;">
@@ -2707,8 +2784,13 @@
         </div>
     </div>
 
-    <div id="grazie" style="display:none;text-align:center;padding:16px 12px;margin:20px auto;max-width:900px;border-radius:12px;background:#e8f5e8;border:1px solid #cfe8cf;color:#2c5f2d;font-weight:600;">
-        ✅ Grazie! La tua richiesta è stata inviata correttamente. Ti contatteremo a breve.
+    <div id="thankYouModal" class="info-modal" style="display:none;">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeThankYouModal()">&times;</span>
+            <h2>Grazie!</h2>
+            <p>La tua richiesta è stata inviata correttamente. Ti risponderemo al più presto.</p>
+            <button class="cta-button" onclick="closeThankYouModal()">Chiudi</button>
+        </div>
     </div>
 </body>
 </html>

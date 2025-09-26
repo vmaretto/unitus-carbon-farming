@@ -54,13 +54,16 @@
         .logo-image {
             height: 120px;
             width: auto;
-            margin-bottom: 20px;
             display: block;
+            opacity: .95;
+            filter: brightness(0) invert(1); /* forza il logo a bianco */
+            clip-path: inset(6% 6% 6% 6%);   /* ritaglia i bordi per eliminare la cornice del file */
+        }
+
+        /* assicurati che non ci siano border/outline */
+        .logo-image {
             border: none;
-            background: transparent;
-            box-shadow: none;
-            filter: none;
-            opacity: 1;
+            outline: none;
         }
 
         .university-text {

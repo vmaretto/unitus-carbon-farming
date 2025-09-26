@@ -246,35 +246,23 @@
             width: 100%;
             max-width: 500px;
             height: 350px;
-            background: linear-gradient(135deg, #2c5f2d, #4a7c59);
             border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 8rem;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            position: relative;
             overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin: 0 auto;
+            background: #2c5f2d; /* fallback neutro */
+            position: relative;
         }
 
-        .overview-img::before {
-            content: "🌱";
-            font-size: 6rem;
-            position: absolute;
-            top: 30%;
-            left: 50%;
-            transform: translateX(-50%);
-            opacity: 0.8;
+        .overview-img::before, .overview-img::after {
+            content: none;
         }
 
-        .overview-img::after {
-            content: "🌍";
-            font-size: 4rem;
-            position: absolute;
-            bottom: 25%;
-            right: 20%;
-            opacity: 0.6;
+        .overview-figure {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;   /* se vuoi vedere tutta l’immagine senza tagli: usa "contain" */
+            display: block;
         }
 
         /* What You Will Learn Section */
@@ -1723,7 +1711,9 @@
                 </div>
                 
                 <div class="overview-image">
-                    <div class="overview-img">🌱</div>
+                    <div class="overview-img">
+                        <img src="assets/img/MasterFuturoSostenibile.png" alt="Master in Carbon Farming - Futuro sostenibile" class="overview-figure" loading="lazy">
+                    </div>
                 </div>
             </div>
         </div>

@@ -2682,13 +2682,15 @@
             observer.observe(section);
         });
 
-        (function () {
+        document.addEventListener('DOMContentLoaded', function () {
             const KEY = 'cookieConsent';
             const banner = document.getElementById('cookieBanner');
             if (!banner) return;
+
             const show = () => (banner.style.display = 'flex');
             const hide = () => (banner.style.display = 'none');
 
+            // Se non c'è consenso salvato, mostra
             const saved = localStorage.getItem(KEY);
             if (!saved) show();
 
@@ -2696,18 +2698,17 @@
             const rej = document.getElementById('cookieReject');
             if (acc) acc.addEventListener('click', () => { localStorage.setItem(KEY, 'accepted'); hide(); });
             if (rej) rej.addEventListener('click', () => { localStorage.setItem(KEY, 'rejected'); hide(); });
-        })();
 
-        (function () {
-            const btn = document.getElementById('cookieSettings');
-            const banner = document.getElementById('cookieBanner');
-            if (!btn || !banner) return;
-            btn.addEventListener('click', function (e) {
-                e.preventDefault();
-                banner.style.display = 'flex';
-                localStorage.removeItem('cookieConsent');
-            });
-        })();
+            // Link "Impostazioni Cookie" nel footer (se presente) per riaprirlo
+            const settings = document.getElementById('cookieSettings');
+            if (settings) {
+                settings.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    localStorage.removeItem(KEY);
+                    show();
+                });
+            }
+        });
     </script>
 
     <div id="cookieBanner" class="cookie-banner" style="display:none;">

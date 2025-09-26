@@ -55,8 +55,12 @@
             height: 120px;
             width: auto;
             margin-bottom: 20px;
-            filter: brightness(0) invert(1);
-            opacity: 0.9;
+            display: block;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            filter: none;
+            opacity: 1;
         }
 
         .university-text {
@@ -347,15 +351,31 @@
             box-shadow: 0 25px 50px rgba(0,0,0,0.15);
         }
 
-        .faculty-image {
-            width: 100%;
+        .faculty-card .faculty-image {
+            width: 50%;
+            max-width: 220px;
             height: auto;
             display: block;
-            object-fit: cover;
+            margin: 24px auto 0;
+            object-fit: contain;
         }
 
         .faculty-image::after {
             content: none;
+        }
+
+        @media (max-width: 992px) {
+            .faculty-card .faculty-image {
+                width: 60%;
+                max-width: 200px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .faculty-card .faculty-image {
+                width: 70%;
+                max-width: 180px;
+            }
         }
 
         .faculty-role-badge {
@@ -1410,7 +1430,7 @@
             <span class="close-modal" onclick="closeStudentModal()">&times;</span>
             <h2>Informazioni per Studenti</h2>
             
-            <form class="info-form" onsubmit="submitStudentForm(event)">
+            <form class="info-form" action="mailto:virgilio.maretto@posti.world" method="post" enctype="text/plain" onsubmit="submitStudentForm(event)">
                 <div class="form-group">
                     <label>Nome e Cognome *</label>
                     <input type="text" name="nome" required>
@@ -2464,7 +2484,8 @@
                     <h3>Link utili</h3>
                     <p><a href="https://www.unitus.it">Università della Tuscia</a><br>
                     <span style="color: #999;">Calendario accademico</span><br><br>
-                    <a href="https://www.unitus.it/ateneo/privacy/" target="_blank">Privacy Policy</a></p>
+                    <a href="https://www.unitus.it/ateneo/privacy/" target="_blank">Privacy Policy</a><br>
+                    <a href="https://www.unitus.it/ateneo/privacy/" target="_blank">Cookie Policy</a></p>
                 </div>
             </div>
             
@@ -2505,9 +2526,20 @@
             event.preventDefault();
             const formData = new FormData(event.target);
             const data = Object.fromEntries(formData);
-            
-            // Simula l'invio del form
-            alert(`Grazie ${data.nome}! La tua richiesta è stata inviata. Ti contatteremo entro 48 ore all'indirizzo ${data.email} con tutte le informazioni sul Master in Carbon Farming.`);
+
+            const subject = encodeURIComponent('Richiesta informazioni Master in Carbon Farming');
+            const bodyLines = [
+                `Nome e Cognome: ${data.nome || ''}`,
+                `Email: ${data.email || ''}`,
+                `Telefono: ${data.telefono || ''}`,
+                `Titolo di Studio: ${data.titolo || ''}`,
+                `Interessi specifici: ${data.interessi || ''}`
+            ];
+            const body = encodeURIComponent(bodyLines.join('\n'));
+            const mailtoLink = `mailto:virgilio.maretto@posti.world?subject=${subject}&body=${body}`;
+
+            window.location.href = mailtoLink;
+            alert(`Grazie ${data.nome}! La tua richiesta è stata inviata con successo.`);
             closeStudentModal();
             event.target.reset();
         }

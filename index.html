@@ -245,12 +245,12 @@
         .overview-img {
             width: 100%;
             max-width: 500px;
-            height: 350px;
+            height: auto;              /* si adatta al contenuto */
             border-radius: 20px;
             overflow: hidden;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
             margin: 0 auto;
-            background: #2c5f2d; /* fallback neutro */
+            background: #2c5f2d;       /* fallback colore */
             position: relative;
         }
 
@@ -260,9 +260,10 @@
 
         .overview-figure {
             width: 100%;
-            height: 100%;
-            object-fit: cover;   /* se vuoi vedere tutta l’immagine senza tagli: usa "contain" */
+            height: auto;
             display: block;
+            object-fit: contain;       /* mostra tutta l’immagine intera */
+            background: #2c5f2d;       /* riempie lo spazio vuoto */
         }
 
         /* What You Will Learn Section */

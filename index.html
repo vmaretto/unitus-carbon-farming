@@ -1407,10 +1407,10 @@
             left: 20px;
             right: 20px;
             bottom: 20px;
-            z-index: 2000;
-            background: rgba(255, 255, 255, 0.97);
+            z-index: 3000;
+            background: rgba(255,255,255,.97);
             border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 10px 30px rgba(0,0,0,.15);
             padding: 16px 20px;
             display: flex;
             gap: 16px;
@@ -1420,7 +1420,7 @@
 
         .cookie-text {
             color: #333;
-            font-size: 0.95rem;
+            font-size: .95rem;
         }
 
         .cookie-text a {
@@ -2546,7 +2546,8 @@
                     <p><a href="https://www.unitus.it">Università della Tuscia</a><br>
                     <span style="color: #999;">Calendario accademico</span><br><br>
                     <a href="https://www.unitus.it/ateneo/privacy/" target="_blank" rel="noopener">Privacy Policy</a><br>
-                    <a href="https://www.unitus.it/ateneo/privacy/" target="_blank" rel="noopener">Cookie Policy</a></p>
+                    <a href="https://www.unitus.it/ateneo/privacy/" target="_blank" rel="noopener">Cookie Policy</a><br>
+                    <a href="#" id="cookieSettings">Impostazioni Cookie</a></p>
                 </div>
             </div>
             
@@ -2695,6 +2696,17 @@
             const rej = document.getElementById('cookieReject');
             if (acc) acc.addEventListener('click', () => { localStorage.setItem(KEY, 'accepted'); hide(); });
             if (rej) rej.addEventListener('click', () => { localStorage.setItem(KEY, 'rejected'); hide(); });
+        })();
+
+        (function () {
+            const btn = document.getElementById('cookieSettings');
+            const banner = document.getElementById('cookieBanner');
+            if (!btn || !banner) return;
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                banner.style.display = 'flex';
+                localStorage.removeItem('cookieConsent');
+            });
         })();
     </script>
 

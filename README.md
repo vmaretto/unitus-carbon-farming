@@ -1,7 +1,11 @@
 # Master in Carbon Farming – UNITUS
 
-Landing page ufficiale del **Master Universitario di II livello in Carbon Farming**  
+Landing page ufficiale del **Master Universitario di II livello in Carbon Farming**
 Università degli Studi della Tuscia – Unitus Academy
+
+Il Master si terrà in lingua italiana con traduzione simultanea in inglese.
+
+Sede delle lezioni: Roma.
 
 👉 **Demo online**: [https://<tuo-username>.github.io/<repo-name>/](https://<tuo-username>.github.io/<repo-name>/)  
 (sostituisci `<tuo-username>` e `<repo-name>` con i valori della tua repo GitHub)

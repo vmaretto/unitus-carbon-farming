@@ -685,6 +685,22 @@
             margin-top: 40px;
         }
 
+        .blog-empty {
+            grid-column: 1 / -1;
+            background: rgba(76, 125, 93, 0.08);
+            color: #2c5f2d;
+            border-radius: 18px;
+            padding: 36px;
+            text-align: center;
+            font-weight: 500;
+            font-size: 1.05rem;
+            line-height: 1.6;
+        }
+
+        .blog-empty--initial {
+            display: none;
+        }
+
         .blog-card {
             background: white;
             border-radius: 20px;
@@ -2305,27 +2321,12 @@
                 Raccontiamo le storie, le ricerche e le innovazioni che stanno cambiando il Carbon Farming in Italia e in Europa.
             </p>
 
-            <div class="blog-grid">
-                <article class="blog-card">
-                    <span class="blog-meta">Novità · Marzo 2024</span>
-                    <h3>Carbon Farming: dalle policy alle applicazioni sul campo</h3>
-                    <p>Un viaggio tra regolamenti europei, certificazioni e casi concreti di aziende che stanno già riducendo le emissioni e valorizzando i crediti di carbonio.</p>
-                    <a class="blog-readmore" href="blog.html#carbon-farming">Scopri di più</a>
-                </article>
-
-                <article class="blog-card">
-                    <span class="blog-meta">Didattica · Marzo 2024</span>
-                    <h3>Dentro la nuova Area amministrazione</h3>
-                    <p>Uno sguardo al pannello operativo che collega Neon e Vercel per supportare la pubblicazione di profili, articoli e risorse didattiche.</p>
-                    <a class="blog-readmore" href="blog.html#area-amministrazione">Approfondisci</a>
-                </article>
-
-                <article class="blog-card">
-                    <span class="blog-meta">Community · Marzo 2024</span>
-                    <h3>Le collaborazioni con imprese e territori</h3>
-                    <p>Dal project work ai pacchetti di borse di studio aziendali: come costruiamo reti di valore con partner pubblici e privati.</p>
-                    <a class="blog-readmore" href="blog.html#community">Leggi l'articolo</a>
-                </article>
+            <div
+                id="blog-grid"
+                class="blog-grid"
+                data-empty-text="Gli articoli arriveranno presto. Torna a trovarci!"
+            >
+                <div class="blog-empty blog-empty--initial">Gli articoli arriveranno presto. Torna a trovarci!</div>
             </div>
         </div>
     </section>

@@ -28,57 +28,163 @@
             background: linear-gradient(135deg, #2c5f2d 0%, #4a7c59 100%);
             color: white;
             text-align: center;
-            padding: 70px 0 90px;
+            padding: 110px 0 90px;
             position: relative;
         }
 
-        .top-nav {
+        .main-nav {
+            width: 100%;
+            position: relative;
+            z-index: 5;
+            background: rgba(20, 66, 37, 0.9);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
+        }
+
+        .main-nav .nav-container {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 22px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 36px;
             gap: 24px;
         }
 
         .nav-brand {
+            color: #fff;
             font-weight: 700;
-            font-size: 1.1rem;
-            color: white;
+            letter-spacing: 0.05em;
             text-decoration: none;
-            letter-spacing: 0.5px;
+            display: inline-flex;
+            flex-direction: column;
+            gap: 2px;
+            text-transform: uppercase;
+            font-size: 0.9rem;
         }
 
-        .top-nav .nav-links {
+        .nav-brand span:last-child {
+            font-size: 1.05rem;
+            letter-spacing: 0.02em;
+            text-transform: none;
+        }
+
+        .nav-links {
             display: flex;
-            gap: 18px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
+            gap: 22px;
+            align-items: center;
         }
 
-        .top-nav .nav-links a {
-            color: rgba(255, 255, 255, 0.9);
+        .nav-links a {
+            color: #fff;
             text-decoration: none;
             font-weight: 600;
             font-size: 0.95rem;
-            padding: 8px 14px;
+            position: relative;
+            padding-bottom: 6px;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 0;
+            height: 2px;
+            background: #ff8a4c;
+            transition: width 0.3s ease;
+        }
+
+        .nav-links a:hover,
+        .nav-links a:focus-visible {
+            color: #ffd7c1;
+        }
+
+        .nav-links a:hover::after,
+        .nav-links a:focus-visible::after {
+            width: 100%;
+        }
+
+        .nav-admin {
+            padding: 10px 18px;
             border-radius: 999px;
-            transition: background 0.3s ease, color 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            background: rgba(255, 255, 255, 0.12);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
         }
 
-        .top-nav .nav-links a:hover,
-        .top-nav .nav-links a:focus {
-            background: rgba(255, 255, 255, 0.15);
-            color: white;
+        .nav-admin:hover,
+        .nav-admin:focus-visible {
+            background: linear-gradient(45deg, #ff6b35, #f7931e);
+            border-color: transparent;
+            color: #fff;
         }
 
-        .top-nav .nav-links .nav-admin {
-            background: rgba(255, 255, 255, 0.15);
-            color: white;
+        .nav-toggle {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: #fff;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s ease, border 0.3s ease;
         }
 
-        .top-nav .nav-links .nav-admin:hover,
-        .top-nav .nav-links .nav-admin:focus {
-            background: rgba(255, 255, 255, 0.25);
+        .nav-toggle:hover,
+        .nav-toggle:focus-visible {
+            background: rgba(255, 255, 255, 0.22);
+            border-color: rgba(255, 255, 255, 0.55);
+        }
+
+        .nav-toggle-icon,
+        .nav-toggle-icon::before,
+        .nav-toggle-icon::after {
+            content: "";
+            display: block;
+            width: 20px;
+            height: 2px;
+            background: currentColor;
+            border-radius: 2px;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        .nav-toggle-icon::before {
+            transform: translateY(-6px);
+        }
+
+        .nav-toggle-icon::after {
+            transform: translateY(4px);
+        }
+
+        .main-nav.nav-open .nav-toggle-icon {
+            background: transparent;
+        }
+
+        .main-nav.nav-open .nav-toggle-icon::before {
+            transform: translateY(0) rotate(45deg);
+        }
+
+        .main-nav.nav-open .nav-toggle-icon::after {
+            transform: translateY(0) rotate(-45deg);
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
         }
 
         .back-link {
@@ -288,19 +394,58 @@
             text-decoration: none;
         }
 
+        @media (max-width: 900px) {
+            .nav-toggle {
+                display: inline-flex;
+            }
+
+            .main-nav .nav-container {
+                gap: 16px;
+            }
+
+            .nav-links {
+                position: absolute;
+                top: 100%;
+                left: 24px;
+                right: 24px;
+                margin-top: 16px;
+                padding: 18px 22px;
+                border-radius: 18px;
+                background: rgba(20, 66, 37, 0.95);
+                box-shadow: 0 24px 50px rgba(0, 0, 0, 0.35);
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 14px;
+                opacity: 0;
+                transform: translateY(-12px);
+                pointer-events: none;
+                transition: opacity 0.3s ease, transform 0.3s ease;
+            }
+
+            .main-nav.nav-open .nav-links {
+                opacity: 1;
+                transform: translateY(0);
+                pointer-events: auto;
+            }
+
+            .nav-links a {
+                width: 100%;
+                padding: 10px 0;
+            }
+
+            .nav-admin {
+                width: 100%;
+                text-align: center;
+            }
+
+            header {
+                padding-top: 120px;
+            }
+        }
+
         @media (max-width: 768px) {
             header {
                 padding: 60px 0 70px;
-            }
-
-            .top-nav {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 18px;
-            }
-
-            .top-nav .nav-links {
-                justify-content: flex-start;
             }
 
             header h1 {
@@ -329,18 +474,28 @@
 </head>
 <body>
     <header>
-        <div class="container">
-            <nav class="top-nav" aria-label="Navigazione principale">
-                <a class="nav-brand" href="index.html">Master in Carbon Farming</a>
-                <div class="nav-links">
+        <nav class="main-nav" aria-label="Navigazione principale">
+            <div class="nav-container">
+                <a class="nav-brand" href="index.html">
+                    <span>UNITUS Academy</span>
+                    <span>Master in Carbon Farming</span>
+                </a>
+                <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-navigation">
+                    <span class="sr-only">Apri il menu di navigazione</span>
+                    <span class="nav-toggle-icon" aria-hidden="true"></span>
+                </button>
+                <div class="nav-links" id="primary-navigation">
                     <a href="index.html#modulesScroll">Programma</a>
                     <a href="index.html#faculty-grid">Faculty</a>
-                    <a href="index.html#blog">Blog</a>
-                    <a href="index.html#info">Informazioni</a>
+                    <a href="index.html#blog">Novità</a>
+                    <a href="index.html#info">Iscrizioni</a>
+                    <a href="blog.html">Blog</a>
                     <a href="sponsorship.html">Sponsorship</a>
-                    <a class="nav-admin" href="/admin/">Dashboard</a>
+                    <a class="nav-admin" href="/admin/">Area Admin</a>
                 </div>
-            </nav>
+            </div>
+        </nav>
+        <div class="container">
             <a href="index.html" class="back-link">Torna al sito</a>
             <h1>Blog del Master in Carbon Farming</h1>
             <p>Approfondimenti, storie e aggiornamenti sulla transizione ecologica raccontati da docenti, studenti e partner.</p>
@@ -388,6 +543,38 @@
     <footer>
         © 2024 Master in Carbon Farming – Università degli Studi della Tuscia. <a href="index.html#info">Informazioni pratiche</a>
     </footer>
+    <script>
+        document.querySelectorAll('.main-nav').forEach(nav => {
+            const toggle = nav.querySelector('.nav-toggle');
+            const links = nav.querySelector('.nav-links');
+            if (!toggle || !links) return;
+
+            const closeMenu = () => {
+                nav.classList.remove('nav-open');
+                toggle.setAttribute('aria-expanded', 'false');
+            };
+
+            toggle.addEventListener('click', () => {
+                const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+                nav.classList.toggle('nav-open', !isExpanded);
+                toggle.setAttribute('aria-expanded', String(!isExpanded));
+            });
+
+            links.querySelectorAll('a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (toggle.getAttribute('aria-expanded') === 'true') {
+                        closeMenu();
+                    }
+                });
+            });
+
+            window.addEventListener('resize', () => {
+                if (window.innerWidth > 900) {
+                    closeMenu();
+                }
+            });
+        });
+    </script>
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             const blogList = document.getElementById('blog-list');

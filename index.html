@@ -430,6 +430,13 @@
             line-height: 1.4;
         }
 
+        .faculty-bio {
+            color: #444;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-top: 12px;
+        }
+
         /* Partnership Section */
         .partnership-section {
             background: white;
@@ -631,6 +638,224 @@
             position: absolute;
             left: 0;
             top: 12px;
+        }
+
+        /* Teacher Hub Section */
+        .teacher-section {
+            background: white;
+        }
+
+        .teacher-header {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .teacher-dashboard-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg, #ff6b35, #f7b733);
+            color: white;
+            padding: 14px 28px;
+            border-radius: 999px;
+            text-decoration: none;
+            font-weight: 600;
+            box-shadow: 0 12px 32px rgba(255, 107, 53, 0.28);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .teacher-dashboard-button::after {
+            content: "↗";
+            font-size: 0.95rem;
+        }
+
+        .teacher-dashboard-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 40px rgba(255, 107, 53, 0.32);
+        }
+
+        .teacher-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .teacher-card {
+            background: #f8fffe;
+            border-radius: 18px;
+            padding: 30px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .teacher-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 18px 40px rgba(0,0,0,0.12);
+        }
+
+        .teacher-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #2c5f2d, #4a7c59);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+        }
+
+        .teacher-card h3 {
+            color: #2c5f2d;
+            margin-bottom: 15px;
+            font-size: 1.25rem;
+        }
+
+        .teacher-card p {
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .teacher-note {
+            margin-top: 30px;
+            background: #f0f7f0;
+            border-radius: 15px;
+            padding: 25px;
+            color: #2c5f2d;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        /* Blog Section */
+        .blog-section {
+            background: #f8fffe;
+        }
+
+        .blog-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .blog-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .blog-action-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 999px;
+            background: rgba(44, 95, 45, 0.1);
+            color: #2c5f2d;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        .blog-action-link::after {
+            content: "→";
+        }
+
+        .blog-action-link:hover {
+            background: rgba(44, 95, 45, 0.18);
+        }
+
+        .blog-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .blog-empty,
+        .faculty-empty {
+            grid-column: 1 / -1;
+            background: rgba(44, 95, 45, 0.08);
+            border-radius: 18px;
+            padding: 40px;
+            text-align: center;
+            color: #2c5f2d;
+            font-weight: 500;
+        }
+
+        .blog-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .blog-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 18px 45px rgba(0,0,0,0.12);
+        }
+
+        .blog-meta {
+            color: #ff6b35;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            font-size: 0.95rem;
+            text-transform: uppercase;
+        }
+
+        .blog-card h3 {
+            color: #2c5f2d;
+            font-size: 1.3rem;
+            line-height: 1.4;
+        }
+
+        .blog-card p {
+            color: #555;
+            line-height: 1.6;
+            flex-grow: 1;
+        }
+
+        .blog-readmore {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #2c5f2d;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .blog-readmore::after {
+            content: "→";
+            transition: transform 0.3s ease;
+        }
+
+        .blog-readmore:hover::after {
+            transform: translateX(4px);
+        }
+
+        .faculty-admin-cta {
+            margin-top: 35px;
+            text-align: center;
+            font-weight: 500;
+            color: #2c5f2d;
+        }
+
+        .faculty-admin-cta a {
+            color: #ff6b35;
+            text-decoration: none;
+        }
+
+        .faculty-admin-cta a:hover {
+            text-decoration: underline;
         }
 
         .scroll-nav {
@@ -1359,7 +1584,7 @@
                 grid-template-columns: repeat(2, 1fr);
             }
             
-            .info-grid, .learn-grid, .candidate-criteria {
+            .info-grid, .learn-grid, .candidate-criteria, .teacher-grid, .blog-grid {
                 grid-template-columns: 1fr;
             }
             
@@ -1601,8 +1826,8 @@
                 <div class="package-card featured">
                     <div class="package-header">
                         <div class="package-icon">🎓</div>
-                        <h3>Borse di Studio Aziendali</h3>
-                        <div class="package-price">€ 5.000 - € 18.000</div>
+                        <h3>Pacchetti di Borse di studio Aziendali</h3>
+                        <div class="package-price">A partire da 5.000 €</div>
                     </div>
                     <div class="package-content">
                         <p class="package-subtitle">Tre pacchetti tra cui scegliere:</p>
@@ -1680,7 +1905,7 @@
                     <select name="pacchetto">
                         <option value="">Seleziona...</option>
                         <option value="istituzionale">Contributo Istituzionale</option>
-                        <option value="borsa">Borse di Studio Aziendali</option>
+                        <option value="borsa">Pacchetti di Borse di studio Aziendali</option>
                         <option value="progetto">Progetto Applicato</option>
                         <option value="personalizzato">Soluzione personalizzata</option>
                     </select>
@@ -1727,6 +1952,7 @@
                 </p>
                 <div class="hero-buttons">
                     <button class="cta-button" onclick="showInfoOptions()">📄 Richiedi Informazioni</button>
+                    <a class="cta-button download-button" href="blog.html">📰 Esplora il Blog</a>
                 </div>
             </div>
         </div>
@@ -1857,144 +2083,12 @@
                 Oltre 30 esperti internazionali provenienti dal mondo accademico, istituzionale e aziendale.
             </p>
 
-            <div class="faculty-grid">
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
-                    <div class="faculty-info">
-                        <div class="faculty-role-badge">Direttore Scientifico</div>
-                        <h3 class="faculty-name">
-                            <a href="https://www.unitus.it/personale/docente/riccardo-valentini/" target="_blank">Prof. Riccardo Valentini</a>
-                        </h3>
-                        <p class="faculty-role">Università della Tuscia - Premio Nobel per la Pace IPCC, esperto internazionale in climate change e carbon cycle</p>
-                    </div>
-                </div>
-                
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
-                    <div class="faculty-info">
-                        <div class="faculty-role-badge">Coordinatore</div>
-                        <h3 class="faculty-name">
-                            <a href="https://www.linkedin.com/in/virgiliomaretto/" target="_blank">Virgilio Maretto</a>
-                        </h3>
-                        <p class="faculty-role">Esperto in sostenibilità e gestione ambientale, consulente strategico per progetti di transizione ecologica</p>
-                    </div>
-                </div>
-                
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-female.png" alt="Docente donna" loading="lazy">
-                    <div class="faculty-info">
-                        <h3 class="faculty-name">Dr.ssa Maria Vincenza Chiriacò</h3>
-                        <p class="faculty-role">Specialista in inventari nazionali delle emissioni e metodologie IPCC per il settore LULUCF</p>
-                    </div>
-                </div>
-                
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
-                    <div class="faculty-info">
-                        <h3 class="faculty-name">
-                            <a href="https://www.unitus.it/personale/docente/emanuele-blasi/" target="_blank">Prof. Emanuele Blasi</a>
-                        </h3>
-                        <p class="faculty-role">Università della Tuscia - Esperto in economia agraria e valutazione economica dei servizi ecosistemici</p>
-                    </div>
-                </div>
-                
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
-                    <div class="faculty-info">
-                        <h3 class="faculty-name">
-                            <a href="https://www.unitus.it/personale/docente/tommaso-chiti/" target="_blank">Prof. Tommaso Chiti</a>
-                        </h3>
-                        <p class="faculty-role">Università della Tuscia - Esperto in biogeochemical cycles, soil carbon dynamics e Life Cycle Assessment</p>
-                    </div>
-                </div>
-                
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
-                    <div class="faculty-info">
-                        <h3 class="faculty-name">
-                            <a href="https://www.unitus.it/personale/docente/dario-papale/" target="_blank">Prof. Dario Papale</a>
-                        </h3>
-                        <p class="faculty-role">Università della Tuscia - Specialista in flussi di CO₂, eddy covariance e monitoraggio ecosistemi forestali</p>
-                    </div>
-                </div>
-                
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
-                    <div class="faculty-info">
-                        <h3 class="faculty-name">
-                            <a href="https://www.unitus.it/personale/docente/raffaele-casa/" target="_blank">Prof. Raffaele Casa</a>
-                        </h3>
-                        <p class="faculty-role">Università della Tuscia - Esperto in agricoltura di precisione, remote sensing e tecnologie per l'agricoltura sostenibile</p>
-                    </div>
-                </div>
-                
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
-                    <div class="faculty-info">
-                        <h3 class="faculty-name">
-                            <a href="https://www.unitus.it/personale/docente/andrea-vannini/" target="_blank">Prof. Andrea Vannini</a>
-                        </h3>
-                        <p class="faculty-role">Università della Tuscia - Esperto in patologia vegetale e protezione delle colture in sistemi agricoli sostenibili</p>
-                    </div>
-                </div>
-                
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-female.png" alt="Docente donna" loading="lazy">
-                    <div class="faculty-info">
-                        <h3 class="faculty-name">
-                            <a href="https://www.unitus.it/personale/docente/anna-barbati/" target="_blank">Prof.ssa Anna Barbati</a>
-                        </h3>
-                        <p class="faculty-role">Università della Tuscia - Specialista in gestione forestale sostenibile, servizi ecosistemici e biodiversità forestale</p>
-                    </div>
-                </div>
-                
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
-                    <div class="faculty-info">
-                        <h3 class="faculty-name">
-                            <a href="https://www.crea.gov.it/web/foreste-e-legno/-/piermaria-corona-1" target="_blank">Prof. Pier Maria Corona</a>
-                        </h3>
-                        <p class="faculty-role">CREA - Esperto in inventari forestali, dendrometria e gestione sostenibile delle risorse forestali</p>
-                    </div>
-                </div>
-                
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
-                    <div class="faculty-info">
-                        <h3 class="faculty-name no-link">Francesco Rutelli</h3>
-                        <p class="faculty-role">Esperto in politiche ambientali e governance della sostenibilità, ex Ministro per i Beni e le Attività Culturali</p>
-                    </div>
-                </div>
-                
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
-                    <div class="faculty-info">
-                        <h3 class="faculty-name">
-                            <a href="https://www.linkedin.com/in/luca-buonocore-24b49b2/" target="_blank">Luca Buonocore</a>
-                        </h3>
-                        <p class="faculty-role">Consulente strategico in sostenibilità e carbon management, esperto in mercati dei crediti di carbonio</p>
-                    </div>
-                </div>
+            <div class="faculty-grid" id="faculty-grid" data-empty-text="La faculty sarà annunciata a breve. Iscriviti alla newsletter per ricevere gli aggiornamenti.">
+                <!-- I docenti pubblicati verranno caricati dinamicamente -->
+            </div>
 
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-female.png" alt="Docente donna" loading="lazy">
-                    <div class="faculty-info">
-                        <h3 class="faculty-name">
-                            <a href="https://www.distabif.unicampania.it/dipartimento/docenti?MATRICOLA=057475" target="_blank">Prof.ssa Simona Castaldi</a>
-                        </h3>
-                        <p class="faculty-role">Università degli Studi della Campania Luigi Vanvitelli - Esperta in ecologia applicata, cicli biogeochimici e agricoltura sostenibile</p>
-                    </div>
-                </div>
-
-                <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
-                    <div class="faculty-info">
-                        <h3 class="faculty-name">
-                            <a href="https://www.unitus.it/personale/docente/nicola-lacetera/" target="_blank">Prof. Nicola Lacetera</a>
-                        </h3>
-                        <p class="faculty-role">Università della Tuscia - Direttore del Dipartimento DAFNE, esperto in scienze agrarie e benessere animale</p>
-                    </div>
-                </div>
+            <div class="faculty-admin-cta">
+                <p>Se sei un docente del Master puoi aggiornare il tuo profilo dalla <a href="/admin/">dashboard docenti</a>.</p>
             </div>
         </div>
     </section>
@@ -2302,6 +2396,65 @@
             <div class="scroll-nav">
                 <button class="scroll-btn" onclick="scrollModules('left')">‹</button>
                 <button class="scroll-btn" onclick="scrollModules('right')">›</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Teacher Hub Section -->
+    <section class="section teacher-section">
+        <div class="container">
+            <div class="teacher-header">
+                <h2 class="section-title">Dashboard docenti</h2>
+                <p class="section-subtitle">
+                    Gestisci i profili della faculty, programma i contenuti del blog e abilita la loro pubblicazione online.
+                </p>
+                <a class="teacher-dashboard-button" href="/admin/">Accedi alla dashboard</a>
+            </div>
+
+            <div class="teacher-grid">
+                <div class="teacher-card">
+                    <div class="teacher-icon">👩‍🏫</div>
+                    <h3>Profili e visibilità</h3>
+                    <p>Attiva o disattiva i docenti della faculty e aggiorna biografie, ruoli e foto con un solo salvataggio.</p>
+                </div>
+
+                <div class="teacher-card">
+                    <div class="teacher-icon">📝</div>
+                    <h3>Articoli del blog</h3>
+                    <p>Pubblica news, ricerche e case study sul blog ufficiale scegliendo date e stato di pubblicazione.</p>
+                </div>
+
+                <div class="teacher-card">
+                    <div class="teacher-icon">🚀</div>
+                    <h3>Prossimi moduli</h3>
+                    <p>A breve sarà possibile aggiungere FAQ, materiali didattici e aggiornamenti dedicati alla community.</p>
+                </div>
+            </div>
+
+            <div class="teacher-note">
+                L'accesso è riservato alla faculty del Master. Contatta il coordinamento per ricevere le credenziali personali.
+            </div>
+        </div>
+    </section>
+
+    <!-- Blog Preview Section -->
+    <section class="section blog-section" id="blog">
+        <div class="container">
+            <div class="blog-header">
+                <div>
+                    <h2 class="section-title">Blog del Master</h2>
+                    <p class="section-subtitle">
+                        Raccontiamo storie, ricerche e innovazioni sul Carbon Farming e sull'ecosistema del Master.
+                    </p>
+                </div>
+                <div class="blog-actions">
+                    <a class="blog-action-link" href="/blog.html">Vai al blog</a>
+                    <a class="blog-action-link" href="/admin/#blog">Gestisci articoli</a>
+                </div>
+            </div>
+
+            <div class="blog-grid" id="blog-grid" data-empty-text="Gli articoli arriveranno presto. Torna a trovarci!">
+                <!-- Gli articoli pubblicati verranno caricati dinamicamente -->
             </div>
         </div>
     </section>
@@ -2845,6 +2998,177 @@
             const m = document.getElementById('thankYouModal');
             if (ev.target === m) closeThankYouModal();
         });
+    </script>
+
+    <script>
+        (function () {
+            const facultyGrid = document.getElementById('faculty-grid');
+            const blogGrid = document.getElementById('blog-grid');
+            const facultyFallbackImage = 'assets/img/faculty-male.png';
+
+            function renderEmpty(container, className, message) {
+                if (!container) return;
+                container.innerHTML = '';
+                const empty = document.createElement('div');
+                empty.className = className;
+                empty.textContent = message;
+                container.appendChild(empty);
+            }
+
+            function createFacultyCard(item) {
+                const card = document.createElement('div');
+                card.className = 'faculty-card';
+
+                const image = document.createElement('img');
+                image.className = 'faculty-image';
+                image.loading = 'lazy';
+                image.alt = item.name ? `Foto di ${item.name}` : 'Docente del Master';
+                image.src = item.photoUrl || facultyFallbackImage;
+                image.addEventListener('error', () => {
+                    if (image.src !== facultyFallbackImage) {
+                        image.src = facultyFallbackImage;
+                    }
+                });
+                card.appendChild(image);
+
+                const info = document.createElement('div');
+                info.className = 'faculty-info';
+
+                if (item.role) {
+                    const badge = document.createElement('div');
+                    badge.className = 'faculty-role-badge';
+                    badge.textContent = item.role;
+                    info.appendChild(badge);
+                }
+
+                const name = document.createElement('h3');
+                name.className = 'faculty-name';
+                name.textContent = item.name || 'Docente del Master';
+                info.appendChild(name);
+
+                if (item.bio) {
+                    const bio = document.createElement('p');
+                    bio.className = 'faculty-bio';
+                    bio.textContent = item.bio;
+                    info.appendChild(bio);
+                } else if (item.role) {
+                    const roleText = document.createElement('p');
+                    roleText.className = 'faculty-role';
+                    roleText.textContent = item.role;
+                    info.appendChild(roleText);
+                }
+
+                card.appendChild(info);
+                return card;
+            }
+
+            function createBlogCard(post) {
+                const article = document.createElement('article');
+                article.className = 'blog-card';
+
+                const meta = document.createElement('span');
+                meta.className = 'blog-meta';
+                if (post.publishedAt) {
+                    const date = new Date(post.publishedAt);
+                    meta.textContent = `Pubblicato · ${date.toLocaleDateString('it-IT', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric'
+                    })}`;
+                } else {
+                    meta.textContent = 'Aggiornamento';
+                }
+                article.appendChild(meta);
+
+                const title = document.createElement('h3');
+                title.textContent = post.title || 'Aggiornamento dal Master';
+                article.appendChild(title);
+
+                const excerpt = document.createElement('p');
+                let previewText = 'Scopri le ultime novità dal Master in Carbon Farming.';
+                if (post.excerpt) {
+                    previewText = post.excerpt;
+                } else if (post.content) {
+                    const trimmed = post.content.trim();
+                    previewText = trimmed.length > 140 ? `${trimmed.slice(0, 140)}…` : trimmed;
+                }
+                excerpt.textContent = previewText;
+                article.appendChild(excerpt);
+
+                const link = document.createElement('a');
+                link.className = 'blog-readmore';
+                const slug = post.slug ? encodeURIComponent(post.slug) : null;
+                link.href = slug ? `/blog.html#${slug}` : '/blog.html';
+                link.textContent = 'Leggi di più';
+                article.appendChild(link);
+
+                return article;
+            }
+
+            if (facultyGrid) {
+                fetch('/api/faculty?published=true')
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error('Impossibile recuperare la faculty');
+                        }
+                        return response.json();
+                    })
+                    .then((members) => {
+                        if (!Array.isArray(members) || members.length === 0) {
+                            renderEmpty(
+                                facultyGrid,
+                                'faculty-empty',
+                                facultyGrid.dataset.emptyText || 'La faculty sarà annunciata a breve.'
+                            );
+                            return;
+                        }
+
+                        facultyGrid.innerHTML = '';
+                        members.forEach((member) => {
+                            facultyGrid.appendChild(createFacultyCard(member));
+                        });
+                    })
+                    .catch(() => {
+                        renderEmpty(
+                            facultyGrid,
+                            'faculty-empty',
+                            facultyGrid.dataset.emptyText || 'La faculty sarà annunciata a breve.'
+                        );
+                    });
+            }
+
+            if (blogGrid) {
+                fetch('/api/blog-posts?published=true&limit=3')
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error('Impossibile recuperare gli articoli del blog');
+                        }
+                        return response.json();
+                    })
+                    .then((posts) => {
+                        if (!Array.isArray(posts) || posts.length === 0) {
+                            renderEmpty(
+                                blogGrid,
+                                'blog-empty',
+                                blogGrid.dataset.emptyText || 'Gli articoli arriveranno presto. Torna a trovarci!'
+                            );
+                            return;
+                        }
+
+                        blogGrid.innerHTML = '';
+                        posts.forEach((post) => {
+                            blogGrid.appendChild(createBlogCard(post));
+                        });
+                    })
+                    .catch(() => {
+                        renderEmpty(
+                            blogGrid,
+                            'blog-empty',
+                            blogGrid.dataset.emptyText || 'Gli articoli arriveranno presto. Torna a trovarci!'
+                        );
+                    });
+            }
+        })();
     </script>
 
     <div id="cookieBanner" class="cookie-banner" style="display:none;">

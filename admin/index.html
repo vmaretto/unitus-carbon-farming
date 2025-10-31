@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pannello Amministrazione - Master in Carbon Farming</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            color-scheme: light dark;
+            --green-900: #1b3a2d;
+            --green-700: #245a3d;
+            --green-500: #2c7a4b;
+            --green-100: #ecf6f0;
+            --orange-500: #ff7a1a;
+            --gray-900: #1c1c1c;
+            --gray-700: #3d3d3d;
+            --gray-500: #6b6b6b;
+            --gray-200: #d9d9d9;
+            --gray-100: #f3f4f6;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--gray-100);
+            color: var(--gray-900);
+            min-height: 100vh;
+        }
+
+        header {
+            background: linear-gradient(135deg, rgba(27, 58, 45, 0.9), rgba(44, 122, 75, 0.85));
+            color: white;
+            padding: 32px 24px 40px;
+            box-shadow: 0 10px 40px rgba(27, 58, 45, 0.25);
+        }
+
+        header .header-content {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        header p {
+            font-size: 1.05rem;
+            line-height: 1.6;
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        header .nav-links {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        header .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            font-weight: 500;
+            transition: background 0.2s ease;
+        }
+
+        header .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        main {
+            max-width: 1100px;
+            margin: -32px auto 60px;
+            padding: 0 24px 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 36px;
+        }
+
+        section {
+            background: white;
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 18px 45px rgba(31, 41, 55, 0.12);
+            border: 1px solid rgba(36, 90, 61, 0.08);
+        }
+
+        section header {
+            background: none;
+            color: inherit;
+            padding: 0;
+            box-shadow: none;
+            margin-bottom: 24px;
+        }
+
+        section h2 {
+            font-size: 1.6rem;
+            margin: 0 0 4px;
+        }
+
+        section p.section-description {
+            margin: 0;
+            color: var(--gray-500);
+            font-size: 0.95rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        label {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        input[type="text"],
+        input[type="url"],
+        input[type="number"],
+        input[type="datetime-local"],
+        textarea,
+        select {
+            border-radius: 12px;
+            border: 1px solid var(--gray-200);
+            padding: 12px 14px;
+            font: inherit;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            background: white;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        input:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--green-500);
+            box-shadow: 0 0 0 3px rgba(44, 122, 75, 0.18);
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+            flex-wrap: wrap;
+        }
+
+        button,
+        .secondary-button {
+            border: none;
+            border-radius: 999px;
+            padding: 12px 22px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        button.primary {
+            background: linear-gradient(120deg, #ff7a1a, #fbbc42);
+            color: white;
+            box-shadow: 0 12px 28px rgba(255, 122, 26, 0.28);
+        }
+
+        button.secondary,
+        .secondary-button {
+            background: rgba(36, 90, 61, 0.1);
+            color: var(--green-700);
+        }
+
+        button.danger {
+            background: rgba(220, 38, 38, 0.12);
+            color: #b91c1c;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        button:hover:not(:disabled),
+        .secondary-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 30px rgba(31, 41, 55, 0.08);
+        }
+
+        .table-wrapper {
+            margin-top: 28px;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 720px;
+        }
+
+        th, td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(107, 114, 128, 0.15);
+            font-size: 0.95rem;
+        }
+
+        th {
+            color: var(--gray-700);
+            font-weight: 600;
+            background: rgba(236, 246, 240, 0.6);
+        }
+
+        tr:hover td {
+            background: rgba(236, 246, 240, 0.4);
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .status-pill[data-status="published"] {
+            background: rgba(44, 122, 75, 0.12);
+            color: var(--green-700);
+        }
+
+        .status-pill[data-status="draft"] {
+            background: rgba(107, 114, 128, 0.12);
+            color: var(--gray-700);
+        }
+
+        .empty-state {
+            background: rgba(27, 58, 45, 0.05);
+            border: 1px dashed rgba(27, 58, 45, 0.25);
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+            color: var(--green-700);
+            margin-top: 24px;
+        }
+
+        .toast {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            background: white;
+            color: var(--gray-900);
+            padding: 16px 22px;
+            border-radius: 14px;
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+            border: 1px solid rgba(36, 90, 61, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 280px;
+            z-index: 1000;
+        }
+
+        .toast[data-type="error"] {
+            border-color: rgba(220, 38, 38, 0.25);
+            color: #b91c1c;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            user-select: none;
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        .switch input {
+            display: none;
+        }
+
+        .switch span.slider {
+            width: 44px;
+            height: 24px;
+            border-radius: 999px;
+            background: rgba(107, 114, 128, 0.3);
+            position: relative;
+            transition: background 0.2s ease;
+        }
+
+        .switch span.slider::after {
+            content: "";
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+            transition: transform 0.2s ease;
+        }
+
+        .switch input:checked + span.slider {
+            background: rgba(44, 122, 75, 0.6);
+        }
+
+        .switch input:checked + span.slider::after {
+            transform: translateX(20px);
+        }
+
+        @media (max-width: 768px) {
+            header .header-content {
+                gap: 12px;
+            }
+
+            main {
+                margin: -24px auto 40px;
+            }
+
+            section {
+                padding: 24px;
+            }
+
+            table {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>Pannello di amministrazione</h1>
+            <p>Gestisci la faculty del Master, programma la pubblicazione degli articoli del blog e controlla la visibilità dei contenuti online.</p>
+            <div class="nav-links">
+                <a href="/index.html">← Torna al sito</a>
+                <a href="#faculty">Gestione docenti</a>
+                <a href="#blog">Gestione blog</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <section id="faculty">
+            <header>
+                <h2>Gestione docenti</h2>
+                <p class="section-description">Configura i docenti che compariranno nella sezione faculty del sito pubblico e decidi quando renderli visibili.</p>
+            </header>
+
+            <form id="faculty-form">
+                <div class="form-grid">
+                    <label>
+                        Nome e cognome
+                        <input type="text" id="faculty-name" name="name" required placeholder="Es. Prof. Riccardo Valentini">
+                    </label>
+                    <label>
+                        Ruolo o area di competenza
+                        <input type="text" id="faculty-role" name="role" placeholder="Es. Direttore scientifico">
+                    </label>
+                    <label>
+                        URL foto (opzionale)
+                        <input type="url" id="faculty-photo" name="photoUrl" placeholder="https://...">
+                    </label>
+                    <label>
+                        Ordine di visualizzazione
+                        <input type="number" id="faculty-order" name="sortOrder" min="0" placeholder="Es. 1">
+                    </label>
+                </div>
+                <label style="margin-top: 18px;">
+                    Biografia breve
+                    <textarea id="faculty-bio" name="bio" placeholder="Descrivi in poche righe l'esperienza del docente"></textarea>
+                </label>
+
+                <div class="actions">
+                    <label class="switch">
+                        <input type="checkbox" id="faculty-published">
+                        <span class="slider"></span>
+                        Visibile sul sito
+                    </label>
+                    <button class="primary" type="submit">Salva docente</button>
+                    <button class="secondary" type="button" id="faculty-reset" hidden>Annulla modifica</button>
+                </div>
+            </form>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Ruolo</th>
+                            <th>Visibilità</th>
+                            <th>Ordine</th>
+                            <th style="width: 180px;">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="faculty-table-body">
+                        <tr class="empty-state" data-empty-faculty>
+                            <td colspan="5">Non ci sono docenti configurati. Aggiungi il primo docente con il modulo qui sopra.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="blog">
+            <header>
+                <h2>Gestione blog</h2>
+                <p class="section-description">Pubblica aggiornamenti, ricerche e storie dal Master. Gli articoli visibili appariranno automaticamente nelle pagine pubbliche.</p>
+            </header>
+
+            <form id="blog-form">
+                <div class="form-grid">
+                    <label>
+                        Titolo articolo
+                        <input type="text" id="blog-title" name="title" required placeholder="Es. Carbon Farming: nuove opportunità">
+                    </label>
+                    <label>
+                        Slug (URL breve)
+                        <input type="text" id="blog-slug" name="slug" placeholder="es. carbon-farming-opportunita">
+                    </label>
+                    <label>
+                        Data pubblicazione
+                        <input type="datetime-local" id="blog-published-at" name="publishedAt">
+                    </label>
+                    <label>
+                        Immagine di copertina (URL)
+                        <input type="url" id="blog-cover" name="coverImageUrl" placeholder="https://...">
+                    </label>
+                </div>
+
+                <label style="margin-top: 18px;">
+                    Estratto breve
+                    <textarea id="blog-excerpt" name="excerpt" placeholder="Una sintesi che apparirà nelle anteprime"></textarea>
+                </label>
+
+                <label style="margin-top: 18px;">
+                    Contenuto completo
+                    <textarea id="blog-content" name="content" placeholder="Inserisci il contenuto completo dell'articolo" rows="8"></textarea>
+                </label>
+
+                <div class="actions">
+                    <label class="switch">
+                        <input type="checkbox" id="blog-published">
+                        <span class="slider"></span>
+                        Pubblicato
+                    </label>
+                    <button class="primary" type="submit">Salva articolo</button>
+                    <button class="secondary" type="button" id="blog-reset" hidden>Annulla modifica</button>
+                </div>
+            </form>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Titolo</th>
+                            <th>Pubblicazione</th>
+                            <th>Stato</th>
+                            <th style="width: 180px;">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="blog-table-body">
+                        <tr class="empty-state" data-empty-blog>
+                            <td colspan="4">Non ci sono articoli pubblicati o in bozza. Usa il modulo per crearne uno nuovo.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <template id="faculty-row-template">
+        <tr>
+            <td data-name></td>
+            <td data-role></td>
+            <td data-status></td>
+            <td data-order></td>
+            <td>
+                <div class="actions">
+                    <button type="button" class="secondary" data-edit>Modifica</button>
+                    <button type="button" class="danger" data-delete>Elimina</button>
+                </div>
+            </td>
+        </tr>
+    </template>
+
+    <template id="blog-row-template">
+        <tr>
+            <td data-title></td>
+            <td data-date></td>
+            <td data-status></td>
+            <td>
+                <div class="actions">
+                    <button type="button" class="secondary" data-edit>Modifica</button>
+                    <button type="button" class="danger" data-delete>Elimina</button>
+                </div>
+            </td>
+        </tr>
+    </template>
+
+    <script>
+        const state = {
+            editingFacultyId: null,
+            editingPostId: null,
+            faculty: [],
+            blogPosts: []
+        };
+
+        function formatDate(dateString) {
+            if (!dateString) return '—';
+            const date = new Date(dateString);
+            return date.toLocaleString('it-IT', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.dataset.type = type;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('visible');
+            }, 10);
+            setTimeout(() => {
+                toast.remove();
+            }, 4200);
+        }
+
+        async function apiRequest(url, options = {}) {
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    ...options
+                });
+
+                if (!response.ok) {
+                    const payload = await response.json().catch(() => ({ error: 'Errore sconosciuto' }));
+                    const error = new Error(payload.error || 'Errore nella richiesta');
+                    error.status = response.status;
+                    throw error;
+                }
+
+                if (response.status === 204) return null;
+                return await response.json();
+            } catch (error) {
+                console.error('API error', error);
+                showToast(error.message || 'Impossibile completare l\'operazione', 'error');
+                throw error;
+            }
+        }
+
+        function toggleEmptyState(tableBody, hasRows, emptySelector) {
+            const emptyRow = tableBody.querySelector(emptySelector);
+            if (!emptyRow) return;
+            emptyRow.style.display = hasRows ? 'none' : '';
+        }
+
+        function resetFacultyForm() {
+            const form = document.getElementById('faculty-form');
+            form.reset();
+            document.getElementById('faculty-published').checked = false;
+            document.getElementById('faculty-reset').hidden = true;
+            state.editingFacultyId = null;
+            const button = form.querySelector('button.primary');
+            button.textContent = button.dataset.defaultText || 'Salva docente';
+        }
+
+        function resetBlogForm() {
+            const form = document.getElementById('blog-form');
+            form.reset();
+            document.getElementById('blog-published').checked = false;
+            document.getElementById('blog-reset').hidden = true;
+            state.editingPostId = null;
+            const button = form.querySelector('button.primary');
+            button.textContent = button.dataset.defaultText || 'Salva articolo';
+        }
+
+        async function loadFaculty() {
+            const tableBody = document.getElementById('faculty-table-body');
+            tableBody.querySelectorAll('tr:not([data-empty-faculty])').forEach((row) => row.remove());
+
+            try {
+                const items = await apiRequest('/api/faculty');
+                state.faculty = items;
+                const template = document.getElementById('faculty-row-template');
+
+                items.forEach((item) => {
+                    const clone = template.content.firstElementChild.cloneNode(true);
+                    clone.dataset.id = item.id;
+                    clone.querySelector('[data-name]').textContent = item.name;
+                    clone.querySelector('[data-role]').textContent = item.role || '—';
+                    const status = clone.querySelector('[data-status]');
+                    const pill = document.createElement('span');
+                    pill.className = 'status-pill';
+                    pill.dataset.status = item.isPublished ? 'published' : 'draft';
+                    pill.textContent = item.isPublished ? 'Visibile' : 'Bozza';
+                    status.innerHTML = '';
+                    status.appendChild(pill);
+                    clone.querySelector('[data-order]').textContent = item.sortOrder ?? '—';
+                    tableBody.appendChild(clone);
+                });
+
+                toggleEmptyState(tableBody, items.length > 0, '[data-empty-faculty]');
+            } catch (error) {
+                state.faculty = [];
+                toggleEmptyState(tableBody, false, '[data-empty-faculty]');
+            }
+        }
+
+        async function loadBlogPosts() {
+            const tableBody = document.getElementById('blog-table-body');
+            tableBody.querySelectorAll('tr:not([data-empty-blog])').forEach((row) => row.remove());
+
+            try {
+                const posts = await apiRequest('/api/blog-posts');
+                state.blogPosts = posts;
+                const template = document.getElementById('blog-row-template');
+
+                posts.forEach((post) => {
+                    const clone = template.content.firstElementChild.cloneNode(true);
+                    clone.dataset.id = post.id;
+                    clone.querySelector('[data-title]').textContent = post.title;
+                    clone.querySelector('[data-date]').textContent = formatDate(post.publishedAt);
+                    const status = clone.querySelector('[data-status]');
+                    const pill = document.createElement('span');
+                    pill.className = 'status-pill';
+                    pill.dataset.status = post.isPublished ? 'published' : 'draft';
+                    pill.textContent = post.isPublished ? 'Pubblicato' : 'Bozza';
+                    status.innerHTML = '';
+                    status.appendChild(pill);
+                    tableBody.appendChild(clone);
+                });
+
+                toggleEmptyState(tableBody, posts.length > 0, '[data-empty-blog]');
+            } catch (error) {
+                state.blogPosts = [];
+                toggleEmptyState(tableBody, false, '[data-empty-blog]');
+            }
+        }
+
+        document.getElementById('faculty-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const payload = {
+                name: document.getElementById('faculty-name').value.trim(),
+                role: document.getElementById('faculty-role').value.trim() || null,
+                photoUrl: document.getElementById('faculty-photo').value.trim() || null,
+                bio: document.getElementById('faculty-bio').value.trim() || null,
+                sortOrder: document.getElementById('faculty-order').value === '' ? null : Number(document.getElementById('faculty-order').value),
+                isPublished: document.getElementById('faculty-published').checked
+            };
+
+            if (!payload.name) {
+                showToast('Inserisci il nome del docente', 'error');
+                return;
+            }
+
+            try {
+                const method = state.editingFacultyId ? 'PUT' : 'POST';
+                const url = state.editingFacultyId ? `/api/faculty/${state.editingFacultyId}` : '/api/faculty';
+                await apiRequest(url, {
+                    method,
+                    body: JSON.stringify(payload)
+                });
+                showToast('Docente salvato con successo');
+                resetFacultyForm();
+                loadFaculty();
+            } catch (error) {
+                // already handled in apiRequest
+            }
+        });
+
+        document.getElementById('faculty-table-body').addEventListener('click', async (event) => {
+            const editButton = event.target.closest('button[data-edit]');
+            const deleteButton = event.target.closest('button[data-delete]');
+            const row = event.target.closest('tr[data-id]');
+            if (!row) return;
+            const id = row.dataset.id;
+
+            if (editButton) {
+                const current = state.faculty.find((item) => item.id === id);
+                if (!current) {
+                    showToast('Docente non trovato', 'error');
+                    return;
+                }
+
+                document.getElementById('faculty-name').value = current.name || '';
+                document.getElementById('faculty-role').value = current.role || '';
+                document.getElementById('faculty-photo').value = current.photoUrl || '';
+                document.getElementById('faculty-bio').value = current.bio || '';
+                document.getElementById('faculty-order').value = current.sortOrder ?? '';
+                document.getElementById('faculty-published').checked = Boolean(current.isPublished);
+                document.getElementById('faculty-reset').hidden = false;
+                document.getElementById('faculty-form').querySelector('button.primary').textContent = 'Aggiorna docente';
+                state.editingFacultyId = id;
+            }
+
+            if (deleteButton) {
+                if (!confirm('Vuoi eliminare questo docente?')) {
+                    return;
+                }
+                try {
+                    await apiRequest(`/api/faculty/${id}`, { method: 'DELETE' });
+                    showToast('Docente eliminato');
+                    loadFaculty();
+                } catch (error) {
+                    // handled
+                }
+            }
+        });
+
+        document.getElementById('faculty-reset').addEventListener('click', resetFacultyForm);
+
+        document.getElementById('blog-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const publishedAtInput = document.getElementById('blog-published-at').value;
+            const payload = {
+                title: document.getElementById('blog-title').value.trim(),
+                slug: document.getElementById('blog-slug').value.trim() || null,
+                excerpt: document.getElementById('blog-excerpt').value.trim() || null,
+                content: document.getElementById('blog-content').value.trim() || null,
+                coverImageUrl: document.getElementById('blog-cover').value.trim() || null,
+                publishedAt: publishedAtInput ? new Date(publishedAtInput).toISOString() : null,
+                isPublished: document.getElementById('blog-published').checked
+            };
+
+            if (!payload.title) {
+                showToast('Inserisci il titolo dell\'articolo', 'error');
+                return;
+            }
+
+            try {
+                const method = state.editingPostId ? 'PUT' : 'POST';
+                const url = state.editingPostId ? `/api/blog-posts/${state.editingPostId}` : '/api/blog-posts';
+                await apiRequest(url, {
+                    method,
+                    body: JSON.stringify(payload)
+                });
+                showToast('Articolo salvato con successo');
+                resetBlogForm();
+                loadBlogPosts();
+            } catch (error) {
+                // handled
+            }
+        });
+
+        document.getElementById('blog-table-body').addEventListener('click', async (event) => {
+            const editButton = event.target.closest('button[data-edit]');
+            const deleteButton = event.target.closest('button[data-delete]');
+            const row = event.target.closest('tr[data-id]');
+            if (!row) return;
+            const id = row.dataset.id;
+
+            if (editButton) {
+                const current = state.blogPosts.find((post) => post.id === id);
+                if (!current) {
+                    showToast('Articolo non trovato', 'error');
+                    return;
+                }
+
+                document.getElementById('blog-title').value = current.title || '';
+                document.getElementById('blog-slug').value = current.slug || '';
+                document.getElementById('blog-excerpt').value = current.excerpt || '';
+                document.getElementById('blog-content').value = current.content || '';
+                document.getElementById('blog-cover').value = current.coverImageUrl || '';
+                document.getElementById('blog-published').checked = Boolean(current.isPublished);
+                document.getElementById('blog-published-at').value = current.publishedAt
+                    ? new Date(current.publishedAt).toISOString().slice(0, 16)
+                    : '';
+                document.getElementById('blog-reset').hidden = false;
+                document.getElementById('blog-form').querySelector('button.primary').textContent = 'Aggiorna articolo';
+                state.editingPostId = id;
+            }
+
+            if (deleteButton) {
+                if (!confirm('Vuoi eliminare questo articolo?')) {
+                    return;
+                }
+                try {
+                    await apiRequest(`/api/blog-posts/${id}`, { method: 'DELETE' });
+                    showToast('Articolo eliminato');
+                    loadBlogPosts();
+                } catch (error) {
+                    // handled
+                }
+            }
+        });
+
+        document.getElementById('blog-reset').addEventListener('click', resetBlogForm);
+
+        const facultyForm = document.getElementById('faculty-form');
+        facultyForm.querySelector('button.primary').dataset.defaultText = 'Salva docente';
+        const blogForm = document.getElementById('blog-form');
+        blogForm.querySelector('button.primary').dataset.defaultText = 'Salva articolo';
+
+        loadFaculty();
+        loadBlogPosts();
+    </script>
+</body>
+</html>

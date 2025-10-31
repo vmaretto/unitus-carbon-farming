@@ -645,37 +645,6 @@
             background: white;
         }
 
-        .teacher-header {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 16px;
-        }
-
-        .teacher-dashboard-button {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            background: linear-gradient(135deg, #ff6b35, #f7b733);
-            color: white;
-            padding: 14px 28px;
-            border-radius: 999px;
-            text-decoration: none;
-            font-weight: 600;
-            box-shadow: 0 12px 32px rgba(255, 107, 53, 0.28);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .teacher-dashboard-button::after {
-            content: "↗";
-            font-size: 0.95rem;
-        }
-
-        .teacher-dashboard-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 18px 40px rgba(255, 107, 53, 0.32);
-        }
-
         .teacher-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -735,57 +704,11 @@
             background: #f8fffe;
         }
 
-        .blog-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-
-        .blog-actions {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .blog-action-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 18px;
-            border-radius: 999px;
-            background: rgba(44, 95, 45, 0.1);
-            color: #2c5f2d;
-            text-decoration: none;
-            font-weight: 600;
-            transition: background 0.3s ease;
-        }
-
-        .blog-action-link::after {
-            content: "→";
-        }
-
-        .blog-action-link:hover {
-            background: rgba(44, 95, 45, 0.18);
-        }
-
         .blog-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 30px;
             margin-top: 40px;
-        }
-
-        .blog-empty,
-        .faculty-empty {
-            grid-column: 1 / -1;
-            background: rgba(44, 95, 45, 0.08);
-            border-radius: 18px;
-            padding: 40px;
-            text-align: center;
-            color: #2c5f2d;
-            font-weight: 500;
         }
 
         .blog-card {
@@ -840,22 +763,6 @@
 
         .blog-readmore:hover::after {
             transform: translateX(4px);
-        }
-
-        .faculty-admin-cta {
-            margin-top: 35px;
-            text-align: center;
-            font-weight: 500;
-            color: #2c5f2d;
-        }
-
-        .faculty-admin-cta a {
-            color: #ff6b35;
-            text-decoration: none;
-        }
-
-        .faculty-admin-cta a:hover {
-            text-decoration: underline;
         }
 
         .scroll-nav {
@@ -2403,36 +2310,33 @@
     <!-- Teacher Hub Section -->
     <section class="section teacher-section">
         <div class="container">
-            <div class="teacher-header">
-                <h2 class="section-title">Dashboard docenti</h2>
-                <p class="section-subtitle">
-                    Gestisci i profili della faculty, programma i contenuti del blog e abilita la loro pubblicazione online.
-                </p>
-                <a class="teacher-dashboard-button" href="/admin/">Accedi alla dashboard</a>
-            </div>
+            <h2 class="section-title">Spazio Docenti</h2>
+            <p class="section-subtitle">
+                Una piattaforma dedicata per configurare il percorso formativo, organizzare i moduli e condividere contenuti sempre aggiornati con gli studenti.
+            </p>
 
             <div class="teacher-grid">
                 <div class="teacher-card">
-                    <div class="teacher-icon">👩‍🏫</div>
-                    <h3>Profili e visibilità</h3>
-                    <p>Attiva o disattiva i docenti della faculty e aggiorna biografie, ruoli e foto con un solo salvataggio.</p>
+                    <div class="teacher-icon">🛠️</div>
+                    <h3>Dashboard di configurazione</h3>
+                    <p>Ogni docente dispone di un pannello intuitivo per impostare calendario, orari, messaggi e materiali del proprio insegnamento.</p>
                 </div>
 
                 <div class="teacher-card">
-                    <div class="teacher-icon">📝</div>
-                    <h3>Articoli del blog</h3>
-                    <p>Pubblica news, ricerche e case study sul blog ufficiale scegliendo date e stato di pubblicazione.</p>
+                    <div class="teacher-icon">📚</div>
+                    <h3>Gestione dei moduli</h3>
+                    <p>Crea, duplica e riordina i moduli del Master allegando syllabus, esercitazioni e questionari con pochi clic.</p>
                 </div>
 
                 <div class="teacher-card">
-                    <div class="teacher-icon">🚀</div>
-                    <h3>Prossimi moduli</h3>
-                    <p>A breve sarà possibile aggiungere FAQ, materiali didattici e aggiornamenti dedicati alla community.</p>
+                    <div class="teacher-icon">💡</div>
+                    <h3>Contenuti multimediali</h3>
+                    <p>Carica video-lezioni, dataset, casi studio e risorse esterne in una libreria condivisa con studenti e partner.</p>
                 </div>
             </div>
 
             <div class="teacher-note">
-                L'accesso è riservato alla faculty del Master. Contatta il coordinamento per ricevere le credenziali personali.
+                L'area docenti è integrata con il calendario del Master e rende immediatamente disponibili gli aggiornamenti a tutti gli iscritti.
             </div>
         </div>
     </section>
@@ -2440,21 +2344,32 @@
     <!-- Blog Preview Section -->
     <section class="section blog-section" id="blog">
         <div class="container">
-            <div class="blog-header">
-                <div>
-                    <h2 class="section-title">Blog del Master</h2>
-                    <p class="section-subtitle">
-                        Raccontiamo storie, ricerche e innovazioni sul Carbon Farming e sull'ecosistema del Master.
-                    </p>
-                </div>
-                <div class="blog-actions">
-                    <a class="blog-action-link" href="/blog.html">Vai al blog</a>
-                    <a class="blog-action-link" href="/admin/#blog">Gestisci articoli</a>
-                </div>
-            </div>
+            <h2 class="section-title">Blog del Master</h2>
+            <p class="section-subtitle">
+                Raccontiamo le storie, le ricerche e le innovazioni che stanno cambiando il Carbon Farming in Italia e in Europa.
+            </p>
 
-            <div class="blog-grid" id="blog-grid" data-empty-text="Gli articoli arriveranno presto. Torna a trovarci!">
-                <!-- Gli articoli pubblicati verranno caricati dinamicamente -->
+            <div class="blog-grid">
+                <article class="blog-card">
+                    <span class="blog-meta">Novità · Marzo 2024</span>
+                    <h3>Carbon Farming: dalle policy alle applicazioni sul campo</h3>
+                    <p>Un viaggio tra regolamenti europei, certificazioni e casi concreti di aziende che stanno già riducendo le emissioni e valorizzando i crediti di carbonio.</p>
+                    <a class="blog-readmore" href="blog.html#carbon-farming">Scopri di più</a>
+                </article>
+
+                <article class="blog-card">
+                    <span class="blog-meta">Didattica · Marzo 2024</span>
+                    <h3>Come funziona la nuova dashboard docenti</h3>
+                    <p>Un'anteprima degli strumenti digitali che supporteranno la faculty nella pianificazione delle lezioni e nella pubblicazione dei materiali.</p>
+                    <a class="blog-readmore" href="blog.html#dashboard-docenti">Approfondisci</a>
+                </article>
+
+                <article class="blog-card">
+                    <span class="blog-meta">Community · Marzo 2024</span>
+                    <h3>Le collaborazioni con imprese e territori</h3>
+                    <p>Dal project work ai pacchetti di borse di studio aziendali: come costruiamo reti di valore con partner pubblici e privati.</p>
+                    <a class="blog-readmore" href="blog.html#community">Leggi l'articolo</a>
+                </article>
             </div>
         </div>
     </section>

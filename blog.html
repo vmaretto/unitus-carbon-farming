@@ -27,116 +27,37 @@
         header {
             background: linear-gradient(135deg, #2c5f2d 0%, #4a7c59 100%);
             color: white;
-            padding: 28px 0 90px;
+            text-align: center;
+            padding: 70px 0 90px;
             position: relative;
         }
 
-        .top-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 16px;
-            margin-bottom: 48px;
-            flex-wrap: wrap;
-        }
-
-        .brand {
-            font-size: 1.1rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: white;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .brand::before {
-            content: "🌿";
-        }
-
-        .main-nav {
-            display: flex;
-            gap: 18px;
-            flex-wrap: wrap;
-        }
-
-        .main-nav a {
-            color: rgba(255, 255, 255, 0.92);
-            text-decoration: none;
-            font-weight: 500;
-            padding: 8px 14px;
-            border-radius: 999px;
-            transition: background 0.3s ease, color 0.3s ease;
-        }
-
-        .main-nav a:hover,
-        .main-nav a.active {
-            background: rgba(255, 255, 255, 0.18);
-            color: white;
-        }
-
-        .header-content {
-            text-align: left;
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-        }
-
-        .header-content h1 {
-            font-size: 3rem;
-            line-height: 1.1;
-        }
-
-        .header-content p {
-            font-size: 1.1rem;
-            max-width: 640px;
-            opacity: 0.94;
-        }
-
-        .hero-actions {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-
-        .hero-button {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            background: linear-gradient(135deg, #ff6b35, #f7b733);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 999px;
-            text-decoration: none;
-            font-weight: 600;
-            box-shadow: 0 14px 32px rgba(255, 107, 53, 0.3);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .hero-button::after {
-            content: "↗";
-            font-size: 0.95rem;
-        }
-
-        .hero-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 22px 40px rgba(255, 107, 53, 0.28);
-        }
-
-        .hero-link {
+        .back-link {
             display: inline-flex;
             align-items: center;
             gap: 8px;
             color: white;
-            font-weight: 600;
             text-decoration: none;
+            font-weight: 600;
+            margin-bottom: 30px;
             opacity: 0.9;
         }
 
-        .hero-link::after {
-            content: "→";
+        .back-link::before {
+            content: "←";
+            font-size: 1.2rem;
+        }
+
+        header h1 {
+            font-size: 2.8rem;
+            margin-bottom: 20px;
+        }
+
+        header p {
+            font-size: 1.1rem;
+            max-width: 700px;
+            margin: 0 auto;
+            opacity: 0.95;
         }
 
         main {
@@ -160,29 +81,20 @@
 
         .blog-grid {
             display: grid;
-            grid-template-columns: minmax(260px, 320px) 1fr;
-            gap: 40px;
-            align-items: start;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
         }
 
         .blog-highlight {
-            background: linear-gradient(135deg, rgba(44, 95, 45, 0.08), rgba(74, 124, 89, 0.1));
+            background: linear-gradient(135deg, rgba(44, 95, 45, 0.08), rgba(74, 124, 89, 0.08));
             border-radius: 18px;
             padding: 30px;
-            position: sticky;
-            top: 30px;
         }
 
         .blog-highlight h2 {
             color: #2c5f2d;
-            font-size: 1.6rem;
-            margin-bottom: 12px;
-        }
-
-        .blog-highlight p {
-            color: #2c5f2d;
-            font-weight: 500;
-            margin-bottom: 20px;
+            font-size: 1.8rem;
+            margin-bottom: 15px;
         }
 
         .blog-highlight ul {
@@ -192,10 +104,9 @@
         }
 
         .blog-highlight ul li {
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             position: relative;
-            padding-left: 26px;
-            line-height: 1.6;
+            padding-left: 24px;
         }
 
         .blog-highlight ul li::before {
@@ -204,49 +115,12 @@
             left: 0;
             top: 0;
             color: #ff6b35;
-            font-weight: 700;
         }
 
-        .blog-highlight .newsletter-box {
-            margin-top: 28px;
-            background: rgba(255, 255, 255, 0.8);
-            border-radius: 16px;
-            padding: 18px;
-            color: #2c5f2d;
-        }
-
-        .blog-highlight .newsletter-box h3 {
-            font-size: 1.1rem;
-            margin-bottom: 8px;
-        }
-
-        .blog-highlight .newsletter-box p {
-            font-weight: 400;
-            color: #35664a;
-            margin-bottom: 12px;
-        }
-
-        .blog-highlight .newsletter-box a {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            color: #ff6b35;
-            font-weight: 600;
-            text-decoration: none;
-        }
-
-        .blog-list {
+        .blog-articles {
+            margin-top: 50px;
             display: grid;
-            gap: 32px;
-        }
-
-        .blog-empty {
-            background: rgba(44, 95, 45, 0.06);
-            border-radius: 18px;
-            padding: 40px;
-            text-align: center;
-            color: #2c5f2d;
-            font-weight: 500;
+            gap: 40px;
         }
 
         article {
@@ -260,7 +134,6 @@
             color: #2c5f2d;
             font-size: 2rem;
             margin-bottom: 15px;
-            line-height: 1.3;
         }
 
         .article-meta {
@@ -271,27 +144,13 @@
             margin-bottom: 20px;
         }
 
-        article figure {
-            margin: 0 0 24px;
-            border-radius: 18px;
-            overflow: hidden;
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
-        }
-
-        article figure img {
-            width: 100%;
-            display: block;
-            object-fit: cover;
-            max-height: 320px;
-        }
-
         article p {
             color: #555;
             margin-bottom: 18px;
         }
 
         article ul {
-            margin: 20px 0 20px 24px;
+            margin: 20px 0 20px 20px;
             color: #555;
         }
 
@@ -299,89 +158,85 @@
             margin-bottom: 10px;
         }
 
-        .article-footer {
-            margin-top: 24px;
+        .cta-box {
+            background: #2c5f2d;
+            color: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-top: 60px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 16px;
-            flex-wrap: wrap;
+            flex-direction: column;
+            gap: 15px;
+            text-align: center;
         }
 
-        .article-footer a {
-            color: #2c5f2d;
-            text-decoration: none;
-            font-weight: 600;
+        .cta-box a {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            justify-content: center;
+            gap: 10px;
+            background: linear-gradient(45deg, #ff6b35, #f7931e);
+            color: white;
+            padding: 14px 28px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .cta-box a:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(255, 107, 53, 0.35);
         }
 
         footer {
-            margin: 80px 0 40px;
             text-align: center;
-            color: #6b7280;
+            margin: 80px 0 40px;
+            color: #666;
             font-size: 0.95rem;
         }
 
-        @media (max-width: 960px) {
-            .blog-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .blog-highlight {
-                position: static;
-            }
+        footer a {
+            color: #2c5f2d;
+            font-weight: 600;
+            text-decoration: none;
         }
 
-        @media (max-width: 720px) {
+        @media (max-width: 768px) {
             header {
-                padding-bottom: 70px;
+                padding: 60px 0 70px;
             }
 
-            .header-content h1 {
-                font-size: 2.4rem;
+            header h1 {
+                font-size: 2.2rem;
             }
 
             .blog-wrapper {
-                padding: 36px;
-            }
-        }
-
-        @media (max-width: 560px) {
-            .blog-wrapper {
-                padding: 28px;
+                padding: 30px;
             }
 
             article {
-                padding: 28px;
+                padding: 30px;
+            }
+        }
+
+        @media (max-width: 520px) {
+            header h1 {
+                font-size: 1.9rem;
+            }
+
+            header p {
+                font-size: 1rem;
             }
         }
     </style>
 </head>
 <body>
     <header>
-        <div class="top-bar container">
-            <a class="brand" href="/index.html">Master in Carbon Farming</a>
-            <nav class="main-nav">
-                <a href="/index.html">Home</a>
-                <a href="/index.html#programma">Programma</a>
-                <a href="/index.html#faculty">Faculty</a>
-                <a href="/sponsorship.html">Partnership</a>
-                <a class="active" href="/blog.html">Blog</a>
-                <a href="/admin/">Area docenti</a>
-            </nav>
-        </div>
-        <div class="header-content container">
-            <h1>Blog del Master</h1>
-            <p>
-                Approfondimenti, storie di innovazione e aggiornamenti dal Master in Carbon Farming dell'Università della Tuscia.
-                Segui le attività della faculty e scopri i progetti con aziende e territori.
-            </p>
-            <div class="hero-actions">
-                <a class="hero-button" href="/admin/#blog">Pubblica un articolo</a>
-                <a class="hero-link" href="/index.html#contatti">Richiedi informazioni</a>
-            </div>
+        <div class="container">
+            <a href="index.html" class="back-link">Torna al sito</a>
+            <h1>Blog del Master in Carbon Farming</h1>
+            <p>Approfondimenti, storie e aggiornamenti sulla transizione ecologica raccontati da docenti, studenti e partner.</p>
         </div>
     </header>
 
@@ -389,172 +244,88 @@
         <div class="container">
             <div class="blog-wrapper">
                 <p class="blog-intro">
-                    Il blog raccoglie contributi originali della faculty e dei partner del Master, offrendo risorse pratiche per aziende, enti territoriali e professionisti che lavorano sulla transizione ecologica.
+                    Qui raccogliamo articoli, interviste e guide operative dedicate al mondo del Carbon Farming. È lo spazio in cui condividiamo esperienze dal campo, strumenti per professionisti e novità sulle attività del Master.
                 </p>
 
                 <div class="blog-grid">
-                    <aside class="blog-highlight">
-                        <h2>Cosa troverai</h2>
-                        <p>Contenuti curati direttamente dalla faculty e dai partner del programma.</p>
+                    <div class="blog-highlight">
+                        <h2>In evidenza</h2>
                         <ul>
-                            <li>Analisi su policy e mercati del carbonio</li>
-                            <li>Case study da imprese agricole e forestali</li>
-                            <li>Strumenti e dati per misurare il carbonio</li>
-                            <li>Novità su borse di studio e partnership</li>
+                            <li>Strumenti digitali per la faculty</li>
+                            <li>Case study di aziende partner</li>
+                            <li>Guide per la certificazione del carbonio</li>
                         </ul>
-                        <div class="newsletter-box">
-                            <h3>Rimani aggiornato</h3>
-                            <p>Iscriviti alla newsletter del Master per ricevere inviti a webinar e nuove pubblicazioni.</p>
-                            <a href="mailto:master.carbonfarming@unitus.it?subject=Iscrizione%20newsletter">Scrivici per iscriverti</a>
-                        </div>
-                    </aside>
+                    </div>
+                    <div class="blog-highlight">
+                        <h2>Partecipa</h2>
+                        <ul>
+                            <li>Invia una proposta di articolo</li>
+                            <li>Condividi un progetto con la community</li>
+                            <li>Segnala eventi e opportunità</li>
+                        </ul>
+                    </div>
+                </div>
 
-                    <section class="blog-list" id="blog-posts" data-empty-text="Nessun articolo pubblicato al momento. Torna a trovarci a breve!">
-                        <!-- Gli articoli saranno caricati dinamicamente -->
-                    </section>
+                <div class="blog-articles">
+                    <article id="carbon-farming">
+                        <div class="article-meta">Novità · Marzo 2024</div>
+                        <h2>Carbon Farming: dalle policy alle applicazioni sul campo</h2>
+                        <p>
+                            Dal Green Deal europeo al regolamento CRCF 2024/3012, la cornice normativa sul Carbon Farming sta accelerando lo sviluppo di nuove pratiche agricole. Nel Master analizziamo i riferimenti legislativi e traduciamo le linee guida in azioni concrete per le imprese.
+                        </p>
+                        <p>
+                            Monitoraggio MRV, gestione del suolo e valorizzazione economica dei crediti sono alcuni dei temi affrontati nelle lezioni e nei project work. Mettiamo in rete università, aziende e istituzioni per sperimentare soluzioni replicabili.
+                        </p>
+                        <ul>
+                            <li>Panoramica sulle politiche europee e nazionali.</li>
+                            <li>Indicatori chiave per misurare l'impatto delle pratiche.</li>
+                            <li>Strumenti finanziari per sostenere gli investimenti.</li>
+                        </ul>
+                    </article>
+
+                    <article id="dashboard-docenti">
+                        <div class="article-meta">Didattica · Marzo 2024</div>
+                        <h2>Come funziona la nuova dashboard docenti</h2>
+                        <p>
+                            I docenti del Master avranno accesso a una dashboard personalizzata per configurare calendario, materiali e comunicazioni. L'interfaccia consente di pubblicare aggiornamenti in tempo reale e di collaborare con la segreteria per gestire le scadenze.
+                        </p>
+                        <p>
+                            Moduli, allegati multimediali e rubriche di valutazione sono organizzati in modo modulare. Gli studenti ricevono notifiche automatiche quando vengono caricati nuovi contenuti o quando viene programmato un webinar.
+                        </p>
+                        <ul>
+                            <li>Gestione modulare del syllabus e degli obiettivi di apprendimento.</li>
+                            <li>Upload rapido di risorse, esercitazioni e casi studio.</li>
+                            <li>Canali di messaggistica per coordinarsi con tutor e studenti.</li>
+                        </ul>
+                    </article>
+
+                    <article id="community">
+                        <div class="article-meta">Community · Marzo 2024</div>
+                        <h2>Le collaborazioni con imprese e territori</h2>
+                        <p>
+                            Le partnership con aziende e pubbliche amministrazioni permettono di co-progettare challenge, stage e borse di studio dedicate. I nuovi pacchetti di borse di studio aziendali, a partire da 5.000 €, sostengono i talenti e garantiscono visibilità ai partner.
+                        </p>
+                        <p>
+                            Ogni anno selezioniamo progetti applicati che connettono ricerca accademica e bisogni dei territori. I risultati vengono condivisi nel blog per ispirare altre realtà ad adottare pratiche rigenerative.
+                        </p>
+                        <ul>
+                            <li>Case study dalle ultime edizioni del Master.</li>
+                            <li>Interviste ai partner che hanno finanziato borse di studio.</li>
+                            <li>Opportunità future di collaborazione con il nostro network.</li>
+                        </ul>
+                    </article>
+                </div>
+
+                <div class="cta-box">
+                    <div>Vuoi restare aggiornato sui nuovi articoli e sulle attività del Master?</div>
+                    <a href="mailto:virgilio.maretto@posti.world?subject=Iscrizione%20newsletter%20Master%20Carbon%20Farming">📬 Iscriviti alla newsletter</a>
                 </div>
             </div>
         </div>
     </main>
 
     <footer>
-        © <span id="year"></span> Master in Carbon Farming · Università della Tuscia
+        © 2024 Master in Carbon Farming – Università degli Studi della Tuscia. <a href="index.html#info">Informazioni pratiche</a>
     </footer>
-
-    <script>
-        (function () {
-            const postsContainer = document.getElementById('blog-posts');
-            const yearSpan = document.getElementById('year');
-            if (yearSpan) {
-                yearSpan.textContent = new Date().getFullYear();
-            }
-
-            function renderEmpty(message) {
-                if (!postsContainer) return;
-                postsContainer.innerHTML = '';
-                const empty = document.createElement('div');
-                empty.className = 'blog-empty';
-                empty.textContent = message;
-                postsContainer.appendChild(empty);
-            }
-
-            function buildParagraph(text) {
-                const paragraph = document.createElement('p');
-                paragraph.textContent = text;
-                return paragraph;
-            }
-
-            function buildList(items) {
-                const list = document.createElement('ul');
-                items.forEach((item) => {
-                    const li = document.createElement('li');
-                    li.textContent = item;
-                    list.appendChild(li);
-                });
-                return list;
-            }
-
-            function parseContent(content) {
-                if (!content) {
-                    return [];
-                }
-
-                const blocks = content.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
-                return blocks.map((block) => {
-                    const bulletMatch = block.match(/^-\s+/m);
-                    if (bulletMatch || block.startsWith('-')) {
-                        const items = block.split(/\n+/)
-                            .map((line) => line.replace(/^[-*]\s*/, '').trim())
-                            .filter(Boolean);
-                        return buildList(items);
-                    }
-                    return buildParagraph(block);
-                });
-            }
-
-            function createArticle(post) {
-                const article = document.createElement('article');
-                const anchor = post.slug ? encodeURIComponent(post.slug) : `post-${post.id}`;
-                article.id = anchor;
-
-                const title = document.createElement('h2');
-                title.textContent = post.title || 'Aggiornamento dal Master';
-                article.appendChild(title);
-
-                const meta = document.createElement('div');
-                meta.className = 'article-meta';
-                if (post.publishedAt) {
-                    const date = new Date(post.publishedAt);
-                    meta.textContent = `Pubblicato il ${date.toLocaleDateString('it-IT', {
-                        day: '2-digit',
-                        month: 'long',
-                        year: 'numeric'
-                    })}`;
-                } else {
-                    meta.textContent = 'Aggiornamento della faculty';
-                }
-                article.appendChild(meta);
-
-                if (post.coverImageUrl) {
-                    const figure = document.createElement('figure');
-                    const img = document.createElement('img');
-                    img.src = post.coverImageUrl;
-                    img.alt = post.title ? `Immagine per ${post.title}` : 'Immagine articolo';
-                    img.loading = 'lazy';
-                    img.addEventListener('error', () => {
-                        figure.remove();
-                    });
-                    figure.appendChild(img);
-                    article.appendChild(figure);
-                }
-
-                const excerptText = post.excerpt || '';
-                if (excerptText) {
-                    article.appendChild(buildParagraph(excerptText));
-                }
-
-                const contentNodes = parseContent(post.content || '');
-                if (contentNodes.length) {
-                    contentNodes.forEach((node) => article.appendChild(node));
-                }
-
-                const footer = document.createElement('div');
-                footer.className = 'article-footer';
-                const cta = document.createElement('a');
-                cta.href = '/index.html#contatti';
-                cta.textContent = 'Richiedi informazioni sul Master';
-                footer.appendChild(cta);
-                article.appendChild(footer);
-
-                return article;
-            }
-
-            if (!postsContainer) {
-                return;
-            }
-
-            fetch('/api/blog-posts?published=true')
-                .then((response) => {
-                    if (!response.ok) {
-                        throw new Error('Errore nel recupero degli articoli');
-                    }
-                    return response.json();
-                })
-                .then((posts) => {
-                    if (!Array.isArray(posts) || posts.length === 0) {
-                        renderEmpty(postsContainer.dataset.emptyText || 'Nessun articolo pubblicato al momento.');
-                        return;
-                    }
-
-                    postsContainer.innerHTML = '';
-                    posts.forEach((post) => {
-                        postsContainer.appendChild(createArticle(post));
-                    });
-                })
-                .catch(() => {
-                    renderEmpty(postsContainer.dataset.emptyText || 'Nessun articolo pubblicato al momento.');
-                });
-        })();
-    </script>
 </body>
 </html>

@@ -640,63 +640,37 @@
             top: 12px;
         }
 
-        /* Teacher Hub Section */
+        /* Area amministrazione */
         .teacher-section {
             background: white;
         }
 
-        .teacher-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 30px;
-            margin-top: 40px;
-        }
-
-        .teacher-card {
-            background: #f8fffe;
-            border-radius: 18px;
-            padding: 30px;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.08);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .teacher-card:hover {
-            transform: translateY(-6px);
-            box-shadow: 0 18px 40px rgba(0,0,0,0.12);
-        }
-
-        .teacher-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 16px;
-            background: linear-gradient(135deg, #2c5f2d, #4a7c59);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.8rem;
-            margin-bottom: 20px;
-        }
-
-        .teacher-card h3 {
-            color: #2c5f2d;
-            margin-bottom: 15px;
-            font-size: 1.25rem;
-        }
-
-        .teacher-card p {
-            color: #555;
-            line-height: 1.6;
-        }
-
-        .teacher-note {
-            margin-top: 30px;
-            background: #f0f7f0;
-            border-radius: 15px;
-            padding: 25px;
-            color: #2c5f2d;
-            font-weight: 500;
+        .admin-cta {
+            max-width: 760px;
+            margin: 0 auto;
             text-align: center;
+            padding: 50px 20px 10px;
+        }
+
+        .admin-cta .section-subtitle {
+            margin-bottom: 25px;
+        }
+
+        .admin-description {
+            font-size: 1.1rem;
+            color: #4a7c59;
+            margin-bottom: 35px;
+            line-height: 1.7;
+        }
+
+        .admin-description span {
+            font-weight: 600;
+            color: #2c5f2d;
+        }
+
+        .admin-button {
+            padding: 18px 48px;
+            font-size: 1.15rem;
         }
 
         /* Blog Section */
@@ -1995,7 +1969,7 @@
             </div>
 
             <div class="faculty-admin-cta">
-                <p>Se sei un docente del Master puoi aggiornare il tuo profilo dalla <a href="/admin/">dashboard docenti</a>.</p>
+                <p>Se fai parte della faculty puoi aggiornare il tuo profilo dall'<a href="/admin/">Area amministrazione</a>.</p>
             </div>
         </div>
     </section>
@@ -2307,36 +2281,18 @@
         </div>
     </section>
 
-    <!-- Teacher Hub Section -->
+    <!-- Area amministrazione -->
     <section class="section teacher-section">
         <div class="container">
-            <h2 class="section-title">Spazio Docenti</h2>
-            <p class="section-subtitle">
-                Una piattaforma dedicata per configurare il percorso formativo, organizzare i moduli e condividere contenuti sempre aggiornati con gli studenti.
-            </p>
-
-            <div class="teacher-grid">
-                <div class="teacher-card">
-                    <div class="teacher-icon">🛠️</div>
-                    <h3>Dashboard di configurazione</h3>
-                    <p>Ogni docente dispone di un pannello intuitivo per impostare calendario, orari, messaggi e materiali del proprio insegnamento.</p>
-                </div>
-
-                <div class="teacher-card">
-                    <div class="teacher-icon">📚</div>
-                    <h3>Gestione dei moduli</h3>
-                    <p>Crea, duplica e riordina i moduli del Master allegando syllabus, esercitazioni e questionari con pochi clic.</p>
-                </div>
-
-                <div class="teacher-card">
-                    <div class="teacher-icon">💡</div>
-                    <h3>Contenuti multimediali</h3>
-                    <p>Carica video-lezioni, dataset, casi studio e risorse esterne in una libreria condivisa con studenti e partner.</p>
-                </div>
-            </div>
-
-            <div class="teacher-note">
-                L'area docenti è integrata con il calendario del Master e rende immediatamente disponibili gli aggiornamenti a tutti gli iscritti.
+            <div class="admin-cta">
+                <h2 class="section-title">Area amministrazione</h2>
+                <p class="section-subtitle">
+                    Il backoffice del Master dove la segreteria e la faculty organizzano docenti, articoli e contenuti futuri sfruttando il database serverless Neon integrato con il deploy su Vercel.
+                </p>
+                <p class="admin-description">
+                    Dall'Area amministrazione puoi <span>aggiornare le schede dei docenti</span>, pubblicare nuovi approfondimenti sul blog e preparare materiali che verranno resi disponibili agli studenti nelle prossime settimane. Tutti i dati sono sincronizzati in tempo reale grazie alla pipeline Neon/Vercel, così ogni modifica è subito online.
+                </p>
+                <a class="cta-button admin-button" href="/admin/">Accedi all'Area amministrazione</a>
             </div>
         </div>
     </section>
@@ -2359,9 +2315,9 @@
 
                 <article class="blog-card">
                     <span class="blog-meta">Didattica · Marzo 2024</span>
-                    <h3>Come funziona la nuova dashboard docenti</h3>
-                    <p>Un'anteprima degli strumenti digitali che supporteranno la faculty nella pianificazione delle lezioni e nella pubblicazione dei materiali.</p>
-                    <a class="blog-readmore" href="blog.html#dashboard-docenti">Approfondisci</a>
+                    <h3>Dentro la nuova Area amministrazione</h3>
+                    <p>Uno sguardo al pannello operativo che collega Neon e Vercel per supportare la pubblicazione di profili, articoli e risorse didattiche.</p>
+                    <a class="blog-readmore" href="blog.html#area-amministrazione">Approfondisci</a>
                 </article>
 
                 <article class="blog-card">

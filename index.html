@@ -112,6 +112,7 @@
             gap: 20px;
             justify-content: center;
             flex-wrap: wrap;
+            margin-bottom: 60px;
         }
 
         .cta-button {
@@ -1071,6 +1072,21 @@
             color: #333;
         }
 
+        .modal-actions {
+            text-align: center;
+            margin: 20px 0 10px;
+        }
+
+        .modal-actions .modal-link {
+            color: #2c5f2d;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .modal-actions .modal-link:hover {
+            text-decoration: underline;
+        }
+
         .info-options {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -1228,6 +1244,31 @@
 
         .package-content {
             padding: 30px;
+        }
+
+        .package-subtitle {
+            font-weight: 600;
+            color: #2c5f2d;
+            margin-bottom: 15px;
+        }
+
+        .package-pricing {
+            list-style: none;
+            margin: 0 0 25px;
+            padding: 0;
+        }
+
+        .package-pricing li {
+            padding: 8px 0;
+            color: #2c5f2d;
+            font-weight: 600;
+        }
+
+        .package-pricing li span {
+            display: block;
+            font-weight: 400;
+            color: #555;
+            font-size: 0.95rem;
         }
 
         .package-features {
@@ -1560,16 +1601,22 @@
                 <div class="package-card featured">
                     <div class="package-header">
                         <div class="package-icon">🎓</div>
-                        <h3>Borsa di Studio Aziendale</h3>
-                        <div class="package-price">€ 2.500 - € 5.000</div>
+                        <h3>Borse di Studio Aziendali</h3>
+                        <div class="package-price">€ 5.000 - € 18.000</div>
                     </div>
                     <div class="package-content">
+                        <p class="package-subtitle">Tre pacchetti tra cui scegliere:</p>
+                        <ul class="package-pricing">
+                            <li>1 borsa di studio <span>€ 5.000</span></li>
+                            <li>3 borse di studio <span>€ 12.000</span></li>
+                            <li>5 borse di studio <span>€ 18.000</span></li>
+                        </ul>
                         <ul class="package-features">
-                            <li>Finanziamento borse di studio</li>
-                            <li>Selezione criteri preferenziali</li>
-                            <li>Mentoring studenti borsisti</li>
-                            <li>Logo "Sponsor Borse di Studio"</li>
-                            <li>Partecipazione evento finale</li>
+                            <li>Finanziamento di borse di studio dedicate</li>
+                            <li>Definizione condivisa dei criteri di assegnazione</li>
+                            <li>Mentoring e testimonianze aziendali durante il Master</li>
+                            <li>Logo con dicitura "Sponsor Borse di Studio" su materiali ufficiali</li>
+                            <li>Invito e visibilità durante l'evento finale</li>
                         </ul>
                     </div>
                 </div>
@@ -1591,7 +1638,11 @@
                     </div>
                 </div>
             </div>
-            
+
+            <div class="modal-actions">
+                <a class="modal-link" href="sponsorship.html">Apri la pagina Partnership e Sponsorship</a>
+            </div>
+
             <form class="sponsor-contact-form" method="POST" action="https://formsubmit.co/virgilio.maretto@posti.world" onsubmit="submitSponsorForm(event)">
                 <input type="hidden" name="_subject" value="Richiesta partnership - Master Carbon Farming">
                 <input type="hidden" name="_captcha" value="false">
@@ -1629,7 +1680,7 @@
                     <select name="pacchetto">
                         <option value="">Seleziona...</option>
                         <option value="istituzionale">Contributo Istituzionale</option>
-                        <option value="borsa">Borsa di Studio Aziendale</option>
+                        <option value="borsa">Borse di Studio Aziendali</option>
                         <option value="progetto">Progetto Applicato</option>
                         <option value="personalizzato">Soluzione personalizzata</option>
                     </select>
@@ -1922,6 +1973,26 @@
                             <a href="https://www.linkedin.com/in/luca-buonocore-24b49b2/" target="_blank">Luca Buonocore</a>
                         </h3>
                         <p class="faculty-role">Consulente strategico in sostenibilità e carbon management, esperto in mercati dei crediti di carbonio</p>
+                    </div>
+                </div>
+
+                <div class="faculty-card">
+                    <img class="faculty-image" src="assets/img/faculty-female.png" alt="Docente donna" loading="lazy">
+                    <div class="faculty-info">
+                        <h3 class="faculty-name">
+                            <a href="https://www.distabif.unicampania.it/dipartimento/docenti?MATRICOLA=057475" target="_blank">Prof.ssa Simona Castaldi</a>
+                        </h3>
+                        <p class="faculty-role">Università degli Studi della Campania Luigi Vanvitelli - Esperta in ecologia applicata, cicli biogeochimici e agricoltura sostenibile</p>
+                    </div>
+                </div>
+
+                <div class="faculty-card">
+                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Docente uomo" loading="lazy">
+                    <div class="faculty-info">
+                        <h3 class="faculty-name">
+                            <a href="https://www.unitus.it/personale/docente/nicola-lacetera/" target="_blank">Prof. Nicola Lacetera</a>
+                        </h3>
+                        <p class="faculty-role">Università della Tuscia - Direttore del Dipartimento DAFNE, esperto in scienze agrarie e benessere animale</p>
                     </div>
                 </div>
             </div>
@@ -2460,16 +2531,15 @@
                     <div class="info-icon">🎓</div>
                     <h3 class="info-title">Requisiti di ammissione</h3>
                     <div class="info-content">
-                        <p><strong>Laurea Magistrale in:</strong></p>
-                        <ul style="text-align: left; margin-top: 15px; color: #555;">
-                            <li>Scienze Agrarie e Forestali</li>
-                            <li>Scienze Ambientali e Naturali</li>
-                            <li>Ingegneria per l'Ambiente</li>
-                            <li>Biotecnologie per l'Agricoltura</li>
-                            <li>Economia Agroalimentare</li>
-                            <li>Scienze della Sostenibilità</li>
-                        </ul>
-                        <p style="margin-top: 15px;">Selezione per titoli con valutazione curriculum.</p>
+                        <p style="text-align: left; color: #555;">
+                            <strong>Laurea Magistrale in:</strong> Scienze Agrarie e Forestali, Scienze Ambientali e Naturali, Ingegneria per l'Ambiente, Biotecnologie per l'Agricoltura, Economia Agroalimentare, Scienze della Sostenibilità
+                        </p>
+                        <p style="margin-top: 15px; text-align: left; color: #555;">
+                            Anche diplomati agrotecnici e periti agrari sono ammessi a partecipare come uditori.
+                        </p>
+                        <p style="margin-top: 15px; text-align: left; color: #555;">
+                            In tutti i casi, l’ammissione avviene tramite selezione per titoli, basata sulla valutazione del curriculum vitae e, se previsto, di altri elementi come lettera motivazionale o esperienze professionali pregresse.
+                        </p>
                     </div>
                 </div>
                 
@@ -2485,7 +2555,8 @@
                             <strong>Riduzioni previste:</strong><br>
                             • Studenti UNITUS: € 2.500<br>
                             • Convenzioni PA: € 3.500<br>
-                            • Dipendenti UNITUS: € 1.500
+                            • Dipendenti UNITUS: € 1.500<br>
+                            • Uditori: € 2.500
                         </p>
                     </div>
                 </div>
@@ -2517,7 +2588,6 @@
                             <li>Analista dei mercati del carbonio</li>
                             <li>Project Manager progetti LIFE/Horizon</li>
                         </ul>
-                        <p style="margin-top: 15px;">Con stage e network internazionale inclusi.</p>
                     </div>
                 </div>
             </div>

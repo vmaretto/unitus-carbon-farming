@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Partnership e Sponsorship - Master in Carbon Farming</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+            background: #f5f9f5;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .page-hero {
+            background: linear-gradient(135deg, #2c5f2d 0%, #4a7c59 100%);
+            color: #fff;
+            padding: 60px 0 80px;
+            text-align: center;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #fff;
+            text-decoration: none;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .back-link::before {
+            content: "←";
+            font-size: 1.2rem;
+        }
+
+        .page-hero h1 {
+            font-size: 2.8rem;
+            margin-bottom: 20px;
+        }
+
+        .page-hero p {
+            font-size: 1.2rem;
+            max-width: 720px;
+            margin: 0 auto;
+        }
+
+        main {
+            margin-top: -40px;
+        }
+
+        .standalone-section {
+            background: #fff;
+            border-radius: 24px;
+            padding: 50px;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.08);
+            position: relative;
+            top: -60px;
+        }
+
+        .standalone-section + .standalone-section {
+            margin-top: 40px;
+        }
+
+        .sponsor-packages {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 30px;
+        }
+
+        .package-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 20px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .package-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+        }
+
+        .package-card.featured {
+            border-color: #ff6b35;
+            transform: scale(1.02);
+        }
+
+        .package-card.featured .package-header {
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            color: white;
+        }
+
+        .package-header {
+            padding: 30px;
+            background: #f8fffe;
+            text-align: center;
+        }
+
+        .package-icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+        }
+
+        .package-header h3 {
+            color: #2c5f2d;
+            margin-bottom: 10px;
+            font-size: 1.3rem;
+        }
+
+        .package-card.featured .package-header h3 {
+            color: #fff;
+        }
+
+        .package-price {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #ff6b35;
+        }
+
+        .package-card.featured .package-price {
+            color: #fff;
+        }
+
+        .package-content {
+            padding: 30px;
+        }
+
+        .package-subtitle {
+            font-weight: 600;
+            color: #2c5f2d;
+            margin-bottom: 15px;
+        }
+
+        .package-pricing {
+            list-style: none;
+            margin: 0 0 25px;
+            padding: 0;
+        }
+
+        .package-pricing li {
+            padding: 8px 0;
+            color: #2c5f2d;
+            font-weight: 600;
+        }
+
+        .package-pricing li span {
+            display: block;
+            font-weight: 400;
+            color: #555;
+            font-size: 0.95rem;
+        }
+
+        .package-features {
+            list-style: none;
+        }
+
+        .package-features li {
+            padding: 10px 0;
+            color: #555;
+            position: relative;
+            padding-left: 25px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .package-features li:last-child {
+            border-bottom: none;
+        }
+
+        .package-features li::before {
+            content: "✓";
+            color: #2c5f2d;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            margin-bottom: 20px;
+            color: #2c5f2d;
+        }
+
+        .section-intro {
+            font-size: 1.05rem;
+            color: #555;
+            margin-bottom: 30px;
+        }
+
+        .sponsor-contact-form {
+            display: grid;
+            gap: 20px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            color: #2c5f2d;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            border: 1px solid #d8e3d8;
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #2c5f2d;
+        }
+
+        .checkbox-group {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            font-size: 0.95rem;
+            color: #555;
+        }
+
+        .checkbox-group a {
+            color: #2c5f2d;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(45deg, #ff6b35, #f7931e);
+            color: white;
+            padding: 16px 36px;
+            text-decoration: none;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 1.05rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
+        }
+
+        .alert {
+            padding: 14px 20px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+        }
+
+        .alert.success {
+            background: #e7f6ec;
+            color: #2c5f2d;
+            border: 1px solid #b7e2c5;
+        }
+
+        .back-home {
+            text-align: center;
+            margin: 60px 0 40px;
+        }
+
+        .back-home a {
+            color: #2c5f2d;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        @media (max-width: 720px) {
+            .page-hero {
+                padding: 50px 0 60px;
+            }
+
+            .page-hero h1 {
+                font-size: 2.2rem;
+            }
+
+            .standalone-section {
+                padding: 30px;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="page-hero">
+        <div class="container">
+            <a class="back-link" href="index.html">Torna alla home</a>
+            <h1>Partnership e Sponsorship</h1>
+            <p>Tre modalità di collaborazione per supportare la formazione in Carbon Farming e costruire nuove relazioni con l'Università della Tuscia.</p>
+        </div>
+    </header>
+
+    <main>
+        <section class="container standalone-section">
+            <h2 class="section-title">Scegli il pacchetto più adatto alla tua organizzazione</h2>
+            <p class="section-intro">Dalla visibilità istituzionale al sostegno diretto degli studenti, ogni proposta è pensata per valorizzare il contributo delle aziende impegnate nella sostenibilità.</p>
+
+            <div class="sponsor-packages">
+                <div class="package-card">
+                    <div class="package-header">
+                        <div class="package-icon">🏛️</div>
+                        <h3>Contributo Istituzionale</h3>
+                        <div class="package-price">€ 2.000+</div>
+                    </div>
+                    <div class="package-content">
+                        <ul class="package-features">
+                            <li>Logo tra i Partner Istituzionali</li>
+                            <li>Visibilità su sito web e brochure</li>
+                            <li>Intervento negli eventi</li>
+                            <li>Coinvolgimento in attività future</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="package-card featured">
+                    <div class="package-header">
+                        <div class="package-icon">🎓</div>
+                        <h3>Borse di Studio Aziendali</h3>
+                        <div class="package-price">€ 5.000 - € 18.000</div>
+                    </div>
+                    <div class="package-content">
+                        <p class="package-subtitle">Tre pacchetti tra cui scegliere:</p>
+                        <ul class="package-pricing">
+                            <li>1 borsa di studio <span>€ 5.000</span></li>
+                            <li>3 borse di studio <span>€ 12.000</span></li>
+                            <li>5 borse di studio <span>€ 18.000</span></li>
+                        </ul>
+                        <ul class="package-features">
+                            <li>Finanziamento di borse di studio dedicate</li>
+                            <li>Definizione condivisa dei criteri di assegnazione</li>
+                            <li>Mentoring e testimonianze aziendali durante il Master</li>
+                            <li>Logo con dicitura "Sponsor Borse di Studio" su materiali ufficiali</li>
+                            <li>Invito e visibilità durante l'evento finale</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="package-card">
+                    <div class="package-header">
+                        <div class="package-icon">🧪</div>
+                        <h3>Progetto Applicato</h3>
+                        <div class="package-price">Su misura</div>
+                    </div>
+                    <div class="package-content">
+                        <ul class="package-features">
+                            <li>Co-progettazione Project Work</li>
+                            <li>Stage studenti in azienda</li>
+                            <li>Caso studio aziendale</li>
+                            <li>Visibilità Best Practice</li>
+                            <li>Collaborazioni scientifiche</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="container standalone-section">
+            <h2 class="section-title">Richiedi informazioni dettagliate</h2>
+            <p class="section-intro">Compila il form per essere ricontattato dal team del Master e costruire insieme la proposta più efficace per la tua azienda.</p>
+
+            <div id="standaloneSuccess" class="alert success" style="display: none;">Grazie! La tua richiesta è stata inviata con successo.</div>
+
+            <form class="sponsor-contact-form" method="POST" action="https://formsubmit.co/virgilio.maretto@posti.world" onsubmit="submitSponsorForm(event)">
+                <input type="hidden" name="_subject" value="Richiesta partnership - Master Carbon Farming">
+                <input type="hidden" name="_captcha" value="false">
+                <input type="hidden" name="_template" value="table">
+                <input type="hidden" name="_next" value="https://vmaretto.github.io/unitus-carbon-farming/sponsorship.html?sent=1#standaloneSuccess">
+                <input type="text" name="_honey" style="display:none">
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Azienda/Ente *</label>
+                        <input type="text" name="azienda" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Referente *</label>
+                        <input type="text" name="referente" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Email *</label>
+                        <input type="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Telefono</label>
+                        <input type="tel" name="telefono">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Pacchetto di interesse</label>
+                    <select name="pacchetto">
+                        <option value="">Seleziona...</option>
+                        <option value="istituzionale">Contributo Istituzionale</option>
+                        <option value="borsa">Borse di Studio Aziendali</option>
+                        <option value="progetto">Progetto Applicato</option>
+                        <option value="personalizzato">Soluzione personalizzata</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Note e richieste specifiche</label>
+                    <textarea name="note" placeholder="Descrivi i tuoi obiettivi e interessi di collaborazione..."></textarea>
+                </div>
+
+                <label class="checkbox-group">
+                    <input type="checkbox" name="privacy" required>
+                    <span>Accetto il trattamento dei dati personali secondo il GDPR – <a href="https://www.unitus.it/ateneo/privacy/" target="_blank" rel="noopener">Privacy Policy</a></span>
+                </label>
+
+                <button type="submit" class="cta-button">Invia richiesta</button>
+            </form>
+        </section>
+
+        <div class="back-home">
+            <a href="index.html">← Torna alla home del Master</a>
+        </div>
+    </main>
+
+    <script>
+        const FORMSUBMIT_EMAIL = 'virgilio.maretto@posti.world';
+        const FORMSUBMIT_URL = `https://formsubmit.co/ajax/${FORMSUBMIT_EMAIL}`;
+
+        async function sendWithFormSubmitAJAX(form, subject) {
+            const fd = new FormData(form);
+            fd.append('_subject', subject || 'Richiesta partnership - Master Carbon Farming');
+            fd.append('_template', 'table');
+            fd.append('_captcha', 'false');
+
+            const resp = await fetch(FORMSUBMIT_URL, {
+                method: 'POST',
+                body: fd,
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (!resp.ok) {
+                throw new Error('FormSubmit response not OK');
+            }
+
+            return resp.json().catch(() => ({}));
+        }
+
+        async function submitSponsorForm(event) {
+            event.preventDefault();
+            const form = event.target;
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
+            try {
+                await sendWithFormSubmitAJAX(form, 'Richiesta Informazioni - Azienda/Sponsor');
+                const successMessage = document.getElementById('standaloneSuccess');
+                if (successMessage) {
+                    successMessage.style.display = 'block';
+                    successMessage.focus?.();
+                }
+                form.reset();
+            } catch (error) {
+                alert('Si è verificato un problema durante l\'invio. Riprova più tardi.');
+                console.error(error);
+            }
+        }
+
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('sent') === '1') {
+            const successMessage = document.getElementById('standaloneSuccess');
+            if (successMessage) {
+                successMessage.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>

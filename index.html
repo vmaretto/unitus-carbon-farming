@@ -633,6 +633,131 @@
             top: 12px;
         }
 
+        /* Teacher Hub Section */
+        .teacher-section {
+            background: white;
+        }
+
+        .teacher-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .teacher-card {
+            background: #f8fffe;
+            border-radius: 18px;
+            padding: 30px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .teacher-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 18px 40px rgba(0,0,0,0.12);
+        }
+
+        .teacher-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #2c5f2d, #4a7c59);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+        }
+
+        .teacher-card h3 {
+            color: #2c5f2d;
+            margin-bottom: 15px;
+            font-size: 1.25rem;
+        }
+
+        .teacher-card p {
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .teacher-note {
+            margin-top: 30px;
+            background: #f0f7f0;
+            border-radius: 15px;
+            padding: 25px;
+            color: #2c5f2d;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        /* Blog Section */
+        .blog-section {
+            background: #f8fffe;
+        }
+
+        .blog-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .blog-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .blog-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 18px 45px rgba(0,0,0,0.12);
+        }
+
+        .blog-meta {
+            color: #ff6b35;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            font-size: 0.95rem;
+            text-transform: uppercase;
+        }
+
+        .blog-card h3 {
+            color: #2c5f2d;
+            font-size: 1.3rem;
+            line-height: 1.4;
+        }
+
+        .blog-card p {
+            color: #555;
+            line-height: 1.6;
+            flex-grow: 1;
+        }
+
+        .blog-readmore {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #2c5f2d;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .blog-readmore::after {
+            content: "→";
+            transition: transform 0.3s ease;
+        }
+
+        .blog-readmore:hover::after {
+            transform: translateX(4px);
+        }
+
         .scroll-nav {
             display: flex;
             justify-content: center;
@@ -1359,7 +1484,7 @@
                 grid-template-columns: repeat(2, 1fr);
             }
             
-            .info-grid, .learn-grid, .candidate-criteria {
+            .info-grid, .learn-grid, .candidate-criteria, .teacher-grid, .blog-grid {
                 grid-template-columns: 1fr;
             }
             
@@ -1601,8 +1726,8 @@
                 <div class="package-card featured">
                     <div class="package-header">
                         <div class="package-icon">🎓</div>
-                        <h3>Borse di Studio Aziendali</h3>
-                        <div class="package-price">€ 5.000 - € 18.000</div>
+                        <h3>Pacchetti di Borse di studio Aziendali</h3>
+                        <div class="package-price">A partire da 5.000 €</div>
                     </div>
                     <div class="package-content">
                         <p class="package-subtitle">Tre pacchetti tra cui scegliere:</p>
@@ -1680,7 +1805,7 @@
                     <select name="pacchetto">
                         <option value="">Seleziona...</option>
                         <option value="istituzionale">Contributo Istituzionale</option>
-                        <option value="borsa">Borse di Studio Aziendali</option>
+                        <option value="borsa">Pacchetti di Borse di studio Aziendali</option>
                         <option value="progetto">Progetto Applicato</option>
                         <option value="personalizzato">Soluzione personalizzata</option>
                     </select>
@@ -1727,6 +1852,7 @@
                 </p>
                 <div class="hero-buttons">
                     <button class="cta-button" onclick="showInfoOptions()">📄 Richiedi Informazioni</button>
+                    <a class="cta-button download-button" href="blog.html">📰 Esplora il Blog</a>
                 </div>
             </div>
         </div>
@@ -2302,6 +2428,73 @@
             <div class="scroll-nav">
                 <button class="scroll-btn" onclick="scrollModules('left')">‹</button>
                 <button class="scroll-btn" onclick="scrollModules('right')">›</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Teacher Hub Section -->
+    <section class="section teacher-section">
+        <div class="container">
+            <h2 class="section-title">Spazio Docenti</h2>
+            <p class="section-subtitle">
+                Una piattaforma dedicata per configurare il percorso formativo, organizzare i moduli e condividere contenuti sempre aggiornati con gli studenti.
+            </p>
+
+            <div class="teacher-grid">
+                <div class="teacher-card">
+                    <div class="teacher-icon">🛠️</div>
+                    <h3>Dashboard di configurazione</h3>
+                    <p>Ogni docente dispone di un pannello intuitivo per impostare calendario, orari, messaggi e materiali del proprio insegnamento.</p>
+                </div>
+
+                <div class="teacher-card">
+                    <div class="teacher-icon">📚</div>
+                    <h3>Gestione dei moduli</h3>
+                    <p>Crea, duplica e riordina i moduli del Master allegando syllabus, esercitazioni e questionari con pochi clic.</p>
+                </div>
+
+                <div class="teacher-card">
+                    <div class="teacher-icon">💡</div>
+                    <h3>Contenuti multimediali</h3>
+                    <p>Carica video-lezioni, dataset, casi studio e risorse esterne in una libreria condivisa con studenti e partner.</p>
+                </div>
+            </div>
+
+            <div class="teacher-note">
+                L'area docenti è integrata con il calendario del Master e rende immediatamente disponibili gli aggiornamenti a tutti gli iscritti.
+            </div>
+        </div>
+    </section>
+
+    <!-- Blog Preview Section -->
+    <section class="section blog-section" id="blog">
+        <div class="container">
+            <h2 class="section-title">Blog del Master</h2>
+            <p class="section-subtitle">
+                Raccontiamo le storie, le ricerche e le innovazioni che stanno cambiando il Carbon Farming in Italia e in Europa.
+            </p>
+
+            <div class="blog-grid">
+                <article class="blog-card">
+                    <span class="blog-meta">Novità · Marzo 2024</span>
+                    <h3>Carbon Farming: dalle policy alle applicazioni sul campo</h3>
+                    <p>Un viaggio tra regolamenti europei, certificazioni e casi concreti di aziende che stanno già riducendo le emissioni e valorizzando i crediti di carbonio.</p>
+                    <a class="blog-readmore" href="blog.html#carbon-farming">Scopri di più</a>
+                </article>
+
+                <article class="blog-card">
+                    <span class="blog-meta">Didattica · Marzo 2024</span>
+                    <h3>Come funziona la nuova dashboard docenti</h3>
+                    <p>Un'anteprima degli strumenti digitali che supporteranno la faculty nella pianificazione delle lezioni e nella pubblicazione dei materiali.</p>
+                    <a class="blog-readmore" href="blog.html#dashboard-docenti">Approfondisci</a>
+                </article>
+
+                <article class="blog-card">
+                    <span class="blog-meta">Community · Marzo 2024</span>
+                    <h3>Le collaborazioni con imprese e territori</h3>
+                    <p>Dal project work ai pacchetti di borse di studio aziendali: come costruiamo reti di valore con partner pubblici e privati.</p>
+                    <a class="blog-readmore" href="blog.html#community">Leggi l'articolo</a>
+                </article>
             </div>
         </div>
     </section>

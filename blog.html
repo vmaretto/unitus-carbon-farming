@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog - Master in Carbon Farming</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+            background: #f5f9f5;
+            line-height: 1.7;
+        }
+
+        .container {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        header {
+            background: linear-gradient(135deg, #2c5f2d 0%, #4a7c59 100%);
+            color: white;
+            text-align: center;
+            padding: 70px 0 90px;
+            position: relative;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+
+        .back-link::before {
+            content: "←";
+            font-size: 1.2rem;
+        }
+
+        header h1 {
+            font-size: 2.8rem;
+            margin-bottom: 20px;
+        }
+
+        header p {
+            font-size: 1.1rem;
+            max-width: 700px;
+            margin: 0 auto;
+            opacity: 0.95;
+        }
+
+        main {
+            margin-top: -50px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .blog-wrapper {
+            background: white;
+            border-radius: 28px;
+            padding: 50px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.12);
+        }
+
+        .blog-intro {
+            font-size: 1.05rem;
+            color: #555;
+            margin-bottom: 40px;
+        }
+
+        .blog-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+        }
+
+        .blog-highlight {
+            background: linear-gradient(135deg, rgba(44, 95, 45, 0.08), rgba(74, 124, 89, 0.08));
+            border-radius: 18px;
+            padding: 30px;
+        }
+
+        .blog-highlight h2 {
+            color: #2c5f2d;
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+        }
+
+        .blog-highlight ul {
+            list-style: none;
+            color: #2c5f2d;
+            font-weight: 600;
+        }
+
+        .blog-highlight ul li {
+            margin-bottom: 10px;
+            position: relative;
+            padding-left: 24px;
+        }
+
+        .blog-highlight ul li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            top: 0;
+            color: #ff6b35;
+        }
+
+        .blog-articles {
+            margin-top: 50px;
+            display: grid;
+            gap: 40px;
+        }
+
+        article {
+            background: #f8fffe;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.08);
+        }
+
+        article h2 {
+            color: #2c5f2d;
+            font-size: 2rem;
+            margin-bottom: 15px;
+        }
+
+        .article-meta {
+            color: #ff6b35;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+
+        article p {
+            color: #555;
+            margin-bottom: 18px;
+        }
+
+        article ul {
+            margin: 20px 0 20px 20px;
+            color: #555;
+        }
+
+        article ul li {
+            margin-bottom: 10px;
+        }
+
+        .cta-box {
+            background: #2c5f2d;
+            color: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-top: 60px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            text-align: center;
+        }
+
+        .cta-box a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background: linear-gradient(45deg, #ff6b35, #f7931e);
+            color: white;
+            padding: 14px 28px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .cta-box a:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(255, 107, 53, 0.35);
+        }
+
+        footer {
+            text-align: center;
+            margin: 80px 0 40px;
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        footer a {
+            color: #2c5f2d;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        @media (max-width: 768px) {
+            header {
+                padding: 60px 0 70px;
+            }
+
+            header h1 {
+                font-size: 2.2rem;
+            }
+
+            .blog-wrapper {
+                padding: 30px;
+            }
+
+            article {
+                padding: 30px;
+            }
+        }
+
+        @media (max-width: 520px) {
+            header h1 {
+                font-size: 1.9rem;
+            }
+
+            header p {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <a href="index.html" class="back-link">Torna al sito</a>
+            <h1>Blog del Master in Carbon Farming</h1>
+            <p>Approfondimenti, storie e aggiornamenti sulla transizione ecologica raccontati da docenti, studenti e partner.</p>
+        </div>
+    </header>
+
+    <main>
+        <div class="container">
+            <div class="blog-wrapper">
+                <p class="blog-intro">
+                    Qui raccogliamo articoli, interviste e guide operative dedicate al mondo del Carbon Farming. È lo spazio in cui condividiamo esperienze dal campo, strumenti per professionisti e novità sulle attività del Master.
+                </p>
+
+                <div class="blog-grid">
+                    <div class="blog-highlight">
+                        <h2>In evidenza</h2>
+                        <ul>
+                            <li>Strumenti digitali per la faculty</li>
+                            <li>Case study di aziende partner</li>
+                            <li>Guide per la certificazione del carbonio</li>
+                        </ul>
+                    </div>
+                    <div class="blog-highlight">
+                        <h2>Partecipa</h2>
+                        <ul>
+                            <li>Invia una proposta di articolo</li>
+                            <li>Condividi un progetto con la community</li>
+                            <li>Segnala eventi e opportunità</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="blog-articles">
+                    <article id="carbon-farming">
+                        <div class="article-meta">Novità · Marzo 2024</div>
+                        <h2>Carbon Farming: dalle policy alle applicazioni sul campo</h2>
+                        <p>
+                            Dal Green Deal europeo al regolamento CRCF 2024/3012, la cornice normativa sul Carbon Farming sta accelerando lo sviluppo di nuove pratiche agricole. Nel Master analizziamo i riferimenti legislativi e traduciamo le linee guida in azioni concrete per le imprese.
+                        </p>
+                        <p>
+                            Monitoraggio MRV, gestione del suolo e valorizzazione economica dei crediti sono alcuni dei temi affrontati nelle lezioni e nei project work. Mettiamo in rete università, aziende e istituzioni per sperimentare soluzioni replicabili.
+                        </p>
+                        <ul>
+                            <li>Panoramica sulle politiche europee e nazionali.</li>
+                            <li>Indicatori chiave per misurare l'impatto delle pratiche.</li>
+                            <li>Strumenti finanziari per sostenere gli investimenti.</li>
+                        </ul>
+                    </article>
+
+                    <article id="dashboard-docenti">
+                        <div class="article-meta">Didattica · Marzo 2024</div>
+                        <h2>Come funziona la nuova dashboard docenti</h2>
+                        <p>
+                            I docenti del Master avranno accesso a una dashboard personalizzata per configurare calendario, materiali e comunicazioni. L'interfaccia consente di pubblicare aggiornamenti in tempo reale e di collaborare con la segreteria per gestire le scadenze.
+                        </p>
+                        <p>
+                            Moduli, allegati multimediali e rubriche di valutazione sono organizzati in modo modulare. Gli studenti ricevono notifiche automatiche quando vengono caricati nuovi contenuti o quando viene programmato un webinar.
+                        </p>
+                        <ul>
+                            <li>Gestione modulare del syllabus e degli obiettivi di apprendimento.</li>
+                            <li>Upload rapido di risorse, esercitazioni e casi studio.</li>
+                            <li>Canali di messaggistica per coordinarsi con tutor e studenti.</li>
+                        </ul>
+                    </article>
+
+                    <article id="community">
+                        <div class="article-meta">Community · Marzo 2024</div>
+                        <h2>Le collaborazioni con imprese e territori</h2>
+                        <p>
+                            Le partnership con aziende e pubbliche amministrazioni permettono di co-progettare challenge, stage e borse di studio dedicate. I nuovi pacchetti di borse di studio aziendali, a partire da 5.000 €, sostengono i talenti e garantiscono visibilità ai partner.
+                        </p>
+                        <p>
+                            Ogni anno selezioniamo progetti applicati che connettono ricerca accademica e bisogni dei territori. I risultati vengono condivisi nel blog per ispirare altre realtà ad adottare pratiche rigenerative.
+                        </p>
+                        <ul>
+                            <li>Case study dalle ultime edizioni del Master.</li>
+                            <li>Interviste ai partner che hanno finanziato borse di studio.</li>
+                            <li>Opportunità future di collaborazione con il nostro network.</li>
+                        </ul>
+                    </article>
+                </div>
+
+                <div class="cta-box">
+                    <div>Vuoi restare aggiornato sui nuovi articoli e sulle attività del Master?</div>
+                    <a href="mailto:virgilio.maretto@posti.world?subject=Iscrizione%20newsletter%20Master%20Carbon%20Farming">📬 Iscriviti alla newsletter</a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        © 2024 Master in Carbon Farming – Università degli Studi della Tuscia. <a href="index.html#info">Informazioni pratiche</a>
+    </footer>
+</body>
+</html>

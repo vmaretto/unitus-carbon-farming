@@ -112,6 +112,7 @@
             gap: 20px;
             justify-content: center;
             flex-wrap: wrap;
+            margin-bottom: 60px;
         }
 
         .cta-button {
@@ -1071,6 +1072,21 @@
             color: #333;
         }
 
+        .modal-actions {
+            text-align: center;
+            margin: 20px 0 10px;
+        }
+
+        .modal-actions .modal-link {
+            color: #2c5f2d;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .modal-actions .modal-link:hover {
+            text-decoration: underline;
+        }
+
         .info-options {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -1228,6 +1244,31 @@
 
         .package-content {
             padding: 30px;
+        }
+
+        .package-subtitle {
+            font-weight: 600;
+            color: #2c5f2d;
+            margin-bottom: 15px;
+        }
+
+        .package-pricing {
+            list-style: none;
+            margin: 0 0 25px;
+            padding: 0;
+        }
+
+        .package-pricing li {
+            padding: 8px 0;
+            color: #2c5f2d;
+            font-weight: 600;
+        }
+
+        .package-pricing li span {
+            display: block;
+            font-weight: 400;
+            color: #555;
+            font-size: 0.95rem;
         }
 
         .package-features {
@@ -1560,16 +1601,22 @@
                 <div class="package-card featured">
                     <div class="package-header">
                         <div class="package-icon">🎓</div>
-                        <h3>Borsa di Studio Aziendale</h3>
-                        <div class="package-price">€ 2.500 - € 5.000</div>
+                        <h3>Borse di Studio Aziendali</h3>
+                        <div class="package-price">€ 5.000 - € 18.000</div>
                     </div>
                     <div class="package-content">
+                        <p class="package-subtitle">Tre pacchetti tra cui scegliere:</p>
+                        <ul class="package-pricing">
+                            <li>1 borsa di studio <span>€ 5.000</span></li>
+                            <li>3 borse di studio <span>€ 12.000</span></li>
+                            <li>5 borse di studio <span>€ 18.000</span></li>
+                        </ul>
                         <ul class="package-features">
-                            <li>Finanziamento borse di studio</li>
-                            <li>Selezione criteri preferenziali</li>
-                            <li>Mentoring studenti borsisti</li>
-                            <li>Logo "Sponsor Borse di Studio"</li>
-                            <li>Partecipazione evento finale</li>
+                            <li>Finanziamento di borse di studio dedicate</li>
+                            <li>Definizione condivisa dei criteri di assegnazione</li>
+                            <li>Mentoring e testimonianze aziendali durante il Master</li>
+                            <li>Logo con dicitura "Sponsor Borse di Studio" su materiali ufficiali</li>
+                            <li>Invito e visibilità durante l'evento finale</li>
                         </ul>
                     </div>
                 </div>
@@ -1591,7 +1638,11 @@
                     </div>
                 </div>
             </div>
-            
+
+            <div class="modal-actions">
+                <a class="modal-link" href="sponsorship.html">Apri la pagina Partnership e Sponsorship</a>
+            </div>
+
             <form class="sponsor-contact-form" method="POST" action="https://formsubmit.co/virgilio.maretto@posti.world" onsubmit="submitSponsorForm(event)">
                 <input type="hidden" name="_subject" value="Richiesta partnership - Master Carbon Farming">
                 <input type="hidden" name="_captcha" value="false">
@@ -1629,7 +1680,7 @@
                     <select name="pacchetto">
                         <option value="">Seleziona...</option>
                         <option value="istituzionale">Contributo Istituzionale</option>
-                        <option value="borsa">Borsa di Studio Aziendale</option>
+                        <option value="borsa">Borse di Studio Aziendali</option>
                         <option value="progetto">Progetto Applicato</option>
                         <option value="personalizzato">Soluzione personalizzata</option>
                     </select>

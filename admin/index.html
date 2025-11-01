@@ -361,6 +361,7 @@
                 <a href="/index.html">← Torna al sito</a>
                 <a href="#faculty">Gestione docenti</a>
                 <a href="#blog">Gestione blog</a>
+                <a href="#partners">Gestione partner</a>
             </div>
         </div>
     </header>
@@ -496,6 +497,75 @@
                 </table>
             </div>
         </section>
+
+        <section id="partners">
+            <header>
+                <h2>Gestione partner</h2>
+                <p class="section-description">Configura i partner del programma e decidi quando renderli visibili sul sito pubblico.</p>
+            </header>
+
+            <form id="partner-form">
+                <div class="form-grid">
+                    <label>
+                        Nome partner
+                        <input type="text" id="partner-name" name="name" required placeholder="Es. Università della Tuscia">
+                    </label>
+                    <label>
+                        Tipo di partnership
+                        <select id="partner-type" name="partnerType" required>
+                            <option value="">Seleziona tipo...</option>
+                            <option value="patrocinio">Patrocinio</option>
+                            <option value="collaborazione">Collaborazione</option>
+                        </select>
+                    </label>
+                    <label>
+                        URL logo
+                        <input type="url" id="partner-logo" name="logoUrl" placeholder="https://...">
+                    </label>
+                    <label>
+                        Sito web
+                        <input type="url" id="partner-website" name="websiteUrl" placeholder="https://...">
+                    </label>
+                    <label>
+                        Ordine di visualizzazione
+                        <input type="number" id="partner-order" name="sortOrder" min="0" placeholder="Es. 1">
+                    </label>
+                </div>
+                <label style="margin-top: 18px;">
+                    Descrizione
+                    <textarea id="partner-description" name="description" placeholder="Descrizione del partner e della collaborazione"></textarea>
+                </label>
+
+                <div class="actions">
+                    <label class="switch">
+                        <input type="checkbox" id="partner-published">
+                        <span class="slider"></span>
+                        Visibile sul sito
+                    </label>
+                    <button class="primary" type="submit">Salva partner</button>
+                    <button class="secondary" type="button" id="partner-reset" hidden>Annulla modifica</button>
+                </div>
+            </form>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Tipo</th>
+                            <th>Visibilità</th>
+                            <th>Ordine</th>
+                            <th style="width: 180px;">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="partner-table-body">
+                        <tr class="empty-state" data-empty-partner>
+                            <td colspan="5">Non ci sono partner configurati. Aggiungi il primo partner con il modulo qui sopra.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </main>
 
     <template id="faculty-row-template">
@@ -527,12 +597,29 @@
         </tr>
     </template>
 
+    <template id="partner-row-template">
+        <tr>
+            <td data-name></td>
+            <td data-type></td>
+            <td data-status></td>
+            <td data-order></td>
+            <td>
+                <div class="actions">
+                    <button type="button" class="secondary" data-edit>Modifica</button>
+                    <button type="button" class="danger" data-delete>Elimina</button>
+                </div>
+            </td>
+        </tr>
+    </template>
+
     <script>
         const state = {
             editingFacultyId: null,
             editingPostId: null,
+            editingPartnerId: null,
             faculty: [],
-            blogPosts: []
+            blogPosts: [],
+            partners: []
         };
 
         function formatDate(dateString) {
@@ -613,6 +700,16 @@
             button.textContent = button.dataset.defaultText || 'Salva articolo';
         }
 
+        function resetPartnerForm() {
+            const form = document.getElementById('partner-form');
+            form.reset();
+            document.getElementById('partner-published').checked = false;
+            document.getElementById('partner-reset').hidden = true;
+            state.editingPartnerId = null;
+            const button = form.querySelector('button.primary');
+            button.textContent = button.dataset.defaultText || 'Salva partner';
+        }
+
         async function loadFaculty() {
             const tableBody = document.getElementById('faculty-table-body');
             tableBody.querySelectorAll('tr:not([data-empty-faculty])').forEach((row) => row.remove());
@@ -673,6 +770,38 @@
             } catch (error) {
                 state.blogPosts = [];
                 toggleEmptyState(tableBody, false, '[data-empty-blog]');
+            }
+        }
+
+        async function loadPartners() {
+            const tableBody = document.getElementById('partner-table-body');
+            tableBody.querySelectorAll('tr:not([data-empty-partner])').forEach((row) => row.remove());
+
+            try {
+                const items = await apiRequest('/api/partners');
+                state.partners = items;
+                const template = document.getElementById('partner-row-template');
+
+                items.forEach((item) => {
+                    const clone = template.content.firstElementChild.cloneNode(true);
+                    clone.dataset.id = item.id;
+                    clone.querySelector('[data-name]').textContent = item.name;
+                    clone.querySelector('[data-type]').textContent = item.partnerType === 'patrocinio' ? 'Patrocinio' : 'Collaborazione';
+                    const status = clone.querySelector('[data-status]');
+                    const pill = document.createElement('span');
+                    pill.className = 'status-pill';
+                    pill.dataset.status = item.isPublished ? 'published' : 'draft';
+                    pill.textContent = item.isPublished ? 'Visibile' : 'Bozza';
+                    status.innerHTML = '';
+                    status.appendChild(pill);
+                    clone.querySelector('[data-order]').textContent = item.sortOrder ?? '—';
+                    tableBody.appendChild(clone);
+                });
+
+                toggleEmptyState(tableBody, items.length > 0, '[data-empty-partner]');
+            } catch (error) {
+                state.partners = [];
+                toggleEmptyState(tableBody, false, '[data-empty-partner]');
             }
         }
 
@@ -830,13 +959,98 @@
 
         document.getElementById('blog-reset').addEventListener('click', resetBlogForm);
 
+        document.getElementById('partner-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const payload = {
+                name: document.getElementById('partner-name').value.trim(),
+                partnerType: document.getElementById('partner-type').value,
+                logoUrl: document.getElementById('partner-logo').value.trim() || null,
+                description: document.getElementById('partner-description').value.trim() || null,
+                websiteUrl: document.getElementById('partner-website').value.trim() || null,
+                sortOrder: document.getElementById('partner-order').value === '' ? null : Number(document.getElementById('partner-order').value),
+                isPublished: document.getElementById('partner-published').checked
+            };
+
+            if (!payload.name) {
+                showToast('Inserisci il nome del partner', 'error');
+                return;
+            }
+
+            if (!payload.partnerType) {
+                showToast('Seleziona il tipo di partnership', 'error');
+                return;
+            }
+
+            try {
+                const method = state.editingPartnerId ? 'PUT' : 'POST';
+                const url = state.editingPartnerId ? `/api/partners/${state.editingPartnerId}` : '/api/partners';
+                await apiRequest(url, {
+                    method,
+                    body: JSON.stringify(payload)
+                });
+                showToast('Partner salvato con successo');
+                resetPartnerForm();
+                loadPartners();
+            } catch (error) {
+                // already handled in apiRequest
+            }
+        });
+
+        document.getElementById('partner-table-body').addEventListener('click', async (event) => {
+            const editButton = event.target.closest('button[data-edit]');
+            const deleteButton = event.target.closest('button[data-delete]');
+            const row = event.target.closest('tr[data-id]');
+            if (!row) return;
+            const id = row.dataset.id;
+
+            if (editButton) {
+                const current = state.partners.find((item) => item.id === id);
+                if (!current) {
+                    showToast('Partner non trovato', 'error');
+                    return;
+                }
+
+                document.getElementById('partner-name').value = current.name || '';
+                document.getElementById('partner-type').value = current.partnerType || '';
+                document.getElementById('partner-logo').value = current.logoUrl || '';
+                document.getElementById('partner-description').value = current.description || '';
+                document.getElementById('partner-website').value = current.websiteUrl || '';
+                document.getElementById('partner-order').value = current.sortOrder ?? '';
+                document.getElementById('partner-published').checked = Boolean(current.isPublished);
+                document.getElementById('partner-reset').hidden = false;
+                document.getElementById('partner-form').querySelector('button.primary').textContent = 'Aggiorna partner';
+                state.editingPartnerId = id;
+
+                // Scroll to form
+                document.getElementById('partner-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            if (deleteButton) {
+                if (!confirm('Vuoi eliminare questo partner?')) {
+                    return;
+                }
+                try {
+                    await apiRequest(`/api/partners/${id}`, { method: 'DELETE' });
+                    showToast('Partner eliminato');
+                    loadPartners();
+                } catch (error) {
+                    // handled
+                }
+            }
+        });
+
+        document.getElementById('partner-reset').addEventListener('click', resetPartnerForm);
+
         const facultyForm = document.getElementById('faculty-form');
         facultyForm.querySelector('button.primary').dataset.defaultText = 'Salva docente';
         const blogForm = document.getElementById('blog-form');
         blogForm.querySelector('button.primary').dataset.defaultText = 'Salva articolo';
+        const partnerForm = document.getElementById('partner-form');
+        partnerForm.querySelector('button.primary').dataset.defaultText = 'Salva partner';
 
         loadFaculty();
         loadBlogPosts();
+        loadPartners();
     </script>
 </body>
 </html>

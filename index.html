@@ -685,6 +685,17 @@
             background: white;
         }
 
+        .partnership-subtitle {
+            font-size: 1.5rem;
+            color: #2c5f2d;
+            margin: 40px 0 20px;
+            font-weight: 600;
+        }
+
+        .partnership-subtitle:first-of-type {
+            margin-top: 50px;
+        }
+
         .partnership-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -730,6 +741,17 @@
             color: #2c5f2d;
             margin-bottom: 15px;
             font-weight: 600;
+        }
+
+        .partner-name a {
+            color: #2c5f2d;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .partner-name a:hover {
+            color: #ff6b35;
+            text-decoration: underline;
         }
 
         .partner-description {
@@ -2369,83 +2391,14 @@
         <div class="container">
             <h2 class="section-title">Partner del programma</h2>
             <p class="section-subtitle">
-                Collaborazioni strategiche con istituzioni e aziende leader nel settore della sostenibilità
-            </p>
-            <p class="section-subtitle">
-                In collaborazione con partner scientifici nazionali e internazionali (in fase di definizione).
+                Collaborazioni strategiche con istituzioni e aziende leader nel settore della sostenibilità, in sinergia con partner scientifici nazionali e internazionali attualmente in fase di definizione.
             </p>
 
-            <div class="partnership-grid">
-                <div class="partner-card">
-                    <div class="partner-logo">UNITUS</div>
-                    <div class="partner-type">Partner Principale</div>
-                    <h3 class="partner-name">Università della Tuscia</h3>
-                    <p class="partner-description">
-                        Partner accademico principale e sede del Master. Coordinamento scientifico e 
-                        infrastrutture per le attività didattiche e di ricerca.
-                    </p>
-                </div>
-                
-                <div class="partner-card">
-                    <div class="partner-logo">🔬</div>
-                    <div class="partner-type">Partner Scientifici</div>
-                    <h3 class="partner-name">Collaborazioni in definizione</h3>
-                    <p class="partner-description">
-                        In collaborazione con partner scientifici nazionali e internazionali (in fase di definizione).
-                        Attività congiunte su ricerca, formazione e innovazione.
-                    </p>
-                </div>
-                
-                <div class="partner-card">
-                    <div class="partner-logo">EU</div>
-                    <div class="partner-type">Partner di Progetto</div>
-                    <h3 class="partner-name">Progetti LIFE e Horizon Europe</h3>
-                    <p class="partner-description">
-                        Accesso a case study e progetti pilota europei. Opportunità di stage 
-                        presso enti della rete europea per l'ambiente.
-                    </p>
-                </div>
-                
-                <div class="partner-card">
-                    <div class="partner-logo">🏭</div>
-                    <div class="partner-type">Partner Privati</div>
-                    <h3 class="partner-name">Aziende Agricole e Agroforestali</h3>
-                    <p class="partner-description">
-                        Network di aziende agricole, agroalimentari e agroforestali per stage, 
-                        tirocini e applicazioni pratiche delle competenze acquisite.
-                    </p>
-                </div>
-                
-                <div class="partner-card">
-                    <div class="partner-logo">🤝</div>
-                    <div class="partner-type">Partner Settoriali</div>
-                    <h3 class="partner-name">Associazioni di Categoria</h3>
-                    <p class="partner-description">
-                        Collaborazioni con associazioni di categoria del settore agricolo e forestale 
-                        per collegamenti con il mondo professionale e opportunità di networking.
-                    </p>
-                </div>
-                
-                <div class="partner-card">
-                    <div class="partner-logo">✓</div>
-                    <div class="partner-type">Partner Tecnici</div>
-                    <h3 class="partner-name">Società di Certificazione del Carbonio</h3>
-                    <p class="partner-description">
-                        Esperienza pratica sulla validazione dei crediti di carbonio attraverso 
-                        collaborazioni con società specializzate nel monitoraggio e certificazione.
-                    </p>
-                </div>
-                
-                <div class="partner-card">
-                    <div class="partner-logo">🏛️</div>
-                    <div class="partner-type">Partner Istituzionali</div>
-                    <h3 class="partner-name">Enti Pubblici e Istituzioni Europee</h3>
-                    <p class="partner-description">
-                        Collaborazione per l'analisi delle politiche e normative di settore. 
-                        Accesso a dati ufficiali e orientamenti normativi europei.
-                    </p>
-                </div>
-            </div>
+            <h3 class="partnership-subtitle">Partner con Patrocinio</h3>
+            <div class="partnership-grid" id="patrocinio-grid"></div>
+
+            <h3 class="partnership-subtitle">Partner in Collaborazione</h3>
+            <div class="partnership-grid" id="collaborazione-grid"></div>
         </div>
     </section>
 
@@ -3415,6 +3368,98 @@
                             'blog-empty',
                             blogGrid.dataset.emptyText || 'Gli articoli arriveranno presto. Torna a trovarci!'
                         );
+                    });
+            }
+
+            function createPartnerCard(partner) {
+                const card = document.createElement('div');
+                card.className = 'partner-card';
+
+                if (partner.logoUrl) {
+                    const logo = document.createElement('img');
+                    logo.className = 'partner-logo';
+                    logo.src = partner.logoUrl;
+                    logo.alt = `Logo ${partner.name}`;
+                    logo.loading = 'lazy';
+                    card.appendChild(logo);
+                } else {
+                    const logoPlaceholder = document.createElement('div');
+                    logoPlaceholder.className = 'partner-logo';
+                    logoPlaceholder.textContent = partner.name.substring(0, 3).toUpperCase();
+                    card.appendChild(logoPlaceholder);
+                }
+
+                const typeLabel = document.createElement('div');
+                typeLabel.className = 'partner-type';
+                typeLabel.textContent = partner.partnerType === 'patrocinio' ? 'Patrocinio' : 'Collaborazione';
+                card.appendChild(typeLabel);
+
+                const name = document.createElement('h3');
+                name.className = 'partner-name';
+                if (partner.websiteUrl) {
+                    const link = document.createElement('a');
+                    link.href = partner.websiteUrl;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.textContent = partner.name;
+                    name.appendChild(link);
+                } else {
+                    name.textContent = partner.name;
+                }
+                card.appendChild(name);
+
+                if (partner.description) {
+                    const description = document.createElement('p');
+                    description.className = 'partner-description';
+                    description.textContent = partner.description;
+                    card.appendChild(description);
+                }
+
+                return card;
+            }
+
+            const patrocinioGrid = document.getElementById('patrocinio-grid');
+            const collaborazioneGrid = document.getElementById('collaborazione-grid');
+
+            if (patrocinioGrid && collaborazioneGrid) {
+                fetch('/api/partners?published=true')
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error('Impossibile recuperare i partner');
+                        }
+                        return response.json();
+                    })
+                    .then((partners) => {
+                        if (!Array.isArray(partners) || partners.length === 0) {
+                            patrocinioGrid.innerHTML = '<p class="section-subtitle">Partner con patrocinio in fase di definizione.</p>';
+                            collaborazioneGrid.innerHTML = '<p class="section-subtitle">Partner in collaborazione in fase di definizione.</p>';
+                            return;
+                        }
+
+                        const patrocinioPartners = partners.filter(p => p.partnerType === 'patrocinio');
+                        const collaborazionePartners = partners.filter(p => p.partnerType === 'collaborazione');
+
+                        if (patrocinioPartners.length === 0) {
+                            patrocinioGrid.innerHTML = '<p class="section-subtitle">Partner con patrocinio in fase di definizione.</p>';
+                        } else {
+                            patrocinioGrid.innerHTML = '';
+                            patrocinioPartners.forEach((partner) => {
+                                patrocinioGrid.appendChild(createPartnerCard(partner));
+                            });
+                        }
+
+                        if (collaborazionePartners.length === 0) {
+                            collaborazioneGrid.innerHTML = '<p class="section-subtitle">Partner in collaborazione in fase di definizione.</p>';
+                        } else {
+                            collaborazioneGrid.innerHTML = '';
+                            collaborazionePartners.forEach((partner) => {
+                                collaborazioneGrid.appendChild(createPartnerCard(partner));
+                            });
+                        }
+                    })
+                    .catch(() => {
+                        patrocinioGrid.innerHTML = '<p class="section-subtitle">Partner con patrocinio in fase di definizione.</p>';
+                        collaborazioneGrid.innerHTML = '<p class="section-subtitle">Partner in collaborazione in fase di definizione.</p>';
                     });
             }
         })();

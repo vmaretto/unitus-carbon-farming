@@ -199,6 +199,21 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS partners (
+      id UUID PRIMARY KEY,
+      name TEXT NOT NULL,
+      logo_url TEXT,
+      partner_type TEXT NOT NULL CHECK (partner_type IN ('patrocinio', 'collaborazione')),
+      description TEXT,
+      website_url TEXT,
+      sort_order INTEGER,
+      is_published BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
 }
 
 let initPromise = null;
@@ -510,6 +525,152 @@ app.delete('/api/blog-posts/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting blog post', error);
     res.status(500).json({ error: 'Unable to delete blog post' });
+  }
+});
+
+app.get('/api/partners', async (req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  try {
+    const { published, type } = req.query;
+    const filters = [];
+    const values = [];
+
+    if (published !== undefined) {
+      filters.push(`is_published = $${filters.length + 1}`);
+      values.push(published === 'true');
+    }
+
+    if (type !== undefined) {
+      filters.push(`partner_type = $${filters.length + 1}`);
+      values.push(type);
+    }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const sql = `
+      SELECT id, name, logo_url AS "logoUrl", partner_type AS "partnerType",
+             description, website_url AS "websiteUrl", sort_order AS "sortOrder",
+             is_published AS "isPublished"
+      FROM partners
+      ${where}
+      ORDER BY sort_order NULLS LAST, created_at ASC
+    `;
+
+    const { rows } = await pool.query(sql, values);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching partners', error);
+    res.status(500).json({ error: 'Unable to retrieve partners' });
+  }
+});
+
+app.post('/api/partners', async (req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  const { name, logoUrl, partnerType, description, websiteUrl, sortOrder, isPublished } = req.body;
+
+  if (!name) {
+    return res.status(400).json({ error: 'Name is required' });
+  }
+
+  if (!partnerType || !['patrocinio', 'collaborazione'].includes(partnerType)) {
+    return res.status(400).json({ error: 'Partner type must be either "patrocinio" or "collaborazione"' });
+  }
+
+  try {
+    const id = uuidv4();
+    const insert = `
+      INSERT INTO partners (id, name, logo_url, partner_type, description, website_url, sort_order, is_published)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, name, logo_url AS "logoUrl", partner_type AS "partnerType",
+                description, website_url AS "websiteUrl", sort_order AS "sortOrder",
+                is_published AS "isPublished"
+    `;
+    const values = [
+      id,
+      name,
+      logoUrl || null,
+      partnerType,
+      description || null,
+      websiteUrl || null,
+      typeof sortOrder === 'number' ? sortOrder : null,
+      Boolean(isPublished)
+    ];
+
+    const { rows } = await pool.query(insert, values);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating partner', error);
+    res.status(500).json({ error: 'Unable to create partner' });
+  }
+});
+
+app.put('/api/partners/:id', async (req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  const { id } = req.params;
+  const { name, logoUrl, partnerType, description, websiteUrl, sortOrder, isPublished } = req.body;
+
+  if (partnerType !== undefined && !['patrocinio', 'collaborazione'].includes(partnerType)) {
+    return res.status(400).json({ error: 'Partner type must be either "patrocinio" or "collaborazione"' });
+  }
+
+  try {
+    const updateFields = {
+      name,
+      logo_url: logoUrl,
+      partner_type: partnerType,
+      description,
+      website_url: websiteUrl,
+      sort_order: sortOrder,
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
+    };
+
+    const { query, values } = buildUpdateQuery('partners', updateFields, id);
+    const { rows } = await pool.query(query, values);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Partner not found' });
+    }
+
+    const row = rows[0];
+    res.json({
+      id: row.id,
+      name: row.name,
+      logoUrl: row.logo_url,
+      partnerType: row.partner_type,
+      description: row.description,
+      websiteUrl: row.website_url,
+      sortOrder: row.sort_order,
+      isPublished: row.is_published
+    });
+  } catch (error) {
+    console.error('Error updating partner', error);
+    res.status(500).json({ error: 'Unable to update partner' });
+  }
+});
+
+app.delete('/api/partners/:id', async (req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  const { id } = req.params;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM partners WHERE id = $1', [id]);
+    if (!rowCount) {
+      return res.status(404).json({ error: 'Partner not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting partner', error);
+    res.status(500).json({ error: 'Unable to delete partner' });
   }
 });
 

@@ -10,6 +10,105 @@ const port = process.env.PORT || 3000;
 const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
 let pool = null;
 
+const defaultFaculty = [
+  {
+    name: 'Prof. Riccardo Valentini',
+    role: 'Direttore Scientifico',
+    bio: 'Università della Tuscia - Premio Nobel per la Pace IPCC, esperto internazionale in climate change e carbon cycle',
+    photoUrl: null,
+    sortOrder: 1,
+    is_published: true
+  },
+  {
+    name: 'Virgilio Maretto',
+    role: 'Coordinatore',
+    bio: 'Esperto in sostenibilità e gestione ambientale, consulente strategico per progetti di transizione ecologica',
+    photoUrl: null,
+    sortOrder: 2,
+    is_published: true
+  },
+  {
+    name: 'Dr.ssa Maria Vincenza Chiriacò',
+    role: null,
+    bio: 'CMCC - Specialista in inventari nazionali delle emissioni e metodologie IPCC per il settore LULUCF',
+    photoUrl: null,
+    sortOrder: 3,
+    is_published: true
+  },
+  {
+    name: 'Prof. Emanuele Blasi',
+    role: null,
+    bio: 'Università della Tuscia - Esperto in economia agraria e valutazione economica dei servizi ecosistemici',
+    photoUrl: null,
+    sortOrder: 4,
+    is_published: true
+  },
+  {
+    name: 'Prof. Tommaso Chiti',
+    role: null,
+    bio: 'Università della Tuscia - Esperto in biogeochemical cycles, soil carbon dynamics e Life Cycle Assessment',
+    photoUrl: null,
+    sortOrder: 5,
+    is_published: true
+  },
+  {
+    name: 'Prof. Dario Papale',
+    role: null,
+    bio: 'Università della Tuscia - Specialista in flussi di CO₂, eddy covariance e monitoraggio ecosistemi forestali',
+    photoUrl: null,
+    sortOrder: 6,
+    is_published: true
+  },
+  {
+    name: 'Prof. Raffaele Casa',
+    role: null,
+    bio: "Università della Tuscia - Esperto in agricoltura di precisione, remote sensing e tecnologie per l'agricoltura sostenibile",
+    photoUrl: null,
+    sortOrder: 7,
+    is_published: true
+  },
+  {
+    name: 'Prof. Andrea Vannini',
+    role: null,
+    bio: 'Università della Tuscia - Esperto in patologia vegetale e protezione delle colture in sistemi agricoli sostenibili',
+    photoUrl: null,
+    sortOrder: 8,
+    is_published: true
+  },
+  {
+    name: 'Prof.ssa Anna Barbati',
+    role: null,
+    bio: 'Università della Tuscia - Specialista in gestione forestale sostenibile, servizi ecosistemici e biodiversità forestale',
+    photoUrl: null,
+    sortOrder: 9,
+    is_published: true
+  },
+  {
+    name: 'Prof. Pier Maria Corona',
+    role: null,
+    bio: 'CREA - Esperto in inventari forestali, dendrometria e gestione sostenibile delle risorse forestali',
+    photoUrl: null,
+    sortOrder: 10,
+    is_published: true
+  },
+  {
+    name: 'Francesco Rutelli',
+    role: null,
+    bio: 'Esperto in politiche ambientali e governance della sostenibilità, ex Ministro per i Beni e le Attività Culturali',
+    photoUrl: null,
+    sortOrder: 11,
+    is_published: true
+  },
+  {
+    name: 'Luca Buonocore',
+    role: null,
+    bio: 'Consulente strategico in sostenibilità e carbon management, esperto in mercati dei crediti di carbonio',
+    photoUrl: null,
+    sortOrder: 12,
+    is_published: true
+  }
+];
+
 if (hasDatabaseUrl) {
   const sslOption = process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false };
   pool = new Pool({
@@ -46,6 +145,39 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+
+  const { rows: facultyCountRows } = await pool.query('SELECT COUNT(*)::INT AS count FROM faculty;');
+  const facultyCount = facultyCountRows?.[0]?.count || 0;
+
+  if (!facultyCount && defaultFaculty.length) {
+    const seedValues = [];
+    const seedPlaceholders = defaultFaculty
+      .map((member, index) => {
+        const base = index * 7;
+        seedValues.push(
+          uuidv4(),
+          member.name,
+          member.role ?? null,
+          member.bio ?? null,
+          member.photoUrl ?? null,
+          typeof member.sortOrder === 'number' ? member.sortOrder : null,
+          member.is_published === true
+        );
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`;
+      })
+      .join(', ');
+
+    if (seedPlaceholders) {
+      await pool.query(
+        `
+          INSERT INTO faculty (id, name, role, bio, photo_url, sort_order, is_published)
+          VALUES ${seedPlaceholders}
+          ON CONFLICT (id) DO NOTHING;
+        `,
+        seedValues
+      );
+    }
+  }
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS blog_posts (

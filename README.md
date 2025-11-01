@@ -56,9 +56,10 @@ npm start
    - Salva e ripeti l'operazione sia per l'ambiente `Production` sia per `Preview` se vuoi usare l'admin anche nelle preview.
    - Se utilizzi `vercel dev`, crea un file `.env` o usa `vercel env pull` per avere `DATABASE_URL` anche in locale.
    - Per l'istanza attualmente predisposta puoi incollare direttamente il valore **Recommended for most uses** riportato qui sotto.
-4. **Verifica la connessione**  
-   - In locale esporta la variabile: `export DATABASE_URL="postgres://<user>:<password>@<host>/<database>?sslmode=require"`.  
-   - Avvia il progetto con `npm run dev` o `npm start` e controlla i log: al primo avvio il server crea automaticamente le tabelle `faculty` e `blog_posts`.  
+4. **Verifica la connessione**
+   - In locale esporta la variabile: `export DATABASE_URL="postgres://<user>:<password>@<host>/<database>?sslmode=require"`.
+   - Avvia il progetto con `npm run dev` o `npm start` e controlla i log: al primo avvio il server crea automaticamente le tabelle `faculty` e `blog_posts`.
+   - Se la tabella `faculty` è vuota, l'applicazione popola automaticamente i docenti di default utilizzati nel fallback statico del sito pubblico.
    - Se l'applicazione gira su Vercel, esegui un nuovo deploy per forzare la lettura della variabile appena impostata.
 5. **Opzioni avanzate**
    - Per disabilitare l'SSL con database locali imposta `DATABASE_SSL=false`.
@@ -103,6 +104,8 @@ POSTGRES_PRISMA_URL=postgresql://neondb_owner:npg_K2Yh5HukeqQs@ep-aged-field-agr
 - `PUT /api/blog-posts/:id` · `DELETE /api/blog-posts/:id`
 
 La dashboard amministrativa disponibile su `/admin/` usa queste API per gestire contenuti e pubblicazione.
+
+Per ripristinare manualmente i docenti di default (ad esempio dopo un reset dell'istanza Neon) puoi eseguire lo script SQL `db/faculty_seed.sql` presente nel repository oppure copiare gli inserimenti da questo file direttamente nella tua console SQL.
 
 🌐 Deploy online (GitHub Pages)
 

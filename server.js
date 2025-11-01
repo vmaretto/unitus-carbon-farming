@@ -146,6 +146,12 @@ async function initDatabase() {
     );
   `);
 
+  // Add profile_link column if it doesn't exist
+  await pool.query(`
+    ALTER TABLE faculty
+    ADD COLUMN IF NOT EXISTS profile_link TEXT;
+  `);
+
   const { rows: facultyCountRows } = await pool.query('SELECT COUNT(*)::INT AS count FROM faculty;');
   const facultyCount = facultyCountRows?.[0]?.count || 0;
 
@@ -193,6 +199,137 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS partners (
+      id UUID PRIMARY KEY,
+      name TEXT NOT NULL,
+      logo_url TEXT,
+      partner_type TEXT NOT NULL CHECK (partner_type IN ('generale', 'patrocinio', 'collaborazione')),
+      description TEXT,
+      website_url TEXT,
+      sort_order INTEGER,
+      is_published BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // Update existing partners table to support 'generale' type
+  await pool.query(`
+    ALTER TABLE partners DROP CONSTRAINT IF EXISTS partners_partner_type_check;
+  `);
+  await pool.query(`
+    ALTER TABLE partners ADD CONSTRAINT partners_partner_type_check
+    CHECK (partner_type IN ('generale', 'patrocinio', 'collaborazione'));
+  `);
+
+  const defaultPartners = [
+    {
+      name: 'Università della Tuscia',
+      logo_url: null,
+      logoText: 'UNITUS',
+      partner_type: 'generale',
+      type_label: 'Partner Principale',
+      description: 'Partner accademico principale e sede del Master. Coordinamento scientifico e infrastrutture per le attività didattiche e di ricerca.',
+      sort_order: 1,
+      is_published: true
+    },
+    {
+      name: 'Collaborazioni in definizione',
+      logo_url: null,
+      logoText: '🔬',
+      partner_type: 'generale',
+      type_label: 'Partner Scientifici',
+      description: 'In collaborazione con partner scientifici nazionali e internazionali (in fase di definizione). Attività congiunte su ricerca, formazione e innovazione.',
+      sort_order: 2,
+      is_published: true
+    },
+    {
+      name: 'Progetti LIFE e Horizon Europe',
+      logo_url: null,
+      logoText: 'EU',
+      partner_type: 'generale',
+      type_label: 'Partner di Progetto',
+      description: 'Accesso a case study e progetti pilota europei. Opportunità di stage presso enti della rete europea per l\'ambiente.',
+      sort_order: 3,
+      is_published: true
+    },
+    {
+      name: 'Aziende Agricole e Agroforestali',
+      logo_url: null,
+      logoText: '🏭',
+      partner_type: 'generale',
+      type_label: 'Partner Privati',
+      description: 'Network di aziende agricole, agroalimentari e agroforestali per stage, tirocini e applicazioni pratiche delle competenze acquisite.',
+      sort_order: 4,
+      is_published: true
+    },
+    {
+      name: 'Associazioni di Categoria',
+      logo_url: null,
+      logoText: '🤝',
+      partner_type: 'generale',
+      type_label: 'Partner Settoriali',
+      description: 'Collaborazioni con associazioni di categoria del settore agricolo e forestale per collegamenti con il mondo professionale e opportunità di networking.',
+      sort_order: 5,
+      is_published: true
+    },
+    {
+      name: 'Società di Certificazione del Carbonio',
+      logo_url: null,
+      logoText: '✓',
+      partner_type: 'generale',
+      type_label: 'Partner Tecnici',
+      description: 'Esperienza pratica sulla validazione dei crediti di carbonio attraverso collaborazioni con società specializzate nel monitoraggio e certificazione.',
+      sort_order: 6,
+      is_published: true
+    },
+    {
+      name: 'Enti Pubblici e Istituzioni Europee',
+      logo_url: null,
+      logoText: '🏛️',
+      partner_type: 'generale',
+      type_label: 'Partner Istituzionali',
+      description: 'Collaborazione per l\'analisi delle politiche e normative di settore. Accesso a dati ufficiali e orientamenti normativi europei.',
+      sort_order: 7,
+      is_published: true
+    }
+  ];
+
+  const { rows: partnerCountRows } = await pool.query('SELECT COUNT(*)::INT AS count FROM partners;');
+  const partnerCount = partnerCountRows?.[0]?.count || 0;
+
+  if (!partnerCount && defaultPartners.length) {
+    const seedValues = [];
+    const seedPlaceholders = defaultPartners
+      .map((partner, index) => {
+        const base = index * 7;
+        seedValues.push(
+          uuidv4(),
+          partner.name,
+          partner.logo_url,
+          partner.partner_type,
+          partner.description,
+          partner.website_url || null,
+          partner.sort_order,
+          partner.is_published === true
+        );
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`;
+      })
+      .join(', ');
+
+    if (seedPlaceholders) {
+      await pool.query(
+        `
+          INSERT INTO partners (id, name, logo_url, partner_type, description, website_url, sort_order, is_published)
+          VALUES ${seedPlaceholders}
+          ON CONFLICT (id) DO NOTHING;
+        `,
+        seedValues
+      );
+    }
+  }
 }
 
 let initPromise = null;
@@ -251,7 +388,7 @@ app.get('/api/faculty', async (req, res) => {
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const sql = `
-      SELECT id, name, role, bio, photo_url AS "photoUrl", sort_order AS "sortOrder", is_published AS "isPublished"
+      SELECT id, name, role, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished"
       FROM faculty
       ${where}
       ORDER BY sort_order NULLS LAST, created_at ASC
@@ -270,7 +407,7 @@ app.post('/api/faculty', async (req, res) => {
     return;
   }
 
-  const { name, role, bio, photoUrl, sortOrder, isPublished } = req.body;
+  const { name, role, bio, photoUrl, profileLink, sortOrder, isPublished } = req.body;
 
   if (!name) {
     return res.status(400).json({ error: 'Name is required' });
@@ -279,9 +416,9 @@ app.post('/api/faculty', async (req, res) => {
   try {
     const id = uuidv4();
     const insert = `
-      INSERT INTO faculty (id, name, role, bio, photo_url, sort_order, is_published)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, name, role, bio, photo_url AS "photoUrl", sort_order AS "sortOrder", is_published AS "isPublished"
+      INSERT INTO faculty (id, name, role, bio, photo_url, profile_link, sort_order, is_published)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, name, role, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished"
     `;
     const values = [
       id,
@@ -289,6 +426,7 @@ app.post('/api/faculty', async (req, res) => {
       role || null,
       bio || null,
       photoUrl || null,
+      profileLink || null,
       typeof sortOrder === 'number' ? sortOrder : null,
       Boolean(isPublished)
     ];
@@ -307,7 +445,7 @@ app.put('/api/faculty/:id', async (req, res) => {
   }
 
   const { id } = req.params;
-  const { name, role, bio, photoUrl, sortOrder, isPublished } = req.body;
+  const { name, role, bio, photoUrl, profileLink, sortOrder, isPublished } = req.body;
 
   try {
     const updateFields = {
@@ -315,6 +453,7 @@ app.put('/api/faculty/:id', async (req, res) => {
       role,
       bio,
       photo_url: photoUrl,
+      profile_link: profileLink,
       sort_order: sortOrder,
       is_published: typeof isPublished === 'boolean' ? isPublished : undefined
     };
@@ -333,6 +472,7 @@ app.put('/api/faculty/:id', async (req, res) => {
       role: row.role,
       bio: row.bio,
       photoUrl: row.photo_url,
+      profileLink: row.profile_link,
       sortOrder: row.sort_order,
       isPublished: row.is_published
     });
@@ -501,6 +641,152 @@ app.delete('/api/blog-posts/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting blog post', error);
     res.status(500).json({ error: 'Unable to delete blog post' });
+  }
+});
+
+app.get('/api/partners', async (req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  try {
+    const { published, type } = req.query;
+    const filters = [];
+    const values = [];
+
+    if (published !== undefined) {
+      filters.push(`is_published = $${filters.length + 1}`);
+      values.push(published === 'true');
+    }
+
+    if (type !== undefined) {
+      filters.push(`partner_type = $${filters.length + 1}`);
+      values.push(type);
+    }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const sql = `
+      SELECT id, name, logo_url AS "logoUrl", partner_type AS "partnerType",
+             description, website_url AS "websiteUrl", sort_order AS "sortOrder",
+             is_published AS "isPublished"
+      FROM partners
+      ${where}
+      ORDER BY sort_order NULLS LAST, created_at ASC
+    `;
+
+    const { rows } = await pool.query(sql, values);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching partners', error);
+    res.status(500).json({ error: 'Unable to retrieve partners' });
+  }
+});
+
+app.post('/api/partners', async (req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  const { name, logoUrl, partnerType, description, websiteUrl, sortOrder, isPublished } = req.body;
+
+  if (!name) {
+    return res.status(400).json({ error: 'Name is required' });
+  }
+
+  if (!partnerType || !['generale', 'patrocinio', 'collaborazione'].includes(partnerType)) {
+    return res.status(400).json({ error: 'Partner type must be "generale", "patrocinio", or "collaborazione"' });
+  }
+
+  try {
+    const id = uuidv4();
+    const insert = `
+      INSERT INTO partners (id, name, logo_url, partner_type, description, website_url, sort_order, is_published)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, name, logo_url AS "logoUrl", partner_type AS "partnerType",
+                description, website_url AS "websiteUrl", sort_order AS "sortOrder",
+                is_published AS "isPublished"
+    `;
+    const values = [
+      id,
+      name,
+      logoUrl || null,
+      partnerType,
+      description || null,
+      websiteUrl || null,
+      typeof sortOrder === 'number' ? sortOrder : null,
+      Boolean(isPublished)
+    ];
+
+    const { rows } = await pool.query(insert, values);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating partner', error);
+    res.status(500).json({ error: 'Unable to create partner' });
+  }
+});
+
+app.put('/api/partners/:id', async (req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  const { id } = req.params;
+  const { name, logoUrl, partnerType, description, websiteUrl, sortOrder, isPublished } = req.body;
+
+  if (partnerType !== undefined && !['generale', 'patrocinio', 'collaborazione'].includes(partnerType)) {
+    return res.status(400).json({ error: 'Partner type must be "generale", "patrocinio", or "collaborazione"' });
+  }
+
+  try {
+    const updateFields = {
+      name,
+      logo_url: logoUrl,
+      partner_type: partnerType,
+      description,
+      website_url: websiteUrl,
+      sort_order: sortOrder,
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
+    };
+
+    const { query, values } = buildUpdateQuery('partners', updateFields, id);
+    const { rows } = await pool.query(query, values);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Partner not found' });
+    }
+
+    const row = rows[0];
+    res.json({
+      id: row.id,
+      name: row.name,
+      logoUrl: row.logo_url,
+      partnerType: row.partner_type,
+      description: row.description,
+      websiteUrl: row.website_url,
+      sortOrder: row.sort_order,
+      isPublished: row.is_published
+    });
+  } catch (error) {
+    console.error('Error updating partner', error);
+    res.status(500).json({ error: 'Unable to update partner' });
+  }
+});
+
+app.delete('/api/partners/:id', async (req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  const { id } = req.params;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM partners WHERE id = $1', [id]);
+    if (!rowCount) {
+      return res.status(404).json({ error: 'Partner not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting partner', error);
+    res.status(500).json({ error: 'Unable to delete partner' });
   }
 });
 

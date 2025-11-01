@@ -514,6 +514,7 @@
                         Tipo di partnership
                         <select id="partner-type" name="partnerType" required>
                             <option value="">Seleziona tipo...</option>
+                            <option value="generale">Generale</option>
                             <option value="patrocinio">Patrocinio</option>
                             <option value="collaborazione">Collaborazione</option>
                         </select>
@@ -786,7 +787,8 @@
                     const clone = template.content.firstElementChild.cloneNode(true);
                     clone.dataset.id = item.id;
                     clone.querySelector('[data-name]').textContent = item.name;
-                    clone.querySelector('[data-type]').textContent = item.partnerType === 'patrocinio' ? 'Patrocinio' : 'Collaborazione';
+                    const typeMap = { 'generale': 'Generale', 'patrocinio': 'Patrocinio', 'collaborazione': 'Collaborazione' };
+                    clone.querySelector('[data-type]').textContent = typeMap[item.partnerType] || item.partnerType;
                     const status = clone.querySelector('[data-status]');
                     const pill = document.createElement('span');
                     pill.className = 'status-pill';

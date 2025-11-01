@@ -205,7 +205,7 @@ async function initDatabase() {
       id UUID PRIMARY KEY,
       name TEXT NOT NULL,
       logo_url TEXT,
-      partner_type TEXT NOT NULL CHECK (partner_type IN ('patrocinio', 'collaborazione')),
+      partner_type TEXT NOT NULL CHECK (partner_type IN ('generale', 'patrocinio', 'collaborazione')),
       description TEXT,
       website_url TEXT,
       sort_order INTEGER,
@@ -214,6 +214,122 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+
+  // Update existing partners table to support 'generale' type
+  await pool.query(`
+    ALTER TABLE partners DROP CONSTRAINT IF EXISTS partners_partner_type_check;
+  `);
+  await pool.query(`
+    ALTER TABLE partners ADD CONSTRAINT partners_partner_type_check
+    CHECK (partner_type IN ('generale', 'patrocinio', 'collaborazione'));
+  `);
+
+  const defaultPartners = [
+    {
+      name: 'Università della Tuscia',
+      logo_url: null,
+      logoText: 'UNITUS',
+      partner_type: 'generale',
+      type_label: 'Partner Principale',
+      description: 'Partner accademico principale e sede del Master. Coordinamento scientifico e infrastrutture per le attività didattiche e di ricerca.',
+      sort_order: 1,
+      is_published: true
+    },
+    {
+      name: 'Collaborazioni in definizione',
+      logo_url: null,
+      logoText: '🔬',
+      partner_type: 'generale',
+      type_label: 'Partner Scientifici',
+      description: 'In collaborazione con partner scientifici nazionali e internazionali (in fase di definizione). Attività congiunte su ricerca, formazione e innovazione.',
+      sort_order: 2,
+      is_published: true
+    },
+    {
+      name: 'Progetti LIFE e Horizon Europe',
+      logo_url: null,
+      logoText: 'EU',
+      partner_type: 'generale',
+      type_label: 'Partner di Progetto',
+      description: 'Accesso a case study e progetti pilota europei. Opportunità di stage presso enti della rete europea per l\'ambiente.',
+      sort_order: 3,
+      is_published: true
+    },
+    {
+      name: 'Aziende Agricole e Agroforestali',
+      logo_url: null,
+      logoText: '🏭',
+      partner_type: 'generale',
+      type_label: 'Partner Privati',
+      description: 'Network di aziende agricole, agroalimentari e agroforestali per stage, tirocini e applicazioni pratiche delle competenze acquisite.',
+      sort_order: 4,
+      is_published: true
+    },
+    {
+      name: 'Associazioni di Categoria',
+      logo_url: null,
+      logoText: '🤝',
+      partner_type: 'generale',
+      type_label: 'Partner Settoriali',
+      description: 'Collaborazioni con associazioni di categoria del settore agricolo e forestale per collegamenti con il mondo professionale e opportunità di networking.',
+      sort_order: 5,
+      is_published: true
+    },
+    {
+      name: 'Società di Certificazione del Carbonio',
+      logo_url: null,
+      logoText: '✓',
+      partner_type: 'generale',
+      type_label: 'Partner Tecnici',
+      description: 'Esperienza pratica sulla validazione dei crediti di carbonio attraverso collaborazioni con società specializzate nel monitoraggio e certificazione.',
+      sort_order: 6,
+      is_published: true
+    },
+    {
+      name: 'Enti Pubblici e Istituzioni Europee',
+      logo_url: null,
+      logoText: '🏛️',
+      partner_type: 'generale',
+      type_label: 'Partner Istituzionali',
+      description: 'Collaborazione per l\'analisi delle politiche e normative di settore. Accesso a dati ufficiali e orientamenti normativi europei.',
+      sort_order: 7,
+      is_published: true
+    }
+  ];
+
+  const { rows: partnerCountRows } = await pool.query('SELECT COUNT(*)::INT AS count FROM partners;');
+  const partnerCount = partnerCountRows?.[0]?.count || 0;
+
+  if (!partnerCount && defaultPartners.length) {
+    const seedValues = [];
+    const seedPlaceholders = defaultPartners
+      .map((partner, index) => {
+        const base = index * 7;
+        seedValues.push(
+          uuidv4(),
+          partner.name,
+          partner.logo_url,
+          partner.partner_type,
+          partner.description,
+          partner.website_url || null,
+          partner.sort_order,
+          partner.is_published === true
+        );
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`;
+      })
+      .join(', ');
+
+    if (seedPlaceholders) {
+      await pool.query(
+        `
+          INSERT INTO partners (id, name, logo_url, partner_type, description, website_url, sort_order, is_published)
+          VALUES ${seedPlaceholders}
+          ON CONFLICT (id) DO NOTHING;
+        `,
+        seedValues
+      );
+    }
+  }
 }
 
 let initPromise = null;
@@ -577,8 +693,8 @@ app.post('/api/partners', async (req, res) => {
     return res.status(400).json({ error: 'Name is required' });
   }
 
-  if (!partnerType || !['patrocinio', 'collaborazione'].includes(partnerType)) {
-    return res.status(400).json({ error: 'Partner type must be either "patrocinio" or "collaborazione"' });
+  if (!partnerType || !['generale', 'patrocinio', 'collaborazione'].includes(partnerType)) {
+    return res.status(400).json({ error: 'Partner type must be "generale", "patrocinio", or "collaborazione"' });
   }
 
   try {
@@ -617,8 +733,8 @@ app.put('/api/partners/:id', async (req, res) => {
   const { id } = req.params;
   const { name, logoUrl, partnerType, description, websiteUrl, sortOrder, isPublished } = req.body;
 
-  if (partnerType !== undefined && !['patrocinio', 'collaborazione'].includes(partnerType)) {
-    return res.status(400).json({ error: 'Partner type must be either "patrocinio" or "collaborazione"' });
+  if (partnerType !== undefined && !['generale', 'patrocinio', 'collaborazione'].includes(partnerType)) {
+    return res.status(400).json({ error: 'Partner type must be "generale", "patrocinio", or "collaborazione"' });
   }
 
   try {

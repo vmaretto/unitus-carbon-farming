@@ -386,6 +386,10 @@
                         <input type="url" id="faculty-photo" name="photoUrl" placeholder="https://...">
                     </label>
                     <label>
+                        Link profilo
+                        <input type="url" id="faculty-profile-link" name="profileLink" placeholder="https://...">
+                    </label>
+                    <label>
                         Ordine di visualizzazione
                         <input type="number" id="faculty-order" name="sortOrder" min="0" placeholder="Es. 1">
                     </label>
@@ -591,6 +595,7 @@
             const form = document.getElementById('faculty-form');
             form.reset();
             document.getElementById('faculty-published').checked = false;
+            document.getElementById('faculty-profile-link').value = '';
             document.getElementById('faculty-reset').hidden = true;
             state.editingFacultyId = null;
             const button = form.querySelector('button.primary');
@@ -676,6 +681,7 @@
                 name: document.getElementById('faculty-name').value.trim(),
                 role: document.getElementById('faculty-role').value.trim() || null,
                 photoUrl: document.getElementById('faculty-photo').value.trim() || null,
+                profileLink: document.getElementById('faculty-profile-link').value.trim() || null,
                 bio: document.getElementById('faculty-bio').value.trim() || null,
                 sortOrder: document.getElementById('faculty-order').value === '' ? null : Number(document.getElementById('faculty-order').value),
                 isPublished: document.getElementById('faculty-published').checked
@@ -718,6 +724,7 @@
                 document.getElementById('faculty-name').value = current.name || '';
                 document.getElementById('faculty-role').value = current.role || '';
                 document.getElementById('faculty-photo').value = current.photoUrl || '';
+                document.getElementById('faculty-profile-link').value = current.profileLink || '';
                 document.getElementById('faculty-bio').value = current.bio || '';
                 document.getElementById('faculty-order').value = current.sortOrder ?? '';
                 document.getElementById('faculty-published').checked = Boolean(current.isPublished);

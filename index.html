@@ -3287,7 +3287,19 @@
 
                 const name = document.createElement('h3');
                 name.className = 'faculty-name';
-                name.textContent = item.name || 'Docente del Master';
+
+                if (item.profileLink) {
+                    const link = document.createElement('a');
+                    link.href = item.profileLink;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.textContent = item.name || 'Docente del Master';
+                    name.appendChild(link);
+                } else {
+                    name.classList.add('no-link');
+                    name.textContent = item.name || 'Docente del Master';
+                }
+
                 info.appendChild(name);
 
                 if (item.bio) {

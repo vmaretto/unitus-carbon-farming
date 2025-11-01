@@ -146,6 +146,12 @@ async function initDatabase() {
     );
   `);
 
+  // Add profile_link column if it doesn't exist
+  await pool.query(`
+    ALTER TABLE faculty
+    ADD COLUMN IF NOT EXISTS profile_link TEXT;
+  `);
+
   const { rows: facultyCountRows } = await pool.query('SELECT COUNT(*)::INT AS count FROM faculty;');
   const facultyCount = facultyCountRows?.[0]?.count || 0;
 
@@ -251,7 +257,7 @@ app.get('/api/faculty', async (req, res) => {
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const sql = `
-      SELECT id, name, role, bio, photo_url AS "photoUrl", sort_order AS "sortOrder", is_published AS "isPublished"
+      SELECT id, name, role, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished"
       FROM faculty
       ${where}
       ORDER BY sort_order NULLS LAST, created_at ASC
@@ -270,7 +276,7 @@ app.post('/api/faculty', async (req, res) => {
     return;
   }
 
-  const { name, role, bio, photoUrl, sortOrder, isPublished } = req.body;
+  const { name, role, bio, photoUrl, profileLink, sortOrder, isPublished } = req.body;
 
   if (!name) {
     return res.status(400).json({ error: 'Name is required' });
@@ -279,9 +285,9 @@ app.post('/api/faculty', async (req, res) => {
   try {
     const id = uuidv4();
     const insert = `
-      INSERT INTO faculty (id, name, role, bio, photo_url, sort_order, is_published)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, name, role, bio, photo_url AS "photoUrl", sort_order AS "sortOrder", is_published AS "isPublished"
+      INSERT INTO faculty (id, name, role, bio, photo_url, profile_link, sort_order, is_published)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, name, role, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished"
     `;
     const values = [
       id,
@@ -289,6 +295,7 @@ app.post('/api/faculty', async (req, res) => {
       role || null,
       bio || null,
       photoUrl || null,
+      profileLink || null,
       typeof sortOrder === 'number' ? sortOrder : null,
       Boolean(isPublished)
     ];
@@ -307,7 +314,7 @@ app.put('/api/faculty/:id', async (req, res) => {
   }
 
   const { id } = req.params;
-  const { name, role, bio, photoUrl, sortOrder, isPublished } = req.body;
+  const { name, role, bio, photoUrl, profileLink, sortOrder, isPublished } = req.body;
 
   try {
     const updateFields = {
@@ -315,6 +322,7 @@ app.put('/api/faculty/:id', async (req, res) => {
       role,
       bio,
       photo_url: photoUrl,
+      profile_link: profileLink,
       sort_order: sortOrder,
       is_published: typeof isPublished === 'boolean' ? isPublished : undefined
     };
@@ -333,6 +341,7 @@ app.put('/api/faculty/:id', async (req, res) => {
       role: row.role,
       bio: row.bio,
       photoUrl: row.photo_url,
+      profileLink: row.profile_link,
       sortOrder: row.sort_order,
       isPublished: row.is_published
     });

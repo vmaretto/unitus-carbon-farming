@@ -565,7 +565,7 @@
             box-shadow: 0 25px 50px rgba(0,0,0,0.15);
         }
 
-        .faculty-card .faculty-image {
+        .faculty-card img.faculty-image {
             width: 50%;
             max-width: 220px;
             height: auto;
@@ -574,21 +574,43 @@
             object-fit: contain;
         }
 
+        .faculty-card .faculty-icon {
+            width: 140px;
+            height: 140px;
+            margin: 24px auto 0;
+            border-radius: 50%;
+            background: rgba(44, 95, 45, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+        }
+
         .faculty-image::after {
             content: none;
         }
 
         @media (max-width: 992px) {
-            .faculty-card .faculty-image {
+            .faculty-card img.faculty-image {
                 width: 60%;
                 max-width: 200px;
+            }
+            .faculty-card .faculty-icon {
+                width: 120px;
+                height: 120px;
+                font-size: 2.6rem;
             }
         }
 
         @media (max-width: 600px) {
-            .faculty-card .faculty-image {
+            .faculty-card img.faculty-image {
                 width: 70%;
                 max-width: 180px;
+            }
+            .faculty-card .faculty-icon {
+                width: 110px;
+                height: 110px;
+                font-size: 2.4rem;
             }
         }
 
@@ -2221,38 +2243,122 @@
 
             <div class="faculty-grid" id="faculty-grid" data-empty-text="La faculty sarà annunciata a breve. Iscriviti alla newsletter per ricevere gli aggiornamenti.">
                 <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Foto di Prof. Marco Conti">
+                    <div class="faculty-image faculty-icon" aria-hidden="true">👨‍🔬</div>
                     <div class="faculty-info">
                         <div class="faculty-role-badge">Direttore Scientifico</div>
-                        <h3 class="faculty-name">Prof. Marco Conti</h3>
-                        <p class="faculty-bio">Professore di Economia Ambientale presso l'Università della Tuscia, esperto di politiche climatiche e mercati dei crediti di carbonio.</p>
+                        <h3 class="faculty-name">
+                            <a href="https://www.unitus.it/personale/docente/riccardo-valentini/" target="_blank">Prof. Riccardo Valentini</a>
+                        </h3>
+                        <p class="faculty-role">Università della Tuscia - Premio Nobel per la Pace IPCC, esperto internazionale in climate change e carbon cycle</p>
                     </div>
                 </div>
 
                 <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-female.png" alt="Foto di Dott.ssa Laura Bianchi">
+                    <div class="faculty-image faculty-icon" aria-hidden="true">💼</div>
                     <div class="faculty-info">
-                        <div class="faculty-role-badge">Coordinatrice Didattica</div>
-                        <h3 class="faculty-name">Dott.ssa Laura Bianchi</h3>
-                        <p class="faculty-bio">Agroecologa e consulente per progetti di rigenerazione del suolo, guida i laboratori pratici di progettazione agroforestale.</p>
+                        <div class="faculty-role-badge">Coordinatore</div>
+                        <h3 class="faculty-name">
+                            <a href="https://www.linkedin.com/in/virgiliomaretto/" target="_blank">Virgilio Maretto</a>
+                        </h3>
+                        <p class="faculty-role">Esperto in sostenibilità e gestione ambientale, consulente strategico per progetti di transizione ecologica</p>
                     </div>
                 </div>
 
                 <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Foto di Ing. Paolo Rinaldi">
+                    <div class="faculty-image faculty-icon" aria-hidden="true">👩‍🔬</div>
                     <div class="faculty-info">
-                        <div class="faculty-role-badge">Esperto MRV &amp; Dati</div>
-                        <h3 class="faculty-name">Ing. Paolo Rinaldi</h3>
-                        <p class="faculty-bio">Ingegnere ambientale specializzato in tecnologie di monitoraggio satellitare e sistemi di certificazione per progetti di carbon farming.</p>
+                        <h3 class="faculty-name">
+                            <a href="https://www.cmcc.it/people/chiriaco-maria-vincenza" target="_blank">Dr.ssa Maria Vincenza Chiriacò</a>
+                        </h3>
+                        <p class="faculty-role">CMCC - Specialista in inventari nazionali delle emissioni e metodologie IPCC per il settore LULUCF</p>
                     </div>
                 </div>
 
                 <div class="faculty-card">
-                    <img class="faculty-image" src="assets/img/faculty-female.png" alt="Foto di Dott.ssa Chiara Leone">
+                    <div class="faculty-image faculty-icon" aria-hidden="true">👨‍🌾</div>
                     <div class="faculty-info">
-                        <div class="faculty-role-badge">Sustainability Advisor</div>
-                        <h3 class="faculty-name">Dott.ssa Chiara Leone</h3>
-                        <p class="faculty-bio">Consulente aziendale per strategie ESG e mercati volontari del carbonio, supporta i partecipanti nello sviluppo di business plan sostenibili.</p>
+                        <h3 class="faculty-name">
+                            <a href="https://www.unitus.it/personale/docente/emanuele-blasi/" target="_blank">Prof. Emanuele Blasi</a>
+                        </h3>
+                        <p class="faculty-role">Università della Tuscia - Esperto in economia agraria e valutazione economica dei servizi ecosistemici</p>
+                    </div>
+                </div>
+
+                <div class="faculty-card">
+                    <div class="faculty-image faculty-icon" aria-hidden="true">👨‍🔬</div>
+                    <div class="faculty-info">
+                        <h3 class="faculty-name">
+                            <a href="https://www.unitus.it/personale/docente/tommaso-chiti/" target="_blank">Prof. Tommaso Chiti</a>
+                        </h3>
+                        <p class="faculty-role">Università della Tuscia - Esperto in biogeochemical cycles, soil carbon dynamics e Life Cycle Assessment</p>
+                    </div>
+                </div>
+
+                <div class="faculty-card">
+                    <div class="faculty-image faculty-icon" aria-hidden="true">👨‍💻</div>
+                    <div class="faculty-info">
+                        <h3 class="faculty-name">
+                            <a href="https://www.unitus.it/personale/docente/dario-papale/" target="_blank">Prof. Dario Papale</a>
+                        </h3>
+                        <p class="faculty-role">Università della Tuscia - Specialista in flussi di CO₂, eddy covariance e monitoraggio ecosistemi forestali</p>
+                    </div>
+                </div>
+
+                <div class="faculty-card">
+                    <div class="faculty-image faculty-icon" aria-hidden="true">👨‍🌾</div>
+                    <div class="faculty-info">
+                        <h3 class="faculty-name">
+                            <a href="https://www.unitus.it/personale/docente/raffaele-casa/" target="_blank">Prof. Raffaele Casa</a>
+                        </h3>
+                        <p class="faculty-role">Università della Tuscia - Esperto in agricoltura di precisione, remote sensing e tecnologie per l'agricoltura sostenibile</p>
+                    </div>
+                </div>
+
+                <div class="faculty-card">
+                    <div class="faculty-image faculty-icon" aria-hidden="true">👨‍🔬</div>
+                    <div class="faculty-info">
+                        <h3 class="faculty-name">
+                            <a href="https://www.unitus.it/personale/docente/andrea-vannini/" target="_blank">Prof. Andrea Vannini</a>
+                        </h3>
+                        <p class="faculty-role">Università della Tuscia - Esperto in patologia vegetale e protezione delle colture in sistemi agricoli sostenibili</p>
+                    </div>
+                </div>
+
+                <div class="faculty-card">
+                    <div class="faculty-image faculty-icon" aria-hidden="true">👩‍🌳</div>
+                    <div class="faculty-info">
+                        <h3 class="faculty-name">
+                            <a href="https://www.unitus.it/personale/docente/anna-barbati/" target="_blank">Prof.ssa Anna Barbati</a>
+                        </h3>
+                        <p class="faculty-role">Università della Tuscia - Specialista in gestione forestale sostenibile, servizi ecosistemici e biodiversità forestale</p>
+                    </div>
+                </div>
+
+                <div class="faculty-card">
+                    <div class="faculty-image faculty-icon" aria-hidden="true">👨‍💼</div>
+                    <div class="faculty-info">
+                        <h3 class="faculty-name">
+                            <a href="https://www.crea.gov.it/web/foreste-e-legno/-/piermaria-corona-1" target="_blank">Prof. Pier Maria Corona</a>
+                        </h3>
+                        <p class="faculty-role">CREA - Esperto in inventari forestali, dendrometria e gestione sostenibile delle risorse forestali</p>
+                    </div>
+                </div>
+
+                <div class="faculty-card">
+                    <div class="faculty-image faculty-icon" aria-hidden="true">🏛️</div>
+                    <div class="faculty-info">
+                        <h3 class="faculty-name no-link">Francesco Rutelli</h3>
+                        <p class="faculty-role">Esperto in politiche ambientali e governance della sostenibilità, ex Ministro per i Beni e le Attività Culturali</p>
+                    </div>
+                </div>
+
+                <div class="faculty-card">
+                    <div class="faculty-image faculty-icon" aria-hidden="true">💡</div>
+                    <div class="faculty-info">
+                        <h3 class="faculty-name">
+                            <a href="https://www.linkedin.com/in/luca-buonocore-24b49b2/" target="_blank">Luca Buonocore</a>
+                        </h3>
+                        <p class="faculty-role">Consulente strategico in sostenibilità e carbon management, esperto in mercati dei crediti di carbonio</p>
                     </div>
                 </div>
             </div>

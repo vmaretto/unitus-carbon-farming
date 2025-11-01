@@ -677,6 +677,9 @@
 
         document.getElementById('faculty-form').addEventListener('submit', async (event) => {
             event.preventDefault();
+            console.log('[SUBMIT] Form submitted');
+            console.log('[SUBMIT] editingFacultyId:', state.editingFacultyId);
+
             const payload = {
                 name: document.getElementById('faculty-name').value.trim(),
                 role: document.getElementById('faculty-role').value.trim() || null,
@@ -687,6 +690,8 @@
                 isPublished: document.getElementById('faculty-published').checked
             };
 
+            console.log('[SUBMIT] Payload:', payload);
+
             if (!payload.name) {
                 showToast('Inserisci il nome del docente', 'error');
                 return;
@@ -695,14 +700,19 @@
             try {
                 const method = state.editingFacultyId ? 'PUT' : 'POST';
                 const url = state.editingFacultyId ? `/api/faculty/${state.editingFacultyId}` : '/api/faculty';
-                await apiRequest(url, {
+                console.log('[SUBMIT] Making request:', method, url);
+
+                const result = await apiRequest(url, {
                     method,
                     body: JSON.stringify(payload)
                 });
+                console.log('[SUBMIT] Request successful, result:', result);
+
                 showToast('Docente salvato con successo');
                 resetFacultyForm();
                 loadFaculty();
             } catch (error) {
+                console.error('[SUBMIT] Request failed:', error);
                 // already handled in apiRequest
             }
         });
@@ -715,7 +725,11 @@
             const id = row.dataset.id;
 
             if (editButton) {
+                console.log('[EDIT] Clicked edit for ID:', id);
+                console.log('[EDIT] Current faculty array:', state.faculty);
                 const current = state.faculty.find((item) => item.id === id);
+                console.log('[EDIT] Found faculty member:', current);
+
                 if (!current) {
                     showToast('Docente non trovato', 'error');
                     return;
@@ -731,6 +745,10 @@
                 document.getElementById('faculty-reset').hidden = false;
                 document.getElementById('faculty-form').querySelector('button.primary').textContent = 'Aggiorna docente';
                 state.editingFacultyId = id;
+                console.log('[EDIT] Set editingFacultyId to:', state.editingFacultyId);
+
+                // Scroll to form
+                document.getElementById('faculty-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
 
             if (deleteButton) {

@@ -195,6 +195,23 @@ async function initDatabase() {
   `);
 }
 
+let initPromise = null;
+
+async function ensureDatabaseInitialized() {
+  if (!hasDatabaseUrl) {
+    return;
+  }
+
+  if (!initPromise) {
+    initPromise = initDatabase().catch((error) => {
+      initPromise = null;
+      throw error;
+    });
+  }
+
+  return initPromise;
+}
+
 function ensurePool(res) {
   if (!pool) {
     res.status(503).json({ error: 'Database not configured. Set DATABASE_URL to connect to Neon.' });
@@ -496,13 +513,30 @@ app.get('*', (req, res) => {
   });
 });
 
-initDatabase()
-  .then(() => {
-    app.listen(port, () => {
-      console.log(`Server running on http://localhost:${port}`);
-    });
-  })
-  .catch((error) => {
+async function handler(req, res) {
+  try {
+    await ensureDatabaseInitialized();
+  } catch (error) {
     console.error('Failed to initialise database', error);
-    process.exit(1);
-  });
+    res.status(500).json({ error: 'Failed to initialise database connection' });
+    return;
+  }
+
+  return app(req, res);
+}
+
+if (require.main === module) {
+  ensureDatabaseInitialized()
+    .catch((error) => {
+      console.error('Failed to initialise database', error);
+      process.exit(1);
+    })
+    .then(() => {
+      app.listen(port, () => {
+        console.log(`Server running on http://localhost:${port}`);
+      });
+    });
+}
+
+module.exports = handler;
+module.exports.app = app;

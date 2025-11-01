@@ -2220,7 +2220,41 @@
             </p>
 
             <div class="faculty-grid" id="faculty-grid" data-empty-text="La faculty sarà annunciata a breve. Iscriviti alla newsletter per ricevere gli aggiornamenti.">
-                <!-- I docenti pubblicati verranno caricati dinamicamente -->
+                <div class="faculty-card">
+                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Foto di Prof. Marco Conti">
+                    <div class="faculty-info">
+                        <div class="faculty-role-badge">Direttore Scientifico</div>
+                        <h3 class="faculty-name">Prof. Marco Conti</h3>
+                        <p class="faculty-bio">Professore di Economia Ambientale presso l'Università della Tuscia, esperto di politiche climatiche e mercati dei crediti di carbonio.</p>
+                    </div>
+                </div>
+
+                <div class="faculty-card">
+                    <img class="faculty-image" src="assets/img/faculty-female.png" alt="Foto di Dott.ssa Laura Bianchi">
+                    <div class="faculty-info">
+                        <div class="faculty-role-badge">Coordinatrice Didattica</div>
+                        <h3 class="faculty-name">Dott.ssa Laura Bianchi</h3>
+                        <p class="faculty-bio">Agroecologa e consulente per progetti di rigenerazione del suolo, guida i laboratori pratici di progettazione agroforestale.</p>
+                    </div>
+                </div>
+
+                <div class="faculty-card">
+                    <img class="faculty-image" src="assets/img/faculty-male.png" alt="Foto di Ing. Paolo Rinaldi">
+                    <div class="faculty-info">
+                        <div class="faculty-role-badge">Esperto MRV &amp; Dati</div>
+                        <h3 class="faculty-name">Ing. Paolo Rinaldi</h3>
+                        <p class="faculty-bio">Ingegnere ambientale specializzato in tecnologie di monitoraggio satellitare e sistemi di certificazione per progetti di carbon farming.</p>
+                    </div>
+                </div>
+
+                <div class="faculty-card">
+                    <img class="faculty-image" src="assets/img/faculty-female.png" alt="Foto di Dott.ssa Chiara Leone">
+                    <div class="faculty-info">
+                        <div class="faculty-role-badge">Sustainability Advisor</div>
+                        <h3 class="faculty-name">Dott.ssa Chiara Leone</h3>
+                        <p class="faculty-bio">Consulente aziendale per strategie ESG e mercati volontari del carbonio, supporta i partecipanti nello sviluppo di business plan sostenibili.</p>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -3210,6 +3244,8 @@
             }
 
             if (facultyGrid) {
+                const initialFacultyHTML = facultyGrid.innerHTML;
+
                 fetch('/api/faculty?published=true')
                     .then((response) => {
                         if (!response.ok) {
@@ -3219,11 +3255,7 @@
                     })
                     .then((members) => {
                         if (!Array.isArray(members) || members.length === 0) {
-                            renderEmpty(
-                                facultyGrid,
-                                'faculty-empty',
-                                facultyGrid.dataset.emptyText || 'La faculty sarà annunciata a breve.'
-                            );
+                            facultyGrid.innerHTML = initialFacultyHTML;
                             return;
                         }
 
@@ -3233,11 +3265,7 @@
                         });
                     })
                     .catch(() => {
-                        renderEmpty(
-                            facultyGrid,
-                            'faculty-empty',
-                            facultyGrid.dataset.emptyText || 'La faculty sarà annunciata a breve.'
-                        );
+                        facultyGrid.innerHTML = initialFacultyHTML;
                     });
             }
 

@@ -315,7 +315,7 @@
         }
 
         .hero-subtitle {
-            font-size: 1.4rem;
+            font-size: 1.2rem;
             margin-bottom: 25px;
             opacity: 0.95;
             font-weight: 300;
@@ -459,6 +459,20 @@
 
         .overview-text p {
             margin-bottom: 25px;
+        }
+
+        .overview-details {
+            background: rgba(44, 95, 45, 0.08);
+            padding: 18px 22px;
+            border-radius: 12px;
+            border-left: 4px solid #2c5f2d;
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-top: 10px;
+        }
+
+        .overview-details strong {
+            color: #2c5f2d;
         }
 
         .overview-image {
@@ -1773,6 +1787,15 @@
                 margin-bottom: 15px;
             }
 
+            .overview-details {
+                font-size: 0.95rem;
+                padding: 15px 18px;
+            }
+
+            .overview-img {
+                max-width: 350px;
+            }
+
             .stats-container {
                 grid-template-columns: repeat(2, 1fr);
                 gap: 20px;
@@ -1780,7 +1803,56 @@
 
             .info-grid, .learn-grid, .candidate-criteria, .teacher-grid, .blog-grid {
                 grid-template-columns: 1fr;
-                gap: 20px;
+                gap: 18px;
+            }
+
+            .candidate-description {
+                font-size: 1.05rem;
+                line-height: 1.6;
+                margin-bottom: 35px;
+            }
+
+            .criteria-item {
+                padding: 22px 20px;
+            }
+
+            .criteria-icon {
+                width: 50px;
+                height: 50px;
+                font-size: 1.5rem;
+                margin-bottom: 15px;
+            }
+
+            .criteria-item h3 {
+                font-size: 1.15rem;
+                margin-bottom: 10px;
+            }
+
+            .criteria-item p {
+                font-size: 0.95rem;
+                line-height: 1.5;
+            }
+
+            .learn-item {
+                padding: 22px 20px;
+                gap: 15px;
+            }
+
+            .learn-icon {
+                width: 50px;
+                height: 50px;
+                font-size: 1.4rem;
+                flex-shrink: 0;
+            }
+
+            .learn-content h3 {
+                font-size: 1.15rem;
+                margin-bottom: 8px;
+            }
+
+            .learn-content p {
+                font-size: 0.95rem;
+                line-height: 1.5;
             }
 
             .section {
@@ -1822,10 +1894,13 @@
 
             .modules-scroll {
                 padding-left: 20px;
+                padding-right: 20px;
+                gap: 20px;
             }
 
             .module-card {
-                min-width: 280px;
+                min-width: calc(85vw - 40px);
+                max-width: 350px;
                 padding: 25px 20px;
             }
 
@@ -1843,12 +1918,28 @@
                 font-size: 0.95rem;
             }
 
+            .faculty-grid {
+                gap: 22px;
+                margin-top: 40px;
+            }
+
+            .faculty-card {
+                padding: 20px 18px;
+            }
+
             .faculty-info {
-                padding: 20px;
+                padding: 18px 16px;
             }
 
             .faculty-name {
                 font-size: 1.1rem;
+                margin-bottom: 6px;
+            }
+
+            .faculty-role-badge {
+                font-size: 0.75rem;
+                padding: 3px 10px;
+                margin-bottom: 6px;
             }
 
             .faculty-bio {
@@ -1879,23 +1970,64 @@
 
             .cbl-features {
                 grid-template-columns: 1fr;
+                gap: 22px;
+                margin-top: 40px;
+            }
+
+            .cbl-description {
+                font-size: 1.05rem;
+                line-height: 1.6;
+                margin-bottom: 30px;
+            }
+
+            .cbl-feature {
+                padding: 25px 20px;
+            }
+
+            .cbl-feature-icon {
+                width: 65px;
+                height: 65px;
+                font-size: 1.7rem;
+                margin-bottom: 16px;
+            }
+
+            .cbl-feature h3 {
+                font-size: 1.15rem;
+                margin-bottom: 12px;
+            }
+
+            .cbl-feature p {
+                font-size: 0.95rem;
+                line-height: 1.5;
             }
 
             .timeline::before {
-                left: 30px;
+                left: 20px;
             }
 
             .timeline-item {
                 flex-direction: row !important;
-                margin-left: 60px;
+                margin-left: 50px;
+                margin-bottom: 35px;
             }
 
             .timeline-content {
                 width: 100%;
+                padding: 22px 18px;
             }
 
             .timeline-marker {
-                left: 30px;
+                left: 20px;
+            }
+
+            .timeline-content h3 {
+                font-size: 1.1rem;
+                margin-bottom: 8px;
+            }
+
+            .timeline-content p {
+                font-size: 0.95rem;
+                line-height: 1.5;
             }
         }
 
@@ -1977,15 +2109,49 @@
                 margin-bottom: 12px;
             }
 
+            .overview-details {
+                font-size: 0.88rem;
+                padding: 12px 15px;
+            }
+
+            .overview-img {
+                max-width: 280px;
+            }
+
+            .info-grid, .learn-grid {
+                gap: 15px;
+            }
+
             .info-card {
-                padding: 25px 20px;
+                padding: 20px 18px;
             }
 
             .info-icon {
-                width: 55px;
-                height: 55px;
-                font-size: 1.5rem;
-                margin-bottom: 15px;
+                width: 50px;
+                height: 50px;
+                font-size: 1.4rem;
+                margin-bottom: 12px;
+            }
+
+            .learn-item {
+                padding: 18px 16px;
+                gap: 12px;
+            }
+
+            .learn-icon {
+                width: 45px;
+                height: 45px;
+                font-size: 1.25rem;
+            }
+
+            .learn-content h3 {
+                font-size: 1.05rem;
+                margin-bottom: 6px;
+            }
+
+            .learn-content p {
+                font-size: 0.88rem;
+                line-height: 1.45;
             }
 
             .info-title {
@@ -1998,8 +2164,15 @@
                 line-height: 1.45;
             }
 
+            .modules-scroll {
+                padding-left: 16px;
+                padding-right: 16px;
+                gap: 16px;
+            }
+
             .module-card {
-                min-width: 260px;
+                min-width: calc(90vw - 32px);
+                max-width: 320px;
                 padding: 20px 18px;
             }
 
@@ -2018,17 +2191,99 @@
                 line-height: 1.4;
             }
 
+            .faculty-grid {
+                gap: 16px;
+                margin-top: 30px;
+            }
+
             .faculty-card {
-                padding: 20px;
+                padding: 16px 14px;
+            }
+
+            .faculty-info {
+                padding: 14px 12px;
             }
 
             .faculty-name {
-                font-size: 1.05rem;
+                font-size: 1rem;
+                margin-bottom: 5px;
+            }
+
+            .faculty-role-badge {
+                font-size: 0.7rem;
+                padding: 2px 8px;
+                margin-bottom: 5px;
             }
 
             .faculty-bio {
-                font-size: 0.88rem;
+                font-size: 0.86rem;
                 line-height: 1.4;
+            }
+
+            .faculty-image, .faculty-icon {
+                width: 100px !important;
+                height: 100px !important;
+            }
+
+            .cbl-description {
+                font-size: 0.92rem;
+                line-height: 1.5;
+                margin-bottom: 25px;
+            }
+
+            .cbl-features {
+                gap: 16px;
+                margin-top: 30px;
+            }
+
+            .cbl-feature {
+                padding: 20px 16px;
+            }
+
+            .cbl-feature-icon {
+                width: 55px;
+                height: 55px;
+                font-size: 1.5rem;
+                margin-bottom: 12px;
+            }
+
+            .cbl-feature h3 {
+                font-size: 1.05rem;
+                margin-bottom: 10px;
+            }
+
+            .cbl-feature p {
+                font-size: 0.88rem;
+                line-height: 1.45;
+            }
+
+            .timeline::before {
+                left: 16px;
+            }
+
+            .timeline-item {
+                margin-left: 40px;
+                margin-bottom: 25px;
+            }
+
+            .timeline-content {
+                padding: 18px 15px;
+            }
+
+            .timeline-marker {
+                left: 16px;
+                width: 16px;
+                height: 16px;
+            }
+
+            .timeline-content h3 {
+                font-size: 1rem;
+                margin-bottom: 6px;
+            }
+
+            .timeline-content p {
+                font-size: 0.88rem;
+                line-height: 1.45;
             }
 
             .partner-card {
@@ -2064,6 +2319,60 @@
 
             .sdgs-grid {
                 grid-template-columns: repeat(4, 1fr);
+                gap: 15px;
+            }
+
+            .sdg-front {
+                font-size: 1.1rem;
+            }
+
+            .sdg-back {
+                font-size: 0.65rem;
+                line-height: 1.15;
+                gap: 5px;
+                padding: 8px;
+            }
+
+            .sdg-back strong {
+                font-size: 0.72rem;
+                margin-bottom: 3px;
+            }
+
+            .sdgs-intro {
+                font-size: 0.92rem;
+                line-height: 1.5;
+                margin-bottom: 35px;
+            }
+
+            .candidate-description {
+                font-size: 0.92rem;
+                line-height: 1.45;
+                margin-bottom: 25px;
+            }
+
+            .candidate-description p {
+                margin-bottom: 12px;
+            }
+
+            .criteria-item {
+                padding: 18px 16px;
+            }
+
+            .criteria-icon {
+                width: 45px;
+                height: 45px;
+                font-size: 1.3rem;
+                margin-bottom: 12px;
+            }
+
+            .criteria-item h3 {
+                font-size: 1.05rem;
+                margin-bottom: 8px;
+            }
+
+            .criteria-item p {
+                font-size: 0.88rem;
+                line-height: 1.4;
             }
         }
 
@@ -2372,12 +2681,6 @@
                     Un percorso formativo innovativo per diventare esperti nella gestione sostenibile del carbonio
                     e guidare la transizione ecologica nel settore agroforestale.
                 </p>
-                <p class="hero-description">
-                    Il Master si terrà in lingua italiana con traduzione simultanea in inglese.
-                </p>
-                <p class="hero-description">
-                    Sede delle lezioni: Roma.
-                </p>
                 <div class="hero-buttons">
                     <button class="cta-button" onclick="showInfoOptions()">📄 Richiedi Informazioni</button>
                 </div>
@@ -2420,13 +2723,17 @@
             <div class="overview-content">
                 <div class="overview-text">
                     <p>
-                        Il Master in Carbon Farming è un percorso formativo innovativo che prepara professionisti altamente qualificati 
+                        Il Master in Carbon Farming è un percorso formativo innovativo che prepara professionisti altamente qualificati
                         nella gestione sostenibile del carbonio in agricoltura e nel settore LULUCF (Land use, Land Use Change and Forestry).
                     </p>
                     <p>
-                        Con un approccio pratico e multidisciplinare, il corso combina teoria avanzata, casi studio internazionali 
-                        e stage presso aziende leader del settore, fornendo strumenti concreti per la misurazione, certificazione 
+                        Con un approccio pratico e multidisciplinare, il corso combina teoria avanzata, casi studio internazionali
+                        e stage presso aziende leader del settore, fornendo strumenti concreti per la misurazione, certificazione
                         e valorizzazione economica dei crediti di carbonio.
+                    </p>
+                    <p class="overview-details">
+                        <strong>Lingua:</strong> Italiano con traduzione simultanea in inglese<br>
+                        <strong>Sede:</strong> Roma
                     </p>
                 </div>
                 

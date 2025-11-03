@@ -67,7 +67,7 @@
             font-weight: 700;
             letter-spacing: 0.05em;
             text-decoration: none;
-            display: inline-flex;
+            display: none;
             flex-direction: column;
             gap: 2px;
             text-transform: uppercase;
@@ -290,6 +290,7 @@
         .university-text {
             text-align: center;
             line-height: 1.3;
+            display: none;
         }
 
         .university-name {
@@ -325,7 +326,7 @@
             max-width: 800px;
             margin: 0 auto 50px;
             opacity: 0.9;
-            line-height: 1.45;
+            line-height: 1.3;
         }
 
         .hero-buttons {
@@ -1726,11 +1727,22 @@
         }
         @media (max-width: 768px) {
             .hero-title {
-                font-size: 2.8rem;
+                font-size: 2.2rem;
+                line-height: 1.2;
+            }
+
+            .hero-subtitle {
+                font-size: 1.15rem;
+            }
+
+            .hero-description {
+                font-size: 1.05rem;
+                line-height: 1.3;
+                margin-bottom: 35px;
             }
 
             .logo-image {
-                height: 100px;
+                height: 85px;
             }
 
             .university-name {
@@ -1740,38 +1752,124 @@
             .academy-name {
                 font-size: 0.9rem;
             }
-            
+
+            .section-title {
+                font-size: 2rem;
+                margin-bottom: 15px;
+            }
+
+            .section-subtitle {
+                font-size: 1.1rem;
+                margin-bottom: 40px;
+            }
+
             .overview-content {
                 grid-template-columns: 1fr;
-                gap: 50px;
+                gap: 30px;
             }
-            
+
+            .overview-text p {
+                font-size: 1rem;
+                margin-bottom: 15px;
+            }
+
             .stats-container {
                 grid-template-columns: repeat(2, 1fr);
+                gap: 20px;
             }
-            
+
             .info-grid, .learn-grid, .candidate-criteria, .teacher-grid, .blog-grid {
                 grid-template-columns: 1fr;
+                gap: 20px;
             }
-            
+
             .section {
-                padding: 50px 0;
+                padding: 40px 0;
             }
 
             .stat-card {
-                padding: 30px 25px;
+                padding: 25px 20px;
+            }
+
+            .stat-number {
+                font-size: 2.5rem;
+            }
+
+            .stat-label {
+                font-size: 0.95rem;
             }
 
             .info-card {
-                padding: 35px 30px;
+                padding: 30px 25px;
+            }
+
+            .info-icon {
+                width: 65px;
+                height: 65px;
+                font-size: 1.7rem;
+                margin-bottom: 18px;
+            }
+
+            .info-title {
+                font-size: 1.25rem;
+                margin-bottom: 15px;
+            }
+
+            .info-content {
+                font-size: 0.95rem;
+                line-height: 1.5;
             }
 
             .modules-scroll {
                 padding-left: 20px;
             }
-            
+
             .module-card {
-                min-width: 320px;
+                min-width: 280px;
+                padding: 25px 20px;
+            }
+
+            .module-icon {
+                font-size: 2rem;
+                margin-bottom: 15px;
+            }
+
+            .module-title {
+                font-size: 1.25rem;
+                margin-bottom: 12px;
+            }
+
+            .module-description {
+                font-size: 0.95rem;
+            }
+
+            .faculty-info {
+                padding: 20px;
+            }
+
+            .faculty-name {
+                font-size: 1.1rem;
+            }
+
+            .faculty-bio {
+                font-size: 0.95rem;
+                line-height: 1.5;
+            }
+
+            .blog-card {
+                padding: 25px 22px;
+            }
+
+            .blog-card h3 {
+                font-size: 1.2rem;
+            }
+
+            .blog-card p {
+                font-size: 0.95rem;
+            }
+
+            .partner-card {
+                padding: 28px 24px;
             }
 
             .hero-buttons {
@@ -1803,26 +1901,33 @@
 
         @media (max-width: 480px) {
             .hero-title {
-                font-size: 2.2rem;
-                margin-bottom: 15px;
+                font-size: 1.8rem;
+                margin-bottom: 12px;
+                line-height: 1.15;
             }
 
             .hero-subtitle {
-                font-size: 1.1rem;
-                margin-bottom: 15px;
+                font-size: 1rem;
+                margin-bottom: 12px;
             }
 
             .hero-description {
-                font-size: 1rem;
-                margin-bottom: 30px;
+                font-size: 0.92rem;
+                margin-bottom: 20px;
+                line-height: 1.35;
             }
 
             .hero-buttons {
-                margin-bottom: 30px;
+                margin-bottom: 25px;
+            }
+
+            .cta-button {
+                font-size: 1rem;
+                padding: 14px 32px;
             }
 
             .logo-image {
-                height: 80px;
+                height: 70px;
             }
 
             .university-name {
@@ -1833,20 +1938,128 @@
                 font-size: 0.8rem;
             }
 
+            .section {
+                padding: 35px 0;
+            }
+
+            .section-title {
+                font-size: 1.65rem;
+                margin-bottom: 12px;
+            }
+
+            .section-subtitle {
+                font-size: 1rem;
+                margin-bottom: 30px;
+                line-height: 1.4;
+            }
+
             .stats-container {
                 grid-template-columns: 1fr;
+                gap: 15px;
             }
 
             .stat-card {
-                padding: 25px 20px;
+                padding: 20px 18px;
+            }
+
+            .stat-number {
+                font-size: 2.2rem;
+                margin-bottom: 8px;
+            }
+
+            .stat-label {
+                font-size: 0.9rem;
+            }
+
+            .overview-text p {
+                font-size: 0.92rem;
+                line-height: 1.5;
+                margin-bottom: 12px;
             }
 
             .info-card {
-                padding: 30px 25px;
+                padding: 25px 20px;
+            }
+
+            .info-icon {
+                width: 55px;
+                height: 55px;
+                font-size: 1.5rem;
+                margin-bottom: 15px;
+            }
+
+            .info-title {
+                font-size: 1.1rem;
+                margin-bottom: 12px;
+            }
+
+            .info-content {
+                font-size: 0.9rem;
+                line-height: 1.45;
             }
 
             .module-card {
-                min-width: 280px;
+                min-width: 260px;
+                padding: 20px 18px;
+            }
+
+            .module-icon {
+                font-size: 1.8rem;
+                margin-bottom: 12px;
+            }
+
+            .module-title {
+                font-size: 1.1rem;
+                margin-bottom: 10px;
+            }
+
+            .module-description {
+                font-size: 0.88rem;
+                line-height: 1.4;
+            }
+
+            .faculty-card {
+                padding: 20px;
+            }
+
+            .faculty-name {
+                font-size: 1.05rem;
+            }
+
+            .faculty-bio {
+                font-size: 0.88rem;
+                line-height: 1.4;
+            }
+
+            .partner-card {
+                padding: 20px 18px;
+            }
+
+            .partner-name {
+                font-size: 1rem;
+            }
+
+            .partner-description {
+                font-size: 0.88rem;
+                line-height: 1.4;
+            }
+
+            .blog-card {
+                padding: 22px 18px;
+            }
+
+            .blog-card h3 {
+                font-size: 1.1rem;
+                line-height: 1.3;
+            }
+
+            .blog-card p {
+                font-size: 0.88rem;
+                line-height: 1.45;
+            }
+
+            .blog-meta {
+                font-size: 0.85rem;
             }
 
             .sdgs-grid {

@@ -67,7 +67,7 @@
             font-weight: 700;
             letter-spacing: 0.05em;
             text-decoration: none;
-            display: inline-flex;
+            display: none;
             flex-direction: column;
             gap: 2px;
             text-transform: uppercase;
@@ -206,7 +206,7 @@
         }
 
         header.hero-header .header-content {
-            padding-top: 160px;
+            padding-top: 80px;
         }
 
         @media (max-width: 1100px) {
@@ -260,7 +260,7 @@
             }
 
             header.hero-header .header-content {
-                padding-top: 200px;
+                padding-top: 90px;
             }
         }
 
@@ -268,12 +268,12 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            margin-bottom: 40px;
+            margin-bottom: 18px;
             opacity: 0.95;
         }
 
         .logo-image {
-            height: 120px;
+            height: 115px;
             width: auto;
             display: block;
             opacity: .95;
@@ -290,6 +290,7 @@
         .university-text {
             text-align: center;
             line-height: 1.3;
+            display: none;
         }
 
         .university-name {
@@ -314,7 +315,7 @@
         }
 
         .hero-subtitle {
-            font-size: 1.4rem;
+            font-size: 1.2rem;
             margin-bottom: 25px;
             opacity: 0.95;
             font-weight: 300;
@@ -325,7 +326,7 @@
             max-width: 800px;
             margin: 0 auto 50px;
             opacity: 0.9;
-            line-height: 1.7;
+            line-height: 1.3;
         }
 
         .hero-buttons {
@@ -458,6 +459,20 @@
 
         .overview-text p {
             margin-bottom: 25px;
+        }
+
+        .overview-details {
+            background: rgba(44, 95, 45, 0.08);
+            padding: 18px 22px;
+            border-radius: 12px;
+            border-left: 4px solid #2c5f2d;
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-top: 10px;
+        }
+
+        .overview-details strong {
+            color: #2c5f2d;
         }
 
         .overview-image {
@@ -1726,11 +1741,18 @@
         }
         @media (max-width: 768px) {
             .hero-title {
-                font-size: 2.8rem;
+                font-size: 2.2rem;
+                line-height: 1.2;
             }
 
-            .logo-image {
-                height: 100px;
+            .hero-subtitle {
+                font-size: 1.15rem;
+            }
+
+            .hero-description {
+                font-size: 1.05rem;
+                line-height: 1.3;
+                margin-bottom: 35px;
             }
 
             .university-name {
@@ -1740,30 +1762,207 @@
             .academy-name {
                 font-size: 0.9rem;
             }
-            
-            .overview-content {
-                grid-template-columns: 1fr;
-                gap: 50px;
+
+            .section-title {
+                font-size: 2rem;
+                margin-bottom: 15px;
             }
-            
+
+            .section-subtitle {
+                font-size: 1.1rem;
+                margin-bottom: 40px;
+            }
+
+            .overview-content {
+                display: flex;
+                flex-direction: column;
+                gap: 30px;
+            }
+
+            .overview-image {
+                order: -1;
+            }
+
+            .overview-text p {
+                font-size: 1rem;
+                margin-bottom: 15px;
+            }
+
+            .overview-details {
+                font-size: 0.95rem;
+                padding: 15px 18px;
+            }
+
+            .overview-img {
+                max-width: 350px;
+            }
+
             .stats-container {
                 grid-template-columns: repeat(2, 1fr);
+                gap: 20px;
             }
-            
+
             .info-grid, .learn-grid, .candidate-criteria, .teacher-grid, .blog-grid {
                 grid-template-columns: 1fr;
+                gap: 18px;
             }
-            
+
+            .candidate-description {
+                font-size: 1.05rem;
+                line-height: 1.6;
+                margin-bottom: 35px;
+            }
+
+            .criteria-item {
+                padding: 22px 20px;
+            }
+
+            .criteria-icon {
+                width: 50px;
+                height: 50px;
+                font-size: 1.5rem;
+                margin-bottom: 15px;
+            }
+
+            .criteria-item h3 {
+                font-size: 1.15rem;
+                margin-bottom: 10px;
+            }
+
+            .criteria-item p {
+                font-size: 0.95rem;
+                line-height: 1.5;
+            }
+
+            .learn-item {
+                padding: 22px 20px;
+                gap: 15px;
+            }
+
+            .learn-icon {
+                width: 50px;
+                height: 50px;
+                font-size: 1.4rem;
+                flex-shrink: 0;
+            }
+
+            .learn-content h3 {
+                font-size: 1.15rem;
+                margin-bottom: 8px;
+            }
+
+            .learn-content p {
+                font-size: 0.95rem;
+                line-height: 1.5;
+            }
+
             .section {
-                padding: 80px 0;
+                padding: 40px 0;
             }
-            
+
+            .stat-card {
+                padding: 25px 20px;
+            }
+
+            .stat-number {
+                font-size: 2.5rem;
+            }
+
+            .stat-label {
+                font-size: 0.95rem;
+            }
+
+            .info-card {
+                padding: 30px 25px;
+            }
+
+            .info-icon {
+                width: 65px;
+                height: 65px;
+                font-size: 1.7rem;
+                margin-bottom: 18px;
+            }
+
+            .info-title {
+                font-size: 1.25rem;
+                margin-bottom: 15px;
+            }
+
+            .info-content {
+                font-size: 0.95rem;
+                line-height: 1.5;
+            }
+
             .modules-scroll {
                 padding-left: 20px;
+                padding-right: 20px;
+                gap: 20px;
             }
-            
+
             .module-card {
-                min-width: 320px;
+                min-width: calc(85vw - 40px);
+                max-width: 350px;
+                padding: 25px 20px;
+            }
+
+            .module-icon {
+                font-size: 1.7rem;
+                margin-bottom: 12px;
+            }
+
+            .module-title {
+                font-size: 1.1rem;
+                margin-bottom: 10px;
+            }
+
+            .module-description {
+                font-size: 0.88rem;
+                line-height: 1.45;
+            }
+
+            .faculty-grid {
+                gap: 22px;
+                margin-top: 40px;
+            }
+
+            .faculty-card {
+                padding: 20px 18px;
+            }
+
+            .faculty-info {
+                padding: 18px 16px;
+            }
+
+            .faculty-name {
+                font-size: 1.1rem;
+                margin-bottom: 6px;
+            }
+
+            .faculty-role-badge {
+                font-size: 0.75rem;
+                padding: 3px 10px;
+                margin-bottom: 6px;
+            }
+
+            .faculty-bio {
+                font-size: 0.95rem;
+                line-height: 1.5;
+            }
+
+            .blog-card {
+                padding: 25px 22px;
+            }
+
+            .blog-card h3 {
+                font-size: 1.2rem;
+            }
+
+            .blog-card p {
+                font-size: 0.95rem;
+            }
+
+            .partner-card {
+                padding: 28px 24px;
             }
 
             .hero-buttons {
@@ -1773,33 +1972,109 @@
 
             .cbl-features {
                 grid-template-columns: 1fr;
+                gap: 22px;
+                margin-top: 40px;
+            }
+
+            .cbl-description {
+                font-size: 1.05rem;
+                line-height: 1.6;
+                margin-bottom: 30px;
+            }
+
+            .cbl-feature {
+                padding: 25px 20px;
+            }
+
+            .cbl-feature-icon {
+                width: 65px;
+                height: 65px;
+                font-size: 1.7rem;
+                margin-bottom: 16px;
+            }
+
+            .cbl-feature h3 {
+                font-size: 1.15rem;
+                margin-bottom: 12px;
+            }
+
+            .cbl-feature p {
+                font-size: 0.95rem;
+                line-height: 1.5;
             }
 
             .timeline::before {
-                left: 30px;
+                left: 20px;
             }
 
             .timeline-item {
                 flex-direction: row !important;
-                margin-left: 60px;
+                margin-left: 50px;
+                margin-bottom: 35px;
             }
 
             .timeline-content {
                 width: 100%;
+                padding: 22px 18px;
             }
 
             .timeline-marker {
-                left: 30px;
+                left: 20px;
+            }
+
+            .timeline-content h3 {
+                font-size: 1.1rem;
+                margin-bottom: 8px;
+            }
+
+            .timeline-content p {
+                font-size: 0.95rem;
+                line-height: 1.5;
             }
         }
 
         @media (max-width: 480px) {
+            header.hero-header {
+                align-items: flex-start;
+            }
+
+            header.hero-header .header-content {
+                padding-top: 70px !important;
+            }
+
+            .university-logo {
+                margin-bottom: 24px;
+            }
+
             .hero-title {
-                font-size: 2.2rem;
+                font-size: 2rem;
+                margin-bottom: 18px;
+                line-height: 1.2;
+            }
+
+            .hero-subtitle {
+                font-size: 1.1rem;
+                margin-bottom: 16px;
+                line-height: 1.4;
+            }
+
+            .hero-description {
+                font-size: 0.98rem;
+                margin-bottom: 28px;
+                line-height: 1.5;
+            }
+
+            .hero-buttons {
+                margin-bottom: 30px;
+            }
+
+            .cta-button {
+                font-size: 1.05rem;
+                padding: 16px 36px;
             }
 
             .logo-image {
-                height: 80px;
+                height: 130px !important;
             }
 
             .university-name {
@@ -1810,16 +2085,349 @@
                 font-size: 0.8rem;
             }
 
+            .section {
+                padding: 35px 0;
+            }
+
+            .section-title {
+                font-size: 1.65rem;
+                margin-bottom: 12px;
+            }
+
+            .section-subtitle {
+                font-size: 1rem;
+                margin-bottom: 30px;
+                line-height: 1.4;
+            }
+
             .stats-container {
                 grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .stat-card {
+                padding: 20px 18px;
+            }
+
+            .stat-number {
+                font-size: 2.2rem;
+                margin-bottom: 8px;
+            }
+
+            .stat-label {
+                font-size: 0.9rem;
+            }
+
+            .overview-text p {
+                font-size: 0.92rem;
+                line-height: 1.5;
+                margin-bottom: 12px;
+            }
+
+            .overview-details {
+                font-size: 0.88rem;
+                padding: 12px 15px;
+            }
+
+            .overview-content {
+                display: flex;
+                flex-direction: column;
+                gap: 25px;
+            }
+
+            .overview-image {
+                order: -1;
+            }
+
+            .overview-img {
+                max-width: 280px;
+            }
+
+            .info-grid, .learn-grid {
+                gap: 15px;
+            }
+
+            .info-card {
+                padding: 20px 18px;
+            }
+
+            .info-icon {
+                width: 50px;
+                height: 50px;
+                font-size: 1.4rem;
+                margin-bottom: 12px;
+            }
+
+            .learn-item {
+                padding: 18px 16px;
+                gap: 12px;
+            }
+
+            .learn-icon {
+                width: 45px;
+                height: 45px;
+                font-size: 1.25rem;
+            }
+
+            .learn-content h3 {
+                font-size: 1.05rem;
+                margin-bottom: 6px;
+            }
+
+            .learn-content p {
+                font-size: 0.88rem;
+                line-height: 1.45;
+            }
+
+            .info-title {
+                font-size: 1.1rem;
+                margin-bottom: 12px;
+            }
+
+            .info-content {
+                font-size: 0.9rem;
+                line-height: 1.45;
+            }
+
+            .modules-scroll {
+                padding-left: 16px;
+                padding-right: 16px;
+                gap: 16px;
             }
 
             .module-card {
-                min-width: 280px;
+                min-width: calc(90vw - 32px);
+                max-width: 320px;
+                padding: 20px 18px;
+            }
+
+            .module-icon {
+                font-size: 1.4rem;
+                margin-bottom: 8px;
+            }
+
+            .module-title {
+                font-size: 0.95rem;
+                margin-bottom: 6px;
+            }
+
+            .module-description {
+                font-size: 0.82rem;
+                line-height: 1.4;
+            }
+
+            .faculty-grid {
+                gap: 16px;
+                margin-top: 30px;
+            }
+
+            .faculty-card {
+                padding: 16px 14px;
+            }
+
+            .faculty-info {
+                padding: 14px 12px;
+            }
+
+            .faculty-name {
+                font-size: 1rem;
+                margin-bottom: 5px;
+            }
+
+            .faculty-role-badge {
+                font-size: 0.7rem;
+                padding: 2px 8px;
+                margin-bottom: 5px;
+            }
+
+            .faculty-bio {
+                font-size: 0.86rem;
+                line-height: 1.4;
+            }
+
+            .faculty-image, .faculty-icon {
+                width: 100px !important;
+                height: 100px !important;
+            }
+
+            .cbl-description {
+                font-size: 0.92rem;
+                line-height: 1.5;
+                margin-bottom: 25px;
+            }
+
+            .cbl-features {
+                gap: 16px;
+                margin-top: 30px;
+            }
+
+            .cbl-feature {
+                padding: 20px 16px;
+            }
+
+            .cbl-feature-icon {
+                width: 55px;
+                height: 55px;
+                font-size: 1.5rem;
+                margin-bottom: 12px;
+            }
+
+            .cbl-feature h3 {
+                font-size: 1.05rem;
+                margin-bottom: 10px;
+            }
+
+            .cbl-feature p {
+                font-size: 0.88rem;
+                line-height: 1.45;
+            }
+
+            .timeline::before {
+                display: none;
+            }
+
+            .timeline-item {
+                margin-left: 0;
+                margin-bottom: 18px;
+                display: block;
+            }
+
+            .timeline-content {
+                padding: 18px 16px;
+                border-left: 4px solid #ff8a4c;
+                background: #fff;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            }
+
+            .timeline-marker {
+                display: none;
+            }
+
+            .timeline-content h3 {
+                font-size: 0.95rem;
+                margin-bottom: 8px;
+                color: #2c5f2d;
+            }
+
+            .timeline-content p {
+                font-size: 0.88rem;
+                line-height: 1.5;
+            }
+
+            .partner-card {
+                padding: 20px 18px;
+            }
+
+            .partner-name {
+                font-size: 1rem;
+            }
+
+            .partner-description {
+                font-size: 0.88rem;
+                line-height: 1.4;
+            }
+
+            .blog-card {
+                padding: 22px 18px;
+            }
+
+            .blog-card h3 {
+                font-size: 1.1rem;
+                line-height: 1.3;
+            }
+
+            .blog-card p {
+                font-size: 0.88rem;
+                line-height: 1.45;
+            }
+
+            .blog-meta {
+                font-size: 0.85rem;
             }
 
             .sdgs-grid {
                 grid-template-columns: repeat(4, 1fr);
+                gap: 15px;
+            }
+
+            .sdg-front {
+                font-size: 1rem;
+            }
+
+            .sdg-back {
+                font-size: 0.58rem;
+                line-height: 1.1;
+                gap: 3px;
+                padding: 6px;
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+            }
+
+            .sdg-back strong {
+                font-size: 0.65rem;
+                margin-bottom: 2px;
+                display: block;
+            }
+
+            .sdgs-intro {
+                font-size: 0.92rem;
+                line-height: 1.5;
+                margin-bottom: 35px;
+            }
+
+            .candidate-description {
+                font-size: 0.92rem;
+                line-height: 1.45;
+                margin-bottom: 25px;
+            }
+
+            .candidate-description p {
+                margin-bottom: 12px;
+            }
+
+            .criteria-item {
+                padding: 18px 16px;
+            }
+
+            .criteria-icon {
+                width: 45px;
+                height: 45px;
+                font-size: 1.3rem;
+                margin-bottom: 12px;
+            }
+
+            .criteria-item h3 {
+                font-size: 1.05rem;
+                margin-bottom: 8px;
+            }
+
+            .criteria-item p {
+                font-size: 0.88rem;
+                line-height: 1.4;
+            }
+
+            footer {
+                padding: 45px 0 25px;
+            }
+
+            .footer-content {
+                gap: 30px;
+                margin-bottom: 25px;
+            }
+
+            .footer-section h3 {
+                font-size: 1.08rem;
+                margin-bottom: 16px;
+            }
+
+            .footer-section p, .footer-section a {
+                font-size: 0.92rem;
+                line-height: 1.65;
+            }
+
+            .footer-bottom {
+                padding-top: 18px;
+                font-size: 0.88rem;
             }
         }
 
@@ -2122,17 +2730,11 @@
                         <div class="academy-name">UNITUS ACADEMY</div>
                     </div>
                 </div>
-                <h1 class="hero-title">Master in Carbon Farming</h1>
+                <h1 class="hero-title">Master sul Carbon Farming</h1>
                 <p class="hero-subtitle">Abbraccia il nuovo paradigma della sostenibilità, dalla teoria alla pratica</p>
                 <p class="hero-description">
                     Un percorso formativo innovativo per diventare esperti nella gestione sostenibile del carbonio
                     e guidare la transizione ecologica nel settore agroforestale.
-                </p>
-                <p class="hero-description">
-                    Il Master si terrà in lingua italiana con traduzione simultanea in inglese.
-                </p>
-                <p class="hero-description">
-                    Sede delle lezioni: Roma.
                 </p>
                 <div class="hero-buttons">
                     <button class="cta-button" onclick="showInfoOptions()">📄 Richiedi Informazioni</button>
@@ -2176,13 +2778,17 @@
             <div class="overview-content">
                 <div class="overview-text">
                     <p>
-                        Il Master in Carbon Farming è un percorso formativo innovativo che prepara professionisti altamente qualificati 
+                        Il Master in Carbon Farming è un percorso formativo innovativo che prepara professionisti altamente qualificati
                         nella gestione sostenibile del carbonio in agricoltura e nel settore LULUCF (Land use, Land Use Change and Forestry).
                     </p>
                     <p>
-                        Con un approccio pratico e multidisciplinare, il corso combina teoria avanzata, casi studio internazionali 
-                        e stage presso aziende leader del settore, fornendo strumenti concreti per la misurazione, certificazione 
+                        Con un approccio pratico e multidisciplinare, il corso combina teoria avanzata, casi studio internazionali
+                        e stage presso aziende leader del settore, fornendo strumenti concreti per la misurazione, certificazione
                         e valorizzazione economica dei crediti di carbonio.
+                    </p>
+                    <p class="overview-details">
+                        <strong>Lingua:</strong> Italiano con traduzione simultanea in inglese<br>
+                        <strong>Sede:</strong> Roma
                     </p>
                 </div>
                 
@@ -2876,11 +3482,11 @@
                             <div class="price-detail">Iscritti esterni (2 rate)</div>
                         </div>
                         <p style="margin-top: 20px; font-size: 1rem; color: #555;">
-                            <strong>Riduzioni previste:</strong><br>
-                            • Studenti UNITUS: € 2.500<br>
-                            • Convenzioni PA: € 3.500<br>
-                            • Dipendenti UNITUS: € 1.500<br>
-                            • Uditori: € 2.500
+                            <strong>Riduzioni previste:</strong><br><br>
+                            Studenti UNITUS: € 2.500<br>
+                            Convenzioni PA: € 3.500<br>
+                            Dipendenti UNITUS: € 1.500<br>
+                            Uditori: € 2.500
                         </p>
                     </div>
                 </div>
@@ -2888,7 +3494,7 @@
                 <div class="info-card">
                     <div class="info-icon">📅</div>
                     <h3 class="info-title">Modalità e durata</h3>
-                    <div class="info-content">
+                    <div class="info-content" style="text-align: left;">
                         <p><strong>Durata:</strong> 12 mesi</p>
                         <p><strong>Modalità:</strong> Blended (presenza + online)</p>
                         <p><strong>Frequenza:</strong> Obbligatoria (max 30% assenze)</p>
@@ -2904,7 +3510,7 @@
                     <h3 class="info-title">Opportunità di carriera</h3>
                     <div class="info-content">
                         <p><strong>Potrai lavorare come:</strong></p>
-                        <ul style="text-align: left; margin-top: 15px; color: #555;">
+                        <ul style="text-align: left; margin-top: 15px; margin-left: 20px; color: #555;">
                             <li>Carbon Farming Specialist</li>
                             <li>Consulente per la sostenibilità</li>
                             <li>Esperto in certificazione del carbonio</li>

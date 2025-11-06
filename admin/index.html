@@ -521,7 +521,10 @@
                     </label>
                     <label>
                         URL logo
-                        <input type="url" id="partner-logo" name="logoUrl" placeholder="https://...">
+                        <input type="url" id="partner-logo" name="logoUrl" placeholder="https://raw.githubusercontent.com/... o https://example.com/logo.png">
+                        <small style="color: #6b6b6b; font-size: 0.85rem; font-weight: 400; margin-top: 4px;">
+                            Per loghi su GitHub, usa il formato "raw" (es. raw.githubusercontent.com). Gli URL "blob" saranno convertiti automaticamente.
+                        </small>
                     </label>
                     <label>
                         Sito web
@@ -963,10 +966,33 @@
 
         document.getElementById('partner-form').addEventListener('submit', async (event) => {
             event.preventDefault();
+
+            let logoUrl = document.getElementById('partner-logo').value.trim() || null;
+
+            // Validazione e avviso per URL GitHub formato "blob"
+            if (logoUrl && logoUrl.includes('github.com/') && logoUrl.includes('/blob/')) {
+                const shouldConvert = confirm(
+                    'Hai inserito un URL GitHub in formato "blob".\n\n' +
+                    'Questo formato non funziona per le immagini. Vuoi convertirlo automaticamente in formato "raw" per garantire la visualizzazione corretta?\n\n' +
+                    'URL attuale: ' + logoUrl.substring(0, 60) + '...\n\n' +
+                    'Clicca OK per convertire automaticamente.'
+                );
+
+                if (shouldConvert) {
+                    // Converti da blob a raw
+                    logoUrl = logoUrl.replace(
+                        /github\.com\/([^\/]+)\/([^\/]+)\/blob\//,
+                        'raw.githubusercontent.com/$1/$2/'
+                    );
+                    document.getElementById('partner-logo').value = logoUrl;
+                    showToast('URL convertito in formato corretto', 'success');
+                }
+            }
+
             const payload = {
                 name: document.getElementById('partner-name').value.trim(),
                 partnerType: document.getElementById('partner-type').value,
-                logoUrl: document.getElementById('partner-logo').value.trim() || null,
+                logoUrl: logoUrl,
                 description: document.getElementById('partner-description').value.trim() || null,
                 websiteUrl: document.getElementById('partner-website').value.trim() || null,
                 sortOrder: document.getElementById('partner-order').value === '' ? null : Number(document.getElementById('partner-order').value),

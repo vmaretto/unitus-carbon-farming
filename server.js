@@ -682,6 +682,26 @@ app.get('/api/partners', async (req, res) => {
   }
 });
 
+// Helper function per normalizzare URL delle immagini
+// Converte URL GitHub "blob" in URL "raw" per immagini dirette
+function normalizeImageUrl(url) {
+  if (!url) return null;
+
+  // Pattern per rilevare URL GitHub formato "blob"
+  // Esempio: https://github.com/user/repo/blob/main/path/to/image.png
+  const githubBlobPattern = /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/(.+)$/;
+  const match = url.match(githubBlobPattern);
+
+  if (match) {
+    const [, owner, repo, path] = match;
+    // Converte in formato "raw"
+    // Esempio: https://raw.githubusercontent.com/user/repo/main/path/to/image.png
+    return `https://raw.githubusercontent.com/${owner}/${repo}/${path}`;
+  }
+
+  return url;
+}
+
 app.post('/api/partners', async (req, res) => {
   if (!ensurePool(res)) {
     return;
@@ -697,6 +717,9 @@ app.post('/api/partners', async (req, res) => {
     return res.status(400).json({ error: 'Partner type must be "generale", "patrocinio", or "collaborazione"' });
   }
 
+  // Normalizza URL del logo (converte GitHub blob in raw)
+  const normalizedLogoUrl = normalizeImageUrl(logoUrl);
+
   try {
     const id = uuidv4();
     const insert = `
@@ -709,7 +732,7 @@ app.post('/api/partners', async (req, res) => {
     const values = [
       id,
       name,
-      logoUrl || null,
+      normalizedLogoUrl || null,
       partnerType,
       description || null,
       websiteUrl || null,
@@ -737,10 +760,13 @@ app.put('/api/partners/:id', async (req, res) => {
     return res.status(400).json({ error: 'Partner type must be "generale", "patrocinio", or "collaborazione"' });
   }
 
+  // Normalizza URL del logo (converte GitHub blob in raw)
+  const normalizedLogoUrl = logoUrl !== undefined ? normalizeImageUrl(logoUrl) : undefined;
+
   try {
     const updateFields = {
       name,
-      logo_url: logoUrl,
+      logo_url: normalizedLogoUrl,
       partner_type: partnerType,
       description,
       website_url: websiteUrl,

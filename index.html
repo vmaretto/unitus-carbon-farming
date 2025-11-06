@@ -4002,6 +4002,16 @@
                     logo.src = partner.logoUrl;
                     logo.alt = `Logo ${partner.name}`;
                     logo.loading = 'lazy';
+
+                    // Gestione errore caricamento immagine
+                    logo.addEventListener('error', () => {
+                        // Sostituisci con placeholder testuale se l'immagine non carica
+                        const logoPlaceholder = document.createElement('div');
+                        logoPlaceholder.className = 'partner-logo';
+                        logoPlaceholder.textContent = partner.name.substring(0, 3).toUpperCase();
+                        logo.replaceWith(logoPlaceholder);
+                    });
+
                     card.appendChild(logo);
                 } else {
                     const logoPlaceholder = document.createElement('div');

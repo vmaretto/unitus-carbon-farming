@@ -4020,13 +4020,6 @@
                     card.appendChild(logoPlaceholder);
                 }
 
-                if (partner.partnerType === 'patrocinio') {
-                    const typeLabel = document.createElement('div');
-                    typeLabel.className = 'partner-type';
-                    typeLabel.textContent = 'Patrocinio';
-                    card.appendChild(typeLabel);
-                }
-
                 const name = document.createElement('h3');
                 name.className = 'partner-name';
                 if (partner.websiteUrl) {

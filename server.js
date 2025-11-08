@@ -233,7 +233,7 @@ async function initDatabase() {
       type_label: 'Partner Principale',
       description: 'Partner accademico principale e sede del Master. Coordinamento scientifico e infrastrutture per le attività didattiche e di ricerca.',
       sort_order: 1,
-      is_published: true
+      is_published: false  // Nascosto perché ora ha una sezione dedicata come organizzatore
     },
     {
       name: 'Collaborazioni in definizione',

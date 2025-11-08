@@ -695,6 +695,68 @@
             margin-top: 12px;
         }
 
+        /* Organizer Section */
+        .organizer-section {
+            background: linear-gradient(135deg, #f8fffe 0%, #e8f5e8 100%);
+        }
+
+        .organizer-content {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 60px;
+            align-items: center;
+            margin-top: 60px;
+        }
+
+        .organizer-logo {
+            text-align: center;
+            background: white;
+            padding: 50px;
+            border-radius: 30px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08);
+        }
+
+        .organizer-logo img {
+            width: 100%;
+            max-width: 280px;
+            height: auto;
+        }
+
+        .organizer-info h3 {
+            font-size: 2rem;
+            color: #2c5f2d;
+            margin-bottom: 25px;
+            font-weight: 700;
+        }
+
+        .organizer-description {
+            font-size: 1.15rem;
+            line-height: 1.8;
+            color: #555;
+            margin-bottom: 40px;
+            text-align: justify;
+        }
+
+        .organizer-cta {
+            text-align: left;
+            margin-top: 30px;
+        }
+
+        @media (max-width: 900px) {
+            .organizer-content {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+
+            .organizer-logo {
+                padding: 35px;
+            }
+
+            .organizer-logo img {
+                max-width: 200px;
+            }
+        }
+
         /* Partnership Section */
         .partnership-section {
             background: white;
@@ -2870,6 +2932,35 @@
         </div>
     </section>
 
+    <!-- Organizer Section -->
+    <section class="section organizer-section">
+        <div class="container">
+            <h2 class="section-title">Organizzato da</h2>
+            <p class="section-subtitle">
+                Un master promosso dall'Università degli Studi della Tuscia attraverso Unitus Academy
+            </p>
+
+            <div class="organizer-content">
+                <div class="organizer-logo">
+                    <img src="assets/img/logo-tuscia.png" alt="Università degli Studi della Tuscia">
+                </div>
+
+                <div class="organizer-info">
+                    <h3>Università degli Studi della Tuscia</h3>
+                    <p class="organizer-description">
+                        Unitus Academy – Scuola di alta formazione dell'Università degli studi della Tuscia persegue la finalità istituzionale di erogare e gestire, nell'ambito dell'offerta formativa di Ateneo, la formazione post-laurea mediante l'istituzione e attivazione di Master di I e II livello, corsi di alta formazione, formazione professionale e aggiornamento nonché scuole di specializzazione.
+                    </p>
+
+                    <div class="organizer-cta">
+                        <a href="https://www.unitus.it/post-laurea/master/master-unitus-academy/carbon-farming/" target="_blank" rel="noopener noreferrer" class="cta-button">
+                            Scopri il Master su Unitus Academy →
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Faculty Section -->
     <section class="section faculty-section">
         <div class="container">
@@ -3008,9 +3099,9 @@
     <!-- Partnership Section -->
     <section class="section partnership-section">
         <div class="container">
-            <h2 class="section-title">Partner del programma</h2>
+            <h2 class="section-title">Partner Esterni e Collaborazioni</h2>
             <p class="section-subtitle">
-                Collaborazioni strategiche con istituzioni e aziende leader nel settore della sostenibilità, in sinergia con partner scientifici nazionali e internazionali attualmente in fase di definizione.
+                Network di enti, aziende e istituzioni che supportano il Master con opportunità di stage, ricerca e progetti applicativi, in sinergia con partner scientifici nazionali e internazionali attualmente in fase di definizione.
             </p>
 
             <h3 class="partnership-subtitle">Con il patrocinio di</h3>

@@ -1471,64 +1471,130 @@
             background: linear-gradient(135deg, #f8fffe 0%, #e8f5e8 100%);
         }
 
-        .enrollment-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 30px;
-            margin-top: 60px;
-        }
-
-        .enrollment-card {
+        .enrollment-card-single {
             background: white;
-            padding: 40px;
             border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            max-width: 900px;
+            margin: 60px auto 0;
+            border-left: 5px solid #2c5f2d;
         }
 
-        .enrollment-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 40px rgba(0,0,0,0.12);
+        .enrollment-content {
+            padding: 50px 40px;
         }
 
-        .enrollment-card-highlight {
-            grid-column: 1 / -1;
-            background: linear-gradient(135deg, #2c5f2d 0%, #4a7c59 100%);
-            color: white;
-            text-align: center;
-        }
-
-        .enrollment-card-highlight h3,
-        .enrollment-card-highlight p {
-            color: white;
-        }
-
-        .enrollment-icon {
-            font-size: 2.5rem;
-            margin-bottom: 20px;
-        }
-
-        .enrollment-card h3 {
-            font-size: 1.4rem;
+        .enrollment-content h3 {
+            font-size: 2rem;
             color: #2c5f2d;
-            margin-bottom: 15px;
+            margin-bottom: 30px;
+            font-weight: 700;
+        }
+
+        .enrollment-info {
+            background: #f5f5f5;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .info-item {
+            font-size: 0.95rem;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .info-item strong {
+            display: block;
+            color: #2c5f2d;
+            margin-bottom: 5px;
             font-weight: 600;
         }
 
-        .enrollment-card p {
-            color: #555;
-            line-height: 1.7;
-            font-size: 1.05rem;
+        .enrollment-note {
+            font-size: 0.95rem;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            font-style: italic;
+            border-left: 3px solid #4a7c59;
+            padding-left: 20px;
         }
 
-        @media (max-width: 900px) {
-            .enrollment-grid {
-                grid-template-columns: 1fr;
-                gap: 25px;
+        .enrollment-actions {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 14px 28px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 1rem;
+            text-decoration: none;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+            min-width: 180px;
+        }
+
+        .button-primary {
+            background: #2c5f2d;
+            color: white;
+            flex: 1;
+        }
+
+        .button-primary:hover {
+            background: #1e4620;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(44, 95, 45, 0.3);
+        }
+
+        .button-secondary {
+            background: #f0f0f0;
+            color: #2c5f2d;
+            border: 2px solid #2c5f2d;
+            flex: 1;
+        }
+
+        .button-secondary:hover {
+            background: #e8f5e8;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(44, 95, 45, 0.15);
+        }
+
+        @media (max-width: 768px) {
+            .enrollment-card-single {
+                margin: 40px 0 0;
             }
 
-            .enrollment-card-highlight {
-                grid-column: 1;
+            .enrollment-content {
+                padding: 35px 25px;
+            }
+
+            .enrollment-content h3 {
+                font-size: 1.6rem;
+            }
+
+            .enrollment-info {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .enrollment-actions {
+                flex-direction: column;
+            }
+
+            .button {
+                width: 100%;
+                min-width: auto;
             }
         }
 
@@ -3694,43 +3760,35 @@
     <section class="section enrollment-section">
         <div class="container">
             <h2 class="section-title">Modalità e informazioni per l'iscrizione</h2>
-            <p class="section-subtitle">
-                Tutti i dettagli per candidarsi al Master in Carbon Farming
-            </p>
 
-            <div class="enrollment-grid">
-                <div class="enrollment-card">
-                    <div class="enrollment-icon">👥</div>
-                    <h3>Posti disponibili</h3>
-                    <p>Il numero <strong>minimo</strong> di iscritti per l'attivazione del master è di <strong>30</strong>; il numero <strong>massimo</strong> di posti disponibili è <strong>40</strong>.</p>
-                </div>
+            <div class="enrollment-card-single">
+                <div class="enrollment-content">
+                    <h3>Candidati al Master</h3>
+                    <div class="enrollment-info">
+                        <div class="info-item">
+                            <strong>Scadenza:</strong> 30 novembre 2025
+                        </div>
+                        <div class="info-item">
+                            <strong>Posti disponibili:</strong> Minimo 30, Massimo 40
+                        </div>
+                        <div class="info-item">
+                            <strong>Durata:</strong> 12 mesi
+                        </div>
+                        <div class="info-item">
+                            <strong>Selezione:</strong> Valutazione del Comitato Ordinatore
+                        </div>
+                    </div>
 
-                <div class="enrollment-card">
-                    <div class="enrollment-icon">📋</div>
-                    <h3>Criteri e modalità di accesso</h3>
-                    <p>Le domande di ammissione pervenute entro la scadenza saranno esaminate dal <strong>Comitato Ordinatore</strong> il quale provvederà a valutare l'ammissibilità delle domande presentate ai fini dell'iscrizione al Master.</p>
-                </div>
+                    <p class="enrollment-note">Le domande di ammissione saranno esaminate dal Comitato Ordinatore. La quota di iscrizione e le riduzioni previste sono indicate nel bando di ammissione.</p>
 
-                <div class="enrollment-card">
-                    <div class="enrollment-icon">⏱️</div>
-                    <h3>Durata</h3>
-                    <p>Il master ha una durata di <strong>12 mesi</strong>.</p>
-                </div>
-
-                <div class="enrollment-card">
-                    <div class="enrollment-icon">💶</div>
-                    <h3>Tassa di iscrizione</h3>
-                    <p>La quota di iscrizione è pari a <strong>euro 5.000</strong>. Sono previste riduzioni come indicato nel bando di ammissione.</p>
-                </div>
-
-                <div class="enrollment-card enrollment-card-highlight">
-                    <div class="enrollment-icon">📅</div>
-                    <h3>Scadenza e iscrizione</h3>
-                    <p>La scadenza per le domande di ammissione è fissata al <strong>30 novembre 2025</strong>.</p>
-                    <p style="margin-top: 20px;">È possibile iscriversi, dopo aver preso visione del bando di ammissione attraverso il modulo di ammissione.</p>
-                    <div style="margin-top: 25px;">
-                        <a href="https://www.unitus.it/post-laurea/master/master-unitus-academy/carbon-farming/" target="_blank" rel="noopener noreferrer" class="cta-button">
-                            Consulta il bando e iscriviti →
+                    <div class="enrollment-actions">
+                        <a href="https://titulus-unitus.cineca.it/albo/viewer?view=files%2F000607547-UNTUCLE-61ea5be0-6d21-4fbf-8ff8-60499485e87d-000.pdf"
+                           target="_blank" rel="noopener noreferrer" class="button button-secondary">
+                            📄 Consulta il bando
+                        </a>
+                        <a href="https://titulus-unitus.cineca.it/albo/viewer?view=files%2F000607547-UNTUCLE-61ea5be0-6d21-4fbf-8ff8-60499485e87d-001.pdf"
+                           target="_blank" rel="noopener noreferrer" class="button button-primary">
+                            ✓ Iscriviti ora
                         </a>
                     </div>
                 </div>

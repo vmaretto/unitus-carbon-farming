@@ -330,6 +330,13 @@ async function initDatabase() {
       );
     }
   }
+
+  // Assicurati che Unitus sia nascosto (ha una sezione dedicata come organizzatore)
+  await pool.query(`
+    UPDATE partners
+    SET is_published = false
+    WHERE name = 'Università della Tuscia';
+  `);
 }
 
 let initPromise = null;

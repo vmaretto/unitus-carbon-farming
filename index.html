@@ -1466,6 +1466,72 @@
             opacity: 0.9;
         }
 
+        /* Enrollment Section */
+        .enrollment-section {
+            background: linear-gradient(135deg, #f8fffe 0%, #e8f5e8 100%);
+        }
+
+        .enrollment-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+            margin-top: 60px;
+        }
+
+        .enrollment-card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+        }
+
+        .enrollment-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.12);
+        }
+
+        .enrollment-card-highlight {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #2c5f2d 0%, #4a7c59 100%);
+            color: white;
+            text-align: center;
+        }
+
+        .enrollment-card-highlight h3,
+        .enrollment-card-highlight p {
+            color: white;
+        }
+
+        .enrollment-icon {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+
+        .enrollment-card h3 {
+            font-size: 1.4rem;
+            color: #2c5f2d;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .enrollment-card p {
+            color: #555;
+            line-height: 1.7;
+            font-size: 1.05rem;
+        }
+
+        @media (max-width: 900px) {
+            .enrollment-grid {
+                grid-template-columns: 1fr;
+                gap: 25px;
+            }
+
+            .enrollment-card-highlight {
+                grid-column: 1;
+            }
+        }
+
         /* Footer */
         footer {
             background: #2c5f2d;
@@ -3624,6 +3690,54 @@
         </div>
     </section>
 
+    <!-- Enrollment Information Section -->
+    <section class="section enrollment-section">
+        <div class="container">
+            <h2 class="section-title">Modalità e informazioni per l'iscrizione</h2>
+            <p class="section-subtitle">
+                Tutti i dettagli per candidarsi al Master in Carbon Farming
+            </p>
+
+            <div class="enrollment-grid">
+                <div class="enrollment-card">
+                    <div class="enrollment-icon">👥</div>
+                    <h3>Posti disponibili</h3>
+                    <p>Il numero <strong>minimo</strong> di iscritti per l'attivazione del master è di <strong>30</strong>; il numero <strong>massimo</strong> di posti disponibili è <strong>40</strong>.</p>
+                </div>
+
+                <div class="enrollment-card">
+                    <div class="enrollment-icon">📋</div>
+                    <h3>Criteri e modalità di accesso</h3>
+                    <p>Le domande di ammissione pervenute entro la scadenza saranno esaminate dal <strong>Comitato Ordinatore</strong> il quale provvederà a valutare l'ammissibilità delle domande presentate ai fini dell'iscrizione al Master.</p>
+                </div>
+
+                <div class="enrollment-card">
+                    <div class="enrollment-icon">⏱️</div>
+                    <h3>Durata</h3>
+                    <p>Il master ha una durata di <strong>12 mesi</strong>.</p>
+                </div>
+
+                <div class="enrollment-card">
+                    <div class="enrollment-icon">💶</div>
+                    <h3>Tassa di iscrizione</h3>
+                    <p>La quota di iscrizione è pari a <strong>euro 5.000</strong>. Sono previste riduzioni come indicato nel bando di ammissione.</p>
+                </div>
+
+                <div class="enrollment-card enrollment-card-highlight">
+                    <div class="enrollment-icon">📅</div>
+                    <h3>Scadenza e iscrizione</h3>
+                    <p>La scadenza per le domande di ammissione è fissata al <strong>30 novembre 2025</strong>.</p>
+                    <p style="margin-top: 20px;">È possibile iscriversi, dopo aver preso visione del bando di ammissione attraverso il modulo di ammissione.</p>
+                    <div style="margin-top: 25px;">
+                        <a href="https://www.unitus.it/post-laurea/master/master-unitus-academy/carbon-farming/" target="_blank" rel="noopener noreferrer" class="cta-button">
+                            Consulta il bando e iscriviti →
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Footer -->
     <footer>
         <div class="container">
@@ -3652,7 +3766,8 @@
                     del Carbon Farming e delle<br>
                     opportunità nel settore<br>
                     della sostenibilità ambientale<br><br>
-                    <a href="https://www.linkedin.com/company/university-of-viterbo-la-tuscia-/" target="_blank">LinkedIn</a></p>
+                    <a href="https://www.linkedin.com/showcase/109769799" target="_blank" rel="noopener noreferrer">LinkedIn</a><br>
+                    <a href="https://www.instagram.com/master_carbon_farming/" target="_blank" rel="noopener noreferrer">Instagram</a></p>
                 </div>
                 
                 <div class="footer-section">

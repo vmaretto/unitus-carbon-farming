@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Richiedi Informazioni - Master in Carbon Farming</title>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17743878069"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'AW-17743878069');
+    </script>
+    <style>
+        :root {
+            --green-900: #0f3a1f;
+            --green-800: #1f5a32;
+            --green-700: #2f7a43;
+            --green-200: #e8f6ed;
+            --green-100: #f4fbf7;
+            --shadow: 0 18px 55px rgba(0, 0, 0, 0.12);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: radial-gradient(circle at 20% 20%, #f4fbf7, #e8f6ed 45%, #e1f2e7 100%);
+            color: var(--green-900);
+            padding: 40px 16px 80px;
+        }
+        .page {
+            max-width: 1024px;
+            margin: 0 auto;
+        }
+        .heading {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .heading h1 {
+            font-size: 2.35rem;
+            font-weight: 800;
+            color: var(--green-800);
+            margin-bottom: 8px;
+        }
+        .heading p {
+            font-size: 1.05rem;
+            color: #3d654a;
+        }
+        .card {
+            background: white;
+            border-radius: 22px;
+            box-shadow: var(--shadow);
+            padding: 28px;
+            border: 1px solid #e9f2eb;
+        }
+        form {
+            display: grid;
+            gap: 18px;
+        }
+        label {
+            font-weight: 700;
+            color: var(--green-800);
+            margin-bottom: 6px;
+            display: block;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid #d7e6dc;
+            font-size: 1rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            background: #fdfefc;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--green-700);
+            box-shadow: 0 0 0 3px rgba(47, 122, 67, 0.2);
+        }
+        textarea { min-height: 120px; resize: vertical; }
+        .row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+        }
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .submit-btn {
+            background: linear-gradient(135deg, #ff7a1a, #ff9a3c);
+            color: #fff;
+            border: none;
+            padding: 14px 26px;
+            border-radius: 14px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 14px 30px rgba(255, 122, 26, 0.25);
+            transition: transform 0.15s ease, box-shadow 0.2s ease;
+        }
+        .submit-btn:hover { transform: translateY(-1px); box-shadow: 0 16px 36px rgba(255, 122, 26, 0.28); }
+        .note { font-size: 0.9rem; color: #4b6b58; }
+        @media (max-width: 640px) {
+            body { padding: 28px 12px 60px; }
+            .heading h1 { font-size: 1.85rem; }
+            .card { padding: 22px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="heading">
+            <h1>Informazioni per Studenti</h1>
+            <p>Compila il form: ti invieremo tutti i dettagli sul Master in Carbon Farming.</p>
+        </div>
+        <div class="card">
+            <form>
+                <div class="row">
+                    <div>
+                        <label for="nome">Nome e Cognome *</label>
+                        <input id="nome" name="nome" type="text" placeholder="Mario Rossi" required>
+                    </div>
+                    <div>
+                        <label for="email">Email *</label>
+                        <input id="email" name="email" type="email" placeholder="nome@esempio.com" required>
+                    </div>
+                </div>
+                <div class="row">
+                    <div>
+                        <label for="telefono">Telefono</label>
+                        <input id="telefono" name="telefono" type="tel" placeholder="+39 ...">
+                    </div>
+                    <div>
+                        <label for="titolo">Titolo di Studio *</label>
+                        <select id="titolo" name="titolo" required>
+                            <option value="" disabled selected>Seleziona...</option>
+                            <option>Laurea Triennale</option>
+                            <option>Laurea Magistrale</option>
+                            <option>Dottorato</option>
+                            <option>Altro</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label for="interessi">Interessi specifici</label>
+                    <textarea id="interessi" name="interessi" placeholder="Specifica i tuoi interessi nell'ambito del Carbon Farming..."></textarea>
+                </div>
+                <div class="actions">
+                    <button type="submit" class="submit-btn">📄 Richiedi Informazioni</button>
+                    <span class="note">Risposta entro 1-2 giorni lavorativi.</span>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

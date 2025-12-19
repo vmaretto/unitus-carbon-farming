@@ -420,6 +420,9 @@ app.post('/api/faculty', async (req, res) => {
     return res.status(400).json({ error: 'Name is required' });
   }
 
+  // Normalizza URL della foto (converte GitHub blob in raw)
+  const normalizedPhotoUrl = normalizeImageUrl(photoUrl);
+
   try {
     const id = uuidv4();
     const insert = `
@@ -432,7 +435,7 @@ app.post('/api/faculty', async (req, res) => {
       name,
       role || null,
       bio || null,
-      photoUrl || null,
+      normalizedPhotoUrl || null,
       profileLink || null,
       typeof sortOrder === 'number' ? sortOrder : null,
       Boolean(isPublished)
@@ -454,12 +457,15 @@ app.put('/api/faculty/:id', async (req, res) => {
   const { id } = req.params;
   const { name, role, bio, photoUrl, profileLink, sortOrder, isPublished } = req.body;
 
+  // Normalizza URL della foto (converte GitHub blob in raw)
+  const normalizedPhotoUrl = photoUrl !== undefined ? normalizeImageUrl(photoUrl) : undefined;
+
   try {
     const updateFields = {
       name,
       role,
       bio,
-      photo_url: photoUrl,
+      photo_url: normalizedPhotoUrl,
       profile_link: profileLink,
       sort_order: sortOrder,
       is_published: typeof isPublished === 'boolean' ? isPublished : undefined

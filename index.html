@@ -1278,8 +1278,15 @@
         }
 
         .sdg-front {
-            background: linear-gradient(135deg, #7AB928, #4a7c59);
-            font-size: 1.4rem;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .sdg-front img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 15px;
         }
 
         .sdg-back {
@@ -2612,10 +2619,6 @@
                 gap: 15px;
             }
 
-            .sdg-front {
-                font-size: 1rem;
-            }
-
             .sdg-back {
                 font-size: 0.58rem;
                 line-height: 1.1;
@@ -3601,91 +3604,111 @@
             </div>
             
             <div class="sdgs-grid">
-                <div class="sdg-item">
+                <div class="sdg-item" data-sdg="2">
                     <div class="sdg-card">
-                        <div class="sdg-front">2</div>
-                        <div class="sdg-back">
+                        <div class="sdg-front">
+                            <img src="https://sdgs.un.org/sites/default/files/goals/E_SDG_Icons-02.jpg" alt="SDG 2 - Fame Zero" loading="lazy">
+                        </div>
+                        <div class="sdg-back" style="background: #DDA63A;">
                             <strong>Fame Zero</strong>
                             <span>Pratiche agricole sostenibili per garantire sicurezza alimentare</span>
                         </div>
                     </div>
                 </div>
-                <div class="sdg-item">
+                <div class="sdg-item" data-sdg="6">
                     <div class="sdg-card">
-                        <div class="sdg-front">6</div>
-                        <div class="sdg-back">
+                        <div class="sdg-front">
+                            <img src="https://sdgs.un.org/sites/default/files/goals/E_SDG_Icons-06.jpg" alt="SDG 6 - Acqua Pulita" loading="lazy">
+                        </div>
+                        <div class="sdg-back" style="background: #26BDE2;">
                             <strong>Acqua Pulita</strong>
                             <span>Gestione sostenibile delle risorse idriche in agricoltura</span>
                         </div>
                     </div>
                 </div>
-                <div class="sdg-item">
+                <div class="sdg-item" data-sdg="7">
                     <div class="sdg-card">
-                        <div class="sdg-front">7</div>
-                        <div class="sdg-back">
+                        <div class="sdg-front">
+                            <img src="https://sdgs.un.org/sites/default/files/goals/E_SDG_Icons-07.jpg" alt="SDG 7 - Energia Pulita" loading="lazy">
+                        </div>
+                        <div class="sdg-back" style="background: #FCC30B;">
                             <strong>Energia Pulita</strong>
                             <span>Bioenergie e riduzione emissioni nel settore agroforestale</span>
                         </div>
                     </div>
                 </div>
-                <div class="sdg-item">
+                <div class="sdg-item" data-sdg="8">
                     <div class="sdg-card">
-                        <div class="sdg-front">8</div>
-                        <div class="sdg-back">
+                        <div class="sdg-front">
+                            <img src="https://sdgs.un.org/sites/default/files/goals/E_SDG_Icons-08.jpg" alt="SDG 8 - Lavoro Dignitoso" loading="lazy">
+                        </div>
+                        <div class="sdg-back" style="background: #A21942;">
                             <strong>Lavoro Dignitoso</strong>
                             <span>Nuove opportunità lavorative nell'economia verde</span>
                         </div>
                     </div>
                 </div>
-                <div class="sdg-item">
+                <div class="sdg-item" data-sdg="9">
                     <div class="sdg-card">
-                        <div class="sdg-front">9</div>
-                        <div class="sdg-back">
+                        <div class="sdg-front">
+                            <img src="https://sdgs.un.org/sites/default/files/goals/E_SDG_Icons-09.jpg" alt="SDG 9 - Innovazione" loading="lazy">
+                        </div>
+                        <div class="sdg-back" style="background: #FD6925;">
                             <strong>Innovazione</strong>
                             <span>Tecnologie digitali per il monitoraggio del carbonio</span>
                         </div>
                     </div>
                 </div>
-                <div class="sdg-item">
+                <div class="sdg-item" data-sdg="11">
                     <div class="sdg-card">
-                        <div class="sdg-front">11</div>
-                        <div class="sdg-back">
+                        <div class="sdg-front">
+                            <img src="https://sdgs.un.org/sites/default/files/goals/E_SDG_Icons-11.jpg" alt="SDG 11 - Città Sostenibili" loading="lazy">
+                        </div>
+                        <div class="sdg-back" style="background: #FD9D24;">
                             <strong>Città Sostenibili</strong>
                             <span>Integrazione urbano-rurale e servizi ecosistemici</span>
                         </div>
                     </div>
                 </div>
-                <div class="sdg-item">
+                <div class="sdg-item" data-sdg="12">
                     <div class="sdg-card">
-                        <div class="sdg-front">12</div>
-                        <div class="sdg-back">
+                        <div class="sdg-front">
+                            <img src="https://sdgs.un.org/sites/default/files/goals/E_SDG_Icons-12.jpg" alt="SDG 12 - Consumo Responsabile" loading="lazy">
+                        </div>
+                        <div class="sdg-back" style="background: #BF8B2E;">
                             <strong>Consumo Responsabile</strong>
                             <span>Filiere agroalimentari sostenibili e tracciabili</span>
                         </div>
                     </div>
                 </div>
-                <div class="sdg-item">
+                <div class="sdg-item" data-sdg="13">
                     <div class="sdg-card">
-                        <div class="sdg-front">13</div>
-                        <div class="sdg-back">
+                        <div class="sdg-front">
+                            <img src="https://sdgs.un.org/sites/default/files/goals/E_SDG_Icons-13.jpg" alt="SDG 13 - Azione Climatica" loading="lazy">
+                        </div>
+                        <div class="sdg-back" style="background: #3F7E44;">
                             <strong>Azione Climatica</strong>
                             <span>Carbon farming per la mitigazione dei cambiamenti climatici</span>
                         </div>
                     </div>
                 </div>
-                <div class="sdg-item">
+                <div class="sdg-item" data-sdg="15">
                     <div class="sdg-card">
-                        <div class="sdg-front">15</div>
-                        <div class="sdg-back">
+                        <div class="sdg-front">
+                            <img src="https://sdgs.un.org/sites/default/files/goals/E_SDG_Icons-15.jpg" alt="SDG 15 - Vita sulla Terra" loading="lazy">
+                        </div>
+                        <div class="sdg-back" style="background: #56C02B;">
                             <strong>Vita sulla Terra</strong>
                             <span>Biodiversità e gestione sostenibile degli ecosistemi</span>
                         </div>
                     </div>
                 </div>
-                <div class="sdg-item">
+                <div class="sdg-item" data-sdg="17">
                     <div class="sdg-card">
-                        <div class="sdg-front">17</div>
-                        <div class="sdg-back">
+                        <div class="sdg-front">
+                            <img src="https://sdgs.un.org/sites/default/files/goals/E_SDG_Icons-17.jpg" alt="SDG 17 - Partnership" loading="lazy">
+                        </div>
+                        <div class="sdg-back" style="background: #19486A;">
                             <strong>Partnership</strong>
                             <span>Collaborazione globale per la transizione ecologica</span>
                         </div>

@@ -719,12 +719,13 @@
         .faculty-role-badge {
             background: linear-gradient(135deg, #ff6b35, #f7931e);
             color: white;
-            padding: 4px 12px;
-            border-radius: 15px;
-            font-size: 0.75rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.65rem;
             font-weight: 600;
-            margin-bottom: 6px;
             display: inline-block;
+            margin-left: 8px;
+            vertical-align: middle;
         }
 
         .faculty-info {
@@ -732,17 +733,25 @@
             bottom: 0;
             left: 0;
             right: 0;
-            padding: 16px 20px;
+            padding: 14px 16px;
             background: rgba(255, 255, 255, 0.65);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             text-align: center;
         }
 
-        .faculty-name {
-            font-size: 1.1rem;
-            color: #1a1a1a;
+        .faculty-name-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 4px;
             margin-bottom: 4px;
+        }
+
+        .faculty-name {
+            font-size: 1rem;
+            color: #1a1a1a;
             font-weight: 700;
             text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
         }
@@ -3186,10 +3195,12 @@
                 <div class="faculty-card">
                     <div class="faculty-image faculty-icon" aria-hidden="true">👨‍🔬</div>
                     <div class="faculty-info">
-                        <div class="faculty-role-badge">Direttore Scientifico</div>
-                        <h3 class="faculty-name">
-                            <a href="https://www.unitus.it/personale/docente/riccardo-valentini/" target="_blank">Prof. Riccardo Valentini</a>
-                        </h3>
+                        <div class="faculty-name-row">
+                            <h3 class="faculty-name">
+                                <a href="https://www.unitus.it/personale/docente/riccardo-valentini/" target="_blank">Prof. Riccardo Valentini</a>
+                            </h3>
+                            <span class="faculty-role-badge">Direttore Scientifico</span>
+                        </div>
                         <p class="faculty-role">Università della Tuscia - Premio Nobel per la Pace IPCC, esperto internazionale in climate change e carbon cycle</p>
                     </div>
                 </div>
@@ -3197,10 +3208,12 @@
                 <div class="faculty-card">
                     <div class="faculty-image faculty-icon" aria-hidden="true">💼</div>
                     <div class="faculty-info">
-                        <div class="faculty-role-badge">Coordinatore</div>
-                        <h3 class="faculty-name">
-                            <a href="https://www.linkedin.com/in/virgiliomaretto/" target="_blank">Virgilio Maretto</a>
-                        </h3>
+                        <div class="faculty-name-row">
+                            <h3 class="faculty-name">
+                                <a href="https://www.linkedin.com/in/virgiliomaretto/" target="_blank">Virgilio Maretto</a>
+                            </h3>
+                            <span class="faculty-role-badge">Coordinatore</span>
+                        </div>
                         <p class="faculty-role">Esperto in sostenibilità e gestione ambientale, consulente strategico per progetti di transizione ecologica</p>
                     </div>
                 </div>
@@ -4213,12 +4226,9 @@
                 const info = document.createElement('div');
                 info.className = 'faculty-info';
 
-                if (item.role) {
-                    const badge = document.createElement('div');
-                    badge.className = 'faculty-role-badge';
-                    badge.textContent = item.role;
-                    info.appendChild(badge);
-                }
+                // Contenitore per nome + badge sulla stessa riga
+                const nameRow = document.createElement('div');
+                nameRow.className = 'faculty-name-row';
 
                 const name = document.createElement('h3');
                 name.className = 'faculty-name';
@@ -4235,18 +4245,23 @@
                     name.textContent = item.name || 'Docente del Master';
                 }
 
-                info.appendChild(name);
+                nameRow.appendChild(name);
+
+                // Badge ruolo accanto al nome (solo per ruoli speciali)
+                if (item.role && (item.role === 'Direttore Scientifico' || item.role === 'Coordinatore')) {
+                    const badge = document.createElement('span');
+                    badge.className = 'faculty-role-badge';
+                    badge.textContent = item.role;
+                    nameRow.appendChild(badge);
+                }
+
+                info.appendChild(nameRow);
 
                 if (item.bio) {
                     const bio = document.createElement('p');
                     bio.className = 'faculty-bio';
                     bio.textContent = item.bio;
                     info.appendChild(bio);
-                } else if (item.role) {
-                    const roleText = document.createElement('p');
-                    roleText.className = 'faculty-role';
-                    roleText.textContent = item.role;
-                    info.appendChild(roleText);
                 }
 
                 card.appendChild(info);

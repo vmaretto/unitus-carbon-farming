@@ -3199,7 +3199,7 @@
                             <h3 class="faculty-name">
                                 <a href="https://www.unitus.it/personale/docente/riccardo-valentini/" target="_blank">Prof. Riccardo Valentini</a>
                             </h3>
-                            <span class="faculty-role-badge">Direttore Scientifico</span>
+                            <span class="faculty-role-badge">Dir. Scientifico</span>
                         </div>
                         <p class="faculty-role">Università della Tuscia - Premio Nobel per la Pace IPCC, esperto internazionale in climate change e carbon cycle</p>
                     </div>
@@ -4251,7 +4251,8 @@
                 if (item.role && (item.role === 'Direttore Scientifico' || item.role === 'Coordinatore')) {
                     const badge = document.createElement('span');
                     badge.className = 'faculty-role-badge';
-                    badge.textContent = item.role;
+                    // Abbrevia "Direttore Scientifico" in "Dir. Scientifico"
+                    badge.textContent = item.role === 'Direttore Scientifico' ? 'Dir. Scientifico' : item.role;
                     nameRow.appendChild(badge);
                 }
 

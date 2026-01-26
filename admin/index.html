@@ -333,6 +333,112 @@
             transform: translateX(20px);
         }
 
+        /* Calendar styles */
+        .calendar-day {
+            min-height: 80px;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            padding: 6px;
+            background: white;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .calendar-day:hover {
+            background: rgba(236, 246, 240, 0.5);
+        }
+
+        .calendar-day.other-month {
+            background: var(--gray-100);
+            opacity: 0.5;
+        }
+
+        .calendar-day.today {
+            border-color: var(--green-500);
+            border-width: 2px;
+        }
+
+        .calendar-day .day-number {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--gray-700);
+            margin-bottom: 4px;
+        }
+
+        .calendar-day .day-lessons {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .calendar-lesson-item {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(44, 122, 75, 0.15);
+            color: var(--green-700);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+        }
+
+        .calendar-lesson-item[data-status="draft"] {
+            background: rgba(107, 114, 128, 0.15);
+            color: var(--gray-700);
+        }
+
+        .calendar-lesson-item[data-status="cancelled"] {
+            background: rgba(220, 38, 38, 0.12);
+            color: #b91c1c;
+            text-decoration: line-through;
+        }
+
+        .calendar-lesson-item[data-status="completed"] {
+            background: rgba(44, 122, 75, 0.25);
+        }
+
+        /* Module pills */
+        .module-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: rgba(44, 122, 75, 0.1);
+            color: var(--green-700);
+            border-radius: 999px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .module-pill button {
+            padding: 2px 6px;
+            font-size: 0.75rem;
+            border-radius: 4px;
+        }
+
+        /* Calendar button active state */
+        button[data-active="true"] {
+            background: var(--green-500);
+            color: white;
+        }
+
+        /* Lesson status pills */
+        .status-pill[data-status="confirmed"] {
+            background: rgba(44, 122, 75, 0.12);
+            color: var(--green-700);
+        }
+
+        .status-pill[data-status="completed"] {
+            background: rgba(44, 122, 75, 0.25);
+            color: var(--green-700);
+        }
+
+        .status-pill[data-status="cancelled"] {
+            background: rgba(220, 38, 38, 0.12);
+            color: #b91c1c;
+        }
+
         @media (max-width: 768px) {
             header .header-content {
                 gap: 12px;
@@ -349,6 +455,10 @@
             table {
                 min-width: auto;
             }
+
+            .calendar-day {
+                min-height: 60px;
+            }
         }
     </style>
 </head>
@@ -359,6 +469,7 @@
             <p>Gestisci la faculty del Master, programma la pubblicazione degli articoli del blog e controlla la visibilità dei contenuti online.</p>
             <div class="nav-links">
                 <a href="/index.html">← Torna al sito</a>
+                <a href="#calendar">Calendario</a>
                 <a href="#faculty">Gestione docenti</a>
                 <a href="#blog">Gestione blog</a>
                 <a href="#partners">Gestione partner</a>
@@ -367,6 +478,152 @@
     </header>
 
     <main>
+        <section id="calendar">
+            <header>
+                <h2>Calendario lezioni</h2>
+                <p class="section-description">Gestisci le lezioni del Master, assegna docenti e organizza i moduli didattici.</p>
+            </header>
+
+            <!-- Gestione Moduli -->
+            <div class="modules-section" style="margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--gray-200);">
+                <h3 style="font-size: 1.2rem; margin: 0 0 16px; color: var(--green-700);">Moduli didattici</h3>
+                <form id="module-form" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+                    <label style="flex: 1; min-width: 200px;">
+                        Nome modulo
+                        <input type="text" id="module-name" name="name" required placeholder="Es. Modulo 1 - Fondamenti Carbon Farming">
+                    </label>
+                    <label style="width: 100px;">
+                        Ordine
+                        <input type="number" id="module-order" name="sortOrder" min="0" placeholder="1">
+                    </label>
+                    <div class="actions" style="margin-top: 0;">
+                        <button class="primary" type="submit">Salva modulo</button>
+                        <button class="secondary" type="button" id="module-reset" hidden>Annulla</button>
+                    </div>
+                </form>
+                <div class="modules-list" id="modules-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px;">
+                    <span class="empty-modules" style="color: var(--gray-500); font-size: 0.9rem;">Nessun modulo creato.</span>
+                </div>
+            </div>
+
+            <!-- Vista Calendario -->
+            <div class="calendar-controls" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button type="button" class="secondary" id="calendar-prev-month">←</button>
+                    <span id="calendar-month-label" style="font-weight: 600; min-width: 150px; text-align: center;"></span>
+                    <button type="button" class="secondary" id="calendar-next-month">→</button>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" class="secondary" id="view-calendar" data-active="true">Calendario</button>
+                    <button type="button" class="secondary" id="view-list">Lista</button>
+                </div>
+            </div>
+
+            <!-- Griglia Calendario Mensile -->
+            <div id="calendar-grid-container" class="calendar-grid-container" style="margin-bottom: 24px;">
+                <div class="calendar-weekdays" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 8px;">
+                    <div style="text-align: center; font-weight: 600; color: var(--gray-500); font-size: 0.85rem;">Lun</div>
+                    <div style="text-align: center; font-weight: 600; color: var(--gray-500); font-size: 0.85rem;">Mar</div>
+                    <div style="text-align: center; font-weight: 600; color: var(--gray-500); font-size: 0.85rem;">Mer</div>
+                    <div style="text-align: center; font-weight: 600; color: var(--gray-500); font-size: 0.85rem;">Gio</div>
+                    <div style="text-align: center; font-weight: 600; color: var(--gray-500); font-size: 0.85rem;">Ven</div>
+                    <div style="text-align: center; font-weight: 600; color: var(--gray-500); font-size: 0.85rem;">Sab</div>
+                    <div style="text-align: center; font-weight: 600; color: var(--gray-500); font-size: 0.85rem;">Dom</div>
+                </div>
+                <div id="calendar-grid" class="calendar-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;"></div>
+            </div>
+
+            <!-- Vista Lista -->
+            <div id="lessons-list-container" class="table-wrapper" style="display: none;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data e ora</th>
+                            <th>Titolo</th>
+                            <th>Modulo</th>
+                            <th>Docente</th>
+                            <th>Stato</th>
+                            <th style="width: 180px;">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lessons-table-body">
+                        <tr class="empty-state" data-empty-lessons>
+                            <td colspan="6">Non ci sono lezioni programmate. Usa il modulo qui sotto per crearne una.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Form Lezione -->
+            <div style="margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--gray-200);">
+                <h3 style="font-size: 1.2rem; margin: 0 0 16px; color: var(--green-700);">Aggiungi/modifica lezione</h3>
+                <form id="lesson-form">
+                    <div class="form-grid">
+                        <label>
+                            Titolo lezione
+                            <input type="text" id="lesson-title" name="title" required placeholder="Es. Introduzione al Carbon Farming">
+                        </label>
+                        <label>
+                            Data e ora inizio
+                            <input type="datetime-local" id="lesson-start" name="startDatetime" required>
+                        </label>
+                        <label>
+                            Durata
+                            <select id="lesson-duration" name="durationMinutes">
+                                <option value="60">1 ora</option>
+                                <option value="90">1 ora e 30 min</option>
+                                <option value="120" selected>2 ore</option>
+                                <option value="180">3 ore</option>
+                                <option value="240">4 ore</option>
+                            </select>
+                        </label>
+                        <label>
+                            Modulo
+                            <select id="lesson-module" name="moduleId">
+                                <option value="">Nessun modulo</option>
+                            </select>
+                        </label>
+                        <label>
+                            Docente
+                            <select id="lesson-teacher" name="teacherId">
+                                <option value="">Nessun docente</option>
+                            </select>
+                        </label>
+                        <label>
+                            Stato
+                            <select id="lesson-status" name="status">
+                                <option value="draft">Bozza</option>
+                                <option value="confirmed">Confermata</option>
+                                <option value="completed">Completata</option>
+                                <option value="cancelled">Cancellata</option>
+                            </select>
+                        </label>
+                        <label>
+                            Aula fisica
+                            <input type="text" id="lesson-location-physical" name="locationPhysical" placeholder="Es. Aula Magna, Università della Tuscia">
+                        </label>
+                        <label>
+                            Link streaming
+                            <input type="url" id="lesson-location-remote" name="locationRemote" placeholder="https://zoom.us/...">
+                        </label>
+                    </div>
+                    <label style="margin-top: 18px;">
+                        Descrizione
+                        <textarea id="lesson-description" name="description" placeholder="Descrizione della lezione (opzionale)"></textarea>
+                    </label>
+                    <label style="margin-top: 18px;">
+                        Note interne
+                        <textarea id="lesson-notes" name="notes" placeholder="Note visibili solo agli amministratori" rows="2"></textarea>
+                    </label>
+
+                    <div class="actions">
+                        <button class="primary" type="submit">Salva lezione</button>
+                        <button class="secondary" type="button" id="lesson-reset" hidden>Annulla modifica</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
         <section id="faculty">
             <header>
                 <h2>Gestione docenti</h2>
@@ -616,14 +873,37 @@
         </tr>
     </template>
 
+    <template id="lesson-row-template">
+        <tr>
+            <td data-datetime></td>
+            <td data-title></td>
+            <td data-module></td>
+            <td data-teacher></td>
+            <td data-status></td>
+            <td>
+                <div class="actions">
+                    <button type="button" class="secondary" data-edit>Modifica</button>
+                    <button type="button" class="danger" data-delete>Elimina</button>
+                </div>
+            </td>
+        </tr>
+    </template>
+
     <script>
         const state = {
             editingFacultyId: null,
             editingPostId: null,
             editingPartnerId: null,
+            editingModuleId: null,
+            editingLessonId: null,
             faculty: [],
             blogPosts: [],
-            partners: []
+            partners: [],
+            modules: [],
+            lessons: [],
+            calendarYear: new Date().getFullYear(),
+            calendarMonth: new Date().getMonth(),
+            calendarView: 'calendar' // 'calendar' or 'list'
         };
 
         function formatDate(dateString) {
@@ -1069,16 +1349,410 @@
 
         document.getElementById('partner-reset').addEventListener('click', resetPartnerForm);
 
+        // ========== CALENDAR / MODULES / LESSONS ==========
+
+        function resetModuleForm() {
+            const form = document.getElementById('module-form');
+            form.reset();
+            document.getElementById('module-reset').hidden = true;
+            state.editingModuleId = null;
+            form.querySelector('button.primary').textContent = 'Salva modulo';
+        }
+
+        function resetLessonForm() {
+            const form = document.getElementById('lesson-form');
+            form.reset();
+            document.getElementById('lesson-reset').hidden = true;
+            document.getElementById('lesson-duration').value = '120';
+            document.getElementById('lesson-status').value = 'draft';
+            state.editingLessonId = null;
+            form.querySelector('button.primary').textContent = 'Salva lezione';
+        }
+
+        async function loadModules() {
+            try {
+                const modules = await apiRequest('/api/modules');
+                state.modules = modules;
+                renderModulesList();
+                updateModuleSelect();
+            } catch (error) {
+                state.modules = [];
+            }
+        }
+
+        function renderModulesList() {
+            const container = document.getElementById('modules-list');
+            container.innerHTML = '';
+
+            if (state.modules.length === 0) {
+                container.innerHTML = '<span class="empty-modules" style="color: var(--gray-500); font-size: 0.9rem;">Nessun modulo creato.</span>';
+                return;
+            }
+
+            state.modules.forEach((mod) => {
+                const pill = document.createElement('div');
+                pill.className = 'module-pill';
+                pill.innerHTML = `
+                    <span>${mod.name}</span>
+                    <button type="button" class="secondary" data-edit-module="${mod.id}">✎</button>
+                    <button type="button" class="danger" data-delete-module="${mod.id}">×</button>
+                `;
+                container.appendChild(pill);
+            });
+        }
+
+        function updateModuleSelect() {
+            const select = document.getElementById('lesson-module');
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">Nessun modulo</option>';
+            state.modules.forEach((mod) => {
+                const option = document.createElement('option');
+                option.value = mod.id;
+                option.textContent = mod.name;
+                select.appendChild(option);
+            });
+            if (currentValue) select.value = currentValue;
+        }
+
+        function updateTeacherSelect() {
+            const select = document.getElementById('lesson-teacher');
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">Nessun docente</option>';
+            state.faculty.forEach((teacher) => {
+                const option = document.createElement('option');
+                option.value = teacher.id;
+                option.textContent = teacher.name;
+                select.appendChild(option);
+            });
+            if (currentValue) select.value = currentValue;
+        }
+
+        async function loadLessons() {
+            try {
+                const params = new URLSearchParams();
+                params.set('year', state.calendarYear);
+                params.set('month', state.calendarMonth + 1);
+                const lessons = await apiRequest(`/api/lessons?${params.toString()}`);
+                state.lessons = lessons;
+                renderCalendar();
+                renderLessonsList();
+            } catch (error) {
+                state.lessons = [];
+            }
+        }
+
+        function getMonthName(month) {
+            const names = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+                           'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+            return names[month];
+        }
+
+        function renderCalendar() {
+            const label = document.getElementById('calendar-month-label');
+            label.textContent = `${getMonthName(state.calendarMonth)} ${state.calendarYear}`;
+
+            const grid = document.getElementById('calendar-grid');
+            grid.innerHTML = '';
+
+            const firstDay = new Date(state.calendarYear, state.calendarMonth, 1);
+            const lastDay = new Date(state.calendarYear, state.calendarMonth + 1, 0);
+            const startDayOfWeek = (firstDay.getDay() + 6) % 7; // Monday = 0
+            const daysInMonth = lastDay.getDate();
+
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+
+            // Previous month days
+            const prevMonth = new Date(state.calendarYear, state.calendarMonth, 0);
+            for (let i = startDayOfWeek - 1; i >= 0; i--) {
+                const dayNum = prevMonth.getDate() - i;
+                const cell = createDayCell(dayNum, true, null);
+                grid.appendChild(cell);
+            }
+
+            // Current month days
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${state.calendarYear}-${String(state.calendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const isToday = dateStr === todayStr;
+                const dayLessons = state.lessons.filter((l) => {
+                    const lessonDate = new Date(l.startDatetime).toISOString().split('T')[0];
+                    return lessonDate === dateStr;
+                });
+                const cell = createDayCell(day, false, dayLessons, isToday, dateStr);
+                grid.appendChild(cell);
+            }
+
+            // Next month days
+            const totalCells = Math.ceil((startDayOfWeek + daysInMonth) / 7) * 7;
+            const remaining = totalCells - startDayOfWeek - daysInMonth;
+            for (let i = 1; i <= remaining; i++) {
+                const cell = createDayCell(i, true, null);
+                grid.appendChild(cell);
+            }
+        }
+
+        function createDayCell(dayNum, isOtherMonth, lessons, isToday = false, dateStr = null) {
+            const cell = document.createElement('div');
+            cell.className = 'calendar-day';
+            if (isOtherMonth) cell.classList.add('other-month');
+            if (isToday) cell.classList.add('today');
+            if (dateStr) cell.dataset.date = dateStr;
+
+            let lessonsHtml = '';
+            if (lessons && lessons.length > 0) {
+                lessonsHtml = '<div class="day-lessons">';
+                lessons.forEach((l) => {
+                    const time = new Date(l.startDatetime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                    lessonsHtml += `<div class="calendar-lesson-item" data-status="${l.status}" data-id="${l.id}" title="${l.title}">${time} ${l.title}</div>`;
+                });
+                lessonsHtml += '</div>';
+            }
+
+            cell.innerHTML = `<div class="day-number">${dayNum}</div>${lessonsHtml}`;
+
+            if (!isOtherMonth && dateStr) {
+                cell.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('calendar-lesson-item')) {
+                        const lessonId = e.target.dataset.id;
+                        editLesson(lessonId);
+                    } else {
+                        // Set date in form for new lesson
+                        const startInput = document.getElementById('lesson-start');
+                        startInput.value = `${dateStr}T09:00`;
+                        document.getElementById('lesson-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                });
+            }
+
+            return cell;
+        }
+
+        function editLesson(lessonId) {
+            const lesson = state.lessons.find((l) => l.id === lessonId);
+            if (!lesson) return;
+
+            document.getElementById('lesson-title').value = lesson.title || '';
+            document.getElementById('lesson-description').value = lesson.description || '';
+            document.getElementById('lesson-notes').value = lesson.notes || '';
+            document.getElementById('lesson-start').value = lesson.startDatetime ? new Date(lesson.startDatetime).toISOString().slice(0, 16) : '';
+            document.getElementById('lesson-duration').value = lesson.durationMinutes || '120';
+            document.getElementById('lesson-module').value = lesson.moduleId || '';
+            document.getElementById('lesson-teacher').value = lesson.teacherId || '';
+            document.getElementById('lesson-status').value = lesson.status || 'draft';
+            document.getElementById('lesson-location-physical').value = lesson.locationPhysical || '';
+            document.getElementById('lesson-location-remote').value = lesson.locationRemote || '';
+            document.getElementById('lesson-reset').hidden = false;
+            document.getElementById('lesson-form').querySelector('button.primary').textContent = 'Aggiorna lezione';
+            state.editingLessonId = lessonId;
+            document.getElementById('lesson-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function renderLessonsList() {
+            const tableBody = document.getElementById('lessons-table-body');
+            tableBody.querySelectorAll('tr:not([data-empty-lessons])').forEach((row) => row.remove());
+
+            const template = document.getElementById('lesson-row-template');
+            const statusLabels = { draft: 'Bozza', confirmed: 'Confermata', completed: 'Completata', cancelled: 'Cancellata' };
+
+            const sorted = [...state.lessons].sort((a, b) => new Date(a.startDatetime) - new Date(b.startDatetime));
+
+            sorted.forEach((lesson) => {
+                const clone = template.content.firstElementChild.cloneNode(true);
+                clone.dataset.id = lesson.id;
+                clone.querySelector('[data-datetime]').textContent = formatDate(lesson.startDatetime);
+                clone.querySelector('[data-title]').textContent = lesson.title;
+                clone.querySelector('[data-module]').textContent = lesson.moduleName || '—';
+                clone.querySelector('[data-teacher]').textContent = lesson.teacherName || '—';
+
+                const status = clone.querySelector('[data-status]');
+                const pill = document.createElement('span');
+                pill.className = 'status-pill';
+                pill.dataset.status = lesson.status;
+                pill.textContent = statusLabels[lesson.status] || lesson.status;
+                status.innerHTML = '';
+                status.appendChild(pill);
+
+                tableBody.appendChild(clone);
+            });
+
+            toggleEmptyState(tableBody, sorted.length > 0, '[data-empty-lessons]');
+        }
+
+        // Module form submit
+        document.getElementById('module-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const payload = {
+                name: document.getElementById('module-name').value.trim(),
+                sortOrder: document.getElementById('module-order').value === '' ? null : Number(document.getElementById('module-order').value)
+            };
+
+            if (!payload.name) {
+                showToast('Inserisci il nome del modulo', 'error');
+                return;
+            }
+
+            try {
+                const method = state.editingModuleId ? 'PUT' : 'POST';
+                const url = state.editingModuleId ? `/api/modules/${state.editingModuleId}` : '/api/modules';
+                await apiRequest(url, { method, body: JSON.stringify(payload) });
+                showToast('Modulo salvato con successo');
+                resetModuleForm();
+                loadModules();
+            } catch (error) {
+                // handled
+            }
+        });
+
+        document.getElementById('module-reset').addEventListener('click', resetModuleForm);
+
+        // Module edit/delete
+        document.getElementById('modules-list').addEventListener('click', async (event) => {
+            const editBtn = event.target.closest('[data-edit-module]');
+            const deleteBtn = event.target.closest('[data-delete-module]');
+
+            if (editBtn) {
+                const id = editBtn.dataset.editModule;
+                const mod = state.modules.find((m) => m.id === id);
+                if (!mod) return;
+                document.getElementById('module-name').value = mod.name || '';
+                document.getElementById('module-order').value = mod.sortOrder ?? '';
+                document.getElementById('module-reset').hidden = false;
+                document.getElementById('module-form').querySelector('button.primary').textContent = 'Aggiorna modulo';
+                state.editingModuleId = id;
+            }
+
+            if (deleteBtn) {
+                const id = deleteBtn.dataset.deleteModule;
+                if (!confirm('Vuoi eliminare questo modulo?')) return;
+                try {
+                    await apiRequest(`/api/modules/${id}`, { method: 'DELETE' });
+                    showToast('Modulo eliminato');
+                    loadModules();
+                } catch (error) {
+                    // handled
+                }
+            }
+        });
+
+        // Lesson form submit
+        document.getElementById('lesson-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const startVal = document.getElementById('lesson-start').value;
+            const payload = {
+                title: document.getElementById('lesson-title').value.trim(),
+                description: document.getElementById('lesson-description').value.trim() || null,
+                notes: document.getElementById('lesson-notes').value.trim() || null,
+                startDatetime: startVal ? new Date(startVal).toISOString() : null,
+                durationMinutes: Number(document.getElementById('lesson-duration').value),
+                moduleId: document.getElementById('lesson-module').value || null,
+                teacherId: document.getElementById('lesson-teacher').value || null,
+                status: document.getElementById('lesson-status').value,
+                locationPhysical: document.getElementById('lesson-location-physical').value.trim() || null,
+                locationRemote: document.getElementById('lesson-location-remote').value.trim() || null
+            };
+
+            if (!payload.title) {
+                showToast('Inserisci il titolo della lezione', 'error');
+                return;
+            }
+            if (!payload.startDatetime) {
+                showToast('Inserisci data e ora di inizio', 'error');
+                return;
+            }
+
+            try {
+                const method = state.editingLessonId ? 'PUT' : 'POST';
+                const url = state.editingLessonId ? `/api/lessons/${state.editingLessonId}` : '/api/lessons';
+                await apiRequest(url, { method, body: JSON.stringify(payload) });
+                showToast('Lezione salvata con successo');
+                resetLessonForm();
+                loadLessons();
+            } catch (error) {
+                // handled
+            }
+        });
+
+        document.getElementById('lesson-reset').addEventListener('click', resetLessonForm);
+
+        // Lesson table edit/delete
+        document.getElementById('lessons-table-body').addEventListener('click', async (event) => {
+            const editButton = event.target.closest('button[data-edit]');
+            const deleteButton = event.target.closest('button[data-delete]');
+            const row = event.target.closest('tr[data-id]');
+            if (!row) return;
+            const id = row.dataset.id;
+
+            if (editButton) {
+                editLesson(id);
+            }
+
+            if (deleteButton) {
+                if (!confirm('Vuoi eliminare questa lezione?')) return;
+                try {
+                    await apiRequest(`/api/lessons/${id}`, { method: 'DELETE' });
+                    showToast('Lezione eliminata');
+                    loadLessons();
+                } catch (error) {
+                    // handled
+                }
+            }
+        });
+
+        // Calendar navigation
+        document.getElementById('calendar-prev-month').addEventListener('click', () => {
+            state.calendarMonth--;
+            if (state.calendarMonth < 0) {
+                state.calendarMonth = 11;
+                state.calendarYear--;
+            }
+            loadLessons();
+        });
+
+        document.getElementById('calendar-next-month').addEventListener('click', () => {
+            state.calendarMonth++;
+            if (state.calendarMonth > 11) {
+                state.calendarMonth = 0;
+                state.calendarYear++;
+            }
+            loadLessons();
+        });
+
+        // View toggle
+        document.getElementById('view-calendar').addEventListener('click', () => {
+            state.calendarView = 'calendar';
+            document.getElementById('view-calendar').dataset.active = 'true';
+            document.getElementById('view-list').dataset.active = 'false';
+            document.getElementById('calendar-grid-container').style.display = '';
+            document.getElementById('lessons-list-container').style.display = 'none';
+        });
+
+        document.getElementById('view-list').addEventListener('click', () => {
+            state.calendarView = 'list';
+            document.getElementById('view-list').dataset.active = 'true';
+            document.getElementById('view-calendar').dataset.active = 'false';
+            document.getElementById('calendar-grid-container').style.display = 'none';
+            document.getElementById('lessons-list-container').style.display = '';
+        });
+
+        // ========== END CALENDAR ==========
+
         const facultyForm = document.getElementById('faculty-form');
         facultyForm.querySelector('button.primary').dataset.defaultText = 'Salva docente';
         const blogForm = document.getElementById('blog-form');
         blogForm.querySelector('button.primary').dataset.defaultText = 'Salva articolo';
         const partnerForm = document.getElementById('partner-form');
         partnerForm.querySelector('button.primary').dataset.defaultText = 'Salva partner';
+        const lessonForm = document.getElementById('lesson-form');
+        lessonForm.querySelector('button.primary').dataset.defaultText = 'Salva lezione';
 
-        loadFaculty();
+        // Load data
+        loadFaculty().then(() => {
+            updateTeacherSelect();
+        });
         loadBlogPosts();
         loadPartners();
+        loadModules();
+        loadLessons();
     </script>
 </body>
 </html>

@@ -337,6 +337,53 @@ async function initDatabase() {
     SET is_published = false
     WHERE name = 'Università della Tuscia';
   `);
+
+  // ============================================
+  // TABELLE CALENDARIO
+  // ============================================
+
+  // Tabella Moduli del Master
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS modules (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      description TEXT,
+      sort_order INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // Tabella Lezioni
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS lessons (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      module_id UUID REFERENCES modules(id) ON DELETE SET NULL,
+      teacher_id UUID REFERENCES faculty(id) ON DELETE SET NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      start_datetime TIMESTAMPTZ NOT NULL,
+      end_datetime TIMESTAMPTZ,
+      duration_minutes INTEGER DEFAULT 120,
+      location_physical TEXT,
+      location_remote TEXT,
+      status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'confirmed', 'completed', 'cancelled')),
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // Indici per performance
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_lessons_start ON lessons(start_datetime);
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_lessons_module ON lessons(module_id);
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_lessons_teacher ON lessons(teacher_id);
+  `);
 }
 
 let initPromise = null;
@@ -826,6 +873,337 @@ app.delete('/api/partners/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting partner', error);
     res.status(500).json({ error: 'Unable to delete partner' });
+  }
+});
+
+// ============================================
+// API MODULI
+// ============================================
+
+app.get('/api/modules', async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  try {
+    const sql = `
+      SELECT id, name, description, sort_order AS "sortOrder",
+             created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM modules
+      ORDER BY sort_order ASC, created_at ASC
+    `;
+    const { rows } = await pool.query(sql);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching modules', error);
+    res.status(500).json({ error: 'Unable to retrieve modules' });
+  }
+});
+
+app.get('/api/modules/:id', async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  const { id } = req.params;
+  try {
+    const sql = `
+      SELECT id, name, description, sort_order AS "sortOrder",
+             created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM modules
+      WHERE id = $1
+    `;
+    const { rows } = await pool.query(sql, [id]);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Module not found' });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching module', error);
+    res.status(500).json({ error: 'Unable to retrieve module' });
+  }
+});
+
+app.post('/api/modules', async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  const { name, description, sortOrder } = req.body;
+
+  if (!name) {
+    return res.status(400).json({ error: 'Name is required' });
+  }
+
+  try {
+    const id = uuidv4();
+    const insert = `
+      INSERT INTO modules (id, name, description, sort_order)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, name, description, sort_order AS "sortOrder",
+                created_at AS "createdAt", updated_at AS "updatedAt"
+    `;
+    const values = [id, name, description || null, typeof sortOrder === 'number' ? sortOrder : null];
+    const { rows } = await pool.query(insert, values);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating module', error);
+    res.status(500).json({ error: 'Unable to create module' });
+  }
+});
+
+app.put('/api/modules/:id', async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  const { id } = req.params;
+  const { name, description, sortOrder } = req.body;
+
+  try {
+    const updateFields = {
+      name,
+      description,
+      sort_order: sortOrder
+    };
+    const { query, values } = buildUpdateQuery('modules', updateFields, id);
+    const { rows } = await pool.query(query, values);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Module not found' });
+    }
+
+    const row = rows[0];
+    res.json({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      sortOrder: row.sort_order,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    });
+  } catch (error) {
+    console.error('Error updating module', error);
+    res.status(500).json({ error: 'Unable to update module' });
+  }
+});
+
+app.delete('/api/modules/:id', async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  const { id } = req.params;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM modules WHERE id = $1', [id]);
+    if (!rowCount) {
+      return res.status(404).json({ error: 'Module not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting module', error);
+    res.status(500).json({ error: 'Unable to delete module' });
+  }
+});
+
+// ============================================
+// API LEZIONI
+// ============================================
+
+app.get('/api/lessons', async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  try {
+    const { module_id, teacher_id, month, year, status } = req.query;
+    const filters = [];
+    const values = [];
+
+    if (module_id) {
+      filters.push(`l.module_id = $${filters.length + 1}`);
+      values.push(module_id);
+    }
+
+    if (teacher_id) {
+      filters.push(`l.teacher_id = $${filters.length + 1}`);
+      values.push(teacher_id);
+    }
+
+    if (status) {
+      filters.push(`l.status = $${filters.length + 1}`);
+      values.push(status);
+    }
+
+    if (month && year) {
+      filters.push(`EXTRACT(MONTH FROM l.start_datetime) = $${filters.length + 1}`);
+      values.push(parseInt(month));
+      filters.push(`EXTRACT(YEAR FROM l.start_datetime) = $${filters.length + 1}`);
+      values.push(parseInt(year));
+    } else if (year) {
+      filters.push(`EXTRACT(YEAR FROM l.start_datetime) = $${filters.length + 1}`);
+      values.push(parseInt(year));
+    }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+    const sql = `
+      SELECT l.id, l.title, l.description, l.start_datetime AS "startDatetime",
+             l.end_datetime AS "endDatetime", l.duration_minutes AS "durationMinutes",
+             l.location_physical AS "locationPhysical", l.location_remote AS "locationRemote",
+             l.status, l.notes, l.created_at AS "createdAt", l.updated_at AS "updatedAt",
+             l.module_id AS "moduleId", m.name AS "moduleName",
+             l.teacher_id AS "teacherId", f.name AS "teacherName"
+      FROM lessons l
+      LEFT JOIN modules m ON l.module_id = m.id
+      LEFT JOIN faculty f ON l.teacher_id = f.id
+      ${where}
+      ORDER BY l.start_datetime ASC
+    `;
+
+    const { rows } = await pool.query(sql, values);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching lessons', error);
+    res.status(500).json({ error: 'Unable to retrieve lessons' });
+  }
+});
+
+app.get('/api/lessons/:id', async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  const { id } = req.params;
+  try {
+    const sql = `
+      SELECT l.id, l.title, l.description, l.start_datetime AS "startDatetime",
+             l.end_datetime AS "endDatetime", l.duration_minutes AS "durationMinutes",
+             l.location_physical AS "locationPhysical", l.location_remote AS "locationRemote",
+             l.status, l.notes, l.created_at AS "createdAt", l.updated_at AS "updatedAt",
+             l.module_id AS "moduleId", m.name AS "moduleName",
+             l.teacher_id AS "teacherId", f.name AS "teacherName"
+      FROM lessons l
+      LEFT JOIN modules m ON l.module_id = m.id
+      LEFT JOIN faculty f ON l.teacher_id = f.id
+      WHERE l.id = $1
+    `;
+    const { rows } = await pool.query(sql, [id]);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching lesson', error);
+    res.status(500).json({ error: 'Unable to retrieve lesson' });
+  }
+});
+
+app.post('/api/lessons', async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  const {
+    title, description, startDatetime, endDatetime, durationMinutes,
+    locationPhysical, locationRemote, status, notes, moduleId, teacherId
+  } = req.body;
+
+  if (!title) {
+    return res.status(400).json({ error: 'Title is required' });
+  }
+
+  if (!startDatetime) {
+    return res.status(400).json({ error: 'Start datetime is required' });
+  }
+
+  try {
+    const id = uuidv4();
+    const insert = `
+      INSERT INTO lessons (id, title, description, start_datetime, end_datetime, duration_minutes,
+                          location_physical, location_remote, status, notes, module_id, teacher_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING id, title, description, start_datetime AS "startDatetime",
+                end_datetime AS "endDatetime", duration_minutes AS "durationMinutes",
+                location_physical AS "locationPhysical", location_remote AS "locationRemote",
+                status, notes, module_id AS "moduleId", teacher_id AS "teacherId",
+                created_at AS "createdAt", updated_at AS "updatedAt"
+    `;
+
+    const values = [
+      id,
+      title,
+      description || null,
+      new Date(startDatetime),
+      endDatetime ? new Date(endDatetime) : null,
+      typeof durationMinutes === 'number' ? durationMinutes : 120,
+      locationPhysical || null,
+      locationRemote || null,
+      status || 'draft',
+      notes || null,
+      moduleId || null,
+      teacherId || null
+    ];
+
+    const { rows } = await pool.query(insert, values);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating lesson', error);
+    res.status(500).json({ error: 'Unable to create lesson' });
+  }
+});
+
+app.put('/api/lessons/:id', async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  const { id } = req.params;
+  const {
+    title, description, startDatetime, endDatetime, durationMinutes,
+    locationPhysical, locationRemote, status, notes, moduleId, teacherId
+  } = req.body;
+
+  try {
+    const updateFields = {
+      title,
+      description,
+      start_datetime: startDatetime ? new Date(startDatetime) : undefined,
+      end_datetime: endDatetime === undefined ? undefined : endDatetime ? new Date(endDatetime) : null,
+      duration_minutes: durationMinutes,
+      location_physical: locationPhysical,
+      location_remote: locationRemote,
+      status,
+      notes,
+      module_id: moduleId,
+      teacher_id: teacherId
+    };
+
+    const { query, values } = buildUpdateQuery('lessons', updateFields, id);
+    const { rows } = await pool.query(query, values);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+
+    const row = rows[0];
+    res.json({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      startDatetime: row.start_datetime,
+      endDatetime: row.end_datetime,
+      durationMinutes: row.duration_minutes,
+      locationPhysical: row.location_physical,
+      locationRemote: row.location_remote,
+      status: row.status,
+      notes: row.notes,
+      moduleId: row.module_id,
+      teacherId: row.teacher_id,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    });
+  } catch (error) {
+    console.error('Error updating lesson', error);
+    res.status(500).json({ error: 'Unable to update lesson' });
+  }
+});
+
+app.delete('/api/lessons/:id', async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  const { id } = req.params;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM lessons WHERE id = $1', [id]);
+    if (!rowCount) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting lesson', error);
+    res.status(500).json({ error: 'Unable to delete lesson' });
   }
 });
 

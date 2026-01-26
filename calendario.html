@@ -319,6 +319,112 @@
             text-align: center;
         }
 
+        /* Next Lesson Card */
+        .next-lesson-card {
+            background: linear-gradient(135deg, var(--green-700) 0%, var(--green-500) 100%);
+            border-radius: 20px;
+            padding: 28px 32px;
+            margin-bottom: 28px;
+            color: white;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 24px;
+            align-items: center;
+            box-shadow: 0 8px 32px rgba(44, 122, 75, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .next-lesson-card::before {
+            content: "";
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 300px;
+            height: 300px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 50%;
+        }
+
+        .next-lesson-card .badge {
+            background: rgba(255,255,255,0.2);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        .next-lesson-card .date-box {
+            background: rgba(255,255,255,0.15);
+            border-radius: 14px;
+            padding: 16px 20px;
+            text-align: center;
+            min-width: 80px;
+        }
+
+        .next-lesson-card .date-box .day {
+            font-size: 2.2rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .next-lesson-card .date-box .month {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            opacity: 0.9;
+        }
+
+        .next-lesson-card .info h3 {
+            margin: 0 0 6px;
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        .next-lesson-card .info .module-name {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-bottom: 12px;
+        }
+
+        .next-lesson-card .info .meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .next-lesson-card .info .meta span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .next-lesson-card .countdown {
+            text-align: right;
+            position: relative;
+            z-index: 1;
+        }
+
+        .next-lesson-card .countdown .label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+
+        .next-lesson-card .countdown .value {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .next-lesson-card.hidden { display: none; }
+
         /* List View */
         .list-container { display: none; }
         .list-container.active { display: block; }
@@ -810,6 +916,9 @@
         @media (max-width: 900px) {
             .header h1 { font-size: 1.4rem; }
             .main-tabs button { padding: 10px 20px; font-size: 0.85rem; }
+
+            .next-lesson-card { grid-template-columns: auto 1fr; gap: 16px; padding: 20px 24px; }
+            .next-lesson-card .countdown { display: none; }
         }
 
         @media (max-width: 768px) {
@@ -835,6 +944,11 @@
             .module-section { padding: 20px; }
 
             .syllabus-stats { grid-template-columns: repeat(2, 1fr); }
+
+            .next-lesson-card .info h3 { font-size: 1.1rem; }
+            .next-lesson-card .info .meta { font-size: 0.8rem; gap: 10px; }
+            .next-lesson-card .date-box { padding: 12px 14px; }
+            .next-lesson-card .date-box .day { font-size: 1.8rem; }
         }
     </style>
 </head>
@@ -855,6 +969,28 @@
     <main>
         <!-- ============ TAB CALENDARIO ============ -->
         <div id="content-calendario" class="tab-content active">
+            <!-- Next Lesson Card -->
+            <div class="next-lesson-card hidden" id="next-lesson-card">
+                <div class="date-box">
+                    <div class="day" id="next-lesson-day">--</div>
+                    <div class="month" id="next-lesson-month">---</div>
+                </div>
+                <div class="info">
+                    <span class="badge">Prossima lezione</span>
+                    <h3 id="next-lesson-title">--</h3>
+                    <div class="module-name" id="next-lesson-module">--</div>
+                    <div class="meta">
+                        <span id="next-lesson-time">⏰ --:--</span>
+                        <span id="next-lesson-teacher">👤 --</span>
+                        <span id="next-lesson-location">📍 --</span>
+                    </div>
+                </div>
+                <div class="countdown">
+                    <div class="label">Tra</div>
+                    <div class="value" id="next-lesson-countdown">-- giorni</div>
+                </div>
+            </div>
+
             <div class="calendar-header">
                 <div class="calendar-nav">
                     <button id="prev-month">←</button>
@@ -1087,13 +1223,14 @@
                     const time = new Date(l.startDatetime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
                     const moduleIdx = state.modules.findIndex(m => m.id === l.moduleId);
                     const colorClass = moduleIdx >= 0 ? `module-${moduleIdx % 4 + 1}` : 'module-default';
+                    const moduleAbbr = moduleIdx >= 0 ? `M${moduleIdx + 1}` : '';
+                    const teacherLast = l.teacherName ? l.teacherName.split(' ').pop() : '';
                     lessonsHtml += `
                         <div class="lesson-mini ${colorClass}" onclick="showModal('${l.id}')">
-                            <div class="lesson-time">${time}</div>
+                            <div class="lesson-time">${time}${moduleAbbr ? ` · <strong>${moduleAbbr}</strong>` : ''}</div>
                             <div class="lesson-title">${l.title}</div>
                             <div class="lesson-info">
-                                ${l.moduleName ? `<span>${l.moduleName.split(' ')[0]}</span>` : ''}
-                                ${l.teacherName ? `<span>${l.teacherName.split(' ').pop()}</span>` : ''}
+                                ${teacherLast ? `<span>👤 ${teacherLast}</span>` : ''}
                             </div>
                         </div>
                     `;
@@ -1110,6 +1247,77 @@
 
             cell.innerHTML = dayNumHtml + lessonsHtml;
             return cell;
+        }
+
+        async function renderNextLessonCard() {
+            try {
+                const res = await fetch('/api/lessons');
+                if (!res.ok) throw new Error();
+                const allLessons = (await res.json()).filter(l => l.status === 'confirmed');
+
+                const now = new Date();
+                const upcoming = allLessons
+                    .filter(l => new Date(l.startDatetime) > now)
+                    .sort((a, b) => new Date(a.startDatetime) - new Date(b.startDatetime));
+
+                const card = document.getElementById('next-lesson-card');
+
+                if (upcoming.length === 0) {
+                    card.classList.add('hidden');
+                    return;
+                }
+
+                const next = upcoming[0];
+                const date = new Date(next.startDatetime);
+                const moduleIdx = state.modules.findIndex(m => m.id === next.moduleId);
+
+                document.getElementById('next-lesson-day').textContent = date.getDate();
+                document.getElementById('next-lesson-month').textContent = monthNames[date.getMonth()].substring(0, 3);
+                document.getElementById('next-lesson-title').textContent = next.title;
+                document.getElementById('next-lesson-module').textContent = next.moduleName || '';
+
+                const timeStr = date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                const endTime = new Date(date.getTime() + (next.durationMinutes || 120) * 60000);
+                const endTimeStr = endTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                document.getElementById('next-lesson-time').textContent = `⏰ ${timeStr} - ${endTimeStr}`;
+
+                const teacherEl = document.getElementById('next-lesson-teacher');
+                if (next.teacherName) {
+                    teacherEl.textContent = `👤 ${next.teacherName}`;
+                    teacherEl.style.display = '';
+                } else {
+                    teacherEl.style.display = 'none';
+                }
+
+                const locationEl = document.getElementById('next-lesson-location');
+                if (next.locationPhysical) {
+                    locationEl.textContent = `📍 ${next.locationPhysical}`;
+                    locationEl.style.display = '';
+                } else {
+                    locationEl.style.display = 'none';
+                }
+
+                // Countdown
+                const diffMs = date - now;
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+                let countdownText = '';
+                if (diffDays > 0) {
+                    countdownText = `${diffDays} giorn${diffDays === 1 ? 'o' : 'i'}`;
+                } else if (diffHours > 0) {
+                    countdownText = `${diffHours} or${diffHours === 1 ? 'a' : 'e'}`;
+                } else {
+                    countdownText = 'Oggi!';
+                }
+                document.getElementById('next-lesson-countdown').textContent = countdownText;
+
+                card.classList.remove('hidden');
+                card.onclick = () => showModal(next.id);
+                card.style.cursor = 'pointer';
+            } catch (e) {
+                document.getElementById('next-lesson-card').classList.add('hidden');
+            }
         }
 
         function renderList() {
@@ -1441,7 +1649,9 @@
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 
         // Init
-        loadModules();
+        loadModules().then(() => {
+            renderNextLessonCard();
+        });
         loadLessons();
     </script>
 </body>

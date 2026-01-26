@@ -354,6 +354,29 @@ async function initDatabase() {
     );
   `);
 
+  // Aggiungi colonne syllabus alla tabella modules se non esistono
+  const moduleColumns = [
+    { name: 'cfu', type: 'INTEGER' },
+    { name: 'ssd', type: 'TEXT' },  // Settore Scientifico Disciplinare
+    { name: 'period', type: 'TEXT' },  // Periodo indicativo (es. "Marzo 2026")
+    { name: 'hours_lectures', type: 'INTEGER DEFAULT 0' },  // Ore lezioni frontali
+    { name: 'hours_lab', type: 'INTEGER DEFAULT 0' },  // Ore esercitazioni/laboratori
+    { name: 'hours_study', type: 'INTEGER DEFAULT 0' },  // Ore studio individuale
+    { name: 'description_short', type: 'TEXT' },  // Descrizione sintetica
+    { name: 'contents_main', type: 'TEXT' },  // Contenuti principali (JSON array o testo)
+    { name: 'contents_detailed', type: 'TEXT' },  // Contenuti dettagliati
+    { name: 'learning_objectives', type: 'TEXT' },  // Obiettivi formativi specifici
+    { name: 'evaluation', type: 'TEXT' },  // Modalità di valutazione
+    { name: 'bibliography', type: 'TEXT' },  // Bibliografia e materiali didattici
+    { name: 'schedule_info', type: 'TEXT' }  // Info calendario (es. "Venerdì 14:00-20:00")
+  ];
+
+  for (const col of moduleColumns) {
+    await pool.query(`
+      ALTER TABLE modules ADD COLUMN IF NOT EXISTS ${col.name} ${col.type};
+    `).catch(() => {});  // Ignora errore se colonna esiste già
+  }
+
   // Tabella Lezioni
   await pool.query(`
     CREATE TABLE IF NOT EXISTS lessons (
@@ -886,6 +909,16 @@ app.get('/api/modules', async (req, res) => {
   try {
     const sql = `
       SELECT id, name, description, sort_order AS "sortOrder",
+             cfu, ssd, period,
+             hours_lectures AS "hoursLectures",
+             hours_lab AS "hoursLab",
+             hours_study AS "hoursStudy",
+             description_short AS "descriptionShort",
+             contents_main AS "contentsMain",
+             contents_detailed AS "contentsDetailed",
+             learning_objectives AS "learningObjectives",
+             evaluation, bibliography,
+             schedule_info AS "scheduleInfo",
              created_at AS "createdAt", updated_at AS "updatedAt"
       FROM modules
       ORDER BY sort_order ASC, created_at ASC
@@ -905,6 +938,16 @@ app.get('/api/modules/:id', async (req, res) => {
   try {
     const sql = `
       SELECT id, name, description, sort_order AS "sortOrder",
+             cfu, ssd, period,
+             hours_lectures AS "hoursLectures",
+             hours_lab AS "hoursLab",
+             hours_study AS "hoursStudy",
+             description_short AS "descriptionShort",
+             contents_main AS "contentsMain",
+             contents_detailed AS "contentsDetailed",
+             learning_objectives AS "learningObjectives",
+             evaluation, bibliography,
+             schedule_info AS "scheduleInfo",
              created_at AS "createdAt", updated_at AS "updatedAt"
       FROM modules
       WHERE id = $1
@@ -923,7 +966,13 @@ app.get('/api/modules/:id', async (req, res) => {
 app.post('/api/modules', async (req, res) => {
   if (!ensurePool(res)) return;
 
-  const { name, description, sortOrder } = req.body;
+  const {
+    name, description, sortOrder,
+    cfu, ssd, period,
+    hoursLectures, hoursLab, hoursStudy,
+    descriptionShort, contentsMain, contentsDetailed,
+    learningObjectives, evaluation, bibliography, scheduleInfo
+  } = req.body;
 
   if (!name) {
     return res.status(400).json({ error: 'Name is required' });
@@ -932,12 +981,46 @@ app.post('/api/modules', async (req, res) => {
   try {
     const id = uuidv4();
     const insert = `
-      INSERT INTO modules (id, name, description, sort_order)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO modules (
+        id, name, description, sort_order,
+        cfu, ssd, period,
+        hours_lectures, hours_lab, hours_study,
+        description_short, contents_main, contents_detailed,
+        learning_objectives, evaluation, bibliography, schedule_info
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING id, name, description, sort_order AS "sortOrder",
+                cfu, ssd, period,
+                hours_lectures AS "hoursLectures",
+                hours_lab AS "hoursLab",
+                hours_study AS "hoursStudy",
+                description_short AS "descriptionShort",
+                contents_main AS "contentsMain",
+                contents_detailed AS "contentsDetailed",
+                learning_objectives AS "learningObjectives",
+                evaluation, bibliography,
+                schedule_info AS "scheduleInfo",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `;
-    const values = [id, name, description || null, typeof sortOrder === 'number' ? sortOrder : null];
+    const values = [
+      id,
+      name,
+      description || null,
+      typeof sortOrder === 'number' ? sortOrder : null,
+      typeof cfu === 'number' ? cfu : null,
+      ssd || null,
+      period || null,
+      typeof hoursLectures === 'number' ? hoursLectures : null,
+      typeof hoursLab === 'number' ? hoursLab : null,
+      typeof hoursStudy === 'number' ? hoursStudy : null,
+      descriptionShort || null,
+      contentsMain || null,
+      contentsDetailed || null,
+      learningObjectives || null,
+      evaluation || null,
+      bibliography || null,
+      scheduleInfo || null
+    ];
     const { rows } = await pool.query(insert, values);
     res.status(201).json(rows[0]);
   } catch (error) {
@@ -950,13 +1033,32 @@ app.put('/api/modules/:id', async (req, res) => {
   if (!ensurePool(res)) return;
 
   const { id } = req.params;
-  const { name, description, sortOrder } = req.body;
+  const {
+    name, description, sortOrder,
+    cfu, ssd, period,
+    hoursLectures, hoursLab, hoursStudy,
+    descriptionShort, contentsMain, contentsDetailed,
+    learningObjectives, evaluation, bibliography, scheduleInfo
+  } = req.body;
 
   try {
     const updateFields = {
       name,
       description,
-      sort_order: sortOrder
+      sort_order: sortOrder,
+      cfu: typeof cfu === 'number' ? cfu : cfu,
+      ssd,
+      period,
+      hours_lectures: hoursLectures,
+      hours_lab: hoursLab,
+      hours_study: hoursStudy,
+      description_short: descriptionShort,
+      contents_main: contentsMain,
+      contents_detailed: contentsDetailed,
+      learning_objectives: learningObjectives,
+      evaluation,
+      bibliography,
+      schedule_info: scheduleInfo
     };
     const { query, values } = buildUpdateQuery('modules', updateFields, id);
     const { rows } = await pool.query(query, values);
@@ -971,6 +1073,19 @@ app.put('/api/modules/:id', async (req, res) => {
       name: row.name,
       description: row.description,
       sortOrder: row.sort_order,
+      cfu: row.cfu,
+      ssd: row.ssd,
+      period: row.period,
+      hoursLectures: row.hours_lectures,
+      hoursLab: row.hours_lab,
+      hoursStudy: row.hours_study,
+      descriptionShort: row.description_short,
+      contentsMain: row.contents_main,
+      contentsDetailed: row.contents_detailed,
+      learningObjectives: row.learning_objectives,
+      evaluation: row.evaluation,
+      bibliography: row.bibliography,
+      scheduleInfo: row.schedule_info,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     });

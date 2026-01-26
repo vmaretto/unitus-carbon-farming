@@ -1171,6 +1171,18 @@
                 return;
             }
 
+            // Calculate totals for stats
+            let totalCfu = 0;
+            let totalHours = 0;
+            state.modules.forEach(m => {
+                if (m.cfu) totalCfu += m.cfu;
+                if (m.hoursLectures) totalHours += m.hoursLectures;
+                if (m.hoursLab) totalHours += m.hoursLab;
+                if (m.hoursStudy) totalHours += m.hoursStudy;
+            });
+            if (totalCfu > 0) document.getElementById('stat-cfu').textContent = totalCfu;
+            if (totalHours > 0) document.getElementById('stat-hours').textContent = totalHours;
+
             container.innerHTML = state.modules.map((mod, idx) => {
                 const colorClass = getModuleClass(idx);
                 const moduleLessons = allLessons.filter(l => l.moduleId === mod.id)
@@ -1179,6 +1191,28 @@
                 // Get unique teachers for this module
                 const teachers = [...new Set(moduleLessons.filter(l => l.teacherName).map(l => l.teacherName))];
 
+                // Calculate total module hours
+                const modTotalHours = (mod.hoursLectures || 0) + (mod.hoursLab || 0);
+
+                // Build meta info
+                const metaItems = [];
+                if (mod.cfu) metaItems.push(`<span>📖 ${mod.cfu} CFU</span>`);
+                if (mod.ssd) metaItems.push(`<span>🏷️ ${mod.ssd}</span>`);
+                if (mod.period) metaItems.push(`<span>📅 ${mod.period}</span>`);
+                if (modTotalHours > 0) metaItems.push(`<span>⏱️ ${modTotalHours}h</span>`);
+                if (teachers.length > 0) metaItems.push(`<span>👤 ${teachers.length} docent${teachers.length > 1 ? 'i' : 'e'}</span>`);
+                metaItems.push(`<span>📚 ${moduleLessons.length} lezioni</span>`);
+
+                // Parse contents if they look like list format
+                const formatListContent = (text) => {
+                    if (!text) return '';
+                    const lines = text.split('\n').filter(l => l.trim());
+                    if (lines.length > 1 || text.includes('- ')) {
+                        return '<ul>' + lines.map(l => `<li>${l.replace(/^[-•]\s*/, '')}</li>`).join('') + '</ul>';
+                    }
+                    return `<p>${text}</p>`;
+                };
+
                 return `
                     <div class="module-card" id="module-${mod.id}">
                         <div class="module-header" onclick="toggleModule('${mod.id}')">
@@ -1186,19 +1220,66 @@
                             <div class="module-title-section">
                                 <h3>${mod.name}</h3>
                                 <div class="module-meta">
-                                    ${teachers.length > 0 ? `<span>👤 ${teachers.join(', ')}</span>` : ''}
-                                    <span>📚 ${moduleLessons.length} lezioni</span>
+                                    ${metaItems.join('')}
                                 </div>
                             </div>
                             <button class="module-toggle">▼</button>
                         </div>
                         <div class="module-content">
-                            ${mod.description ? `
+                            ${(mod.descriptionShort || mod.description) ? `
                                 <div class="module-section">
                                     <h4>Descrizione</h4>
-                                    <p>${mod.description}</p>
+                                    <p>${mod.descriptionShort || mod.description}</p>
                                 </div>
                             ` : ''}
+
+                            ${(mod.hoursLectures || mod.hoursLab || mod.hoursStudy) ? `
+                                <div class="module-section">
+                                    <h4>Monte ore</h4>
+                                    <div class="hours-grid">
+                                        ${mod.hoursLectures ? `<div class="hour-item"><div class="value">${mod.hoursLectures}</div><div class="label">Ore lezione</div></div>` : ''}
+                                        ${mod.hoursLab ? `<div class="hour-item"><div class="value">${mod.hoursLab}</div><div class="label">Ore laboratorio</div></div>` : ''}
+                                        ${mod.hoursStudy ? `<div class="hour-item"><div class="value">${mod.hoursStudy}</div><div class="label">Ore studio</div></div>` : ''}
+                                    </div>
+                                    ${mod.scheduleInfo ? `<p style="margin-top: 12px; color: var(--gray-500); font-size: 0.9rem;">📅 ${mod.scheduleInfo}</p>` : ''}
+                                </div>
+                            ` : ''}
+
+                            ${mod.contentsMain ? `
+                                <div class="module-section">
+                                    <h4>Contenuti</h4>
+                                    ${formatListContent(mod.contentsMain)}
+                                </div>
+                            ` : ''}
+
+                            ${mod.contentsDetailed ? `
+                                <div class="module-section">
+                                    <h4>Contenuti dettagliati</h4>
+                                    <p>${mod.contentsDetailed}</p>
+                                </div>
+                            ` : ''}
+
+                            ${mod.learningObjectives ? `
+                                <div class="module-section">
+                                    <h4>Obiettivi formativi</h4>
+                                    ${formatListContent(mod.learningObjectives)}
+                                </div>
+                            ` : ''}
+
+                            ${mod.evaluation ? `
+                                <div class="module-section">
+                                    <h4>Modalità di valutazione</h4>
+                                    <p>${mod.evaluation}</p>
+                                </div>
+                            ` : ''}
+
+                            ${mod.bibliography ? `
+                                <div class="module-section">
+                                    <h4>Bibliografia e materiali</h4>
+                                    ${formatListContent(mod.bibliography)}
+                                </div>
+                            ` : ''}
+
                             ${teachers.length > 0 ? `
                                 <div class="module-section">
                                     <h4>Docenti</h4>
@@ -1212,6 +1293,7 @@
                                     </div>
                                 </div>
                             ` : ''}
+
                             ${moduleLessons.length > 0 ? `
                                 <div class="module-section module-lessons">
                                     <h4>Calendario Lezioni</h4>

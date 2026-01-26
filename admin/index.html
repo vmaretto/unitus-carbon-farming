@@ -487,23 +487,95 @@
             <!-- Gestione Moduli -->
             <div class="modules-section" style="margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--gray-200);">
                 <h3 style="font-size: 1.2rem; margin: 0 0 16px; color: var(--green-700);">Moduli didattici</h3>
-                <form id="module-form" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
-                    <label style="flex: 1; min-width: 200px;">
-                        Nome modulo
-                        <input type="text" id="module-name" name="name" required placeholder="Es. Modulo 1 - Fondamenti Carbon Farming">
-                    </label>
-                    <label style="width: 100px;">
-                        Ordine
-                        <input type="number" id="module-order" name="sortOrder" min="0" placeholder="1">
-                    </label>
-                    <div class="actions" style="margin-top: 0;">
-                        <button class="primary" type="submit">Salva modulo</button>
-                        <button class="secondary" type="button" id="module-reset" hidden>Annulla</button>
-                    </div>
-                </form>
-                <div class="modules-list" id="modules-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px;">
+
+                <div class="modules-list" id="modules-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;">
                     <span class="empty-modules" style="color: var(--gray-500); font-size: 0.9rem;">Nessun modulo creato.</span>
                 </div>
+
+                <details id="module-form-details" style="background: var(--gray-100); border-radius: 12px; padding: 20px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: var(--green-700); margin-bottom: 16px;">+ Aggiungi / Modifica modulo</summary>
+
+                    <form id="module-form">
+                        <div class="form-grid">
+                            <label style="grid-column: span 2;">
+                                Nome modulo
+                                <input type="text" id="module-name" name="name" required placeholder="Es. Modulo 1 - Fondamenti Carbon Farming">
+                            </label>
+                            <label>
+                                Ordine
+                                <input type="number" id="module-order" name="sortOrder" min="0" placeholder="1">
+                            </label>
+                            <label>
+                                CFU
+                                <input type="number" id="module-cfu" name="cfu" min="0" placeholder="Es. 6">
+                            </label>
+                            <label>
+                                SSD (Settore Scientifico)
+                                <input type="text" id="module-ssd" name="ssd" placeholder="Es. AGR/02">
+                            </label>
+                            <label>
+                                Periodo
+                                <input type="text" id="module-period" name="period" placeholder="Es. Marzo 2026">
+                            </label>
+                            <label>
+                                Ore lezioni frontali
+                                <input type="number" id="module-hours-lectures" name="hoursLectures" min="0" placeholder="Es. 20">
+                            </label>
+                            <label>
+                                Ore esercitazioni/laboratori
+                                <input type="number" id="module-hours-lab" name="hoursLab" min="0" placeholder="Es. 10">
+                            </label>
+                            <label>
+                                Ore studio individuale
+                                <input type="number" id="module-hours-study" name="hoursStudy" min="0" placeholder="Es. 120">
+                            </label>
+                            <label>
+                                Info orario lezioni
+                                <input type="text" id="module-schedule-info" name="scheduleInfo" placeholder="Es. Venerdì 14:00-20:00, Sabato 9:00-13:00">
+                            </label>
+                        </div>
+
+                        <label style="margin-top: 18px;">
+                            Descrizione sintetica
+                            <textarea id="module-description-short" name="descriptionShort" placeholder="Una breve descrizione del modulo (2-3 righe)" rows="2"></textarea>
+                        </label>
+
+                        <label style="margin-top: 18px;">
+                            Descrizione completa
+                            <textarea id="module-description" name="description" placeholder="Descrizione dettagliata del modulo"></textarea>
+                        </label>
+
+                        <label style="margin-top: 18px;">
+                            Contenuti principali
+                            <textarea id="module-contents-main" name="contentsMain" placeholder="Elenco dei contenuti principali (uno per riga):&#10;- Contenuto 1&#10;- Contenuto 2" rows="4"></textarea>
+                        </label>
+
+                        <label style="margin-top: 18px;">
+                            Contenuti dettagliati
+                            <textarea id="module-contents-detailed" name="contentsDetailed" placeholder="Descrizione dettagliata dei contenuti del modulo" rows="4"></textarea>
+                        </label>
+
+                        <label style="margin-top: 18px;">
+                            Obiettivi formativi
+                            <textarea id="module-learning-objectives" name="learningObjectives" placeholder="Obiettivi formativi specifici del modulo:&#10;- Obiettivo 1&#10;- Obiettivo 2" rows="4"></textarea>
+                        </label>
+
+                        <label style="margin-top: 18px;">
+                            Modalità di valutazione
+                            <textarea id="module-evaluation" name="evaluation" placeholder="Descrivi le modalità di valutazione (es. esame scritto, progetto, ecc.)" rows="2"></textarea>
+                        </label>
+
+                        <label style="margin-top: 18px;">
+                            Bibliografia e materiali
+                            <textarea id="module-bibliography" name="bibliography" placeholder="Bibliografia consigliata e materiali didattici" rows="3"></textarea>
+                        </label>
+
+                        <div class="actions">
+                            <button class="primary" type="submit">Salva modulo</button>
+                            <button class="secondary" type="button" id="module-reset" hidden>Annulla modifica</button>
+                        </div>
+                    </form>
+                </details>
             </div>
 
             <!-- Vista Calendario -->
@@ -1357,6 +1429,8 @@
             document.getElementById('module-reset').hidden = true;
             state.editingModuleId = null;
             form.querySelector('button.primary').textContent = 'Salva modulo';
+            // Collapse the details element
+            document.getElementById('module-form-details').removeAttribute('open');
         }
 
         function resetLessonForm() {
@@ -1583,7 +1657,21 @@
             event.preventDefault();
             const payload = {
                 name: document.getElementById('module-name').value.trim(),
-                sortOrder: document.getElementById('module-order').value === '' ? null : Number(document.getElementById('module-order').value)
+                sortOrder: document.getElementById('module-order').value === '' ? null : Number(document.getElementById('module-order').value),
+                cfu: document.getElementById('module-cfu').value === '' ? null : Number(document.getElementById('module-cfu').value),
+                ssd: document.getElementById('module-ssd').value.trim() || null,
+                period: document.getElementById('module-period').value.trim() || null,
+                hoursLectures: document.getElementById('module-hours-lectures').value === '' ? null : Number(document.getElementById('module-hours-lectures').value),
+                hoursLab: document.getElementById('module-hours-lab').value === '' ? null : Number(document.getElementById('module-hours-lab').value),
+                hoursStudy: document.getElementById('module-hours-study').value === '' ? null : Number(document.getElementById('module-hours-study').value),
+                scheduleInfo: document.getElementById('module-schedule-info').value.trim() || null,
+                descriptionShort: document.getElementById('module-description-short').value.trim() || null,
+                description: document.getElementById('module-description').value.trim() || null,
+                contentsMain: document.getElementById('module-contents-main').value.trim() || null,
+                contentsDetailed: document.getElementById('module-contents-detailed').value.trim() || null,
+                learningObjectives: document.getElementById('module-learning-objectives').value.trim() || null,
+                evaluation: document.getElementById('module-evaluation').value.trim() || null,
+                bibliography: document.getElementById('module-bibliography').value.trim() || null
             };
 
             if (!payload.name) {
@@ -1614,11 +1702,32 @@
                 const id = editBtn.dataset.editModule;
                 const mod = state.modules.find((m) => m.id === id);
                 if (!mod) return;
+
+                // Populate all fields
                 document.getElementById('module-name').value = mod.name || '';
                 document.getElementById('module-order').value = mod.sortOrder ?? '';
+                document.getElementById('module-cfu').value = mod.cfu ?? '';
+                document.getElementById('module-ssd').value = mod.ssd || '';
+                document.getElementById('module-period').value = mod.period || '';
+                document.getElementById('module-hours-lectures').value = mod.hoursLectures ?? '';
+                document.getElementById('module-hours-lab').value = mod.hoursLab ?? '';
+                document.getElementById('module-hours-study').value = mod.hoursStudy ?? '';
+                document.getElementById('module-schedule-info').value = mod.scheduleInfo || '';
+                document.getElementById('module-description-short').value = mod.descriptionShort || '';
+                document.getElementById('module-description').value = mod.description || '';
+                document.getElementById('module-contents-main').value = mod.contentsMain || '';
+                document.getElementById('module-contents-detailed').value = mod.contentsDetailed || '';
+                document.getElementById('module-learning-objectives').value = mod.learningObjectives || '';
+                document.getElementById('module-evaluation').value = mod.evaluation || '';
+                document.getElementById('module-bibliography').value = mod.bibliography || '';
+
                 document.getElementById('module-reset').hidden = false;
                 document.getElementById('module-form').querySelector('button.primary').textContent = 'Aggiorna modulo';
+                document.getElementById('module-form-details').setAttribute('open', '');
                 state.editingModuleId = id;
+
+                // Scroll to form
+                document.getElementById('module-form-details').scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
 
             if (deleteBtn) {

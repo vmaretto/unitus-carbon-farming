@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario Lezioni - Master in Carbon Farming</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --green-900: #1b3a2d;
+            --green-700: #245a3d;
+            --green-500: #2c7a4b;
+            --green-100: #ecf6f0;
+            --orange-500: #ff7a1a;
+            --gray-900: #1c1c1c;
+            --gray-700: #3d3d3d;
+            --gray-500: #6b6b6b;
+            --gray-200: #d9d9d9;
+            --gray-100: #f3f4f6;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--gray-100);
+            color: var(--gray-900);
+            min-height: 100vh;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--green-900), var(--green-500));
+            color: white;
+            padding: 40px 24px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0 0 8px;
+        }
+
+        header p {
+            font-size: 1.05rem;
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 16px;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 999px;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+
+        .back-link:hover {
+            background: rgba(255,255,255,0.15);
+        }
+
+        main {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 32px 24px 60px;
+        }
+
+        .calendar-nav {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .calendar-nav button {
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .calendar-nav button:hover {
+            background: var(--green-100);
+            border-color: var(--green-500);
+        }
+
+        .calendar-nav .month-label {
+            font-size: 1.4rem;
+            font-weight: 600;
+            min-width: 200px;
+            text-align: center;
+        }
+
+        .view-toggle {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .view-toggle button {
+            padding: 8px 20px;
+            border: 1px solid var(--gray-200);
+            background: white;
+            border-radius: 999px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .view-toggle button.active {
+            background: var(--green-500);
+            color: white;
+            border-color: var(--green-500);
+        }
+
+        /* Calendar Grid */
+        .calendar-grid-container {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        .weekdays {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .weekdays div {
+            text-align: center;
+            font-weight: 600;
+            color: var(--gray-500);
+            font-size: 0.85rem;
+            padding: 8px;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+        }
+
+        .calendar-day {
+            min-height: 90px;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            padding: 8px;
+            background: white;
+            transition: background 0.2s;
+        }
+
+        .calendar-day:hover {
+            background: var(--green-100);
+        }
+
+        .calendar-day.other-month {
+            background: var(--gray-100);
+            opacity: 0.5;
+        }
+
+        .calendar-day.today {
+            border-color: var(--green-500);
+            border-width: 2px;
+            background: rgba(44, 122, 75, 0.05);
+        }
+
+        .calendar-day .day-number {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--gray-700);
+            margin-bottom: 6px;
+        }
+
+        .calendar-day.today .day-number {
+            color: var(--green-700);
+        }
+
+        .calendar-lesson {
+            font-size: 0.75rem;
+            padding: 4px 6px;
+            border-radius: 4px;
+            background: var(--green-100);
+            color: var(--green-700);
+            margin-bottom: 3px;
+            cursor: pointer;
+            transition: background 0.2s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .calendar-lesson:hover {
+            background: rgba(44, 122, 75, 0.25);
+        }
+
+        .calendar-lesson.cancelled {
+            background: rgba(220, 38, 38, 0.1);
+            color: #b91c1c;
+            text-decoration: line-through;
+        }
+
+        /* List View */
+        .lessons-list {
+            display: none;
+        }
+
+        .lessons-list.active {
+            display: block;
+        }
+
+        .calendar-grid-container.hidden {
+            display: none;
+        }
+
+        .lesson-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border-left: 4px solid var(--green-500);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .lesson-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        .lesson-card.cancelled {
+            border-left-color: #b91c1c;
+            opacity: 0.7;
+        }
+
+        .lesson-card .lesson-date {
+            font-size: 0.85rem;
+            color: var(--green-700);
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .lesson-card .lesson-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin: 0 0 8px;
+            color: var(--gray-900);
+        }
+
+        .lesson-card .lesson-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+            color: var(--gray-500);
+        }
+
+        .lesson-card .lesson-meta span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .lesson-card .lesson-description {
+            margin-top: 12px;
+            color: var(--gray-700);
+            line-height: 1.6;
+        }
+
+        .lesson-card .module-tag {
+            display: inline-block;
+            background: var(--green-100);
+            color: var(--green-700);
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-bottom: 12px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-badge.confirmed {
+            background: rgba(44, 122, 75, 0.15);
+            color: var(--green-700);
+        }
+
+        .status-badge.draft {
+            background: rgba(107, 114, 128, 0.15);
+            color: var(--gray-700);
+        }
+
+        .status-badge.cancelled {
+            background: rgba(220, 38, 38, 0.12);
+            color: #b91c1c;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 24px;
+            color: var(--gray-500);
+        }
+
+        .empty-state h3 {
+            margin: 0 0 8px;
+            color: var(--gray-700);
+        }
+
+        /* Lesson Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 20px;
+            max-width: 500px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            padding: 24px 24px 0;
+        }
+
+        .modal-header .module-tag {
+            display: inline-block;
+            background: var(--green-100);
+            color: var(--green-700);
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.4rem;
+        }
+
+        .modal-body {
+            padding: 20px 24px 24px;
+        }
+
+        .modal-info {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .modal-info-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 0.95rem;
+        }
+
+        .modal-info-row .icon {
+            width: 20px;
+            text-align: center;
+            color: var(--green-500);
+        }
+
+        .modal-info-row .label {
+            color: var(--gray-500);
+            min-width: 80px;
+        }
+
+        .modal-info-row .value {
+            color: var(--gray-900);
+            font-weight: 500;
+        }
+
+        .modal-description {
+            background: var(--gray-100);
+            padding: 16px;
+            border-radius: 12px;
+            line-height: 1.6;
+            color: var(--gray-700);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: var(--gray-100);
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .modal-close:hover {
+            background: var(--gray-200);
+        }
+
+        .modal {
+            position: relative;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.5rem;
+            }
+
+            .calendar-nav .month-label {
+                font-size: 1.1rem;
+                min-width: 150px;
+            }
+
+            .calendar-day {
+                min-height: 70px;
+                padding: 4px;
+            }
+
+            .calendar-day .day-number {
+                font-size: 0.8rem;
+            }
+
+            .calendar-lesson {
+                font-size: 0.65rem;
+                padding: 2px 4px;
+            }
+
+            .weekdays div {
+                font-size: 0.75rem;
+                padding: 4px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Calendario Lezioni</h1>
+        <p>Master in Carbon Farming - Università della Tuscia</p>
+        <a href="/index.html" class="back-link">← Torna al sito</a>
+    </header>
+
+    <main>
+        <div class="calendar-nav">
+            <button id="prev-month">←</button>
+            <span class="month-label" id="month-label"></span>
+            <button id="next-month">→</button>
+        </div>
+
+        <div class="view-toggle">
+            <button id="btn-calendar" class="active">Calendario</button>
+            <button id="btn-list">Lista</button>
+        </div>
+
+        <!-- Calendar Grid View -->
+        <div class="calendar-grid-container" id="calendar-container">
+            <div class="weekdays">
+                <div>Lun</div>
+                <div>Mar</div>
+                <div>Mer</div>
+                <div>Gio</div>
+                <div>Ven</div>
+                <div>Sab</div>
+                <div>Dom</div>
+            </div>
+            <div class="calendar-grid" id="calendar-grid"></div>
+        </div>
+
+        <!-- List View -->
+        <div class="lessons-list" id="lessons-list"></div>
+    </main>
+
+    <!-- Lesson Detail Modal -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal" id="lesson-modal">
+            <button class="modal-close" id="modal-close">×</button>
+            <div class="modal-header">
+                <span class="module-tag" id="modal-module"></span>
+                <h2 id="modal-title"></h2>
+            </div>
+            <div class="modal-body">
+                <div class="modal-info">
+                    <div class="modal-info-row">
+                        <span class="icon">📅</span>
+                        <span class="label">Data</span>
+                        <span class="value" id="modal-date"></span>
+                    </div>
+                    <div class="modal-info-row">
+                        <span class="icon">⏰</span>
+                        <span class="label">Orario</span>
+                        <span class="value" id="modal-time"></span>
+                    </div>
+                    <div class="modal-info-row" id="modal-teacher-row">
+                        <span class="icon">👤</span>
+                        <span class="label">Docente</span>
+                        <span class="value" id="modal-teacher"></span>
+                    </div>
+                    <div class="modal-info-row" id="modal-location-row">
+                        <span class="icon">📍</span>
+                        <span class="label">Luogo</span>
+                        <span class="value" id="modal-location"></span>
+                    </div>
+                    <div class="modal-info-row" id="modal-remote-row">
+                        <span class="icon">💻</span>
+                        <span class="label">Online</span>
+                        <span class="value" id="modal-remote"></span>
+                    </div>
+                </div>
+                <div class="modal-description" id="modal-description"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            year: new Date().getFullYear(),
+            month: new Date().getMonth(),
+            lessons: [],
+            view: 'calendar'
+        };
+
+        const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+                           'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+
+        async function loadLessons() {
+            try {
+                const params = new URLSearchParams();
+                params.set('year', state.year);
+                params.set('month', state.month + 1);
+                params.set('status', 'confirmed'); // Only show confirmed lessons to users
+
+                const response = await fetch(`/api/lessons?${params.toString()}`);
+                if (!response.ok) throw new Error('Failed to load lessons');
+
+                state.lessons = await response.json();
+                render();
+            } catch (error) {
+                console.error('Error loading lessons:', error);
+                state.lessons = [];
+                render();
+            }
+        }
+
+        function render() {
+            document.getElementById('month-label').textContent = `${monthNames[state.month]} ${state.year}`;
+
+            if (state.view === 'calendar') {
+                renderCalendarGrid();
+            } else {
+                renderList();
+            }
+        }
+
+        function renderCalendarGrid() {
+            const grid = document.getElementById('calendar-grid');
+            grid.innerHTML = '';
+
+            const firstDay = new Date(state.year, state.month, 1);
+            const lastDay = new Date(state.year, state.month + 1, 0);
+            const startDayOfWeek = (firstDay.getDay() + 6) % 7;
+            const daysInMonth = lastDay.getDate();
+
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+
+            // Previous month days
+            const prevMonth = new Date(state.year, state.month, 0);
+            for (let i = startDayOfWeek - 1; i >= 0; i--) {
+                const dayNum = prevMonth.getDate() - i;
+                grid.appendChild(createDayCell(dayNum, true));
+            }
+
+            // Current month days
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${state.year}-${String(state.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const isToday = dateStr === todayStr;
+                const dayLessons = state.lessons.filter(l => {
+                    const lessonDate = new Date(l.startDatetime).toISOString().split('T')[0];
+                    return lessonDate === dateStr;
+                });
+                grid.appendChild(createDayCell(day, false, dayLessons, isToday));
+            }
+
+            // Next month days
+            const totalCells = Math.ceil((startDayOfWeek + daysInMonth) / 7) * 7;
+            const remaining = totalCells - startDayOfWeek - daysInMonth;
+            for (let i = 1; i <= remaining; i++) {
+                grid.appendChild(createDayCell(i, true));
+            }
+        }
+
+        function createDayCell(dayNum, isOtherMonth, lessons = [], isToday = false) {
+            const cell = document.createElement('div');
+            cell.className = 'calendar-day';
+            if (isOtherMonth) cell.classList.add('other-month');
+            if (isToday) cell.classList.add('today');
+
+            let lessonsHtml = '';
+            if (lessons.length > 0) {
+                lessons.forEach(l => {
+                    const time = new Date(l.startDatetime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                    const cancelledClass = l.status === 'cancelled' ? 'cancelled' : '';
+                    lessonsHtml += `<div class="calendar-lesson ${cancelledClass}" data-id="${l.id}">${time} ${l.title}</div>`;
+                });
+            }
+
+            cell.innerHTML = `<div class="day-number">${dayNum}</div>${lessonsHtml}`;
+
+            // Add click handlers for lessons
+            cell.querySelectorAll('.calendar-lesson').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showLessonModal(el.dataset.id);
+                });
+            });
+
+            return cell;
+        }
+
+        function renderList() {
+            const container = document.getElementById('lessons-list');
+
+            const sorted = [...state.lessons].sort((a, b) => new Date(a.startDatetime) - new Date(b.startDatetime));
+
+            if (sorted.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>Nessuna lezione programmata</h3>
+                        <p>Non ci sono lezioni confermate per questo mese.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = sorted.map(lesson => {
+                const date = new Date(lesson.startDatetime);
+                const dateStr = date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                const timeStr = date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                const endTime = new Date(date.getTime() + (lesson.durationMinutes || 120) * 60000);
+                const endTimeStr = endTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
+                const cancelledClass = lesson.status === 'cancelled' ? 'cancelled' : '';
+
+                return `
+                    <div class="lesson-card ${cancelledClass}" data-id="${lesson.id}" onclick="showLessonModal('${lesson.id}')">
+                        ${lesson.moduleName ? `<span class="module-tag">${lesson.moduleName}</span>` : ''}
+                        <div class="lesson-date">
+                            <span>${dateStr}</span>
+                            ${lesson.status === 'cancelled' ? '<span class="status-badge cancelled">Cancellata</span>' : ''}
+                        </div>
+                        <h3 class="lesson-title">${lesson.title}</h3>
+                        <div class="lesson-meta">
+                            <span>⏰ ${timeStr} - ${endTimeStr}</span>
+                            ${lesson.teacherName ? `<span>👤 ${lesson.teacherName}</span>` : ''}
+                            ${lesson.locationPhysical ? `<span>📍 ${lesson.locationPhysical}</span>` : ''}
+                        </div>
+                        ${lesson.description ? `<p class="lesson-description">${lesson.description}</p>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showLessonModal(lessonId) {
+            const lesson = state.lessons.find(l => l.id === lessonId);
+            if (!lesson) return;
+
+            const date = new Date(lesson.startDatetime);
+            const dateStr = date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            const timeStr = date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+            const endTime = new Date(date.getTime() + (lesson.durationMinutes || 120) * 60000);
+            const endTimeStr = endTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
+            document.getElementById('modal-module').textContent = lesson.moduleName || '';
+            document.getElementById('modal-module').style.display = lesson.moduleName ? '' : 'none';
+            document.getElementById('modal-title').textContent = lesson.title;
+            document.getElementById('modal-date').textContent = dateStr;
+            document.getElementById('modal-time').textContent = `${timeStr} - ${endTimeStr} (${lesson.durationMinutes || 120} min)`;
+
+            document.getElementById('modal-teacher').textContent = lesson.teacherName || '';
+            document.getElementById('modal-teacher-row').style.display = lesson.teacherName ? '' : 'none';
+
+            document.getElementById('modal-location').textContent = lesson.locationPhysical || '';
+            document.getElementById('modal-location-row').style.display = lesson.locationPhysical ? '' : 'none';
+
+            if (lesson.locationRemote) {
+                document.getElementById('modal-remote').innerHTML = `<a href="${lesson.locationRemote}" target="_blank">Accedi alla lezione online</a>`;
+                document.getElementById('modal-remote-row').style.display = '';
+            } else {
+                document.getElementById('modal-remote-row').style.display = 'none';
+            }
+
+            const descEl = document.getElementById('modal-description');
+            if (lesson.description) {
+                descEl.textContent = lesson.description;
+                descEl.style.display = '';
+            } else {
+                descEl.style.display = 'none';
+            }
+
+            document.getElementById('modal-overlay').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.remove('active');
+        }
+
+        // Event listeners
+        document.getElementById('prev-month').addEventListener('click', () => {
+            state.month--;
+            if (state.month < 0) {
+                state.month = 11;
+                state.year--;
+            }
+            loadLessons();
+        });
+
+        document.getElementById('next-month').addEventListener('click', () => {
+            state.month++;
+            if (state.month > 11) {
+                state.month = 0;
+                state.year++;
+            }
+            loadLessons();
+        });
+
+        document.getElementById('btn-calendar').addEventListener('click', () => {
+            state.view = 'calendar';
+            document.getElementById('btn-calendar').classList.add('active');
+            document.getElementById('btn-list').classList.remove('active');
+            document.getElementById('calendar-container').classList.remove('hidden');
+            document.getElementById('lessons-list').classList.remove('active');
+            render();
+        });
+
+        document.getElementById('btn-list').addEventListener('click', () => {
+            state.view = 'list';
+            document.getElementById('btn-list').classList.add('active');
+            document.getElementById('btn-calendar').classList.remove('active');
+            document.getElementById('calendar-container').classList.add('hidden');
+            document.getElementById('lessons-list').classList.add('active');
+            render();
+        });
+
+        document.getElementById('modal-close').addEventListener('click', closeModal);
+        document.getElementById('modal-overlay').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('modal-overlay')) {
+                closeModal();
+            }
+        });
+
+        // Escape key closes modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // Initial load
+        loadLessons();
+    </script>
+</body>
+</html>

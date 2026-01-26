@@ -21,17 +21,27 @@
     body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
     @media screen and (max-width: 600px) {
       .wrapper { width: 100% !important; }
-      .side-band { width: 15px !important; }
+      .side-band { width: 10px !important; }
       .content-cell { padding: 20px 15px !important; }
       .mobile-full { width: 100% !important; display: block !important; }
       .header-img { width: 100% !important; height: auto !important; }
+      .main-content { width: 100% !important; }
+      .cta-button {
+        width: 100% !important;
+        max-width: 280px !important;
+        box-sizing: border-box !important;
+      }
+      .footer-cell { padding: 20px 15px !important; }
+      h1 { font-size: 24px !important; }
+      h2 { font-size: 18px !important; }
+      h3 { font-size: 17px !important; }
     }
   </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, Helvetica, sans-serif;">
+<body style="margin: 0; padding: 0; background-color: #8CB369; font-family: Arial, Helvetica, sans-serif;">
 
   <!-- Main Wrapper -->
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f5f5f5;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #8CB369;">
     <tr>
       <td align="center" style="padding: 20px 0;">
 
@@ -42,7 +52,7 @@
             <td class="side-band" width="40" style="background-color: #8CB369;">&nbsp;</td>
 
             <!-- Main Content Area -->
-            <td width="620" style="background-color: #ffffff;">
+            <td class="main-content" width="620" style="background-color: #ffffff;">
 
               <!-- ============================================
                    HEADER CON LOGHI
@@ -394,14 +404,14 @@
                     <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
                       <tr>
                         <td align="center" style="padding-bottom: 15px;">
-                          <a href="https://unitus.carbonfarmingmaster.it" target="_blank" style="display: inline-block; background-color: #8CB369; color: #ffffff; text-decoration: none; padding: 14px 30px; font-size: 15px; font-weight: bold; border-radius: 4px; min-width: 250px; text-align: center;">
+                          <a href="https://unitus.carbonfarmingmaster.it" target="_blank" class="cta-button" style="display: inline-block; background-color: #8CB369; color: #ffffff; text-decoration: none; padding: 14px 30px; font-size: 15px; font-weight: bold; border-radius: 4px; min-width: 250px; text-align: center;">
                             Scarica il modulo di ammissione
                           </a>
                         </td>
                       </tr>
                       <tr>
                         <td align="center">
-                          <a href="https://unitus.carbonfarmingmaster.it" target="_blank" style="display: inline-block; background-color: #8CB369; color: #ffffff; text-decoration: none; padding: 14px 30px; font-size: 15px; font-weight: bold; border-radius: 4px; min-width: 200px; text-align: center;">
+                          <a href="https://unitus.carbonfarmingmaster.it" target="_blank" class="cta-button" style="display: inline-block; background-color: #8CB369; color: #ffffff; text-decoration: none; padding: 14px 30px; font-size: 15px; font-weight: bold; border-radius: 4px; min-width: 200px; text-align: center;">
                             Maggiori informazioni
                           </a>
                         </td>
@@ -416,7 +426,7 @@
                    ============================================ -->
               <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #8CB369;">
                 <tr>
-                  <td style="padding: 25px 40px; text-align: center;">
+                  <td class="footer-cell" style="padding: 25px 40px; text-align: center;">
                     <p style="margin: 0 0 10px 0; color: #ffffff; font-size: 14px; line-height: 1.5;">
                       <strong>Hai domande?</strong> Scrivici a
                       <a href="mailto:maretto@carbonfarmingmaster.it" style="color: #ffffff; text-decoration: underline;">maretto@carbonfarmingmaster.it</a>

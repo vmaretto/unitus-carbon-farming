@@ -117,7 +117,7 @@ Trovi l’URL sotto Settings → Pages → Environments → github-pages.
 📧 Contatti
 
 Coordinamento Master
-Virgilio Maretto – virgilio.maretto@posti.world
+Virgilio Maretto – maretto@carbonfarmingmaster.it
 
 Università degli Studi della Tuscia – www.unitus.it
 

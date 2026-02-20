@@ -111,6 +111,12 @@
             letter-spacing: 0.02em;
             text-transform: none;
         }
+        
+        .nav-brand.active {
+            color: #ffd7c1;
+            border-bottom: 2px solid #ff8a4c;
+            padding-bottom: 4px;
+        }
 
         .nav-links {
             display: flex;
@@ -121,7 +127,8 @@
         .nav-links a {
             color: #fff;
             text-decoration: none;
-            font-weight: 500;
+            font-weight: 600;
+            font-size: 0.95rem;
             position: relative;
             padding-bottom: 6px;
             transition: color 0.3s ease;
@@ -145,6 +152,14 @@
 
         .nav-links a:hover::after,
         .nav-links a:focus-visible::after {
+            width: 100%;
+        }
+        
+        .nav-links a.active {
+            color: #ffd7c1;
+        }
+        
+        .nav-links a.active::after {
             width: 100%;
         }
 
@@ -3002,7 +3017,7 @@
     <header class="hero-header">
         <nav class="main-nav" aria-label="Navigazione principale">
             <div class="nav-container">
-                <a class="nav-brand" href="index.html">
+                <a class="nav-brand active" href="index.html">
                     <span>Home</span>
                     
                 </a>

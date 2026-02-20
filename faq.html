@@ -110,6 +110,14 @@
         .nav-links a:focus-visible {
             color: #ffd7c1;
         }
+        
+        .nav-links a.active {
+            color: #ffd7c1;
+        }
+        
+        .nav-links a.active::after {
+            width: 100%;
+        }
 
         .nav-links a:hover::after,
         .nav-links a:focus-visible::after {
@@ -312,14 +320,14 @@
         <nav class="main-nav">
             <div class="nav-container">
                 <a href="index.html" class="nav-brand">
-                    <span>Master</span>
-                    <span>Carbon Farming</span>
+                    <span>UNITUS Academy</span>
+                    <span>Master in Carbon Farming</span>
                 </a>
                 <div class="nav-links">
-                    <a href="index.html#modulesScroll">Programma</a>
+                    <a href="index.html#programma">Programma</a>
                     <a href="index.html#faculty-grid">Faculty</a>
                     <a href="index.html#info">Iscrizioni</a>
-                    <a href="faq.html">FAQ</a>
+                    <a href="faq.html" class="active">FAQ</a>
                     <a href="blog.html">Blog</a>
                 </div>
             </div>

@@ -26,11 +26,13 @@
 
         .main-nav {
             width: 100%;
-            position: relative;
-            z-index: 5;
-            background: rgba(20, 66, 37, 0.9);
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 100;
+            background: linear-gradient(135deg, #7AB928 0%, #4a7c59 100%);
             backdrop-filter: blur(12px);
-            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
         }
 
         .main-nav .nav-container {
@@ -94,6 +96,14 @@
 
         .nav-links a:hover::after,
         .nav-links a:focus-visible::after {
+            width: 100%;
+        }
+        
+        .nav-links a.active {
+            color: #ffd7c1;
+        }
+        
+        .nav-links a.active::after {
             width: 100%;
         }
 
@@ -179,10 +189,18 @@
         }
 
         .page-hero {
-            background: linear-gradient(135deg, #7AB928 0%, #4a7c59 100%);
-            color: #fff;
-            padding: 60px 0 80px;
+            background: transparent;
+            color: #333;
+            padding: 100px 0 40px;
             text-align: center;
+        }
+        
+        .page-hero h1 {
+            color: #2d5016;
+        }
+        
+        .page-hero p {
+            color: #555;
         }
 
         @media (max-width: 900px) {
@@ -522,8 +540,22 @@
 </head>
 <body>
     <header class="page-hero">
+        <nav class="main-nav">
+            <div class="nav-container">
+                <a href="index.html" class="nav-brand">
+                    <span>UNITUS Academy</span>
+                    <span>Master in Carbon Farming</span>
+                </a>
+                <div class="nav-links">
+                    <a href="index.html#programma">Programma</a>
+                    <a href="index.html#faculty-grid">Faculty</a>
+                    <a href="index.html#info">Iscrizioni</a>
+                    <a href="faq.html">FAQ</a>
+                    <a href="blog.html">Blog</a>
+                </div>
+            </div>
+        </nav>
         <div class="container">
-            <a class="back-link" href="index.html">← Torna alla home</a>
             <h1>Partnership e Sponsorship</h1>
             <p>Tre modalità di collaborazione per supportare la formazione in Carbon Farming e costruire nuove relazioni con l'Università della Tuscia.</p>
         </div>

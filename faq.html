@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAQ - Master in Carbon Farming</title>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17743878069"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'AW-17743878069');
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+            background: #f5f9f5;
+            line-height: 1.7;
+        }
+
+        .container {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        header {
+            background: linear-gradient(135deg, #7AB928 0%, #4a7c59 100%);
+            color: white;
+            text-align: center;
+            padding: 110px 0 90px;
+            position: relative;
+        }
+
+        .main-nav {
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 5;
+            background: rgba(20, 66, 37, 0.9);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
+        }
+
+        .main-nav .nav-container {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 22px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+        }
+
+        .nav-brand {
+            color: #fff;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-decoration: none;
+            display: inline-flex;
+            flex-direction: column;
+            gap: 2px;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+        }
+
+        .nav-brand span:last-child {
+            font-size: 1.05rem;
+            letter-spacing: 0.02em;
+            text-transform: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 22px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: #fff;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.95rem;
+            position: relative;
+            padding-bottom: 6px;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 0;
+            height: 2px;
+            background: #ff8a4c;
+            transition: width 0.3s ease;
+        }
+
+        .nav-links a:hover,
+        .nav-links a:focus-visible {
+            color: #ffd7c1;
+        }
+
+        .nav-links a:hover::after,
+        .nav-links a:focus-visible::after {
+            width: 100%;
+        }
+
+        header h1 {
+            font-size: 2.8rem;
+            margin-bottom: 16px;
+            font-weight: 800;
+        }
+
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.95;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        main {
+            padding: 60px 0 80px;
+        }
+
+        .faq-intro {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .faq-intro h2 {
+            font-size: 1.8rem;
+            color: #2d5016;
+            margin-bottom: 12px;
+        }
+
+        .faq-intro p {
+            color: #555;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .faq-section {
+            margin-bottom: 50px;
+        }
+
+        .faq-section-title {
+            font-size: 1.5rem;
+            color: #2d5016;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 3px solid #7AB928;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .faq-section-title .icon {
+            font-size: 1.8rem;
+        }
+
+        .faq-item {
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+            border: 1px solid #e8f0e8;
+        }
+
+        .faq-question {
+            padding: 20px 24px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 1.05rem;
+            color: #2d5016;
+            transition: background 0.2s ease;
+        }
+
+        .faq-question:hover {
+            background: #f8fbf5;
+        }
+
+        .faq-question .toggle-icon {
+            font-size: 1.5rem;
+            color: #7AB928;
+            transition: transform 0.3s ease;
+            flex-shrink: 0;
+            margin-left: 16px;
+        }
+
+        .faq-item.active .faq-question .toggle-icon {
+            transform: rotate(45deg);
+        }
+
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease, padding 0.3s ease;
+        }
+
+        .faq-item.active .faq-answer {
+            max-height: 2000px;
+        }
+
+        .faq-answer-content {
+            padding: 0 24px 24px;
+            color: #444;
+            line-height: 1.8;
+        }
+
+        .faq-answer-content p {
+            margin-bottom: 12px;
+        }
+
+        .faq-answer-content ul {
+            margin: 12px 0 12px 24px;
+        }
+
+        .faq-answer-content li {
+            margin-bottom: 8px;
+        }
+
+        .faq-answer-content strong {
+            color: #2d5016;
+        }
+
+        .contact-cta {
+            background: linear-gradient(135deg, #7AB928 0%, #4a7c59 100%);
+            color: white;
+            padding: 50px 30px;
+            border-radius: 16px;
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        .contact-cta h3 {
+            font-size: 1.6rem;
+            margin-bottom: 16px;
+        }
+
+        .contact-cta p {
+            margin-bottom: 20px;
+            opacity: 0.95;
+        }
+
+        .contact-cta a {
+            display: inline-block;
+            background: white;
+            color: #2d5016;
+            padding: 14px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 700;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .contact-cta a:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        footer {
+            background: #1a3d1a;
+            color: white;
+            padding: 40px 0;
+            text-align: center;
+        }
+
+        footer p {
+            opacity: 0.8;
+            font-size: 0.9rem;
+        }
+
+        footer a {
+            color: #7AB928;
+            text-decoration: none;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2rem;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .faq-question {
+                padding: 16px 18px;
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav class="main-nav">
+            <div class="nav-container">
+                <a href="index.html" class="nav-brand">
+                    <span>Master</span>
+                    <span>Carbon Farming</span>
+                </a>
+                <div class="nav-links">
+                    <a href="index.html#modulesScroll">Programma</a>
+                    <a href="index.html#faculty-grid">Faculty</a>
+                    <a href="index.html#info">Iscrizioni</a>
+                    <a href="faq.html">FAQ</a>
+                    <a href="blog.html">Blog</a>
+                </div>
+            </div>
+        </nav>
+        <div class="container">
+            <h1>Domande Frequenti</h1>
+            <p>Tutto quello che devi sapere sul Carbon Farming e sul Master dell'Università della Tuscia</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="faq-intro">
+            <h2>Hai delle domande? Siamo qui per rispondere.</h2>
+            <p>Abbiamo raccolto le domande più frequenti sul Carbon Farming e sul nostro Master. Se non trovi la risposta che cerchi, contattaci direttamente.</p>
+        </div>
+
+        <!-- PARTE 1: IL CARBON FARMING -->
+        <section class="faq-section">
+            <h2 class="faq-section-title"><span class="icon">🌱</span> Il Carbon Farming</h2>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>1. Cos'è il Carbon Farming?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il Carbon Farming (o "coltivazione del carbonio") è un insieme di pratiche agricole e forestali che mirano a catturare l'anidride carbonica (CO₂) dall'atmosfera e a stoccarla nel suolo e nella biomassa vegetale, oppure a ridurre le emissioni di gas a effetto serra dai terreni agricoli.</p>
+                        <p>Si tratta di un approccio che trasforma l'agricoltura da fonte di emissioni a soluzione per il cambiamento climatico, generando al contempo benefici economici per gli agricoltori attraverso la certificazione e la vendita di crediti di carbonio.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>2. Quali sono le principali pratiche di Carbon Farming?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Le pratiche di Carbon Farming includono:</p>
+                        <ul>
+                            <li>L'imboschimento e il rimboschimento</li>
+                            <li>L'agroforestazione e l'agricoltura mista</li>
+                            <li>L'uso di colture intercalari e di copertura</li>
+                            <li>La lavorazione conservativa del suolo</li>
+                            <li>L'aumento degli elementi caratteristici del paesaggio</li>
+                            <li>La conversione di terre coltivate in prati permanenti</li>
+                            <li>Il ripristino delle torbiere e delle zone umide</li>
+                            <li>La gestione sostenibile delle foreste</li>
+                        </ul>
+                        <p>Ciascuna pratica contribuisce in modo diverso all'assorbimento di carbonio e alla riduzione delle emissioni, e può essere certificata secondo le metodologie previste dal regolamento europeo.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>3. Le pratiche di Carbon Farming sono anche pratiche sostenibili?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Sì, le pratiche di Carbon Farming sono intrinsecamente pratiche di agricoltura sostenibile. Adottandole, l'agricoltore ottiene automaticamente molteplici benefici:</p>
+                        <ul>
+                            <li>Miglioramento della fertilità e della struttura del suolo</li>
+                            <li>Maggiore ritenzione idrica</li>
+                            <li>Riduzione dell'erosione</li>
+                            <li>Aumento della biodiversità</li>
+                            <li>Minore dipendenza da input chimici</li>
+                        </ul>
+                        <p>Questo significa che, indipendentemente dai crediti di carbonio, l'agricoltore che adotta queste pratiche migliora la resilienza e la produttività della propria azienda nel medio-lungo termine, riducendo al contempo i costi operativi.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>4. Cosa prevede il Regolamento UE 2024/3012 sulla certificazione del carbonio?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il Regolamento (UE) 2024/3012 istituisce il primo quadro volontario di certificazione dell'Unione Europea per gli assorbimenti di carbonio. Esso distingue tre categorie:</p>
+                        <ul>
+                            <li><strong>Assorbimenti permanenti di carbonio</strong> (stoccaggio geologico per diversi secoli)</li>
+                            <li><strong>Coltivazione del carbonio</strong> (pratiche agricole e forestali con stoccaggio temporaneo)</li>
+                            <li><strong>Stoccaggio del carbonio nei prodotti</strong> di lunga durata (almeno 35 anni)</li>
+                        </ul>
+                        <p>Il regolamento stabilisce criteri di qualità rigorosi in termini di quantificazione, addizionalità, stoccaggio a lungo termine, monitoraggio e sostenibilità ambientale, garantendo l'integrità e la trasparenza delle certificazioni.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>5. Cosa è successo il 3 febbraio 2026?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il 3 febbraio 2026 la Commissione Europea ha adottato le prime metodologie di certificazione nell'ambito del Regolamento CRCF (Carbon Removals and Carbon Farming).</p>
+                        <p>Si tratta di un <strong>traguardo storico</strong>: l'Unione Europea diventa il primo blocco economico al mondo a dotarsi di standard ufficiali per la certificazione delle rimozioni permanenti di carbonio.</p>
+                        <p>Le prime metodologie riguardano la cattura diretta dall'aria (DACCS), la cattura di emissioni biogeniche (BioCCS) e il biochar. Le metodologie specifiche per il carbon farming agricolo (agroforestazione, rewetting delle torbiere, pratiche agricole) sono attese nel corso del 2026.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>6. Il Carbon Farming è aggiuntivo rispetto alla PAC?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Sì, i ricavi derivanti dal Carbon Farming sono <strong>completamente aggiuntivi</strong> rispetto ai contributi della Politica Agricola Comune (PAC).</p>
+                        <p>Gli agricoltori possono continuare a ricevere i pagamenti diretti e gli eco-schemi previsti dalla PAC, e contemporaneamente generare reddito aggiuntivo dalla vendita di crediti di carbonio certificati.</p>
+                        <p>Le due fonti di reddito sono complementari e non si escludono a vicenda: la PAC remunera il rispetto di determinati requisiti e pratiche, mentre i crediti di carbonio remunerano i risultati effettivamente misurati in termini di CO₂ sequestrata o emissioni ridotte.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>7. Quali sono i criteri di qualità per la certificazione?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il regolamento europeo prevede quattro criteri fondamentali:</p>
+                        <ul>
+                            <li><strong>Quantificazione accurata:</strong> gli assorbimenti devono essere misurati in modo conservativo, completo e trasparente, sottraendo le emissioni associate al ciclo di vita dell'attività.</li>
+                            <li><strong>Addizionalità:</strong> le attività devono andare oltre gli obblighi normativi esistenti e diventare sostenibili grazie all'effetto incentivante della certificazione.</li>
+                            <li><strong>Stoccaggio e monitoraggio:</strong> sono previsti meccanismi di responsabilità per gestire il rischio di inversione (rilascio del carbonio).</li>
+                            <li><strong>Sostenibilità:</strong> le attività non devono arrecare danni significativi all'ambiente e devono generare co-benefici per la biodiversità, la protezione delle acque e la transizione circolare.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>8. Cosa sono le "unità certificate" e come funzionano?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Le unità certificate sono i "crediti" generati dalle attività di Carbon Farming. Ogni unità corrisponde a <strong>una tonnellata metrica di CO₂ equivalente</strong> assorbita o di emissioni ridotte.</p>
+                        <p>Esistono quattro tipologie distinte:</p>
+                        <ul>
+                            <li>Unità di assorbimento permanente del carbonio</li>
+                            <li>Unità di sequestro del carbonio mediante coltivazione del carbonio</li>
+                            <li>Unità di stoccaggio del carbonio nei prodotti</li>
+                            <li>Unità di riduzione delle emissioni dal suolo</li>
+                        </ul>
+                        <p>Le unità vengono rilasciate solo dopo un controllo di ricertificazione indipendente e sono registrate in un registro europeo dedicato, che ne garantisce la tracciabilità e previene il doppio conteggio.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>9. Qual è il valore economico dei crediti di carbonio?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il valore dei crediti di carbonio sul mercato volontario varia significativamente in base a diversi fattori: la tipologia di progetto, la qualità e la durata dello stoccaggio, i co-benefici ambientali generati e lo standard di certificazione utilizzato.</p>
+                        <p>Attualmente i prezzi oscillano indicativamente:</p>
+                        <ul>
+                            <li><strong>30-50 dollari/tCO₂</strong> per progetti base</li>
+                            <li><strong>50-100 dollari/tCO₂</strong> per progetti di alta qualità con co-benefici significativi</li>
+                            <li><strong>Oltre 100 dollari/tCO₂</strong> per progetti premium con impatti multipli verificati</li>
+                        </ul>
+                        <p>La crescente domanda di crediti di alta qualità e il nuovo quadro normativo europeo sono destinati a sostenere e rafforzare questi valori.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>10. Quali opportunità offre il Carbon Farming per gli agricoltori?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il Carbon Farming rappresenta una <strong>nuova fonte di reddito</strong> per gli agricoltori, che possono diversificare le proprie entrate attraverso la vendita di crediti di carbonio certificati.</p>
+                        <p>Oltre al beneficio economico diretto, le pratiche di Carbon Farming:</p>
+                        <ul>
+                            <li>Migliorano la qualità del suolo, aumentandone la fertilità e la resilienza</li>
+                            <li>Riducono i costi legati all'uso di fertilizzanti chimici</li>
+                            <li>Aumentano la produttività nel medio-lungo termine</li>
+                        </ul>
+                        <p>Gli agricoltori si posizionano inoltre come protagonisti della transizione ecologica, rispondendo alla crescente domanda di sostenibilità da parte dei consumatori e delle filiere agroalimentari.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>11. Perché il Carbon Farming è strategico per l'Unione Europea?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>L'UE si è impegnata a raggiungere la <strong>neutralità climatica entro il 2050</strong> e a ridurre le emissioni nette di almeno il 55% entro il 2030.</p>
+                        <p>Il settore agricolo è responsabile di circa il 10% delle emissioni europee di gas a effetto serra, ma è anche l'unico settore in grado di assorbire attivamente CO₂ dall'atmosfera.</p>
+                        <p>Il regolamento (UE) 2018/841 fissa un obiettivo di <strong>310 milioni di tonnellate di CO₂ equivalente</strong> di assorbimenti netti entro il 2030. Il Carbon Farming è dunque uno strumento essenziale per colmare il divario tra obiettivi climatici e situazione attuale.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>12. Qual è la differenza tra approccio "activity-based" e "result-based"? Cosa sono le metodologie MRV?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Esistono due approcci principali per remunerare le pratiche di Carbon Farming:</p>
+                        <ul>
+                            <li><strong>Activity-based</strong> (basato sulle attività): remunera l'agricoltore per l'adozione di determinate pratiche sostenibili, indipendentemente dai risultati effettivi. È il modello tipico degli eco-schemi della PAC.</li>
+                            <li><strong>Result-based</strong> (basato sui risultati): remunera i risultati effettivamente misurati, ossia le tonnellate di CO₂ realmente sequestrate o le emissioni effettivamente ridotte. È il modello dei crediti di carbonio certificati.</li>
+                        </ul>
+                        <p>Per garantire l'affidabilità dell'approccio result-based, sono fondamentali le <strong>metodologie MRV</strong> (Measurement, Reporting and Verification):</p>
+                        <ul>
+                            <li><strong>Measurement:</strong> tecniche e strumenti per quantificare il carbonio nel suolo e nella biomassa</li>
+                            <li><strong>Reporting:</strong> documentazione standardizzata dei dati raccolti e dei risultati ottenuti</li>
+                            <li><strong>Verification:</strong> audit indipendente da parte di enti certificatori accreditati</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>13. Qual è il ruolo delle tecnologie nel Carbon Farming?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Le tecnologie sono fondamentali per rendere il Carbon Farming misurabile, verificabile e scalabile. I principali strumenti tecnologici includono:</p>
+                        <ul>
+                            <li><strong>Sensori in campo (IoT):</strong> dispositivi che misurano in continuo parametri chiave come umidità, temperatura, contenuto di carbonio organico</li>
+                            <li><strong>Telerilevamento satellitare:</strong> programmi come Copernicus dell'UE per monitorare copertura vegetale e biomassa</li>
+                            <li><strong>Blockchain:</strong> tecnologia che garantisce tracciabilità e trasparenza dei dati di certificazione</li>
+                            <li><strong>Intelligenza artificiale:</strong> algoritmi per stimare con precisione il carbonio sequestrato</li>
+                            <li><strong>Sistemi GIS:</strong> piattaforme per mappare e gestire le attività a scala territoriale</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>14. Quali sono le prospettive future del mercato del Carbon Farming?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il mercato del Carbon Farming è destinato a una <strong>crescita significativa</strong> nei prossimi anni:</p>
+                        <ul>
+                            <li>La Commissione europea elaborerà metodologie di certificazione dettagliate</li>
+                            <li>Entro il 2026 sarà riesaminata l'estensione alla fermentazione enterica e alla gestione del letame</li>
+                            <li>La creazione di un registro europeo unificato garantirà trasparenza e fiducia</li>
+                            <li>Si prevede un allineamento con l'articolo 6 dell'Accordo di Parigi</li>
+                            <li>Sempre maggiore integrazione con le politiche ESG e di rendicontazione di sostenibilità</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PARTE 2: IL MASTER -->
+        <section class="faq-section">
+            <h2 class="faq-section-title"><span class="icon">🎓</span> Il Master in Carbon Farming</h2>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>1. In cosa consiste il Master in Carbon Farming dell'Università della Tuscia?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il Master di II livello in Carbon Farming è il <strong>primo programma di formazione avanzata in Europa</strong> interamente dedicato alla gestione sostenibile del carbonio nei sistemi agricoli, forestali e agroalimentari.</p>
+                        <p>È un percorso di <strong>12 mesi (60 CFU, pari a 1.500 ore)</strong> erogato dall'Università degli Studi della Tuscia attraverso UNITUS Academy, sotto la direzione scientifica del Prof. Riccardo Valentini, membro dell'IPCC e co-vincitore del Premio Nobel per la Pace.</p>
+                        <p>Il programma forma figure professionali altamente specializzate nella certificazione del carbonio, nella consulenza per la transizione ecologica e nella gestione dei mercati del carbonio.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>2. Chi è il direttore scientifico e perché è rilevante?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il direttore scientifico è il <strong>Prof. Riccardo Valentini</strong>, ordinario presso l'Università della Tuscia e figura di riferimento internazionale nel campo della scienza del clima.</p>
+                        <p>È membro dell'IPCC (Gruppo Intergovernativo di Esperti sul Cambiamento Climatico) e ha contribuito al lavoro che è valso all'IPCC il <strong>Premio Nobel per la Pace nel 2007</strong>.</p>
+                        <p>La sua direzione garantisce al Master un ancoraggio scientifico di altissimo livello e un network internazionale di eccellenza, con accesso diretto alle più recenti evidenze scientifiche e ai principali attori istituzionali del settore.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>3. Chi sono i docenti del Master?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Oltre al Prof. Valentini, il Master si avvale di una faculty di alto profilo composta da docenti universitari, ricercatori ed esperti internazionali provenienti dal mondo accademico, istituzionale e aziendale.</p>
+                        <p>La faculty include specialisti in economia agraria, agricoltura di precisione, gestione forestale, remote sensing, mercati del carbonio e certificazione.</p>
+                        <p>Per l'elenco completo e aggiornato dei docenti, si invita a consultare la sezione "Faculty" del sito.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>4. A chi è rivolto il Master?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il Master è rivolto a tutti i <strong>laureati magistrali</strong> (o con titolo equivalente) interessati a specializzarsi nel settore del Carbon Farming e della sostenibilità ambientale. È particolarmente indicato per:</p>
+                        <ul>
+                            <li>Laureati in scienze agrarie e forestali</li>
+                            <li>Laureati in scienze ambientali</li>
+                            <li>Ingegneri ambientali</li>
+                            <li>Biologi</li>
+                            <li>Laureati in economia e gestione d'impresa</li>
+                            <li>Laureati in giurisprudenza ambientale</li>
+                        </ul>
+                        <p>Il programma è pensato sia per giovani laureati che desiderano entrare in un settore ad alta domanda occupazionale, sia per professionisti già attivi che vogliono aggiornare le proprie competenze.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>5. Qual è la struttura didattica del programma?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il programma è articolato in moduli progressivi:</p>
+                        <ul>
+                            <li><strong>Moduli core</strong> (marzo-dicembre 2026): fondamenti teorici, quadro normativo europeo e internazionale, politiche climatiche e metodologie di base</li>
+                            <li><strong>Moduli specialistici</strong> (gennaio-febbraio 2027): tecnologie avanzate, certificazione, mercati del carbonio e un modulo a scelta per personalizzare il percorso</li>
+                        </ul>
+                        <p>Per i dettagli completi sui contenuti di ciascun modulo, si invita a consultare la sezione Programma del sito.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>6. Sono previste attività pratiche oltre alle lezioni?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Sì, il Master integra le lezioni frontali con numerose attività pratiche e esperienziali:</p>
+                        <ul>
+                            <li>Seminari tematici con esperti del settore</li>
+                            <li>Workshop operativi su strumenti e metodologie</li>
+                            <li>Visite aziendali presso realtà che applicano pratiche di Carbon Farming</li>
+                            <li>Project work su casi reali</li>
+                            <li>Tirocinio qualificato presso aziende partner</li>
+                        </ul>
+                        <p>Questa combinazione di teoria e pratica garantisce l'acquisizione di competenze immediatamente spendibili nel mondo del lavoro.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>7. Quando si svolge il Master? In quali giorni e orari?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Le lezioni si svolgono:</p>
+                        <ul>
+                            <li><strong>Venerdì:</strong> dalle 14:00 alle 19:00</li>
+                            <li><strong>Alcuni giovedì del mese:</strong> dalle 14:00 alle 19:00</li>
+                        </ul>
+                        <p>Questa organizzazione consente la frequenza anche a professionisti già impegnati durante la settimana.</p>
+                        <p>Tutte le lezioni possono essere seguite sia in presenza che online tramite la piattaforma e-learning dell'ateneo. È prevista l'obbligatorietà di frequenza per almeno il <strong>70% delle lezioni</strong>.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>8. Come si svolge il Master? È compatibile con un'attività lavorativa?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il Master è erogato in <strong>formula blended</strong>, con una combinazione di lezioni in presenza presso la sede INAIL di Roma e attività online.</p>
+                        <p>Tutte le lezioni possono essere seguite sia in presenza che online, offrendo massima flessibilità. Questa formula è stata progettata specificamente per consentire la frequenza anche a professionisti già impegnati.</p>
+                        <p>I materiali didattici, le registrazioni e le attività di approfondimento sono accessibili tramite la piattaforma e-learning dell'ateneo.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>9. Dove si svolgono le lezioni in presenza?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Le lezioni in presenza si tengono a Roma, presso le strutture messe a disposizione dall'INAIL (Istituto Nazionale per l'Assicurazione contro gli Infortuni sul Lavoro):</p>
+                        <p><strong>📍 Via IV Novembre 144, Roma (Parlamentino)</strong></p>
+                        <p>L'INAIL è partner strategico del programma. La scelta di Roma come sede operativa facilita l'accesso ai partecipanti provenienti da tutta Italia e consente la vicinanza ai principali centri decisionali in materia di politiche ambientali e agricole.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>10. Quanto costa il Master e quali sono le modalità di iscrizione?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il Master prevede due modalità di iscrizione:</p>
+                        <ul>
+                            <li><strong>Iscrizione ordinaria (5.000 €):</strong> riservata ai laureati magistrali. Consente di ottenere il Diploma di Master Universitario di II livello con 60 CFU.</li>
+                            <li><strong>Iscrizione come uditore (2.500 €):</strong> pensata per chi non possiede il requisito della laurea magistrale o per chi desidera seguire l'intero percorso esclusivamente online. Gli uditori partecipano a tutte le lezioni e attività, ma ricevono un attestato di partecipazione anziché il diploma universitario.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>11. Quali sono gli sbocchi professionali?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>I diplomati del Master possono accedere a ruoli ad alta specializzazione e crescente domanda:</p>
+                        <ul>
+                            <li>Carbon Farming Specialist presso aziende agricole e consorzi</li>
+                            <li>Consulente per la certificazione dei crediti di carbonio</li>
+                            <li>Sustainability Consultant e ESG Analyst</li>
+                            <li>GHG Auditor e verificatore ambientale</li>
+                            <li>Project Manager per progetti di mitigazione climatica</li>
+                            <li>Funzionario o esperto tecnico presso enti pubblici e agenzie ambientali</li>
+                            <li>Ricercatore in istituti e centri di ricerca sul clima</li>
+                        </ul>
+                        <p>Il mercato del lavoro in questo settore presenta una <strong>significativa carenza di professionisti qualificati</strong>, il che rende gli sbocchi occupazionali particolarmente favorevoli.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>12. Quali partner e istituzioni sono coinvolti nel programma?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il Master si avvale di una rete di partnership di alto profilo. Tra gli altri, collaborano al programma:</p>
+                        <ul>
+                            <li><strong>INAIL</strong> per le strutture didattiche a Roma</li>
+                            <li><strong>CMCC</strong> (Centro Euro-Mediterraneo sui Cambiamenti Climatici) come partner scientifico</li>
+                            <li><strong>CREA</strong> (Consiglio per la Ricerca in Agricoltura) come partner scientifico</li>
+                            <li><strong>WWF Italia</strong> tra i partner ambientali</li>
+                            <li><strong>CONAF</strong> (Consiglio dell'Ordine Nazionale dei Dottori Agronomi e Forestali) come ordine professionale di riferimento</li>
+                        </ul>
+                        <p>Per l'elenco completo e aggiornato dei partner, si invita a consultare la sezione "Partner" del sito.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">
+                    <span>13. Come posso iscrivermi e quando parte il Master?</span>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <p>Il Master è previsto in partenza per il mese di <strong>marzo 2026</strong>, con durata fino a marzo 2027.</p>
+                        <p>Le iscrizioni sono aperte e possono essere effettuate tramite il sito web del programma.</p>
+                        <p>Per informazioni dettagliate su requisiti di ammissione, documentazione necessaria e scadenze, è possibile contattare il Coordinatore del Master:</p>
+                        <p><strong>Virgilio Maretto</strong><br>
+                        📧 <a href="mailto:virgilio.maretto@posti.world">virgilio.maretto@posti.world</a></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="contact-cta">
+            <h3>Non hai trovato la risposta che cercavi?</h3>
+            <p>Contattaci direttamente per qualsiasi domanda sul Carbon Farming o sul Master.</p>
+            <a href="richiedi-informazioni.html">Richiedi Informazioni</a>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>Master in Carbon Farming — <a href="index.html">Università degli Studi della Tuscia</a></p>
+            <p style="margin-top: 8px;">© 2026 UNITUS Academy. Documento aggiornato a febbraio 2026.</p>
+        </div>
+    </footer>
+
+    <script>
+        // FAQ Accordion functionality
+        document.querySelectorAll('.faq-question').forEach(question => {
+            question.addEventListener('click', () => {
+                const item = question.parentElement;
+                const isActive = item.classList.contains('active');
+                
+                // Close all other items
+                document.querySelectorAll('.faq-item').forEach(i => {
+                    i.classList.remove('active');
+                });
+                
+                // Toggle current item
+                if (!isActive) {
+                    item.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

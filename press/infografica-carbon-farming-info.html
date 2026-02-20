@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carbon Farming - Infografica</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f5f5f5;
+            color: #1a1a1a;
+        }
+        
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 20px auto;
+            background: white;
+            padding: 12mm;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 6mm;
+            padding-bottom: 5mm;
+            border-bottom: 4px solid #2E7D32;
+        }
+        
+        .header h1 {
+            font-size: 28pt;
+            font-weight: 800;
+            color: #1B5E20;
+            margin-bottom: 2mm;
+        }
+        
+        .header .subtitle {
+            font-size: 11pt;
+            color: #4CAF50;
+            font-weight: 500;
+        }
+        
+        /* Definition Box */
+        .definition {
+            background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+            border-radius: 4mm;
+            padding: 5mm;
+            margin-bottom: 5mm;
+            border-left: 5px solid #2E7D32;
+        }
+        
+        .definition h2 {
+            font-size: 11pt;
+            color: #1B5E20;
+            margin-bottom: 2mm;
+            display: flex;
+            align-items: center;
+            gap: 2mm;
+        }
+        
+        .definition p {
+            font-size: 9.5pt;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .definition strong {
+            color: #1B5E20;
+        }
+        
+        /* How it works */
+        .how-it-works {
+            margin-bottom: 5mm;
+        }
+        
+        .section-title {
+            font-size: 12pt;
+            font-weight: 700;
+            color: #1B5E20;
+            margin-bottom: 3mm;
+            display: flex;
+            align-items: center;
+            gap: 2mm;
+        }
+        
+        .process-flow {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+            border-radius: 3mm;
+            padding: 4mm;
+        }
+        
+        .process-step {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .process-step .icon {
+            font-size: 24pt;
+            margin-bottom: 2mm;
+        }
+        
+        .process-step .title {
+            font-size: 8pt;
+            font-weight: 700;
+            color: #1B5E20;
+            margin-bottom: 1mm;
+        }
+        
+        .process-step .desc {
+            font-size: 7pt;
+            color: #666;
+        }
+        
+        .process-arrow {
+            font-size: 16pt;
+            color: #4CAF50;
+            padding: 0 2mm;
+        }
+        
+        /* Two columns */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4mm;
+            margin-bottom: 5mm;
+        }
+        
+        /* Practices */
+        .practices-section {
+            background: #f8f9fa;
+            border-radius: 3mm;
+            padding: 4mm;
+        }
+        
+        .practices-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2mm;
+        }
+        
+        .practice {
+            display: flex;
+            align-items: center;
+            gap: 2mm;
+            background: white;
+            border-radius: 2mm;
+            padding: 2.5mm;
+            border-left: 3px solid #4CAF50;
+        }
+        
+        .practice .icon {
+            font-size: 14pt;
+        }
+        
+        .practice-info .name {
+            font-size: 7.5pt;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .practice-info .benefit {
+            font-size: 6.5pt;
+            color: #666;
+        }
+        
+        /* Benefits */
+        .benefits-section {
+            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+            color: white;
+            border-radius: 3mm;
+            padding: 4mm;
+        }
+        
+        .benefits-section .section-title {
+            color: white;
+            margin-bottom: 3mm;
+        }
+        
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2mm;
+        }
+        
+        .benefit-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 2mm;
+            font-size: 7.5pt;
+        }
+        
+        .benefit-item .icon {
+            font-size: 10pt;
+        }
+        
+        /* Carbon Credits Section */
+        .credits-section {
+            background: #FFF8E1;
+            border-radius: 3mm;
+            padding: 4mm;
+            margin-bottom: 5mm;
+            border-left: 5px solid #FF9800;
+        }
+        
+        .credits-section h3 {
+            font-size: 10pt;
+            color: #E65100;
+            margin-bottom: 3mm;
+            display: flex;
+            align-items: center;
+            gap: 2mm;
+        }
+        
+        .credits-flow {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .credit-step {
+            flex: 1;
+        }
+        
+        .credit-step .icon {
+            font-size: 20pt;
+            margin-bottom: 1mm;
+        }
+        
+        .credit-step .title {
+            font-size: 7.5pt;
+            font-weight: 600;
+            color: #E65100;
+        }
+        
+        .credit-step .desc {
+            font-size: 6.5pt;
+            color: #666;
+        }
+        
+        .credit-arrow {
+            font-size: 14pt;
+            color: #FF9800;
+        }
+        
+        /* Stats */
+        .stats-section {
+            margin-bottom: 5mm;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 3mm;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+            border-radius: 3mm;
+            padding: 3mm;
+            text-align: center;
+            border-bottom: 3px solid #1976D2;
+        }
+        
+        .stat-card .number {
+            font-size: 16pt;
+            font-weight: 800;
+            color: #1565C0;
+        }
+        
+        .stat-card .label {
+            font-size: 6.5pt;
+            color: #555;
+            margin-top: 1mm;
+            line-height: 1.3;
+        }
+        
+        /* EU Policy */
+        .eu-section {
+            background: #E8EAF6;
+            border-radius: 3mm;
+            padding: 4mm;
+            margin-bottom: 5mm;
+        }
+        
+        .eu-section h3 {
+            font-size: 10pt;
+            color: #303F9F;
+            margin-bottom: 3mm;
+            display: flex;
+            align-items: center;
+            gap: 2mm;
+        }
+        
+        .eu-timeline {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .eu-item {
+            text-align: center;
+            flex: 1;
+            padding: 0 2mm;
+        }
+        
+        .eu-item .year {
+            font-size: 10pt;
+            font-weight: 800;
+            color: #303F9F;
+        }
+        
+        .eu-item .title {
+            font-size: 7pt;
+            font-weight: 600;
+            color: #333;
+            margin: 1mm 0;
+        }
+        
+        .eu-item .desc {
+            font-size: 6pt;
+            color: #666;
+        }
+        
+        /* Who Benefits */
+        .who-section {
+            margin-bottom: 5mm;
+        }
+        
+        .who-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 3mm;
+        }
+        
+        .who-card {
+            background: #f8f9fa;
+            border-radius: 3mm;
+            padding: 3mm;
+            text-align: center;
+        }
+        
+        .who-card .icon {
+            font-size: 20pt;
+            margin-bottom: 1mm;
+        }
+        
+        .who-card .title {
+            font-size: 7.5pt;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .who-card .desc {
+            font-size: 6pt;
+            color: #666;
+            margin-top: 1mm;
+        }
+        
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding-top: 4mm;
+            border-top: 2px solid #e0e0e0;
+            font-size: 7pt;
+            color: #888;
+        }
+        
+        .footer strong {
+            color: #1B5E20;
+        }
+        
+        @media print {
+            body { background: white; }
+            .page { 
+                margin: 0; 
+                box-shadow: none;
+                padding: 8mm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <!-- Header -->
+        <header class="header">
+            <h1>🌱 Carbon Farming</h1>
+            <p class="subtitle">L'agricoltura come soluzione al cambiamento climatico</p>
+        </header>
+        
+        <!-- Definition -->
+        <section class="definition">
+            <h2>📖 Cos'è il Carbon Farming?</h2>
+            <p>Il <strong>Carbon Farming</strong> è un insieme di pratiche agricole e forestali che <strong>catturano CO₂ dall'atmosfera</strong> e la immagazzinano nel suolo e nella biomassa vegetale. Trasforma l'agricoltura da fonte di emissioni a <strong>soluzione climatica</strong>, permettendo agli agricoltori di generare <strong>crediti di carbonio certificati</strong> e nuove fonti di reddito.</p>
+        </section>
+        
+        <!-- How it works -->
+        <section class="how-it-works">
+            <h3 class="section-title">⚙️ Come Funziona</h3>
+            <div class="process-flow">
+                <div class="process-step">
+                    <div class="icon">🌿</div>
+                    <div class="title">FOTOSINTESI</div>
+                    <div class="desc">Le piante catturano<br>CO₂ dall'atmosfera</div>
+                </div>
+                <div class="process-arrow">→</div>
+                <div class="process-step">
+                    <div class="icon">🌾</div>
+                    <div class="title">BIOMASSA</div>
+                    <div class="desc">Carbonio stoccato<br>nelle piante</div>
+                </div>
+                <div class="process-arrow">→</div>
+                <div class="process-step">
+                    <div class="icon">🪱</div>
+                    <div class="title">SUOLO</div>
+                    <div class="desc">Carbonio trasferito<br>nel terreno</div>
+                </div>
+                <div class="process-arrow">→</div>
+                <div class="process-step">
+                    <div class="icon">📊</div>
+                    <div class="title">MRV</div>
+                    <div class="desc">Misurazione e<br>verifica</div>
+                </div>
+                <div class="process-arrow">→</div>
+                <div class="process-step">
+                    <div class="icon">💰</div>
+                    <div class="title">CREDITI</div>
+                    <div class="desc">Certificazione e<br>vendita</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Two columns: Practices + Benefits -->
+        <div class="two-col">
+            <!-- Practices -->
+            <section class="practices-section">
+                <h3 class="section-title">🌾 Pratiche Principali</h3>
+                <div class="practices-grid">
+                    <div class="practice">
+                        <span class="icon">🌿</span>
+                        <div class="practice-info">
+                            <div class="name">Cover Crops</div>
+                            <div class="benefit">Copertura permanente del suolo</div>
+                        </div>
+                    </div>
+                    <div class="practice">
+                        <span class="icon">🌳</span>
+                        <div class="practice-info">
+                            <div class="name">Agroforestry</div>
+                            <div class="benefit">Alberi integrati nei campi</div>
+                        </div>
+                    </div>
+                    <div class="practice">
+                        <span class="icon">🚜</span>
+                        <div class="practice-info">
+                            <div class="name">No-Till / Min-Till</div>
+                            <div class="benefit">Lavorazione ridotta del suolo</div>
+                        </div>
+                    </div>
+                    <div class="practice">
+                        <span class="icon">♻️</span>
+                        <div class="practice-info">
+                            <div class="name">Compostaggio</div>
+                            <div class="benefit">Restituzione materia organica</div>
+                        </div>
+                    </div>
+                    <div class="practice">
+                        <span class="icon">🐄</span>
+                        <div class="practice-info">
+                            <div class="name">Pascolo Rotazionale</div>
+                            <div class="benefit">Gestione sostenibile pascoli</div>
+                        </div>
+                    </div>
+                    <div class="practice">
+                        <span class="icon">🔥</span>
+                        <div class="practice-info">
+                            <div class="name">Biochar</div>
+                            <div class="benefit">Carbone vegetale nel suolo</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Benefits -->
+            <section class="benefits-section">
+                <h3 class="section-title">✨ Benefici</h3>
+                <div class="benefits-grid">
+                    <div class="benefit-item">
+                        <span class="icon">🌍</span>
+                        <span>Riduzione gas serra e contrasto al cambiamento climatico</span>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="icon">💧</span>
+                        <span>Miglior ritenzione idrica e resistenza alla siccità</span>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="icon">🌱</span>
+                        <span>Aumento fertilità naturale del suolo</span>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="icon">🦋</span>
+                        <span>Protezione biodiversità e habitat naturali</span>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="icon">💰</span>
+                        <span>Nuove entrate da crediti di carbonio</span>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="icon">📉</span>
+                        <span>Riduzione costi input chimici</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+        
+        <!-- Carbon Credits -->
+        <section class="credits-section">
+            <h3>💳 I Crediti di Carbonio</h3>
+            <p style="font-size: 8pt; color: #555; margin-bottom: 3mm;">I crediti di carbonio sono certificati che attestano la rimozione o mancata emissione di CO₂. Possono essere venduti ad aziende che vogliono compensare le proprie emissioni.</p>
+            <div class="credits-flow">
+                <div class="credit-step">
+                    <div class="icon">👨‍🌾</div>
+                    <div class="title">AGRICOLTORE</div>
+                    <div class="desc">Adotta pratiche<br>carbon farming</div>
+                </div>
+                <div class="credit-arrow">→</div>
+                <div class="credit-step">
+                    <div class="icon">📋</div>
+                    <div class="title">CERTIFICAZIONE</div>
+                    <div class="desc">Ente terzo verifica<br>e certifica</div>
+                </div>
+                <div class="credit-arrow">→</div>
+                <div class="credit-step">
+                    <div class="icon">📊</div>
+                    <div class="title">REGISTRO</div>
+                    <div class="desc">Crediti registrati<br>su piattaforma EU</div>
+                </div>
+                <div class="credit-arrow">→</div>
+                <div class="credit-step">
+                    <div class="icon">🏭</div>
+                    <div class="title">AZIENDA</div>
+                    <div class="desc">Acquista per<br>compensare</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Stats -->
+        <section class="stats-section">
+            <h3 class="section-title">📊 I Numeri</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="number">10%</div>
+                    <div class="label">delle emissioni EU<br>dall'agricoltura</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">42 Mt</div>
+                    <div class="label">CO₂ sequestrabili/anno<br>nei suoli agricoli EU</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">€30-80</div>
+                    <div class="label">prezzo medio per<br>tonnellata CO₂</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">2030</div>
+                    <div class="label">obiettivo EU:<br>carbon neutrality suoli</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- EU Policy -->
+        <section class="eu-section">
+            <h3>🇪🇺 Il Quadro Normativo Europeo</h3>
+            <div class="eu-timeline">
+                <div class="eu-item">
+                    <div class="year">2021</div>
+                    <div class="title">Strategia Suolo</div>
+                    <div class="desc">Obiettivo suoli sani entro 2050</div>
+                </div>
+                <div class="eu-item">
+                    <div class="year">2022</div>
+                    <div class="title">Carbon Removal Certification</div>
+                    <div class="desc">Framework certificazione EU</div>
+                </div>
+                <div class="eu-item">
+                    <div class="year">2023</div>
+                    <div class="title">PAC Green</div>
+                    <div class="desc">Eco-schemi e condizionalità</div>
+                </div>
+                <div class="eu-item">
+                    <div class="year">2024</div>
+                    <div class="title">CRCF Regulation</div>
+                    <div class="desc">Regolamento crediti certificati</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Who Benefits -->
+        <section class="who-section">
+            <h3 class="section-title">👥 Chi può beneficiarne</h3>
+            <div class="who-grid">
+                <div class="who-card">
+                    <div class="icon">👨‍🌾</div>
+                    <div class="title">Agricoltori</div>
+                    <div class="desc">Nuove entrate + suoli più fertili</div>
+                </div>
+                <div class="who-card">
+                    <div class="icon">🏭</div>
+                    <div class="title">Aziende</div>
+                    <div class="desc">Compensazione emissioni scope 3</div>
+                </div>
+                <div class="who-card">
+                    <div class="icon">🏛️</div>
+                    <div class="title">PA e Territori</div>
+                    <div class="desc">Obiettivi clima e valorizzazione</div>
+                </div>
+                <div class="who-card">
+                    <div class="icon">🌍</div>
+                    <div class="title">Ambiente</div>
+                    <div class="desc">Mitigazione clima e biodiversità</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Footer -->
+        <footer class="footer">
+            <p><strong>Il Carbon Farming è una delle soluzioni più promettenti per raggiungere gli obiettivi climatici, trasformando l'agricoltura in alleata del clima.</strong></p>
+        </footer>
+    </div>
+</body>
+</html>

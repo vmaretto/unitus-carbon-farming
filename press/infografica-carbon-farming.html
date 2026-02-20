@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infografica Carbon Farming - Press Kit</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f5f5f5;
+            color: #1a1a1a;
+        }
+        
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 20px auto;
+            background: white;
+            padding: 15mm;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8mm;
+            padding-bottom: 5mm;
+            border-bottom: 3px solid #2E7D32;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 4mm;
+        }
+        
+        .logo-placeholder {
+            width: 20mm;
+            height: 20mm;
+            background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 100%);
+            border-radius: 3mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 800;
+            font-size: 10pt;
+        }
+        
+        .header-text h1 {
+            font-size: 18pt;
+            font-weight: 800;
+            color: #1B5E20;
+            line-height: 1.1;
+        }
+        
+        .header-text p {
+            font-size: 9pt;
+            color: #666;
+            margin-top: 1mm;
+        }
+        
+        .badge {
+            background: linear-gradient(135deg, #2E7D32 0%, #388E3C 100%);
+            color: white;
+            padding: 3mm 5mm;
+            border-radius: 2mm;
+            font-size: 8pt;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .badge span {
+            display: block;
+            font-size: 14pt;
+            font-weight: 800;
+        }
+        
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+            border-radius: 4mm;
+            padding: 6mm;
+            margin-bottom: 6mm;
+            text-align: center;
+        }
+        
+        .hero h2 {
+            font-size: 11pt;
+            color: #1B5E20;
+            font-weight: 700;
+            margin-bottom: 3mm;
+        }
+        
+        .hero p {
+            font-size: 9pt;
+            color: #2E7D32;
+            line-height: 1.5;
+            max-width: 150mm;
+            margin: 0 auto;
+        }
+        
+        /* Stats Grid */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 4mm;
+            margin-bottom: 6mm;
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            border-radius: 3mm;
+            padding: 4mm;
+            text-align: center;
+            border-left: 3px solid #4CAF50;
+        }
+        
+        .stat-card .number {
+            font-size: 20pt;
+            font-weight: 800;
+            color: #2E7D32;
+        }
+        
+        .stat-card .label {
+            font-size: 7pt;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 1mm;
+        }
+        
+        /* Two Column Layout */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5mm;
+            margin-bottom: 6mm;
+        }
+        
+        /* Section */
+        .section {
+            margin-bottom: 5mm;
+        }
+        
+        .section-title {
+            font-size: 10pt;
+            font-weight: 700;
+            color: #1B5E20;
+            margin-bottom: 3mm;
+            padding-bottom: 2mm;
+            border-bottom: 2px solid #C8E6C9;
+            display: flex;
+            align-items: center;
+            gap: 2mm;
+        }
+        
+        .section-title .icon {
+            font-size: 12pt;
+        }
+        
+        /* Practices */
+        .practices {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 3mm;
+        }
+        
+        .practice {
+            background: #f8f9fa;
+            border-radius: 2mm;
+            padding: 3mm;
+            text-align: center;
+        }
+        
+        .practice .icon {
+            font-size: 16pt;
+            margin-bottom: 1mm;
+        }
+        
+        .practice .name {
+            font-size: 7pt;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        /* Modules */
+        .modules {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2mm;
+        }
+        
+        .module {
+            background: linear-gradient(135deg, #E8F5E9 0%, #f8f9fa 100%);
+            border-radius: 2mm;
+            padding: 2.5mm 3mm;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 7pt;
+        }
+        
+        .module .name {
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .module .cfu {
+            background: #2E7D32;
+            color: white;
+            padding: 1mm 2mm;
+            border-radius: 1mm;
+            font-size: 6pt;
+            font-weight: 600;
+        }
+        
+        /* Benefits */
+        .benefits {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2mm;
+        }
+        
+        .benefit {
+            display: flex;
+            align-items: flex-start;
+            gap: 2mm;
+            font-size: 7.5pt;
+            color: #333;
+        }
+        
+        .benefit .check {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        /* Partners */
+        .partners-section {
+            background: #f8f9fa;
+            border-radius: 3mm;
+            padding: 4mm;
+            margin-bottom: 5mm;
+        }
+        
+        .partners-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3mm;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .partner-tag {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 2mm;
+            padding: 2mm 3mm;
+            font-size: 6.5pt;
+            font-weight: 500;
+            color: #555;
+        }
+        
+        /* Impact Box */
+        .impact-box {
+            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+            color: white;
+            border-radius: 3mm;
+            padding: 5mm;
+            margin-bottom: 5mm;
+        }
+        
+        .impact-box h3 {
+            font-size: 10pt;
+            font-weight: 700;
+            margin-bottom: 3mm;
+            text-align: center;
+        }
+        
+        .impact-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4mm;
+            text-align: center;
+        }
+        
+        .impact-stat .value {
+            font-size: 16pt;
+            font-weight: 800;
+        }
+        
+        .impact-stat .desc {
+            font-size: 7pt;
+            opacity: 0.9;
+            margin-top: 1mm;
+        }
+        
+        /* Footer */
+        .footer {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 5mm;
+            padding-top: 4mm;
+            border-top: 2px solid #e0e0e0;
+        }
+        
+        .contact-info {
+            font-size: 8pt;
+            color: #555;
+        }
+        
+        .contact-info strong {
+            color: #1B5E20;
+        }
+        
+        .contact-info p {
+            margin-bottom: 1mm;
+        }
+        
+        .qr-placeholder {
+            width: 25mm;
+            height: 25mm;
+            background: #f0f0f0;
+            border: 2px dashed #ccc;
+            border-radius: 2mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 6pt;
+            color: #999;
+            text-align: center;
+        }
+        
+        @media print {
+            body { background: white; }
+            .page { 
+                margin: 0; 
+                box-shadow: none;
+                padding: 10mm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo-placeholder">UNITUS</div>
+                <div class="header-text">
+                    <h1>Master in Carbon Farming</h1>
+                    <p>Università degli Studi della Tuscia · II Livello</p>
+                </div>
+            </div>
+            <div class="badge">
+                <span>2026</span>
+                Marzo - Marzo 2027
+            </div>
+        </header>
+        
+        <!-- Hero Definition -->
+        <section class="hero">
+            <h2>🌱 Cos'è il Carbon Farming?</h2>
+            <p>Un insieme di pratiche agricole e forestali che <strong>catturano CO₂ dall'atmosfera</strong> e la immagazzinano nel suolo e nella biomassa vegetale, trasformando l'agricoltura da fonte di emissioni a <strong>soluzione climatica</strong>.</p>
+        </section>
+        
+        <!-- Stats -->
+        <section class="stats">
+            <div class="stat-card">
+                <div class="number">60</div>
+                <div class="label">Crediti CFU</div>
+            </div>
+            <div class="stat-card">
+                <div class="number">12</div>
+                <div class="label">Mesi Durata</div>
+            </div>
+            <div class="stat-card">
+                <div class="number">7</div>
+                <div class="label">Moduli Didattici</div>
+            </div>
+            <div class="stat-card">
+                <div class="number">15+</div>
+                <div class="label">Partner</div>
+            </div>
+        </section>
+        
+        <!-- Two Column: Practices + Modules -->
+        <div class="two-col">
+            <!-- Practices -->
+            <section class="section">
+                <h3 class="section-title"><span class="icon">🌾</span> Pratiche di Carbon Farming</h3>
+                <div class="practices">
+                    <div class="practice">
+                        <div class="icon">🌿</div>
+                        <div class="name">Cover Crops</div>
+                    </div>
+                    <div class="practice">
+                        <div class="icon">🌳</div>
+                        <div class="name">Agroforestry</div>
+                    </div>
+                    <div class="practice">
+                        <div class="icon">🚜</div>
+                        <div class="name">No-Till</div>
+                    </div>
+                    <div class="practice">
+                        <div class="icon">♻️</div>
+                        <div class="name">Compostaggio</div>
+                    </div>
+                    <div class="practice">
+                        <div class="icon">🐄</div>
+                        <div class="name">Pascolo Rotazionale</div>
+                    </div>
+                    <div class="practice">
+                        <div class="icon">🔥</div>
+                        <div class="name">Biochar</div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Modules -->
+            <section class="section">
+                <h3 class="section-title"><span class="icon">📚</span> Programma Didattico</h3>
+                <div class="modules">
+                    <div class="module">
+                        <span class="name">Ciclo del Carbonio</span>
+                        <span class="cfu">4 CFU</span>
+                    </div>
+                    <div class="module">
+                        <span class="name">Politiche EU & Mercato</span>
+                        <span class="cfu">4 CFU</span>
+                    </div>
+                    <div class="module">
+                        <span class="name">Riduzione Emissioni</span>
+                        <span class="cfu">4 CFU</span>
+                    </div>
+                    <div class="module">
+                        <span class="name">Sequestro nei Suoli</span>
+                        <span class="cfu">6 CFU</span>
+                    </div>
+                    <div class="module">
+                        <span class="name">Prodotti Legnosi</span>
+                        <span class="cfu">4 CFU</span>
+                    </div>
+                    <div class="module">
+                        <span class="name">Monitoraggio MRV</span>
+                        <span class="cfu">6 CFU</span>
+                    </div>
+                    <div class="module">
+                        <span class="name">Certificazione</span>
+                        <span class="cfu">6 CFU</span>
+                    </div>
+                    <div class="module">
+                        <span class="name">Project Work</span>
+                        <span class="cfu">26 CFU</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+        
+        <!-- Benefits -->
+        <section class="section">
+            <h3 class="section-title"><span class="icon">🎯</span> Competenze in Uscita</h3>
+            <div class="benefits">
+                <div class="benefit">
+                    <span class="check">✓</span>
+                    <span>Progettare interventi di sequestro del carbonio su scala aziendale</span>
+                </div>
+                <div class="benefit">
+                    <span class="check">✓</span>
+                    <span>Certificare crediti di carbonio con metodologie IPCC</span>
+                </div>
+                <div class="benefit">
+                    <span class="check">✓</span>
+                    <span>Implementare sistemi MRV (Measurement, Reporting, Verification)</span>
+                </div>
+                <div class="benefit">
+                    <span class="check">✓</span>
+                    <span>Navigare i mercati volontari e regolamentati del carbonio</span>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Impact Box -->
+        <section class="impact-box">
+            <h3>🌍 Il Potenziale del Carbon Farming in Europa</h3>
+            <div class="impact-stats">
+                <div class="impact-stat">
+                    <div class="value">42 Mt</div>
+                    <div class="desc">CO₂ sequestrabili/anno<br>con suoli agricoli EU</div>
+                </div>
+                <div class="impact-stat">
+                    <div class="value">€100+</div>
+                    <div class="desc">Miliardi mercato<br>crediti carbonio 2030</div>
+                </div>
+                <div class="impact-stat">
+                    <div class="value">GAP</div>
+                    <div class="desc">Forte carenza di<br>professionisti qualificati</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Partners -->
+        <section class="partners-section">
+            <h3 class="section-title" style="border: none; margin-bottom: 3mm;"><span class="icon">🤝</span> Partner del Master</h3>
+            <div class="partners-grid">
+                <span class="partner-tag">🏛️ CREA</span>
+                <span class="partner-tag">🏭 Barilla</span>
+                <span class="partner-tag">🍅 Mutti</span>
+                <span class="partner-tag">🍫 Ferrero</span>
+                <span class="partner-tag">🌍 WWF Italia</span>
+                <span class="partner-tag">📊 CMCC</span>
+                <span class="partner-tag">🌱 ASviS</span>
+                <span class="partner-tag">🏛️ Arsial</span>
+                <span class="partner-tag">👨‍🌾 Confagricoltura</span>
+                <span class="partner-tag">📋 CONAF</span>
+                <span class="partner-tag">🔬 EY</span>
+                <span class="partner-tag">🏥 INAIL</span>
+                <span class="partner-tag">🍷 FIVI</span>
+                <span class="partner-tag">🇪🇺 Credible EU</span>
+            </div>
+        </section>
+        
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="contact-info">
+                <p><strong>📧 Email:</strong> maretto@carbonfarmingmaster.it</p>
+                <p><strong>🌐 Sito:</strong> carbonfarmingmaster.it</p>
+                <p><strong>🏛️ Sede:</strong> Università della Tuscia · Roma</p>
+                <p><strong>👤 Direttore Scientifico:</strong> Prof. Riccardo Valentini (Nobel IPCC 2007)</p>
+                <p><strong>👤 Direttore Operativo:</strong> Virgilio Maretto</p>
+            </div>
+            <div class="qr-placeholder">
+                QR Code<br>Sito Web
+            </div>
+        </footer>
+    </div>
+</body>
+</html>

@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carbon Farming - Infografica Illustrata</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: #f5f0e8;
+        }
+        
+        .page {
+            width: 210mm;
+            margin: 0 auto;
+            background: linear-gradient(180deg, #87CEEB 0%, #E8F5E9 15%, #f5f0e8 30%);
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        /* Header with sky */
+        .header {
+            background: linear-gradient(180deg, #5BA3D9 0%, #87CEEB 50%, #B8E0B8 100%);
+            padding: 8mm 10mm 15mm;
+            text-align: center;
+            position: relative;
+        }
+        
+        .clouds {
+            position: absolute;
+            top: 5mm;
+            left: 0;
+            right: 0;
+            font-size: 30pt;
+            opacity: 0.8;
+        }
+        
+        .header h1 {
+            font-size: 32pt;
+            font-weight: 900;
+            color: #2E5A1C;
+            text-shadow: 2px 2px 0 white;
+            margin-bottom: 2mm;
+        }
+        
+        .header .subtitle {
+            font-size: 12pt;
+            color: #5A8A3A;
+            font-weight: 700;
+            font-style: italic;
+        }
+        
+        /* Section styling */
+        .section {
+            margin: 0 5mm 4mm;
+            border-radius: 5mm;
+            padding: 5mm;
+            position: relative;
+        }
+        
+        .section-title {
+            background: linear-gradient(90deg, #8B4513 0%, #A0522D 50%, #8B4513 100%);
+            color: #FFF8DC;
+            padding: 2mm 5mm;
+            border-radius: 3mm;
+            font-size: 11pt;
+            font-weight: 800;
+            display: inline-block;
+            margin-bottom: 3mm;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        /* Il Problema */
+        .problema {
+            background: linear-gradient(135deg, #FFF8DC 0%, #F5DEB3 100%);
+            border: 3px solid #D2B48C;
+        }
+        
+        .problema-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4mm;
+        }
+        
+        .problema-item {
+            background: white;
+            border-radius: 3mm;
+            padding: 3mm;
+            display: flex;
+            align-items: center;
+            gap: 3mm;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .problema-item .icon {
+            font-size: 24pt;
+        }
+        
+        .problema-item .text {
+            font-size: 8pt;
+            color: #5D4037;
+        }
+        
+        .problema-item .number {
+            font-size: 14pt;
+            font-weight: 900;
+            color: #C62828;
+        }
+        
+        /* La Soluzione */
+        .soluzione {
+            background: linear-gradient(180deg, #C8E6C9 0%, #A5D6A7 50%, #81C784 100%);
+            border: 3px solid #66BB6A;
+            position: relative;
+            padding-bottom: 20mm;
+        }
+        
+        .soluzione-flow {
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            margin-top: 3mm;
+        }
+        
+        .sol-step {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .sol-step .bubble {
+            background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+            border: 2px solid #4CAF50;
+            border-radius: 50%;
+            width: 18mm;
+            height: 18mm;
+            margin: 0 auto 2mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20pt;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+        }
+        
+        .sol-step .label {
+            font-size: 7.5pt;
+            font-weight: 700;
+            color: #1B5E20;
+            line-height: 1.3;
+        }
+        
+        .sol-arrow {
+            font-size: 18pt;
+            color: #4CAF50;
+            margin-top: 6mm;
+        }
+        
+        /* Ground illustration */
+        .ground {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 15mm;
+            background: linear-gradient(180deg, #8B4513 0%, #654321 100%);
+            border-radius: 0 0 3mm 3mm;
+        }
+        
+        .ground::before {
+            content: "🌱 🪱 🌱 🪱 🌱 🪱 🌱";
+            position: absolute;
+            top: 2mm;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 10pt;
+            letter-spacing: 5mm;
+        }
+        
+        /* Pratiche */
+        .pratiche {
+            background: linear-gradient(135deg, #FFFDE7 0%, #FFF9C4 100%);
+            border: 3px solid #FBC02D;
+        }
+        
+        .pratiche-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2mm;
+        }
+        
+        .pratica-card {
+            background: white;
+            border-radius: 3mm;
+            padding: 2.5mm;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-bottom: 3px solid #8BC34A;
+        }
+        
+        .pratica-card .icon {
+            font-size: 20pt;
+            margin-bottom: 1mm;
+        }
+        
+        .pratica-card .name {
+            font-size: 7pt;
+            font-weight: 700;
+            color: #33691E;
+        }
+        
+        /* Benefici */
+        .benefici {
+            background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+            border: 3px solid #64B5F6;
+        }
+        
+        .benefici-title-bar {
+            background: linear-gradient(90deg, #FF7043 0%, #FF8A65 50%, #FF7043 100%);
+            color: white;
+            padding: 2mm 5mm;
+            border-radius: 3mm;
+            font-size: 11pt;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 3mm;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .benefici-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 3mm;
+        }
+        
+        .beneficio {
+            background: white;
+            border-radius: 3mm;
+            padding: 3mm;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .beneficio .icon {
+            font-size: 18pt;
+            margin-bottom: 1mm;
+        }
+        
+        .beneficio .title {
+            font-size: 8pt;
+            font-weight: 800;
+            color: #1565C0;
+            margin-bottom: 1mm;
+        }
+        
+        .beneficio .desc {
+            font-size: 6.5pt;
+            color: #555;
+            line-height: 1.3;
+        }
+        
+        /* Crediti */
+        .crediti {
+            background: linear-gradient(135deg, #FCE4EC 0%, #F8BBD9 100%);
+            border: 3px solid #EC407A;
+        }
+        
+        .eu-badge {
+            background: linear-gradient(135deg, #1565C0 0%, #1976D2 100%);
+            color: white;
+            padding: 2mm 4mm;
+            border-radius: 3mm;
+            font-size: 9pt;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 2mm;
+            margin-bottom: 3mm;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .eu-badge .stars {
+            color: #FFD700;
+        }
+        
+        .crediti-flow {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            background: white;
+            border-radius: 3mm;
+            padding: 3mm;
+        }
+        
+        .crediti-step {
+            text-align: center;
+        }
+        
+        .crediti-step .icon {
+            font-size: 22pt;
+        }
+        
+        .crediti-step .label {
+            font-size: 7pt;
+            font-weight: 700;
+            color: #880E4F;
+        }
+        
+        .crediti-arrow {
+            font-size: 14pt;
+            color: #EC407A;
+        }
+        
+        /* Chi è coinvolto */
+        .coinvolti {
+            background: linear-gradient(135deg, #EFEBE9 0%, #D7CCC8 100%);
+            border: 3px solid #A1887F;
+        }
+        
+        .coinvolti-grid {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 2mm;
+        }
+        
+        .coinvolto {
+            background: white;
+            border-radius: 3mm;
+            padding: 2mm 3mm;
+            text-align: center;
+            min-width: 22mm;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .coinvolto .icon {
+            font-size: 18pt;
+        }
+        
+        .coinvolto .name {
+            font-size: 6.5pt;
+            font-weight: 700;
+            color: #4E342E;
+        }
+        
+        /* Footer */
+        .footer {
+            background: linear-gradient(180deg, #4CAF50 0%, #388E3C 100%);
+            padding: 4mm;
+            text-align: center;
+            margin: 0 5mm 5mm;
+            border-radius: 3mm;
+        }
+        
+        .footer p {
+            color: white;
+            font-size: 9pt;
+            font-weight: 700;
+            line-height: 1.5;
+        }
+        
+        .footer .highlight {
+            font-size: 10pt;
+            font-style: italic;
+        }
+        
+        @media print {
+            .page { 
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <!-- Header with sky -->
+        <header class="header">
+            <div class="clouds">☁️ ☁️ ☁️</div>
+            <h1>🌱 Carbon Farming</h1>
+            <p class="subtitle">Coltivare il cibo... coltivando anche il clima</p>
+        </header>
+        
+        <!-- Il Problema -->
+        <section class="section problema">
+            <div class="section-title">⚠️ IL PROBLEMA</div>
+            <div class="problema-grid">
+                <div class="problema-item">
+                    <span class="icon">🏭</span>
+                    <div class="text">
+                        <div class="number">~25%</div>
+                        delle emissioni di gas serra globali viene da agricoltura e uso del suolo
+                    </div>
+                </div>
+                <div class="problema-item">
+                    <span class="icon">🌍</span>
+                    <div class="text">
+                        <div class="number">50-70%</div>
+                        del carbonio organico perso nei suoli agricoli negli ultimi 200 anni
+                    </div>
+                </div>
+                <div class="problema-item">
+                    <span class="icon">🏜️</span>
+                    <div class="text">
+                        <div class="number">+Siccità</div>
+                        Suoli degradati trattengono meno acqua, più vulnerabili al clima
+                    </div>
+                </div>
+                <div class="problema-item">
+                    <span class="icon">📉</span>
+                    <div class="text">
+                        <div class="number">-Fertilità</div>
+                        Calo produttività, più dipendenza da input chimici
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- La Soluzione -->
+        <section class="section soluzione">
+            <div class="section-title">💡 LA SOLUZIONE: CARBON FARMING</div>
+            <div class="soluzione-flow">
+                <div class="sol-step">
+                    <div class="bubble">🌿</div>
+                    <div class="label">Sequestrare CO₂<br>dall'atmosfera</div>
+                </div>
+                <div class="sol-arrow">→</div>
+                <div class="sol-step">
+                    <div class="bubble">🌳</div>
+                    <div class="label">Immagazzinarla<br>nel suolo e piante</div>
+                </div>
+                <div class="sol-arrow">→</div>
+                <div class="sol-step">
+                    <div class="bubble">🔒</div>
+                    <div class="label">Mantenere stabile<br>il carbonio</div>
+                </div>
+                <div class="sol-arrow">→</div>
+                <div class="sol-step">
+                    <div class="bubble">💰</div>
+                    <div class="label">Generare crediti<br>certificati</div>
+                </div>
+            </div>
+            <div class="ground"></div>
+        </section>
+        
+        <!-- Le Pratiche -->
+        <section class="section pratiche">
+            <div class="section-title">🌾 LE PRATICHE PRINCIPALI</div>
+            <div class="pratiche-grid">
+                <div class="pratica-card">
+                    <div class="icon">🌿</div>
+                    <div class="name">Cover Crops</div>
+                </div>
+                <div class="pratica-card">
+                    <div class="icon">🌳</div>
+                    <div class="name">Agroforestazione</div>
+                </div>
+                <div class="pratica-card">
+                    <div class="icon">🚜</div>
+                    <div class="name">Minima Lavorazione</div>
+                </div>
+                <div class="pratica-card">
+                    <div class="icon">♻️</div>
+                    <div class="name">Compost</div>
+                </div>
+                <div class="pratica-card">
+                    <div class="icon">🐄</div>
+                    <div class="name">Pascoli Sostenibili</div>
+                </div>
+                <div class="pratica-card">
+                    <div class="icon">🌲</div>
+                    <div class="name">Siepi e Alberi</div>
+                </div>
+                <div class="pratica-card">
+                    <div class="icon">💧</div>
+                    <div class="name">Gestione Acqua</div>
+                </div>
+                <div class="pratica-card">
+                    <div class="icon">🔥</div>
+                    <div class="name">Biochar</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Cosa Migliora -->
+        <section class="section benefici">
+            <div class="benefici-title-bar">✨ COSA MIGLIORA</div>
+            <div class="benefici-grid">
+                <div class="beneficio">
+                    <div class="icon">🌡️</div>
+                    <div class="title">Clima</div>
+                    <div class="desc">Meno CO₂<br>Neutralità climatica</div>
+                </div>
+                <div class="beneficio">
+                    <div class="icon">🌱</div>
+                    <div class="title">Suolo</div>
+                    <div class="desc">Più fertile<br>Più resiliente</div>
+                </div>
+                <div class="beneficio">
+                    <div class="icon">💧</div>
+                    <div class="title">Acqua</div>
+                    <div class="desc">Più ritenzione<br>Meno erosione</div>
+                </div>
+                <div class="beneficio">
+                    <div class="icon">🦋</div>
+                    <div class="title">Biodiversità</div>
+                    <div class="desc">Suoli vivi<br>Ecosistemi sani</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Crediti di Carbonio -->
+        <section class="section crediti">
+            <div class="section-title">💳 PERCHÉ CONVIENE AGLI AGRICOLTORI</div>
+            <div class="eu-badge">
+                <span class="stars">★★★</span>
+                EU Carbon Removal Certification Framework
+                <span class="stars">★★★</span>
+            </div>
+            <div class="crediti-flow">
+                <div class="crediti-step">
+                    <div class="icon">📏</div>
+                    <div class="label">Misurare</div>
+                </div>
+                <div class="crediti-arrow">→</div>
+                <div class="crediti-step">
+                    <div class="icon">✅</div>
+                    <div class="label">Verificare</div>
+                </div>
+                <div class="crediti-arrow">→</div>
+                <div class="crediti-step">
+                    <div class="icon">📜</div>
+                    <div class="label">Certificare</div>
+                </div>
+                <div class="crediti-arrow">→</div>
+                <div class="crediti-step">
+                    <div class="icon">💰</div>
+                    <div class="label">Vendere</div>
+                </div>
+                <div class="crediti-arrow">=</div>
+                <div class="crediti-step">
+                    <div class="icon">🌾</div>
+                    <div class="label">Suoli Vivi<br>+ Reddito</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Chi è Coinvolto -->
+        <section class="section coinvolti">
+            <div class="section-title">👥 CHI È COINVOLTO</div>
+            <div class="coinvolti-grid">
+                <div class="coinvolto">
+                    <div class="icon">👨‍🌾</div>
+                    <div class="name">Agricoltori</div>
+                </div>
+                <div class="coinvolto">
+                    <div class="icon">🏭</div>
+                    <div class="name">Industria<br>Alimentare</div>
+                </div>
+                <div class="coinvolto">
+                    <div class="icon">🏦</div>
+                    <div class="name">Finanza &<br>Assicurazioni</div>
+                </div>
+                <div class="coinvolto">
+                    <div class="icon">🔬</div>
+                    <div class="name">Ricerca<br>Scientifica</div>
+                </div>
+                <div class="coinvolto">
+                    <div class="icon">🏛️</div>
+                    <div class="name">Istituzioni<br>Pubbliche</div>
+                </div>
+                <div class="coinvolto">
+                    <div class="icon">🛒</div>
+                    <div class="name">Consumatori</div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Footer -->
+        <footer class="footer">
+            <p class="highlight">"Il suolo non è solo dove cresce il cibo.</p>
+            <p>È una delle più grandi tecnologie naturali per contrastare il cambiamento climatico."</p>
+        </footer>
+    </div>
+</body>
+</html>

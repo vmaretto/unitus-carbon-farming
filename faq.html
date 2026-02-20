@@ -33,22 +33,22 @@
         }
 
         header {
-            background: linear-gradient(135deg, #7AB928 0%, #4a7c59 100%);
-            color: white;
+            background: transparent;
+            color: #333;
             text-align: center;
-            padding: 110px 0 90px;
+            padding: 90px 0 40px;
             position: relative;
         }
 
         .main-nav {
             width: 100%;
-            position: absolute;
+            position: fixed;
             top: 0;
             left: 0;
-            z-index: 5;
-            background: rgba(20, 66, 37, 0.9);
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(12px);
-            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08);
         }
 
         .main-nav .nav-container {
@@ -62,7 +62,7 @@
         }
 
         .nav-brand {
-            color: #fff;
+            color: #2d5016;
             font-weight: 700;
             letter-spacing: 0.05em;
             text-decoration: none;
@@ -86,7 +86,7 @@
         }
 
         .nav-links a {
-            color: #fff;
+            color: #333;
             text-decoration: none;
             font-weight: 600;
             font-size: 0.95rem;
@@ -102,13 +102,13 @@
             bottom: 0;
             width: 0;
             height: 2px;
-            background: #ff8a4c;
+            background: #7AB928;
             transition: width 0.3s ease;
         }
 
         .nav-links a:hover,
         .nav-links a:focus-visible {
-            color: #ffd7c1;
+            color: #7AB928;
         }
 
         .nav-links a:hover::after,
@@ -120,11 +120,12 @@
             font-size: 2.8rem;
             margin-bottom: 16px;
             font-weight: 800;
+            color: #2d5016;
         }
 
         header p {
             font-size: 1.2rem;
-            opacity: 0.95;
+            color: #555;
             max-width: 700px;
             margin: 0 auto;
         }

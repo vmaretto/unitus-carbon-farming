@@ -25,20 +25,22 @@
         }
 
         header {
-            background: linear-gradient(135deg, #7AB928 0%, #4a7c59 100%);
-            color: white;
+            background: transparent;
+            color: #333;
             text-align: center;
-            padding: 110px 0 90px;
+            padding: 100px 0 40px;
             position: relative;
         }
 
         .main-nav {
             width: 100%;
-            position: relative;
-            z-index: 5;
-            background: rgba(20, 66, 37, 0.9);
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 100;
+            background: linear-gradient(135deg, #7AB928 0%, #4a7c59 100%);
             backdrop-filter: blur(12px);
-            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
         }
 
         .main-nav .nav-container {
@@ -103,6 +105,14 @@
 
         .nav-links a:hover::after,
         .nav-links a:focus-visible::after {
+            width: 100%;
+        }
+        
+        .nav-links a.active {
+            color: #ffd7c1;
+        }
+        
+        .nav-links a.active::after {
             width: 100%;
         }
 
@@ -474,10 +484,24 @@
 </head>
 <body>
     <header>
+        <nav class="main-nav">
+            <div class="nav-container">
+                <a href="index.html" class="nav-brand">
+                    <span>UNITUS Academy</span>
+                    <span>Master in Carbon Farming</span>
+                </a>
+                <div class="nav-links">
+                    <a href="index.html#programma">Programma</a>
+                    <a href="index.html#faculty-grid">Faculty</a>
+                    <a href="index.html#info">Iscrizioni</a>
+                    <a href="faq.html">FAQ</a>
+                    <a href="blog.html" class="active">Blog</a>
+                </div>
+            </div>
+        </nav>
         <div class="container">
-            <a href="index.html" class="back-link">← Torna alla home</a>
-            <h1>Blog del Master in Carbon Farming</h1>
-            <p>Approfondimenti, storie e aggiornamenti sulla transizione ecologica raccontati da docenti, studenti e partner.</p>
+            <h1 style="color: #2d5016;">Blog del Master in Carbon Farming</h1>
+            <p style="color: #555;">Approfondimenti, storie e aggiornamenti sulla transizione ecologica raccontati da docenti, studenti e partner.</p>
         </div>
     </header>
 

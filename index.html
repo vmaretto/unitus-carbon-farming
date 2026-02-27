@@ -2800,9 +2800,86 @@
                 justify-content: flex-end;
             }
         }
+
+        /* News Banner - Annuncio Conferma Master */
+        .news-banner {
+            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ff6b35 100%);
+            background-size: 200% 200%;
+            animation: gradientShift 3s ease infinite;
+            color: white;
+            text-align: center;
+            padding: 16px 20px;
+            position: relative;
+            z-index: 10;
+            box-shadow: 0 4px 20px rgba(255, 107, 53, 0.4);
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .news-banner-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .news-banner .news-icon {
+            font-size: 1.5rem;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+
+        .news-banner .news-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .news-banner .news-text strong {
+            font-weight: 800;
+        }
+
+        .news-banner .news-highlight {
+            background: rgba(255, 255, 255, 0.25);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 768px) {
+            .news-banner {
+                padding: 14px 16px;
+            }
+            .news-banner .news-text {
+                font-size: 0.95rem;
+            }
+            .news-banner-content {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- News Banner - Conferma Master -->
+    <div class="news-banner">
+        <div class="news-banner-content">
+            <span class="news-icon">🎉</span>
+            <span class="news-text"><strong>MASTER CONFERMATO!</strong> Prima lezione: <span class="news-highlight">Venerdì 27 marzo 2026</span> ore 14:00-19:00 — Inaugurazione con il Prof. Riccardo Valentini</span>
+            <span class="news-icon">🎓</span>
+        </div>
+    </div>
+
     <!-- Info Options Modal -->
     <div id="infoModal" class="info-modal" style="display: none;">
         <div class="modal-content">

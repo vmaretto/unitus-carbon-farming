@@ -8,7 +8,7 @@ TRUNCATE TABLE faculty RESTART IDENTITY;
 
 INSERT INTO faculty (id, name, role, bio, photo_url, sort_order, is_published) VALUES
   ('8f1a5a3f-6f62-4f7e-835f-b0c39c7314d5', 'Prof. Riccardo Valentini', 'Direttore Scientifico', 'Università della Tuscia - Premio Nobel per la Pace IPCC, esperto internazionale in climate change e carbon cycle', NULL, 1, TRUE),
-  ('bbba5d80-4146-41a7-9901-68e53399e988', 'Virgilio Maretto', 'Coordinatore', 'Esperto in sostenibilità e gestione ambientale, consulente strategico per progetti di transizione ecologica', NULL, 2, TRUE),
+  ('bbba5d80-4146-41a7-9901-68e53399e988', 'Virgilio Maretto', NULL, 'Esperto in sostenibilità e gestione ambientale, consulente strategico per progetti di transizione ecologica', NULL, 2, TRUE),
   ('4f3f3db9-275d-458f-87fe-f1dcac975992', 'Dr.ssa Maria Vincenza Chiriacò', NULL, 'CMCC - Specialista in inventari nazionali delle emissioni e metodologie IPCC per il settore LULUCF', NULL, 3, TRUE),
   ('e36efb7f-0f64-4fda-9d86-7299f46b7959', 'Prof. Emanuele Blasi', NULL, 'Università della Tuscia - Esperto in economia agraria e valutazione economica dei servizi ecosistemici', NULL, 4, TRUE),
   ('66a03466-678f-4d58-9e12-bb412a26b5a4', 'Prof. Tommaso Chiti', NULL, 'Università della Tuscia - Esperto in biogeochemical cycles, soil carbon dynamics e Life Cycle Assessment', NULL, 5, TRUE),

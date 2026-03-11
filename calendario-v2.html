@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario Lezioni - Master in Carbon Farming</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --green-900: #0f2419;
+            --green-800: #1b3a2d;
+            --green-700: #245a3d;
+            --green-600: #2c7a4b;
+            --green-500: #38a169;
+            --green-400: #68d391;
+            --green-300: #9ae6b4;
+            --green-200: #c6f6d5;
+            --green-100: #f0fff4;
+            --orange-500: #ff7a1a;
+            --orange-400: #ff9a4d;
+            --orange-100: #fff7ed;
+            --blue-600: #2563eb;
+            --blue-500: #3b82f6;
+            --blue-100: #dbeafe;
+            --purple-600: #7c3aed;
+            --purple-100: #ede9fe;
+            --red-500: #ef4444;
+            --red-100: #fee2e2;
+            --gray-900: #111827;
+            --gray-800: #1f2937;
+            --gray-700: #374151;
+            --gray-600: #4b5563;
+            --gray-500: #6b7280;
+            --gray-400: #9ca3af;
+            --gray-300: #d1d5db;
+            --gray-200: #e5e7eb;
+            --gray-100: #f3f4f6;
+            --gray-50: #f9fafb;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--gray-50);
+            color: var(--gray-900);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--green-800) 0%, var(--green-600) 100%);
+            padding: 24px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .header-content {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .back-link {
+            color: rgba(255,255,255,0.9);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+            font-size: 0.85rem;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover { color: white; }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-export {
+            background: rgba(255,255,255,0.15);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-export:hover {
+            background: rgba(255,255,255,0.25);
+        }
+
+        /* Main Container */
+        .main {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 24px 20px 60px;
+        }
+
+        /* Next Lesson Card */
+        .next-lesson {
+            background: linear-gradient(135deg, var(--green-700) 0%, var(--green-500) 100%);
+            border-radius: 20px;
+            padding: 24px;
+            margin-bottom: 32px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(44, 122, 75, 0.3);
+        }
+
+        .next-lesson::before {
+            content: "";
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 200px;
+            height: 200px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 50%;
+        }
+
+        .next-lesson-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,255,255,0.2);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 16px;
+        }
+
+        .next-lesson-badge.live {
+            background: var(--red-500);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .next-lesson h2 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .next-lesson-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-bottom: 16px;
+        }
+
+        .next-lesson-meta span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .countdown {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .countdown-item {
+            text-align: center;
+        }
+
+        .countdown-value {
+            font-size: 1.8rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .countdown-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            opacity: 0.8;
+            letter-spacing: 0.05em;
+        }
+
+        /* Filters */
+        .filters {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: white;
+            border: 1px solid var(--gray-200);
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--gray-600);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-btn:hover {
+            border-color: var(--green-500);
+            color: var(--green-600);
+        }
+
+        .filter-btn.active {
+            background: var(--green-600);
+            border-color: var(--green-600);
+            color: white;
+        }
+
+        .filter-select {
+            background: white;
+            border: 1px solid var(--gray-200);
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--gray-700);
+            cursor: pointer;
+            min-width: 160px;
+        }
+
+        /* Timeline */
+        .timeline {
+            position: relative;
+        }
+
+        .timeline::before {
+            content: "";
+            position: absolute;
+            left: 20px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--gray-200);
+        }
+
+        /* Date Separator */
+        .date-separator {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 32px 0 20px;
+            position: relative;
+        }
+
+        .date-separator:first-child {
+            margin-top: 0;
+        }
+
+        .date-dot {
+            width: 42px;
+            height: 42px;
+            background: var(--green-600);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .date-dot .day {
+            font-size: 1rem;
+            line-height: 1;
+        }
+
+        .date-dot .month {
+            font-size: 0.55rem;
+            text-transform: uppercase;
+            opacity: 0.9;
+        }
+
+        .date-text {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        .date-text .weekday {
+            color: var(--gray-500);
+            font-weight: 500;
+        }
+
+        /* Lesson Card */
+        .lesson-card {
+            background: white;
+            border-radius: 16px;
+            margin-left: 52px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            border: 1px solid var(--gray-100);
+            overflow: hidden;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .lesson-card:hover {
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .lesson-card.expanded {
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+        }
+
+        .lesson-card-header {
+            padding: 20px;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .lesson-time {
+            text-align: center;
+            flex-shrink: 0;
+            min-width: 60px;
+        }
+
+        .lesson-time .time {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .lesson-time .duration {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+        }
+
+        .lesson-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .lesson-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--gray-900);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .lesson-teacher {
+            font-size: 0.85rem;
+            color: var(--gray-600);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .lesson-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .lesson-status.completed {
+            background: var(--gray-100);
+            color: var(--gray-500);
+        }
+
+        .lesson-status.upcoming {
+            background: var(--green-100);
+            color: var(--green-700);
+        }
+
+        .lesson-status.live {
+            background: var(--red-500);
+            color: white;
+            animation: pulse 2s infinite;
+        }
+
+        .lesson-status.future {
+            background: var(--blue-100);
+            color: var(--blue-600);
+        }
+
+        .module-tag {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .module-tag.module-1 { background: var(--green-100); color: var(--green-700); }
+        .module-tag.module-2 { background: var(--blue-100); color: var(--blue-600); }
+        .module-tag.module-3 { background: var(--purple-100); color: var(--purple-600); }
+        .module-tag.module-4 { background: var(--orange-100); color: var(--orange-500); }
+
+        /* Expanded Content */
+        .lesson-details {
+            display: none;
+            padding: 0 20px 20px;
+            border-top: 1px solid var(--gray-100);
+            margin-top: 0;
+        }
+
+        .lesson-card.expanded .lesson-details {
+            display: block;
+        }
+
+        .lesson-details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 16px;
+            padding-top: 16px;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .detail-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: var(--gray-500);
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        .detail-value {
+            font-size: 0.9rem;
+            color: var(--gray-800);
+            font-weight: 500;
+        }
+
+        .lesson-description {
+            padding-top: 16px;
+            font-size: 0.9rem;
+            color: var(--gray-600);
+            line-height: 1.6;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--gray-500);
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+
+        .empty-state h3 {
+            font-size: 1.1rem;
+            color: var(--gray-700);
+            margin-bottom: 8px;
+        }
+
+        /* Chevron */
+        .chevron {
+            width: 20px;
+            height: 20px;
+            color: var(--gray-400);
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+
+        .lesson-card.expanded .chevron {
+            transform: rotate(180deg);
+        }
+
+        /* Mobile */
+        @media (max-width: 600px) {
+            .header h1 { font-size: 1.25rem; }
+            
+            .next-lesson { padding: 20px; }
+            .next-lesson h2 { font-size: 1.2rem; }
+            
+            .countdown-value { font-size: 1.4rem; }
+            
+            .filters { gap: 8px; }
+            .filter-btn { padding: 8px 12px; font-size: 0.8rem; }
+            
+            .timeline::before { left: 16px; }
+            .date-dot { width: 34px; height: 34px; }
+            .date-dot .day { font-size: 0.85rem; }
+            .date-dot .month { font-size: 0.5rem; }
+            
+            .lesson-card { margin-left: 44px; }
+            .lesson-card-header { padding: 16px; flex-wrap: wrap; }
+            .lesson-time { min-width: 50px; }
+            .lesson-time .time { font-size: 0.95rem; }
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: var(--gray-500);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--gray-200);
+            border-top-color: var(--green-500);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="header-top">
+                <a href="index.html" class="back-link">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                    </svg>
+                    Torna al sito
+                </a>
+                <div class="header-actions">
+                    <button class="btn-export" onclick="exportToIcal()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Esporta .ics
+                    </button>
+                </div>
+            </div>
+            <h1>📅 Calendario Lezioni</h1>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- Next Lesson Card -->
+        <div id="next-lesson-container"></div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <button class="filter-btn active" data-filter="all">Tutte</button>
+            <button class="filter-btn" data-filter="upcoming">Prossime</button>
+            <button class="filter-btn" data-filter="completed">Completate</button>
+            <select class="filter-select" id="teacher-filter">
+                <option value="">Tutti i docenti</option>
+            </select>
+        </div>
+
+        <!-- Timeline -->
+        <div class="timeline" id="timeline">
+            <div class="loading">
+                <div class="spinner"></div>
+                Caricamento lezioni...
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let allLessons = [];
+        let currentFilter = 'all';
+        let teacherFilter = '';
+
+        // Format date utilities
+        function formatTime(date) {
+            return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function formatDuration(minutes) {
+            if (minutes >= 60) {
+                const h = Math.floor(minutes / 60);
+                const m = minutes % 60;
+                return m > 0 ? `${h}h ${m}min` : `${h}h`;
+            }
+            return `${minutes}min`;
+        }
+
+        function formatDate(date) {
+            return date.toLocaleDateString('it-IT', { 
+                weekday: 'long', 
+                day: 'numeric', 
+                month: 'long', 
+                year: 'numeric' 
+            });
+        }
+
+        function getDateKey(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        function getMonthShort(date) {
+            return date.toLocaleDateString('it-IT', { month: 'short' }).toUpperCase().replace('.', '');
+        }
+
+        // Determine lesson status
+        function getLessonStatus(lesson) {
+            const now = new Date();
+            const start = new Date(lesson.startDatetime);
+            const end = lesson.endDatetime 
+                ? new Date(lesson.endDatetime) 
+                : new Date(start.getTime() + (lesson.durationMinutes || 120) * 60000);
+
+            if (now >= start && now <= end) return 'live';
+            if (now > end) return 'completed';
+            
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(23, 59, 59, 999);
+            
+            if (start <= tomorrow) return 'upcoming';
+            return 'future';
+        }
+
+        function getStatusLabel(status) {
+            const labels = {
+                live: '🔴 In corso',
+                completed: 'Completata',
+                upcoming: 'Prossima',
+                future: 'Programmata'
+            };
+            return labels[status] || status;
+        }
+
+        // Render next lesson card
+        function renderNextLesson(lessons) {
+            const container = document.getElementById('next-lesson-container');
+            const now = new Date();
+            
+            // Find next upcoming or live lesson
+            const nextLesson = lessons.find(l => {
+                const start = new Date(l.startDatetime);
+                const end = l.endDatetime 
+                    ? new Date(l.endDatetime) 
+                    : new Date(start.getTime() + (l.durationMinutes || 120) * 60000);
+                return now <= end;
+            });
+
+            if (!nextLesson) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const start = new Date(nextLesson.startDatetime);
+            const status = getLessonStatus(nextLesson);
+            const isLive = status === 'live';
+
+            let countdownHtml = '';
+            if (!isLive) {
+                const diff = start - now;
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+                countdownHtml = `
+                    <div class="countdown">
+                        ${days > 0 ? `<div class="countdown-item"><div class="countdown-value">${days}</div><div class="countdown-label">Giorni</div></div>` : ''}
+                        <div class="countdown-item"><div class="countdown-value">${hours}</div><div class="countdown-label">Ore</div></div>
+                        <div class="countdown-item"><div class="countdown-value">${minutes}</div><div class="countdown-label">Min</div></div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = `
+                <div class="next-lesson">
+                    <div class="next-lesson-badge ${isLive ? 'live' : ''}">
+                        ${isLive ? '🔴 In corso ora' : '⏰ Prossima lezione'}
+                    </div>
+                    <h2>${nextLesson.title}</h2>
+                    <div class="next-lesson-meta">
+                        <span>📅 ${formatDate(start)}</span>
+                        <span>🕐 ${formatTime(start)}</span>
+                        <span>👤 ${nextLesson.teacherName || 'Da definire'}</span>
+                    </div>
+                    ${countdownHtml}
+                </div>
+            `;
+        }
+
+        // Render timeline
+        function renderTimeline(lessons) {
+            const timeline = document.getElementById('timeline');
+            
+            if (lessons.length === 0) {
+                timeline.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <h3>Nessuna lezione trovata</h3>
+                        <p>Prova a modificare i filtri</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Group by date
+            const grouped = {};
+            lessons.forEach(lesson => {
+                const date = new Date(lesson.startDatetime);
+                const key = getDateKey(date);
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(lesson);
+            });
+
+            let html = '';
+            Object.keys(grouped).sort().forEach(dateKey => {
+                const date = new Date(dateKey + 'T12:00:00');
+                const dayLessons = grouped[dateKey];
+
+                html += `
+                    <div class="date-separator">
+                        <div class="date-dot">
+                            <span class="day">${date.getDate()}</span>
+                            <span class="month">${getMonthShort(date)}</span>
+                        </div>
+                        <div class="date-text">
+                            <span class="weekday">${date.toLocaleDateString('it-IT', { weekday: 'long' })}</span>
+                            ${date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </div>
+                    </div>
+                `;
+
+                dayLessons.forEach(lesson => {
+                    const start = new Date(lesson.startDatetime);
+                    const status = getLessonStatus(lesson);
+                    const moduleIndex = (lesson.moduleIndex || 1) % 5;
+
+                    html += `
+                        <div class="lesson-card" data-id="${lesson.id}" onclick="toggleCard(this)">
+                            <div class="lesson-card-header">
+                                <div class="lesson-time">
+                                    <div class="time">${formatTime(start)}</div>
+                                    <div class="duration">${formatDuration(lesson.durationMinutes || 120)}</div>
+                                </div>
+                                <div class="lesson-content">
+                                    <div class="lesson-title">
+                                        ${lesson.title}
+                                        <span class="lesson-status ${status}">${getStatusLabel(status)}</span>
+                                    </div>
+                                    <div class="lesson-teacher">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                        ${lesson.teacherName || 'Docente da definire'}
+                                    </div>
+                                    ${lesson.moduleName ? `<span class="module-tag module-${moduleIndex}">${lesson.moduleName}</span>` : ''}
+                                </div>
+                                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            </div>
+                            <div class="lesson-details">
+                                <div class="lesson-details-grid">
+                                    ${lesson.locationPhysical ? `
+                                        <div class="detail-item">
+                                            <span class="detail-label">📍 Luogo</span>
+                                            <span class="detail-value">${lesson.locationPhysical}</span>
+                                        </div>
+                                    ` : ''}
+                                    ${lesson.locationRemote ? `
+                                        <div class="detail-item">
+                                            <span class="detail-label">💻 Online</span>
+                                            <span class="detail-value"><a href="${lesson.locationRemote}" target="_blank">Collegati</a></span>
+                                        </div>
+                                    ` : ''}
+                                    <div class="detail-item">
+                                        <span class="detail-label">⏱️ Durata</span>
+                                        <span class="detail-value">${formatDuration(lesson.durationMinutes || 120)}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">📋 Stato</span>
+                                        <span class="detail-value">${lesson.status === 'confirmed' ? 'Confermata' : lesson.status || 'Da confermare'}</span>
+                                    </div>
+                                </div>
+                                ${lesson.description ? `<div class="lesson-description">${lesson.description}</div>` : ''}
+                                ${lesson.notes ? `<div class="lesson-description"><strong>Note:</strong> ${lesson.notes}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+            });
+
+            timeline.innerHTML = html;
+        }
+
+        function toggleCard(card) {
+            card.classList.toggle('expanded');
+        }
+
+        // Filter lessons
+        function filterLessons() {
+            let filtered = [...allLessons];
+
+            // Status filter
+            if (currentFilter !== 'all') {
+                filtered = filtered.filter(l => {
+                    const status = getLessonStatus(l);
+                    if (currentFilter === 'upcoming') return status === 'upcoming' || status === 'live' || status === 'future';
+                    if (currentFilter === 'completed') return status === 'completed';
+                    return true;
+                });
+            }
+
+            // Teacher filter
+            if (teacherFilter) {
+                filtered = filtered.filter(l => l.teacherId === teacherFilter);
+            }
+
+            renderTimeline(filtered);
+        }
+
+        // Populate teacher dropdown
+        function populateTeacherFilter(lessons) {
+            const select = document.getElementById('teacher-filter');
+            const teachers = new Map();
+            
+            lessons.forEach(l => {
+                if (l.teacherId && l.teacherName) {
+                    teachers.set(l.teacherId, l.teacherName);
+                }
+            });
+
+            teachers.forEach((name, id) => {
+                const option = document.createElement('option');
+                option.value = id;
+                option.textContent = name;
+                select.appendChild(option);
+            });
+        }
+
+        // Export to iCal
+        function exportToIcal() {
+            let ical = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Master Carbon Farming//Calendario Lezioni//IT
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Master Carbon Farming - Lezioni
+`;
+
+            allLessons.forEach(lesson => {
+                const start = new Date(lesson.startDatetime);
+                const end = lesson.endDatetime 
+                    ? new Date(lesson.endDatetime)
+                    : new Date(start.getTime() + (lesson.durationMinutes || 120) * 60000);
+
+                const formatIcalDate = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+
+                ical += `BEGIN:VEVENT
+UID:${lesson.id}@master-carbon-farming
+DTSTART:${formatIcalDate(start)}
+DTEND:${formatIcalDate(end)}
+SUMMARY:${lesson.title}
+DESCRIPTION:${lesson.teacherName ? 'Docente: ' + lesson.teacherName : ''}${lesson.description ? '\\n' + lesson.description : ''}
+LOCATION:${lesson.locationPhysical || lesson.locationRemote || 'Da definire'}
+STATUS:${lesson.status === 'confirmed' ? 'CONFIRMED' : 'TENTATIVE'}
+END:VEVENT
+`;
+            });
+
+            ical += 'END:VCALENDAR';
+
+            const blob = new Blob([ical], { type: 'text/calendar;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'master-carbon-farming-lezioni.ics';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Event listeners
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                filterLessons();
+            });
+        });
+
+        document.getElementById('teacher-filter').addEventListener('change', (e) => {
+            teacherFilter = e.target.value;
+            filterLessons();
+        });
+
+        // Load lessons
+        async function loadLessons() {
+            try {
+                const response = await fetch('/api/lessons');
+                if (!response.ok) throw new Error('Errore caricamento');
+                
+                const data = await response.json();
+                allLessons = data.sort((a, b) => new Date(a.startDatetime) - new Date(b.startDatetime));
+                
+                renderNextLesson(allLessons);
+                populateTeacherFilter(allLessons);
+                filterLessons();
+
+                // Update countdown every minute
+                setInterval(() => renderNextLesson(allLessons), 60000);
+            } catch (error) {
+                console.error('Errore:', error);
+                document.getElementById('timeline').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⚠️</div>
+                        <h3>Errore di caricamento</h3>
+                        <p>Impossibile caricare le lezioni. Riprova più tardi.</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Init
+        loadLessons();
+    </script>
+</body>
+</html>

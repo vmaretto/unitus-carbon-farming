@@ -397,6 +397,12 @@ async function initDatabase() {
     );
   `);
 
+  // Aggiunge colonna per docente esterno (non nel sistema)
+  await pool.query(`
+    ALTER TABLE lessons
+    ADD COLUMN IF NOT EXISTS external_teacher_name TEXT;
+  `);
+
   // Indici per performance
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_lessons_start ON lessons(start_datetime);
@@ -1170,7 +1176,8 @@ app.get('/api/lessons', async (req, res) => {
              l.location_physical AS "locationPhysical", l.location_remote AS "locationRemote",
              l.status, l.notes, l.created_at AS "createdAt", l.updated_at AS "updatedAt",
              l.module_id AS "moduleId", m.name AS "moduleName",
-             l.teacher_id AS "teacherId", f.name AS "teacherName"
+             l.teacher_id AS "teacherId", f.name AS "teacherName",
+             l.external_teacher_name AS "externalTeacherName"
       FROM lessons l
       LEFT JOIN modules m ON l.module_id = m.id
       LEFT JOIN faculty f ON l.teacher_id = f.id
@@ -1197,7 +1204,8 @@ app.get('/api/lessons/:id', async (req, res) => {
              l.location_physical AS "locationPhysical", l.location_remote AS "locationRemote",
              l.status, l.notes, l.created_at AS "createdAt", l.updated_at AS "updatedAt",
              l.module_id AS "moduleId", m.name AS "moduleName",
-             l.teacher_id AS "teacherId", f.name AS "teacherName"
+             l.teacher_id AS "teacherId", f.name AS "teacherName",
+             l.external_teacher_name AS "externalTeacherName"
       FROM lessons l
       LEFT JOIN modules m ON l.module_id = m.id
       LEFT JOIN faculty f ON l.teacher_id = f.id
@@ -1219,7 +1227,7 @@ app.post('/api/lessons', async (req, res) => {
 
   const {
     title, description, startDatetime, endDatetime, durationMinutes,
-    locationPhysical, locationRemote, status, notes, moduleId, teacherId
+    locationPhysical, locationRemote, status, notes, moduleId, teacherId, externalTeacherName
   } = req.body;
 
   if (!title) {
@@ -1234,12 +1242,13 @@ app.post('/api/lessons', async (req, res) => {
     const id = uuidv4();
     const insert = `
       INSERT INTO lessons (id, title, description, start_datetime, end_datetime, duration_minutes,
-                          location_physical, location_remote, status, notes, module_id, teacher_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                          location_physical, location_remote, status, notes, module_id, teacher_id, external_teacher_name)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING id, title, description, start_datetime AS "startDatetime",
                 end_datetime AS "endDatetime", duration_minutes AS "durationMinutes",
                 location_physical AS "locationPhysical", location_remote AS "locationRemote",
                 status, notes, module_id AS "moduleId", teacher_id AS "teacherId",
+                external_teacher_name AS "externalTeacherName",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `;
 
@@ -1255,7 +1264,8 @@ app.post('/api/lessons', async (req, res) => {
       status || 'draft',
       notes || null,
       moduleId || null,
-      teacherId || null
+      teacherId || null,
+      externalTeacherName || null
     ];
 
     const { rows } = await pool.query(insert, values);
@@ -1272,7 +1282,7 @@ app.put('/api/lessons/:id', async (req, res) => {
   const { id } = req.params;
   const {
     title, description, startDatetime, endDatetime, durationMinutes,
-    locationPhysical, locationRemote, status, notes, moduleId, teacherId
+    locationPhysical, locationRemote, status, notes, moduleId, teacherId, externalTeacherName
   } = req.body;
 
   try {
@@ -1287,7 +1297,8 @@ app.put('/api/lessons/:id', async (req, res) => {
       status,
       notes,
       module_id: moduleId,
-      teacher_id: teacherId
+      teacher_id: teacherId,
+      external_teacher_name: externalTeacherName
     };
 
     const { query, values } = buildUpdateQuery('lessons', updateFields, id);
@@ -1311,6 +1322,7 @@ app.put('/api/lessons/:id', async (req, res) => {
       notes: row.notes,
       moduleId: row.module_id,
       teacherId: row.teacher_id,
+      externalTeacherName: row.external_teacher_name,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     });

@@ -653,6 +653,7 @@
                                 <option value="120" selected>2 ore</option>
                                 <option value="180">3 ore</option>
                                 <option value="240">4 ore</option>
+                                <option value="300">5 ore</option>
                             </select>
                         </label>
                         <label>
@@ -664,8 +665,12 @@
                         <label>
                             Docente
                             <select id="lesson-teacher" name="teacherId">
-                                <option value="">Nessun docente</option>
+                                <option value="">Seleziona o inserisci sotto</option>
                             </select>
+                        </label>
+                        <label>
+                            Docente esterno (se non in elenco)
+                            <input type="text" id="lesson-external-teacher" name="externalTeacherName" placeholder="Es. Prof. Mario Rossi">
                         </label>
                         <label>
                             Stato
@@ -1619,6 +1624,7 @@
             document.getElementById('lesson-duration').value = lesson.durationMinutes || '120';
             document.getElementById('lesson-module').value = lesson.moduleId || '';
             document.getElementById('lesson-teacher').value = lesson.teacherId || '';
+            document.getElementById('lesson-external-teacher').value = lesson.externalTeacherName || '';
             document.getElementById('lesson-status').value = lesson.status || 'draft';
             document.getElementById('lesson-location-physical').value = lesson.locationPhysical || '';
             document.getElementById('lesson-location-remote').value = lesson.locationRemote || '';
@@ -1643,7 +1649,7 @@
                 clone.querySelector('[data-datetime]').textContent = formatDate(lesson.startDatetime);
                 clone.querySelector('[data-title]').textContent = lesson.title;
                 clone.querySelector('[data-module]').textContent = lesson.moduleName || '—';
-                clone.querySelector('[data-teacher]').textContent = lesson.teacherName || '—';
+                clone.querySelector('[data-teacher]').textContent = lesson.teacherName || lesson.externalTeacherName || '—';
 
                 const status = clone.querySelector('[data-status]');
                 const pill = document.createElement('span');
@@ -1762,6 +1768,7 @@
                 durationMinutes: Number(document.getElementById('lesson-duration').value),
                 moduleId: document.getElementById('lesson-module').value || null,
                 teacherId: document.getElementById('lesson-teacher').value || null,
+                externalTeacherName: document.getElementById('lesson-external-teacher').value.trim() || null,
                 status: document.getElementById('lesson-status').value,
                 locationPhysical: document.getElementById('lesson-location-physical').value.trim() || null,
                 locationRemote: document.getElementById('lesson-location-remote').value.trim() || null

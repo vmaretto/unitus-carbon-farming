@@ -721,7 +721,7 @@
                     <div class="next-lesson-meta">
                         <span>📅 ${formatDate(start)}</span>
                         <span>🕐 ${formatTime(start)}</span>
-                        <span>👤 ${nextLesson.teacherName || 'Da definire'}</span>
+                        <span>👤 ${nextLesson.teacherName || nextLesson.externalTeacherName || 'Da definire'}</span>
                     </div>
                     ${countdownHtml}
                 </div>
@@ -792,7 +792,7 @@
                                             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                                             <circle cx="12" cy="7" r="4"/>
                                         </svg>
-                                        ${lesson.teacherName || 'Docente da definire'}
+                                        ${lesson.teacherName || lesson.externalTeacherName || 'Docente da definire'}
                                     </div>
                                     ${lesson.moduleName ? `<span class="module-tag module-${moduleIndex}">${lesson.moduleName}</span>` : ''}
                                 </div>
@@ -902,7 +902,7 @@ UID:${lesson.id}@master-carbon-farming
 DTSTART:${formatIcalDate(start)}
 DTEND:${formatIcalDate(end)}
 SUMMARY:${lesson.title}
-DESCRIPTION:${lesson.teacherName ? 'Docente: ' + lesson.teacherName : ''}${lesson.description ? '\\n' + lesson.description : ''}
+DESCRIPTION:${(lesson.teacherName || lesson.externalTeacherName) ? 'Docente: ' + (lesson.teacherName || lesson.externalTeacherName) : ''}${lesson.description ? '\\n' + lesson.description : ''}
 LOCATION:${lesson.locationPhysical || lesson.locationRemote || 'Da definire'}
 STATUS:${lesson.status === 'confirmed' ? 'CONFIRMED' : 'TENTATIVE'}
 END:VEVENT

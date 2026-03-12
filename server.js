@@ -417,10 +417,24 @@ async function ensureDatabaseInitialized() {
   }
 
   if (!initPromise) {
-    initPromise = initDatabase().catch((error) => {
+    initPromise = (async () => {
+      const maxRetries = 3;
+      let lastError;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          await initDatabase();
+          return;
+        } catch (error) {
+          lastError = error;
+          console.warn(`Database init attempt ${attempt}/${maxRetries} failed:`, error.message);
+          if (attempt < maxRetries) {
+            await new Promise(r => setTimeout(r, 500 * attempt));
+          }
+        }
+      }
       initPromise = null;
-      throw error;
-    });
+      throw lastError;
+    })();
   }
 
   return initPromise;

@@ -66,33 +66,20 @@ npm start
    - Puoi monitorare l'attività dal pannello Neon → **Monitoring** per verificare le query provenienti dal progetto Vercel.
    - Ricordati di rigenerare i token di accesso se revoci o cambi la password del ruolo.
 
-#### Variabili d'ambiente per l'istanza Neon fornita
+#### Variabili d'ambiente richieste
 
-Usa questi valori per popolare l'ambiente Vercel (Production e Preview) e per avviare il progetto in locale creando un file `.env` alla radice con le stesse chiavi.
+Crea un file `.env` alla radice del progetto (non tracciato da Git) con le seguenti variabili. I valori reali sono disponibili sulla console Neon del progetto e nelle Environment Variables di Vercel.
 
 ```env
-DATABASE_URL=postgresql://neondb_owner:npg_K2Yh5HukeqQs@ep-aged-field-agruc2b4-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
-DATABASE_URL_UNPOOLED=postgresql://neondb_owner:npg_K2Yh5HukeqQs@ep-aged-field-agruc2b4.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
+DATABASE_URL=postgresql://<user>:<password>@<host>/<database>?sslmode=require
+ADMIN_PASSWORD=<scegli-una-password-sicura>
 
-# Parametri individuali (facoltativi, utili per strumenti che richiedono variabili separate)
-PGHOST=ep-aged-field-agruc2b4-pooler.c-2.eu-central-1.aws.neon.tech
-PGHOST_UNPOOLED=ep-aged-field-agruc2b4.c-2.eu-central-1.aws.neon.tech
-PGUSER=neondb_owner
-PGDATABASE=neondb
-PGPASSWORD=npg_K2Yh5HukeqQs
-
-# Template compatibili con integrazione Vercel Postgres
-POSTGRES_URL=postgresql://neondb_owner:npg_K2Yh5HukeqQs@ep-aged-field-agruc2b4-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
-POSTGRES_URL_NON_POOLING=postgresql://neondb_owner:npg_K2Yh5HukeqQs@ep-aged-field-agruc2b4.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
-POSTGRES_USER=neondb_owner
-POSTGRES_HOST=ep-aged-field-agruc2b4-pooler.c-2.eu-central-1.aws.neon.tech
-POSTGRES_PASSWORD=npg_K2Yh5HukeqQs
-POSTGRES_DATABASE=neondb
-POSTGRES_URL_NO_SSL=postgresql://neondb_owner:npg_K2Yh5HukeqQs@ep-aged-field-agruc2b4-pooler.c-2.eu-central-1.aws.neon.tech/neondb
-POSTGRES_PRISMA_URL=postgresql://neondb_owner:npg_K2Yh5HukeqQs@ep-aged-field-agruc2b4-pooler.c-2.eu-central-1.aws.neon.tech/neondb?connect_timeout=15&sslmode=require
+# Opzionali
+JWT_SECRET=<stringa-casuale-lunga>
+DATABASE_SSL=true
 ```
 
-> ⚠️ **Importante**: conserva queste credenziali in un ambiente sicuro (variabili Vercel o `.env` locale non tracciato da Git). Non condividere pubblicamente il file `.env` con i valori reali.
+> **Importante**: non pubblicare mai credenziali reali nel repository. Usa sempre variabili d'ambiente (Vercel Settings o `.env` locale).
 
 ### API disponibili
 
@@ -104,6 +91,15 @@ POSTGRES_PRISMA_URL=postgresql://neondb_owner:npg_K2Yh5HukeqQs@ep-aged-field-agr
 - `PUT /api/blog-posts/:id` · `DELETE /api/blog-posts/:id`
 
 La dashboard amministrativa disponibile su `/admin/` usa queste API per gestire contenuti e pubblicazione.
+
+### Autenticazione Admin
+
+L'area `/admin/` e tutte le API di scrittura (POST, PUT, DELETE) sono protette da autenticazione. Per attivarla:
+
+1. Imposta la variabile d'ambiente `ADMIN_PASSWORD` con una password sicura (su Vercel e/o nel file `.env` locale).
+2. Opzionalmente imposta `JWT_SECRET` con una stringa casuale lunga. Se non fornita, viene generata automaticamente ad ogni avvio del server.
+3. All'accesso a `/admin/`, inserisci la password per ottenere l'accesso.
+4. La sessione dura 24 ore, dopo le quali dovrai effettuare nuovamente il login.
 
 Per ripristinare manualmente i docenti di default (ad esempio dopo un reset dell'istanza Neon) puoi eseguire lo script SQL `db/faculty_seed.sql` presente nel repository oppure copiare gli inserimenti da questo file direttamente nella tua console SQL.
 

@@ -474,16 +474,34 @@
             <h1>Pannello di amministrazione</h1>
             <p>Gestisci la faculty del Master, programma la pubblicazione degli articoli del blog e controlla la visibilità dei contenuti online.</p>
             <div class="nav-links">
-                <a href="/index.html">← Torna al sito</a>
+                <a href="/index.html">&larr; Torna al sito</a>
                 <a href="#calendar">Calendario</a>
                 <a href="#faculty">Gestione docenti</a>
                 <a href="#blog">Gestione blog</a>
                 <a href="#partners">Gestione partner</a>
+                <a href="#" id="logout-btn" onclick="adminLogout(); return false;" style="background: rgba(255,255,255,0.15);">Esci</a>
             </div>
         </div>
     </header>
 
-    <main>
+    <!-- LOGIN GATE -->
+    <div id="login-gate" style="display:none; min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 24px;">
+        <div style="background: white; border-radius: 12px; padding: 40px; max-width: 400px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.1);">
+            <h2 style="margin: 0 0 8px; color: var(--green-900); font-size: 1.5rem;">Accesso Amministrazione</h2>
+            <p style="margin: 0 0 24px; color: var(--gray-500); font-size: 0.95rem;">Inserisci la password per accedere al pannello.</p>
+            <form id="login-form">
+                <input type="password" id="login-password" placeholder="Password" required
+                    style="width: 100%; padding: 12px 16px; border: 1px solid var(--gray-200); border-radius: 8px; font-size: 1rem; margin-bottom: 16px; box-sizing: border-box;">
+                <p id="login-error" style="display:none; color: #dc3545; font-size: 0.9rem; margin: 0 0 12px;"></p>
+                <button type="submit"
+                    style="width: 100%; padding: 12px; background: var(--green-700); color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer;">
+                    Accedi
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <main style="display:none;">
         <section id="calendar">
             <header>
                 <h2>Calendario lezioni</h2>
@@ -973,6 +991,103 @@
     </template>
 
     <script>
+        // ============================================
+        // AUTH MANAGEMENT
+        // ============================================
+        let adminToken = sessionStorage.getItem('adminToken') || null;
+
+        async function checkAuth() {
+            const loginGate = document.getElementById('login-gate');
+            const mainContent = document.querySelector('main');
+            const headerEl = document.querySelector('header');
+
+            // Controlla se il server richiede autenticazione
+            try {
+                const statusRes = await fetch('/api/auth/status');
+                const statusData = await statusRes.json();
+
+                if (!statusData.authRequired) {
+                    // Auth non configurata: mostra tutto (backwards compatible)
+                    loginGate.style.display = 'none';
+                    mainContent.style.display = '';
+                    headerEl.style.display = '';
+                    document.getElementById('logout-btn').style.display = 'none';
+                    return true;
+                }
+            } catch (e) {
+                // Se fallisce, assume che serve auth
+            }
+
+            // Se abbiamo un token, verificalo
+            if (adminToken) {
+                try {
+                    const verifyRes = await fetch('/api/auth/verify', {
+                        headers: { 'Authorization': 'Bearer ' + adminToken }
+                    });
+                    if (verifyRes.ok) {
+                        loginGate.style.display = 'none';
+                        mainContent.style.display = '';
+                        headerEl.style.display = '';
+                        return true;
+                    }
+                } catch (e) {}
+                // Token non valido, pulisci
+                adminToken = null;
+                sessionStorage.removeItem('adminToken');
+            }
+
+            // Mostra login
+            loginGate.style.display = 'flex';
+            mainContent.style.display = 'none';
+            headerEl.style.display = 'none';
+            return false;
+        }
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pwd = document.getElementById('login-password').value;
+            const errorEl = document.getElementById('login-error');
+            errorEl.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: pwd })
+                });
+
+                if (!res.ok) {
+                    const data = await res.json();
+                    errorEl.textContent = data.error || 'Password non valida';
+                    errorEl.style.display = 'block';
+                    return;
+                }
+
+                const data = await res.json();
+                adminToken = data.token;
+                sessionStorage.setItem('adminToken', adminToken);
+                await checkAuth();
+                // Carica i dati dopo il login
+                loadFaculty(); loadBlogPosts(); loadPartners(); loadModules(); loadLessons();
+            } catch (err) {
+                errorEl.textContent = 'Errore di connessione';
+                errorEl.style.display = 'block';
+            }
+        });
+
+        function adminLogout() {
+            adminToken = null;
+            sessionStorage.removeItem('adminToken');
+            checkAuth();
+        }
+
+        // Avvia il check auth al caricamento
+        checkAuth().then(authenticated => {
+            if (authenticated) {
+                // Pagina pronta, carica dati
+            }
+        });
+
         const state = {
             editingFacultyId: null,
             editingPostId: null,
@@ -1017,14 +1132,25 @@
 
         async function apiRequest(url, options = {}) {
             try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {})
+                };
+                if (adminToken) {
+                    headers['Authorization'] = 'Bearer ' + adminToken;
+                }
                 const response = await fetch(url, {
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    ...options
+                    ...options,
+                    headers
                 });
 
                 if (!response.ok) {
+                    if (response.status === 401) {
+                        adminToken = null;
+                        sessionStorage.removeItem('adminToken');
+                        checkAuth();
+                        throw new Error('Sessione scaduta. Effettua nuovamente il login.');
+                    }
                     const payload = await response.json().catch(() => ({ error: 'Errore sconosciuto' }));
                     const error = new Error(payload.error || 'Errore nella richiesta');
                     error.status = response.status;

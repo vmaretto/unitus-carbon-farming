@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const crypto = require('crypto');
 const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
 
@@ -8,6 +9,52 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
+
+// ============================================
+// AUTENTICAZIONE ADMIN
+// ============================================
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
+const JWT_SECRET = process.env.JWT_SECRET || (ADMIN_PASSWORD ? crypto.randomBytes(32).toString('hex') : null);
+
+function generateToken(payload) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(JSON.stringify({ ...payload, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 86400 })).toString('base64url');
+  const signature = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
+  return `${header}.${body}.${signature}`;
+}
+
+function verifyToken(token) {
+  try {
+    const [header, body, signature] = token.split('.');
+    const expected = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
+    if (signature !== expected) return null;
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function requireAdmin(req, res, next) {
+  // Se ADMIN_PASSWORD non è configurata, l'admin è disabilitato (503)
+  if (!ADMIN_PASSWORD) {
+    return res.status(503).json({ error: 'Admin authentication not configured. Set ADMIN_PASSWORD environment variable.' });
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const token = authHeader.slice(7);
+  const payload = verifyToken(token);
+  if (!payload || payload.role !== 'admin') {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  next();
+}
 let pool = null;
 
 const defaultFaculty = [
@@ -124,6 +171,45 @@ app.use(express.static(staticRoot));
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', database: hasDatabaseUrl });
+});
+
+// ============================================
+// AUTH ENDPOINTS
+// ============================================
+
+// Controlla se l'autenticazione è richiesta
+app.get('/api/auth/status', (_req, res) => {
+  res.json({ authRequired: Boolean(ADMIN_PASSWORD) });
+});
+
+// Login admin
+app.post('/api/auth/login', (req, res) => {
+  if (!ADMIN_PASSWORD) {
+    return res.status(503).json({ error: 'Admin authentication not configured. Set ADMIN_PASSWORD environment variable.' });
+  }
+
+  const { password } = req.body;
+  if (!password || password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Password non valida' });
+  }
+
+  const token = generateToken({ role: 'admin' });
+  res.json({ token, expiresIn: 86400 });
+});
+
+// Verifica token
+app.get('/api/auth/verify', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ valid: false });
+  }
+
+  const payload = verifyToken(authHeader.slice(7));
+  if (!payload) {
+    return res.status(401).json({ valid: false });
+  }
+
+  res.json({ valid: true, role: payload.role });
 });
 
 async function initDatabase() {
@@ -499,7 +585,7 @@ app.get('/api/faculty', async (req, res) => {
   }
 });
 
-app.post('/api/faculty', async (req, res) => {
+app.post('/api/faculty', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) {
     return;
   }
@@ -539,7 +625,7 @@ app.post('/api/faculty', async (req, res) => {
   }
 });
 
-app.put('/api/faculty/:id', async (req, res) => {
+app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) {
     return;
   }
@@ -585,7 +671,7 @@ app.put('/api/faculty/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/faculty/:id', async (req, res) => {
+app.delete('/api/faculty/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) {
     return;
   }
@@ -638,7 +724,7 @@ app.get('/api/blog-posts', async (req, res) => {
   }
 });
 
-app.post('/api/blog-posts', async (req, res) => {
+app.post('/api/blog-posts', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) {
     return;
   }
@@ -681,7 +767,7 @@ app.post('/api/blog-posts', async (req, res) => {
   }
 });
 
-app.put('/api/blog-posts/:id', async (req, res) => {
+app.put('/api/blog-posts/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) {
     return;
   }
@@ -729,7 +815,7 @@ app.put('/api/blog-posts/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/blog-posts/:id', async (req, res) => {
+app.delete('/api/blog-posts/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) {
     return;
   }
@@ -805,7 +891,7 @@ function normalizeImageUrl(url) {
   return url;
 }
 
-app.post('/api/partners', async (req, res) => {
+app.post('/api/partners', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) {
     return;
   }
@@ -851,7 +937,7 @@ app.post('/api/partners', async (req, res) => {
   }
 });
 
-app.put('/api/partners/:id', async (req, res) => {
+app.put('/api/partners/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) {
     return;
   }
@@ -901,7 +987,7 @@ app.put('/api/partners/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/partners/:id', async (req, res) => {
+app.delete('/api/partners/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) {
     return;
   }
@@ -983,7 +1069,7 @@ app.get('/api/modules/:id', async (req, res) => {
   }
 });
 
-app.post('/api/modules', async (req, res) => {
+app.post('/api/modules', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
 
   const {
@@ -1049,7 +1135,7 @@ app.post('/api/modules', async (req, res) => {
   }
 });
 
-app.put('/api/modules/:id', async (req, res) => {
+app.put('/api/modules/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
 
   const { id } = req.params;
@@ -1115,7 +1201,7 @@ app.put('/api/modules/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/modules/:id', async (req, res) => {
+app.delete('/api/modules/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
 
   const { id } = req.params;
@@ -1222,7 +1308,7 @@ app.get('/api/lessons/:id', async (req, res) => {
   }
 });
 
-app.post('/api/lessons', async (req, res) => {
+app.post('/api/lessons', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
 
   const {
@@ -1276,7 +1362,7 @@ app.post('/api/lessons', async (req, res) => {
   }
 });
 
-app.put('/api/lessons/:id', async (req, res) => {
+app.put('/api/lessons/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
 
   const { id } = req.params;
@@ -1332,7 +1418,7 @@ app.put('/api/lessons/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/lessons/:id', async (req, res) => {
+app.delete('/api/lessons/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
 
   const { id } = req.params;

@@ -1613,6 +1613,17 @@
             return cell;
         }
 
+        // Helper function to convert date to local datetime-local format
+        function toLocalDatetimeString(dateInput) {
+            const d = new Date(dateInput);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
         function editLesson(lessonId) {
             const lesson = state.lessons.find((l) => l.id === lessonId);
             if (!lesson) return;
@@ -1620,7 +1631,7 @@
             document.getElementById('lesson-title').value = lesson.title || '';
             document.getElementById('lesson-description').value = lesson.description || '';
             document.getElementById('lesson-notes').value = lesson.notes || '';
-            document.getElementById('lesson-start').value = lesson.startDatetime ? new Date(lesson.startDatetime).toISOString().slice(0, 16) : '';
+            document.getElementById('lesson-start').value = lesson.startDatetime ? toLocalDatetimeString(lesson.startDatetime) : '';
             document.getElementById('lesson-duration').value = lesson.durationMinutes || '120';
             document.getElementById('lesson-module').value = lesson.moduleId || '';
             document.getElementById('lesson-teacher').value = lesson.teacherId || '';

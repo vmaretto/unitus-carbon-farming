@@ -589,10 +589,25 @@ function ensurePool(res) {
   return true;
 }
 
+// Whitelist colonne aggiornabili per tabella (sicurezza)
+const ALLOWED_UPDATE_FIELDS = {
+  faculty: ['name', 'role', 'bio', 'photo_url', 'sort_order', 'is_published'],
+  blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'is_published', 'published_at'],
+  partners: ['name', 'logo_url', 'website_url', 'category', 'sort_order', 'is_visible'],
+  modules: ['name', 'ssd', 'cfu', 'hours', 'description', 'sort_order'],
+  lessons: ['title', 'module_id', 'teacher_id', 'external_teacher_name', 'start_datetime', 'duration_hours', 'location_physical', 'location_remote', 'status', 'notes'],
+  courses: ['title', 'slug', 'description', 'cover_image_url', 'is_published'],
+  course_editions: ['name', 'start_date', 'end_date', 'max_students', 'is_active'],
+  lms_modules: ['title', 'description', 'sort_order', 'is_published'],
+  lms_lessons: ['title', 'description', 'video_url', 'duration_minutes', 'sort_order', 'is_published'],
+  quizzes: ['title', 'description', 'passing_score', 'max_attempts', 'time_limit_minutes', 'is_active'],
+};
+
 function buildUpdateQuery(table, fields, id) {
-  const entries = Object.entries(fields).filter(([, value]) => value !== undefined);
+  const allowed = ALLOWED_UPDATE_FIELDS[table];
+  const entries = Object.entries(fields).filter(([key, value]) => value !== undefined && (!allowed || allowed.includes(key)));
   if (!entries.length) {
-    throw new Error('No fields provided for update');
+    throw new Error('No valid fields provided for update');
   }
 
   const setClauses = entries.map(([key], index) => `${key} = $${index + 1}`);
@@ -2025,7 +2040,7 @@ app.post('/api/lms/enrollments/bulk', requireAdmin, async (req, res) => {
   }
 });
 
-app.get('/api/lms/enrollments', async (req, res) => {
+app.get('/api/lms/enrollments', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { courseEditionId } = req.query;
@@ -2261,6 +2276,9 @@ app.post('/api/lms/lessons/:id/progress', requireStudent, async (req, res) => {
   const lessonId = req.params.id;
   const userId = req.user.userId;
 
+  // Validazione timeSpentSeconds: max 4 ore per singolo aggiornamento (14400 sec)
+  const sanitizedTime = Math.min(Math.max(Math.round(timeSpentSeconds || 0), 0), 14400);
+
   try {
     const { rows } = await pool.query(`
       INSERT INTO lesson_progress (id, user_id, lms_lesson_id, last_position_seconds, progress_percent, time_spent_seconds, watched_segments)
@@ -2268,7 +2286,7 @@ app.post('/api/lms/lessons/:id/progress', requireStudent, async (req, res) => {
       ON CONFLICT (user_id, lms_lesson_id) DO UPDATE SET
         last_position_seconds = GREATEST(lesson_progress.last_position_seconds, $4),
         progress_percent = GREATEST(lesson_progress.progress_percent, $5),
-        time_spent_seconds = $6,
+        time_spent_seconds = GREATEST(lesson_progress.time_spent_seconds, $6),
         watched_segments = $7,
         updated_at = NOW()
       RETURNING progress_percent AS "progressPercent",
@@ -2278,7 +2296,7 @@ app.post('/api/lms/lessons/:id/progress', requireStudent, async (req, res) => {
     `, [uuidv4(), userId, lessonId,
         lastPositionSec || 0,
         Math.min(Math.max(Math.round(watchPercentage || 0), 0), 100),
-        timeSpentSeconds || 0,
+        sanitizedTime,
         JSON.stringify(watchedSegments || [])]);
     res.json(rows[0]);
   } catch (error) {
@@ -2290,7 +2308,7 @@ app.post('/api/lms/lessons/:id/progress', requireStudent, async (req, res) => {
 // --- QUIZ ---
 
 // Admin: CRUD quiz per lezione
-app.get('/api/lms/quizzes', async (req, res) => {
+app.get('/api/lms/quizzes', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { lessonId } = req.query;
@@ -2662,9 +2680,9 @@ app.post('/api/lms/lessons/:id/complete', requireStudent, async (req, res) => {
       });
     }
 
-    // Tutti i criteri soddisfatti — segna completata
-    await pool.query(
-      'UPDATE lesson_progress SET completed_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND lms_lesson_id = $2',
+    // Tutti i criteri soddisfatti — segna completata (WHERE completed_at IS NULL evita race condition)
+    const { rowCount } = await pool.query(
+      'UPDATE lesson_progress SET completed_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND lms_lesson_id = $2 AND completed_at IS NULL',
       [userId, lessonId]
     );
 
@@ -2672,7 +2690,7 @@ app.post('/api/lms/lessons/:id/complete', requireStudent, async (req, res) => {
     await pool.query(`
       INSERT INTO attendance (id, user_id, lms_lesson_id, attendance_type, method)
       VALUES ($1, $2, $3, 'async', 'auto_tracking')
-      ON CONFLICT DO NOTHING
+      ON CONFLICT (user_id, lms_lesson_id) DO NOTHING
     `, [uuidv4(), userId, lessonId]);
 
     res.json({ completed: true, message: 'Lezione completata!', criteria });

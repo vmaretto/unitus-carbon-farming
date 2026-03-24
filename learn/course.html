@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Corso - Carbon Farming Master</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --green-900:#1b3a2d; --green-700:#245a3d; --green-500:#2c7a4b; --green-100:#ecf6f0; --orange-500:#ff7a1a; --gray-900:#1c1c1c; --gray-700:#3d3d3d; --gray-500:#6b6b6b; --gray-200:#d9d9d9; --gray-100:#f3f4f6; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--gray-100); color: var(--gray-900); min-height: 100vh; }
+        header { background: linear-gradient(135deg, rgba(27,58,45,0.9), rgba(44,122,75,0.85)); color: white; padding: 24px; box-shadow: 0 10px 40px rgba(27,58,45,0.25); }
+        .header-content { max-width: 900px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        header h1 { font-size: 1.4rem; margin: 0; }
+        .nav-links { display: flex; gap: 10px; flex-wrap: wrap; }
+        .nav-links a { color: white; text-decoration: none; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.3); font-weight: 500; font-size: 0.9rem; transition: background 0.2s; }
+        .nav-links a:hover { background: rgba(255,255,255,0.15); }
+        main { max-width: 900px; margin: 24px auto; padding: 0 24px 40px; }
+        .breadcrumb { font-size: 0.85rem; color: var(--gray-500); margin-bottom: 16px; }
+        .breadcrumb a { color: var(--green-500); text-decoration: none; }
+        .breadcrumb a:hover { text-decoration: underline; }
+        .card { background: white; border-radius: 20px; padding: 28px; box-shadow: 0 8px 30px rgba(31,41,55,0.08); border: 1px solid rgba(36,90,61,0.08); margin-bottom: 24px; }
+        .card h2 { font-size: 1.3rem; margin: 0 0 16px; color: var(--green-900); }
+        .course-header { margin-bottom: 8px; }
+        .course-header h2 { margin-bottom: 4px; }
+        .course-meta { color: var(--gray-500); font-size: 0.9rem; }
+        .progress-bar { background: var(--gray-200); border-radius: 999px; height: 8px; overflow: hidden; margin-top: 12px; }
+        .progress-fill { background: linear-gradient(90deg, var(--green-500), #4ade80); height: 100%; border-radius: 999px; transition: width 0.5s ease; }
+        .module { margin-bottom: 20px; }
+        .module-title { font-weight: 600; font-size: 1.05rem; color: var(--green-900); padding: 12px 0; border-bottom: 2px solid var(--green-100); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .module-title .badge { font-size: 0.75rem; background: var(--green-100); color: var(--green-700); padding: 4px 10px; border-radius: 999px; font-weight: 500; }
+        .lesson-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px; margin-bottom: 6px; cursor: pointer; transition: background 0.2s; border: 1px solid transparent; }
+        .lesson-item:hover { background: var(--green-100); border-color: rgba(44,122,75,0.15); }
+        .lesson-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1rem; }
+        .lesson-icon.completed { background: var(--green-500); color: white; }
+        .lesson-icon.available { background: var(--green-100); color: var(--green-700); }
+        .lesson-icon.locked { background: var(--gray-100); color: var(--gray-500); }
+        .lesson-info { flex: 1; }
+        .lesson-title { font-weight: 500; font-size: 0.95rem; }
+        .lesson-desc { color: var(--gray-500); font-size: 0.8rem; margin-top: 2px; }
+        .lesson-duration { color: var(--gray-500); font-size: 0.8rem; white-space: nowrap; }
+        .empty { color: var(--gray-500); text-align: center; padding: 32px; }
+        @media (max-width: 640px) { .header-content { flex-direction: column; align-items: flex-start; } }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div>
+                <h1>Carbon Farming Master</h1>
+            </div>
+            <div class="nav-links">
+                <a href="/learn/index.html">Dashboard</a>
+                <a href="/learn/checkin.html">Check-in</a>
+                <a href="/learn/profile.html">Profilo</a>
+                <a href="#" id="logout-btn">Esci</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="breadcrumb">
+            <a href="/learn/index.html">Dashboard</a> &rsaquo; <span id="breadcrumb-title">Corso</span>
+        </div>
+
+        <!-- Course info card -->
+        <div class="card">
+            <div class="course-header">
+                <h2 id="course-title">Caricamento...</h2>
+                <div class="course-meta" id="course-meta"></div>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width: 0%"></div></div>
+        </div>
+
+        <!-- Modules & Lessons -->
+        <div class="card">
+            <h2>Programma del corso</h2>
+            <div id="modules-list">
+                <div class="empty">Caricamento moduli e lezioni...</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const token = sessionStorage.getItem('learnToken');
+        if (!token) { window.location.href = '/learn/login.html'; }
+
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            sessionStorage.removeItem('learnToken');
+            sessionStorage.removeItem('learnUser');
+            window.location.href = '/learn/login.html';
+        });
+
+        const params = new URLSearchParams(window.location.search);
+        const courseId = params.get('id');
+        if (!courseId) { window.location.href = '/learn/index.html'; }
+
+        async function api(url) {
+            const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+            if (res.status === 401) {
+                sessionStorage.removeItem('learnToken');
+                window.location.href = '/learn/login.html';
+                return null;
+            }
+            if (!res.ok) throw new Error('API error');
+            return res.json();
+        }
+
+        async function loadCourse() {
+            try {
+                // Load course info from my-courses
+                const courses = await api('/api/lms/my-courses');
+                if (!courses) return;
+
+                const course = courses.find(c => c.id === courseId);
+                if (!course) {
+                    document.getElementById('course-title').textContent = 'Corso non trovato';
+                    return;
+                }
+
+                const total = parseInt(course.totalLessons) || 0;
+                const completed = parseInt(course.completedLessons) || 0;
+                const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+                document.getElementById('course-title').textContent = course.title;
+                document.getElementById('breadcrumb-title').textContent = course.title;
+                document.getElementById('course-meta').textContent = `${course.editionName} — ${completed}/${total} lezioni completate (${pct}%)`;
+                document.getElementById('progress-fill').style.width = pct + '%';
+                document.title = `${course.title} - Carbon Farming Master`;
+
+                // Load modules for this course
+                const modulesRes = await fetch(`/api/lms/modules?course_id=${courseId}`);
+                const modules = modulesRes.ok ? await modulesRes.json() : [];
+
+                // Load lessons for this course
+                const lessonsRes = await fetch(`/api/lms/lessons?course_id=${courseId}`);
+                const lessons = lessonsRes.ok ? await lessonsRes.json() : [];
+
+                // Load student progress
+                const progress = await api('/api/lms/my-progress') || [];
+
+                const progressMap = {};
+                progress.forEach(p => { progressMap[p.lessonId] = p; });
+
+                const modulesList = document.getElementById('modules-list');
+
+                if (!modules.length && !lessons.length) {
+                    modulesList.innerHTML = '<div class="empty">Nessun contenuto disponibile per questo corso. I moduli e le lezioni verranno aggiunti a breve.</div>';
+                    return;
+                }
+
+                modulesList.innerHTML = '';
+
+                // Group lessons by module
+                const lessonsByModule = {};
+                const unassignedLessons = [];
+                lessons.forEach(l => {
+                    if (l.moduleId) {
+                        if (!lessonsByModule[l.moduleId]) lessonsByModule[l.moduleId] = [];
+                        lessonsByModule[l.moduleId].push(l);
+                    } else {
+                        unassignedLessons.push(l);
+                    }
+                });
+
+                // Sort modules by sort_order
+                modules.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+                modules.forEach(mod => {
+                    const modLessons = (lessonsByModule[mod.id] || []).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+                    const completedInMod = modLessons.filter(l => progressMap[l.id] && progressMap[l.id].completed).length;
+
+                    const modDiv = document.createElement('div');
+                    modDiv.className = 'module';
+                    modDiv.innerHTML = `
+                        <div class="module-title">
+                            <span>${mod.title}</span>
+                            <span class="badge">${completedInMod}/${modLessons.length} completate</span>
+                        </div>
+                    `;
+
+                    if (modLessons.length === 0) {
+                        modDiv.innerHTML += '<div style="padding: 8px 16px; color: var(--gray-500); font-size: 0.85rem;">Lezioni in arrivo...</div>';
+                    }
+
+                    modLessons.forEach(lesson => {
+                        const lProgress = progressMap[lesson.id];
+                        const isCompleted = lProgress && lProgress.completed;
+                        const iconClass = isCompleted ? 'completed' : 'available';
+                        const icon = isCompleted ? '&#10003;' : '&#9654;';
+                        const durationMin = lesson.durationMinutes ? `${lesson.durationMinutes} min` : '';
+
+                        const lessonDiv = document.createElement('div');
+                        lessonDiv.className = 'lesson-item';
+                        lessonDiv.innerHTML = `
+                            <div class="lesson-icon ${iconClass}">${icon}</div>
+                            <div class="lesson-info">
+                                <div class="lesson-title">${lesson.title}</div>
+                                ${lesson.description ? `<div class="lesson-desc">${lesson.description}</div>` : ''}
+                            </div>
+                            ${durationMin ? `<div class="lesson-duration">${durationMin}</div>` : ''}
+                        `;
+                        lessonDiv.addEventListener('click', () => {
+                            window.location.href = `/learn/lesson.html?id=${lesson.id}`;
+                        });
+                        modDiv.appendChild(lessonDiv);
+                    });
+
+                    modulesList.appendChild(modDiv);
+                });
+
+                // Unassigned lessons
+                if (unassignedLessons.length > 0) {
+                    const otherDiv = document.createElement('div');
+                    otherDiv.className = 'module';
+                    otherDiv.innerHTML = '<div class="module-title"><span>Altre lezioni</span></div>';
+
+                    unassignedLessons.forEach(lesson => {
+                        const lProgress = progressMap[lesson.id];
+                        const isCompleted = lProgress && lProgress.completed;
+                        const iconClass = isCompleted ? 'completed' : 'available';
+                        const icon = isCompleted ? '&#10003;' : '&#9654;';
+
+                        const lessonDiv = document.createElement('div');
+                        lessonDiv.className = 'lesson-item';
+                        lessonDiv.innerHTML = `
+                            <div class="lesson-icon ${iconClass}">${icon}</div>
+                            <div class="lesson-info">
+                                <div class="lesson-title">${lesson.title}</div>
+                            </div>
+                        `;
+                        lessonDiv.addEventListener('click', () => {
+                            window.location.href = `/learn/lesson.html?id=${lesson.id}`;
+                        });
+                        otherDiv.appendChild(lessonDiv);
+                    });
+
+                    modulesList.appendChild(otherDiv);
+                }
+
+            } catch (error) {
+                console.error('Error loading course', error);
+                document.getElementById('modules-list').innerHTML = '<div class="empty">Errore nel caricamento del corso.</div>';
+            }
+        }
+
+        loadCourse();
+    </script>
+</body>
+</html>

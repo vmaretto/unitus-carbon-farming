@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accedi - Carbon Farming Master</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --green-900:#1b3a2d; --green-700:#245a3d; --green-500:#2c7a4b; --green-100:#ecf6f0; --orange-500:#ff7a1a; --gray-900:#1c1c1c; --gray-700:#3d3d3d; --gray-500:#6b6b6b; --gray-200:#d9d9d9; --gray-100:#f3f4f6; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--gray-100); color: var(--gray-900); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+        .card { background: white; border-radius: 24px; padding: 48px 40px; max-width: 420px; width: 100%; box-shadow: 0 18px 45px rgba(31,41,55,0.12); }
+        h1 { font-size: 1.6rem; margin: 0 0 8px; color: var(--green-900); }
+        p { color: var(--gray-500); margin: 0 0 28px; font-size: 0.95rem; line-height: 1.6; }
+        label { display: block; font-weight: 600; color: var(--gray-700); margin-bottom: 8px; }
+        input { width: 100%; padding: 14px 16px; border: 1px solid var(--gray-200); border-radius: 12px; font: inherit; margin-bottom: 20px; }
+        input:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px rgba(44,122,75,0.18); }
+        button { width: 100%; padding: 14px; background: linear-gradient(120deg,#ff7a1a,#fbbc42); color: white; border: none; border-radius: 999px; font-weight: 600; font-size: 1rem; cursor: pointer; box-shadow: 0 12px 28px rgba(255,122,26,0.28); }
+        button:hover { transform: translateY(-1px); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .success { display: none; text-align: center; }
+        .success h2 { color: var(--green-700); margin: 0 0 12px; }
+        .success p { color: var(--gray-700); }
+        .error { color: #b91c1c; font-size: 0.9rem; display: none; margin-bottom: 12px; }
+        .back-link { display: block; text-align: center; margin-top: 20px; color: var(--green-700); text-decoration: none; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div id="login-view">
+            <h1>Accedi al Master</h1>
+            <p>Inserisci la tua email per ricevere un link di accesso sicuro.</p>
+            <form id="login-form">
+                <label for="email">Email</label>
+                <input type="email" id="email" required placeholder="la-tua-email@esempio.com" autocomplete="email">
+                <p class="error" id="error-msg"></p>
+                <button type="submit">Invia link di accesso</button>
+            </form>
+            <a href="/index.html" class="back-link">&larr; Torna al sito</a>
+        </div>
+        <div id="success-view" class="success">
+            <h2>Controlla la tua email</h2>
+            <p>Se il tuo indirizzo è registrato, riceverai un link di accesso valido per 15 minuti.</p>
+            <a href="/learn/login.html" class="back-link">Invia di nuovo</a>
+        </div>
+    </div>
+
+    <script>
+        // Se già loggato, vai alla dashboard
+        const token = sessionStorage.getItem('learnToken');
+        if (token) window.location.href = '/learn/index.html';
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value.trim();
+            const errorEl = document.getElementById('error-msg');
+            errorEl.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/auth/magic-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    errorEl.textContent = data.error || 'Errore';
+                    errorEl.style.display = 'block';
+                    return;
+                }
+                document.getElementById('login-view').style.display = 'none';
+                document.getElementById('success-view').style.display = 'block';
+            } catch (err) {
+                errorEl.textContent = 'Errore di connessione';
+                errorEl.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

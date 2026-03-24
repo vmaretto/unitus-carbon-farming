@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Carbon Farming Master</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --green-900:#1b3a2d; --green-700:#245a3d; --green-500:#2c7a4b; --green-100:#ecf6f0; --orange-500:#ff7a1a; --gray-900:#1c1c1c; --gray-700:#3d3d3d; --gray-500:#6b6b6b; --gray-200:#d9d9d9; --gray-100:#f3f4f6; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--gray-100); color: var(--gray-900); min-height: 100vh; }
+        header { background: linear-gradient(135deg, rgba(27,58,45,0.9), rgba(44,122,75,0.85)); color: white; padding: 24px; box-shadow: 0 10px 40px rgba(27,58,45,0.25); }
+        .header-content { max-width: 900px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        header h1 { font-size: 1.4rem; margin: 0; }
+        .nav-links { display: flex; gap: 10px; flex-wrap: wrap; }
+        .nav-links a { color: white; text-decoration: none; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.3); font-weight: 500; font-size: 0.9rem; transition: background 0.2s; }
+        .nav-links a:hover { background: rgba(255,255,255,0.15); }
+        main { max-width: 900px; margin: 24px auto; padding: 0 24px 40px; }
+        .card { background: white; border-radius: 20px; padding: 28px; box-shadow: 0 8px 30px rgba(31,41,55,0.08); border: 1px solid rgba(36,90,61,0.08); margin-bottom: 24px; }
+        .card h2 { font-size: 1.3rem; margin: 0 0 16px; color: var(--green-900); }
+        .card h3 { font-size: 1.1rem; margin: 0 0 8px; }
+        .welcome { font-size: 1.1rem; margin: 0 0 4px; opacity: 0.9; }
+        .progress-bar { background: var(--gray-200); border-radius: 999px; height: 8px; overflow: hidden; margin-top: 8px; }
+        .progress-fill { background: linear-gradient(90deg, var(--green-500), #4ade80); height: 100%; border-radius: 999px; transition: width 0.5s ease; }
+        .course-card { border: 1px solid var(--gray-200); border-radius: 14px; padding: 20px; margin-bottom: 12px; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; }
+        .course-card:hover { border-color: var(--green-500); box-shadow: 0 4px 16px rgba(44,122,75,0.1); }
+        .course-meta { color: var(--gray-500); font-size: 0.85rem; margin-top: 4px; }
+        .live-banner { background: linear-gradient(120deg, var(--green-700), var(--green-500)); color: white; border-radius: 14px; padding: 20px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .live-banner h3 { margin: 0; color: white; }
+        .live-banner p { margin: 4px 0 0; opacity: 0.9; font-size: 0.9rem; }
+        .live-banner a { background: rgba(255,255,255,0.2); color: white; padding: 10px 20px; border-radius: 999px; text-decoration: none; font-weight: 600; }
+        .empty { color: var(--gray-500); text-align: center; padding: 32px; }
+        @media (max-width: 640px) { .header-content { flex-direction: column; align-items: flex-start; } }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div>
+                <h1>Carbon Farming Master</h1>
+                <p class="welcome" id="welcome-msg">Ciao!</p>
+            </div>
+            <div class="nav-links">
+                <a href="/learn/index.html">Dashboard</a>
+                <a href="/learn/checkin.html">Check-in</a>
+                <a href="/learn/profile.html">Profilo</a>
+                <a href="#" id="logout-btn">Esci</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Prossima lezione live -->
+        <div id="live-section"></div>
+
+        <!-- Corsi iscritti -->
+        <div class="card">
+            <h2>I miei corsi</h2>
+            <div id="courses-list">
+                <div class="empty">Caricamento...</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Auth check
+        function getToken() {
+            // Check hash fragment (from magic link redirect)
+            const hash = window.location.hash;
+            if (hash.startsWith('#token=')) {
+                const t = hash.slice(7);
+                sessionStorage.setItem('learnToken', t);
+                // Parse user info from JWT
+                try {
+                    const payload = JSON.parse(atob(t.split('.')[1]));
+                    if (payload.firstName || payload.lastName) {
+                        sessionStorage.setItem('learnUser', JSON.stringify(payload));
+                    }
+                } catch (e) {}
+                window.location.hash = '';
+                return t;
+            }
+            return sessionStorage.getItem('learnToken');
+        }
+
+        const token = getToken();
+        if (!token) { window.location.href = '/learn/login.html'; }
+
+        let userInfo = {};
+        try { userInfo = JSON.parse(sessionStorage.getItem('learnUser') || '{}'); } catch(e) {}
+
+        const welcomeName = [userInfo.firstName, userInfo.lastName].filter(Boolean).join(' ') || userInfo.email || '';
+        if (welcomeName) document.getElementById('welcome-msg').textContent = `Ciao, ${welcomeName}!`;
+
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            sessionStorage.removeItem('learnToken');
+            sessionStorage.removeItem('learnUser');
+            window.location.href = '/learn/login.html';
+        });
+
+        async function api(url) {
+            const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+            if (res.status === 401) {
+                sessionStorage.removeItem('learnToken');
+                window.location.href = '/learn/login.html';
+                return null;
+            }
+            if (!res.ok) throw new Error('API error');
+            return res.json();
+        }
+
+        async function loadDashboard() {
+            try {
+                const courses = await api('/api/lms/my-courses');
+                if (!courses) return;
+
+                const coursesList = document.getElementById('courses-list');
+                if (!courses.length) {
+                    coursesList.innerHTML = '<div class="empty">Non sei iscritto a nessun corso.</div>';
+                    return;
+                }
+
+                coursesList.innerHTML = '';
+                courses.forEach(c => {
+                    const total = parseInt(c.totalLessons) || 0;
+                    const completed = parseInt(c.completedLessons) || 0;
+                    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+                    const div = document.createElement('div');
+                    div.className = 'course-card';
+                    div.innerHTML = `
+                        <h3>${c.title}</h3>
+                        <div class="course-meta">${c.editionName} &bull; ${completed}/${total} lezioni completate (${pct}%)</div>
+                        <div class="progress-bar"><div class="progress-fill" style="width: ${pct}%"></div></div>
+                    `;
+                    div.addEventListener('click', () => {
+                        window.location.href = `/learn/course.html?id=${c.id}`;
+                    });
+                    coursesList.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Error loading dashboard', error);
+            }
+
+            // Carica prossima lezione live
+            try {
+                const lessonsRes = await fetch('/api/lessons');
+                if (lessonsRes.ok) {
+                    const lessons = await lessonsRes.json();
+                    const now = new Date();
+                    const upcoming = lessons
+                        .filter(l => new Date(l.startDatetime) > now && l.status !== 'cancelled')
+                        .sort((a, b) => new Date(a.startDatetime) - new Date(b.startDatetime));
+
+                    const liveSection = document.getElementById('live-section');
+                    if (upcoming.length > 0) {
+                        const next = upcoming[0];
+                        const dt = new Date(next.startDatetime).toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+                        const teamsLink = next.locationRemote ? `<a href="${next.locationRemote}" target="_blank" rel="noopener">Entra in Teams</a>` : '';
+                        liveSection.innerHTML = `
+                            <div class="live-banner">
+                                <div>
+                                    <h3>Prossima lezione: ${next.title}</h3>
+                                    <p>${dt}${next.locationPhysical ? ' &bull; ' + next.locationPhysical : ''}</p>
+                                </div>
+                                ${teamsLink}
+                            </div>
+                        `;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>

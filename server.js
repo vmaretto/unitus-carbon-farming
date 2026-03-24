@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { Pool } = require('pg');
@@ -55,6 +56,23 @@ function requireAdmin(req, res, next) {
 
   next();
 }
+
+function requireStudent(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const token = authHeader.slice(7);
+  const payload = verifyToken(token);
+  if (!payload || !['student', 'teacher', 'admin'].includes(payload.role)) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  req.user = payload;
+  next();
+}
+
 let pool = null;
 
 const defaultFaculty = [
@@ -499,6 +517,36 @@ async function initDatabase() {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_lessons_teacher ON lessons(teacher_id);
   `);
+
+  // ============================================
+  // MIGRAZIONI SQL DA db/migrations/
+  // ============================================
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS _migrations (
+      id SERIAL PRIMARY KEY,
+      filename TEXT NOT NULL UNIQUE,
+      executed_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  const migrationsDir = path.join(__dirname, 'db', 'migrations');
+  if (fs.existsSync(migrationsDir)) {
+    const files = fs.readdirSync(migrationsDir)
+      .filter(f => f.endsWith('.sql'))
+      .sort();
+
+    const { rows: executed } = await pool.query('SELECT filename FROM _migrations');
+    const executedSet = new Set(executed.map(r => r.filename));
+
+    for (const file of files) {
+      if (executedSet.has(file)) continue;
+      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+      console.log(`Running migration: ${file}`);
+      await pool.query(sql);
+      await pool.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
+      console.log(`Migration completed: ${file}`);
+    }
+  }
 }
 
 let initPromise = null;
@@ -1431,6 +1479,746 @@ app.delete('/api/lessons/:id', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error deleting lesson', error);
     res.status(500).json({ error: 'Unable to delete lesson' });
+  }
+});
+
+// ============================================
+// LMS CORE API
+// ============================================
+
+// --- COURSES ---
+
+app.get('/api/lms/courses', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, title, slug, description, cover_image_url AS "coverImageUrl",
+             is_published AS "isPublished", created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM courses
+      ORDER BY created_at DESC
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching courses', error);
+    res.status(500).json({ error: 'Unable to retrieve courses' });
+  }
+});
+
+app.get('/api/lms/courses/:id', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, title, slug, description, cover_image_url AS "coverImageUrl",
+             is_published AS "isPublished", created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM courses WHERE id = $1
+    `, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Course not found' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching course', error);
+    res.status(500).json({ error: 'Unable to retrieve course' });
+  }
+});
+
+app.post('/api/lms/courses', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { title, slug, description, coverImageUrl, isPublished } = req.body;
+  if (!title) return res.status(400).json({ error: 'Title is required' });
+  try {
+    const id = uuidv4();
+    const { rows } = await pool.query(`
+      INSERT INTO courses (id, title, slug, description, cover_image_url, is_published)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id, title, slug, description, cover_image_url AS "coverImageUrl",
+                is_published AS "isPublished", created_at AS "createdAt", updated_at AS "updatedAt"
+    `, [id, title, slug || null, description || null, coverImageUrl || null, Boolean(isPublished)]);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating course', error);
+    res.status(500).json({ error: 'Unable to create course' });
+  }
+});
+
+app.put('/api/lms/courses/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { title, slug, description, coverImageUrl, isPublished } = req.body;
+  try {
+    const { query, values } = buildUpdateQuery('courses', {
+      title, slug, description,
+      cover_image_url: coverImageUrl,
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
+    }, req.params.id);
+    const { rows } = await pool.query(query, values);
+    if (!rows.length) return res.status(404).json({ error: 'Course not found' });
+    const r = rows[0];
+    res.json({
+      id: r.id, title: r.title, slug: r.slug, description: r.description,
+      coverImageUrl: r.cover_image_url, isPublished: r.is_published,
+      createdAt: r.created_at, updatedAt: r.updated_at
+    });
+  } catch (error) {
+    console.error('Error updating course', error);
+    res.status(500).json({ error: 'Unable to update course' });
+  }
+});
+
+app.delete('/api/lms/courses/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM courses WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Course not found' });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting course', error);
+    res.status(500).json({ error: 'Unable to delete course' });
+  }
+});
+
+// --- COURSE EDITIONS ---
+
+app.get('/api/lms/course-editions', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { courseId } = req.query;
+    const filters = [];
+    const values = [];
+    if (courseId) {
+      filters.push(`course_id = $${filters.length + 1}`);
+      values.push(courseId);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const { rows } = await pool.query(`
+      SELECT id, course_id AS "courseId", edition_name AS "editionName",
+             start_date AS "startDate", end_date AS "endDate",
+             max_students AS "maxStudents", is_active AS "isActive",
+             created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM course_editions ${where}
+      ORDER BY start_date DESC NULLS LAST, created_at DESC
+    `, values);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching course editions', error);
+    res.status(500).json({ error: 'Unable to retrieve course editions' });
+  }
+});
+
+app.get('/api/lms/course-editions/:id', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, course_id AS "courseId", edition_name AS "editionName",
+             start_date AS "startDate", end_date AS "endDate",
+             max_students AS "maxStudents", is_active AS "isActive",
+             created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM course_editions WHERE id = $1
+    `, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Course edition not found' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching course edition', error);
+    res.status(500).json({ error: 'Unable to retrieve course edition' });
+  }
+});
+
+app.post('/api/lms/course-editions', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { courseId, editionName, startDate, endDate, maxStudents, isActive } = req.body;
+  if (!courseId || !editionName) return res.status(400).json({ error: 'courseId and editionName are required' });
+  try {
+    const id = uuidv4();
+    const { rows } = await pool.query(`
+      INSERT INTO course_editions (id, course_id, edition_name, start_date, end_date, max_students, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, course_id AS "courseId", edition_name AS "editionName",
+                start_date AS "startDate", end_date AS "endDate",
+                max_students AS "maxStudents", is_active AS "isActive",
+                created_at AS "createdAt", updated_at AS "updatedAt"
+    `, [id, courseId, editionName, startDate || null, endDate || null, maxStudents || null, isActive !== false]);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating course edition', error);
+    res.status(500).json({ error: 'Unable to create course edition' });
+  }
+});
+
+app.put('/api/lms/course-editions/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { courseId, editionName, startDate, endDate, maxStudents, isActive } = req.body;
+  try {
+    const { query, values } = buildUpdateQuery('course_editions', {
+      course_id: courseId, edition_name: editionName,
+      start_date: startDate, end_date: endDate,
+      max_students: maxStudents,
+      is_active: typeof isActive === 'boolean' ? isActive : undefined
+    }, req.params.id);
+    const { rows } = await pool.query(query, values);
+    if (!rows.length) return res.status(404).json({ error: 'Course edition not found' });
+    const r = rows[0];
+    res.json({
+      id: r.id, courseId: r.course_id, editionName: r.edition_name,
+      startDate: r.start_date, endDate: r.end_date,
+      maxStudents: r.max_students, isActive: r.is_active,
+      createdAt: r.created_at, updatedAt: r.updated_at
+    });
+  } catch (error) {
+    console.error('Error updating course edition', error);
+    res.status(500).json({ error: 'Unable to update course edition' });
+  }
+});
+
+app.delete('/api/lms/course-editions/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM course_editions WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Course edition not found' });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting course edition', error);
+    res.status(500).json({ error: 'Unable to delete course edition' });
+  }
+});
+
+// --- LMS MODULES ---
+
+app.get('/api/lms/modules', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { courseId } = req.query;
+    const filters = [];
+    const values = [];
+    if (courseId) {
+      filters.push(`course_id = $${filters.length + 1}`);
+      values.push(courseId);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const { rows } = await pool.query(`
+      SELECT id, course_id AS "courseId", title, description,
+             sort_order AS "sortOrder", is_published AS "isPublished",
+             created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM lms_modules ${where}
+      ORDER BY sort_order ASC, created_at ASC
+    `, values);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching LMS modules', error);
+    res.status(500).json({ error: 'Unable to retrieve LMS modules' });
+  }
+});
+
+app.get('/api/lms/modules/:id', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, course_id AS "courseId", title, description,
+             sort_order AS "sortOrder", is_published AS "isPublished",
+             created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM lms_modules WHERE id = $1
+    `, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Module not found' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching LMS module', error);
+    res.status(500).json({ error: 'Unable to retrieve LMS module' });
+  }
+});
+
+app.post('/api/lms/modules', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { courseId, title, description, sortOrder, isPublished } = req.body;
+  if (!courseId || !title) return res.status(400).json({ error: 'courseId and title are required' });
+  try {
+    const id = uuidv4();
+    const { rows } = await pool.query(`
+      INSERT INTO lms_modules (id, course_id, title, description, sort_order, is_published)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id, course_id AS "courseId", title, description,
+                sort_order AS "sortOrder", is_published AS "isPublished",
+                created_at AS "createdAt", updated_at AS "updatedAt"
+    `, [id, courseId, title, description || null, typeof sortOrder === 'number' ? sortOrder : 0, isPublished !== false]);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating LMS module', error);
+    res.status(500).json({ error: 'Unable to create LMS module' });
+  }
+});
+
+app.put('/api/lms/modules/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { courseId, title, description, sortOrder, isPublished } = req.body;
+  try {
+    const { query, values } = buildUpdateQuery('lms_modules', {
+      course_id: courseId, title, description,
+      sort_order: sortOrder,
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
+    }, req.params.id);
+    const { rows } = await pool.query(query, values);
+    if (!rows.length) return res.status(404).json({ error: 'Module not found' });
+    const r = rows[0];
+    res.json({
+      id: r.id, courseId: r.course_id, title: r.title, description: r.description,
+      sortOrder: r.sort_order, isPublished: r.is_published,
+      createdAt: r.created_at, updatedAt: r.updated_at
+    });
+  } catch (error) {
+    console.error('Error updating LMS module', error);
+    res.status(500).json({ error: 'Unable to update LMS module' });
+  }
+});
+
+app.delete('/api/lms/modules/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM lms_modules WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Module not found' });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting LMS module', error);
+    res.status(500).json({ error: 'Unable to delete LMS module' });
+  }
+});
+
+// --- LMS LESSONS ---
+
+app.get('/api/lms/lessons', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { moduleId } = req.query;
+    const filters = [];
+    const values = [];
+    if (moduleId) {
+      filters.push(`lms_module_id = $${filters.length + 1}`);
+      values.push(moduleId);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const { rows } = await pool.query(`
+      SELECT id, lms_module_id AS "moduleId", title, description,
+             video_url AS "videoUrl", video_provider AS "videoProvider",
+             duration_seconds AS "durationSeconds", sort_order AS "sortOrder",
+             is_free AS "isFree", is_published AS "isPublished",
+             created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM lms_lessons ${where}
+      ORDER BY sort_order ASC, created_at ASC
+    `, values);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching LMS lessons', error);
+    res.status(500).json({ error: 'Unable to retrieve LMS lessons' });
+  }
+});
+
+app.get('/api/lms/lessons/:id', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, lms_module_id AS "moduleId", title, description,
+             video_url AS "videoUrl", video_provider AS "videoProvider",
+             duration_seconds AS "durationSeconds", sort_order AS "sortOrder",
+             is_free AS "isFree", is_published AS "isPublished",
+             created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM lms_lessons WHERE id = $1
+    `, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Lesson not found' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching LMS lesson', error);
+    res.status(500).json({ error: 'Unable to retrieve LMS lesson' });
+  }
+});
+
+app.post('/api/lms/lessons', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { moduleId, title, description, videoUrl, videoProvider, durationSeconds, sortOrder, isFree, isPublished } = req.body;
+  if (!moduleId || !title) return res.status(400).json({ error: 'moduleId and title are required' });
+  try {
+    const id = uuidv4();
+    const { rows } = await pool.query(`
+      INSERT INTO lms_lessons (id, lms_module_id, title, description, video_url, video_provider, duration_seconds, sort_order, is_free, is_published)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id, lms_module_id AS "moduleId", title, description,
+                video_url AS "videoUrl", video_provider AS "videoProvider",
+                duration_seconds AS "durationSeconds", sort_order AS "sortOrder",
+                is_free AS "isFree", is_published AS "isPublished",
+                created_at AS "createdAt", updated_at AS "updatedAt"
+    `, [id, moduleId, title, description || null, videoUrl || null, videoProvider || null,
+        durationSeconds || null, typeof sortOrder === 'number' ? sortOrder : 0, Boolean(isFree), isPublished !== false]);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating LMS lesson', error);
+    res.status(500).json({ error: 'Unable to create LMS lesson' });
+  }
+});
+
+app.put('/api/lms/lessons/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { moduleId, title, description, videoUrl, videoProvider, durationSeconds, sortOrder, isFree, isPublished } = req.body;
+  try {
+    const { query, values } = buildUpdateQuery('lms_lessons', {
+      lms_module_id: moduleId, title, description,
+      video_url: videoUrl, video_provider: videoProvider,
+      duration_seconds: durationSeconds, sort_order: sortOrder,
+      is_free: typeof isFree === 'boolean' ? isFree : undefined,
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
+    }, req.params.id);
+    const { rows } = await pool.query(query, values);
+    if (!rows.length) return res.status(404).json({ error: 'Lesson not found' });
+    const r = rows[0];
+    res.json({
+      id: r.id, moduleId: r.lms_module_id, title: r.title, description: r.description,
+      videoUrl: r.video_url, videoProvider: r.video_provider,
+      durationSeconds: r.duration_seconds, sortOrder: r.sort_order,
+      isFree: r.is_free, isPublished: r.is_published,
+      createdAt: r.created_at, updatedAt: r.updated_at
+    });
+  } catch (error) {
+    console.error('Error updating LMS lesson', error);
+    res.status(500).json({ error: 'Unable to update LMS lesson' });
+  }
+});
+
+app.delete('/api/lms/lessons/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM lms_lessons WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Lesson not found' });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting LMS lesson', error);
+    res.status(500).json({ error: 'Unable to delete LMS lesson' });
+  }
+});
+
+// --- LESSON ASSETS ---
+
+app.get('/api/lms/lesson-assets', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { lessonId } = req.query;
+    const filters = [];
+    const values = [];
+    if (lessonId) {
+      filters.push(`lms_lesson_id = $${filters.length + 1}`);
+      values.push(lessonId);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const { rows } = await pool.query(`
+      SELECT id, lms_lesson_id AS "lessonId", title, asset_type AS "assetType",
+             url, sort_order AS "sortOrder", created_at AS "createdAt"
+      FROM lesson_assets ${where}
+      ORDER BY sort_order ASC, created_at ASC
+    `, values);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching lesson assets', error);
+    res.status(500).json({ error: 'Unable to retrieve lesson assets' });
+  }
+});
+
+app.post('/api/lms/lesson-assets', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { lessonId, title, assetType, url, sortOrder } = req.body;
+  if (!lessonId || !title || !assetType || !url) {
+    return res.status(400).json({ error: 'lessonId, title, assetType and url are required' });
+  }
+  try {
+    const id = uuidv4();
+    const { rows } = await pool.query(`
+      INSERT INTO lesson_assets (id, lms_lesson_id, title, asset_type, url, sort_order)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id, lms_lesson_id AS "lessonId", title, asset_type AS "assetType",
+                url, sort_order AS "sortOrder", created_at AS "createdAt"
+    `, [id, lessonId, title, assetType, url, typeof sortOrder === 'number' ? sortOrder : 0]);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating lesson asset', error);
+    res.status(500).json({ error: 'Unable to create lesson asset' });
+  }
+});
+
+app.delete('/api/lms/lesson-assets/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM lesson_assets WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Lesson asset not found' });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting lesson asset', error);
+    res.status(500).json({ error: 'Unable to delete lesson asset' });
+  }
+});
+
+// --- ENROLLMENTS ---
+
+app.post('/api/lms/enrollments/bulk', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const items = req.body;
+  if (!Array.isArray(items) || !items.length) {
+    return res.status(400).json({ error: 'Request body must be a non-empty array of {email, courseEditionId, role}' });
+  }
+  try {
+    const results = [];
+    for (const item of items) {
+      const { email, courseEditionId, role } = item;
+      if (!email || !courseEditionId) {
+        results.push({ email, error: 'email and courseEditionId are required' });
+        continue;
+      }
+      // Find or create user
+      let userId;
+      const { rows: existingUsers } = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+      if (existingUsers.length) {
+        userId = existingUsers[0].id;
+        // Update role if provided
+        if (role) {
+          await pool.query('UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2', [role, userId]);
+        }
+      } else {
+        // Create user with a random password hash (they'll reset it)
+        const newId = uuidv4();
+        const placeholderHash = crypto.randomBytes(32).toString('hex');
+        await pool.query(`
+          INSERT INTO users (id, email, password_hash, first_name, last_name, role)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [newId, email, placeholderHash, '', '', role || 'student']);
+        userId = newId;
+      }
+      // Enroll
+      const enrollId = uuidv4();
+      const { rows: enrolled } = await pool.query(`
+        INSERT INTO enrollments (id, user_id, course_edition_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, course_edition_id) DO NOTHING
+        RETURNING id, user_id AS "userId", course_edition_id AS "courseEditionId",
+                  status, enrolled_at AS "enrolledAt"
+      `, [enrollId, userId, courseEditionId]);
+      if (enrolled.length) {
+        results.push({ email, ...enrolled[0] });
+      } else {
+        results.push({ email, skipped: true, reason: 'already enrolled' });
+      }
+    }
+    res.status(201).json(results);
+  } catch (error) {
+    console.error('Error bulk enrolling', error);
+    res.status(500).json({ error: 'Unable to process enrollments' });
+  }
+});
+
+app.get('/api/lms/enrollments', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { courseEditionId } = req.query;
+    if (!courseEditionId) return res.status(400).json({ error: 'courseEditionId query parameter is required' });
+    const { rows } = await pool.query(`
+      SELECT e.id, e.user_id AS "userId", e.course_edition_id AS "courseEditionId",
+             e.status, e.enrolled_at AS "enrolledAt", e.completed_at AS "completedAt",
+             u.email, u.first_name AS "firstName", u.last_name AS "lastName", u.role
+      FROM enrollments e
+      JOIN users u ON u.id = e.user_id
+      WHERE e.course_edition_id = $1
+      ORDER BY e.enrolled_at ASC
+    `, [courseEditionId]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching enrollments', error);
+    res.status(500).json({ error: 'Unable to retrieve enrollments' });
+  }
+});
+
+// ============================================
+// STUDENT AUTH & API
+// ============================================
+
+// Magic link login - genera token e stampa link nel log
+app.post('/api/auth/magic-link', async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+
+  try {
+    const { rows } = await pool.query('SELECT id, role, is_active FROM users WHERE email = $1', [email.trim().toLowerCase()]);
+    if (!rows.length) {
+      // Non rivelare se l'utente esiste o meno
+      return res.json({ message: 'Se l\'indirizzo email è registrato, riceverai un link di accesso.' });
+    }
+    const user = rows[0];
+    if (!user.is_active) {
+      return res.json({ message: 'Se l\'indirizzo email è registrato, riceverai un link di accesso.' });
+    }
+
+    // Genera token casuale
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minuti
+
+    await pool.query(
+      'UPDATE users SET token_hash = $1, token_expires_at = $2, updated_at = NOW() WHERE id = $3',
+      [tokenHash, expiresAt, user.id]
+    );
+
+    // MVP: stampa il link nel log del server
+    const baseUrl = req.protocol + '://' + req.get('host');
+    const magicLink = `${baseUrl}/api/auth/verify-magic/${rawToken}`;
+    console.log(`\n========== MAGIC LINK ==========`);
+    console.log(`User: ${email}`);
+    console.log(`Link: ${magicLink}`);
+    console.log(`Expires: ${expiresAt.toISOString()}`);
+    console.log(`================================\n`);
+
+    res.json({ message: 'Se l\'indirizzo email è registrato, riceverai un link di accesso.' });
+  } catch (error) {
+    console.error('Error generating magic link', error);
+    res.status(500).json({ error: 'Unable to process request' });
+  }
+});
+
+// Verifica magic link token e crea sessione JWT
+app.get('/api/auth/verify-magic/:token', async (req, res) => {
+  if (!pool) return res.status(503).send('Database not configured');
+
+  try {
+    const rawToken = req.params.token;
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    const { rows } = await pool.query(
+      'SELECT id, email, first_name, last_name, role FROM users WHERE token_hash = $1 AND token_expires_at > NOW() AND is_active = true',
+      [tokenHash]
+    );
+
+    if (!rows.length) {
+      return res.status(400).send(`
+        <html><body style="font-family: Inter, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f3f4f6;">
+          <div style="text-align: center; padding: 40px;">
+            <h2>Link scaduto o non valido</h2>
+            <p>Richiedi un nuovo link di accesso.</p>
+            <a href="/learn/login.html" style="color: #2c7a4b;">Torna al login</a>
+          </div>
+        </body></html>
+      `);
+    }
+
+    const user = rows[0];
+
+    // Invalida il token (single-use)
+    await pool.query('UPDATE users SET token_hash = NULL, token_expires_at = NULL, last_login_at = NOW(), updated_at = NOW() WHERE id = $1', [user.id]);
+
+    // Genera JWT di sessione
+    const jwt = generateToken({
+      userId: user.id,
+      email: user.email,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      role: user.role
+    });
+
+    // Redirect a learn/ con token nel fragment (non va al server)
+    res.redirect(`/learn/index.html#token=${jwt}`);
+  } catch (error) {
+    console.error('Error verifying magic link', error);
+    res.status(500).send('Errore interno');
+  }
+});
+
+// Corsi dello studente loggato
+app.get('/api/lms/my-courses', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT c.id, c.title, c.slug, c.description, c.cover_image_url AS "coverImageUrl",
+             ce.id AS "editionId", ce.edition_name AS "editionName",
+             e.status AS "enrollmentStatus", e.enrolled_at AS "enrolledAt",
+             (SELECT COUNT(*)::int FROM lms_modules m WHERE m.course_id = c.id) AS "totalModules",
+             (SELECT COUNT(*)::int FROM lms_lessons ll
+              JOIN lms_modules m2 ON m2.id = ll.lms_module_id
+              WHERE m2.course_id = c.id AND ll.is_published = true) AS "totalLessons",
+             (SELECT COUNT(*)::int FROM lesson_progress lp
+              JOIN lms_lessons ll2 ON ll2.id = lp.lms_lesson_id
+              JOIN lms_modules m3 ON m3.id = ll2.lms_module_id
+              WHERE m3.course_id = c.id AND lp.user_id = $1 AND lp.completed_at IS NOT NULL) AS "completedLessons"
+      FROM enrollments e
+      JOIN course_editions ce ON ce.id = e.course_edition_id
+      JOIN courses c ON c.id = ce.course_id
+      WHERE e.user_id = $1 AND e.status = 'active'
+      ORDER BY e.enrolled_at DESC
+    `, [req.user.userId]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching student courses', error);
+    res.status(500).json({ error: 'Unable to retrieve courses' });
+  }
+});
+
+// Progresso complessivo studente
+app.get('/api/lms/my-progress', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    // Lezioni completate e totali per ogni corso
+    const { rows: courseProgress } = await pool.query(`
+      SELECT c.id AS "courseId", c.title AS "courseTitle",
+             COUNT(DISTINCT ll.id) FILTER (WHERE ll.is_published = true) AS "totalLessons",
+             COUNT(DISTINCT lp.lms_lesson_id) FILTER (WHERE lp.completed_at IS NOT NULL) AS "completedLessons"
+      FROM enrollments e
+      JOIN course_editions ce ON ce.id = e.course_edition_id
+      JOIN courses c ON c.id = ce.course_id
+      LEFT JOIN lms_modules m ON m.course_id = c.id
+      LEFT JOIN lms_lessons ll ON ll.lms_module_id = m.id AND ll.is_published = true
+      LEFT JOIN lesson_progress lp ON lp.lms_lesson_id = ll.id AND lp.user_id = $1
+      WHERE e.user_id = $1 AND e.status = 'active'
+      GROUP BY c.id, c.title
+    `, [req.user.userId]);
+
+    // Presenze totali
+    const { rows: attendanceRows } = await pool.query(
+      'SELECT COUNT(*)::int AS total FROM attendance WHERE user_id = $1',
+      [req.user.userId]
+    );
+
+    res.json({
+      courses: courseProgress,
+      totalAttendances: attendanceRows[0]?.total || 0
+    });
+  } catch (error) {
+    console.error('Error fetching student progress', error);
+    res.status(500).json({ error: 'Unable to retrieve progress' });
+  }
+});
+
+// Check-in presenze con PIN
+app.post('/api/attendance/checkin', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: 'Code is required' });
+
+  try {
+    // Trova il codice valido
+    const { rows: codes } = await pool.query(
+      `SELECT ac.id, ac.lesson_id FROM attendance_codes ac
+       WHERE ac.code = $1 AND ac.expires_at > NOW() AND ac.is_used = false
+       LIMIT 1`,
+      [code.trim()]
+    );
+
+    if (!codes.length) {
+      return res.status(400).json({ error: 'Codice non valido o scaduto' });
+    }
+
+    const lessonId = codes[0].lesson_id;
+
+    // Registra presenza
+    const { rows } = await pool.query(`
+      INSERT INTO attendance (id, user_id, lesson_id, method)
+      VALUES ($1, $2, $3, 'pin')
+      ON CONFLICT (user_id, lesson_id) DO NOTHING
+      RETURNING id
+    `, [uuidv4(), req.user.userId, lessonId]);
+
+    if (rows.length) {
+      res.json({ success: true, message: 'Presenza registrata' });
+    } else {
+      res.json({ success: true, message: 'Presenza già registrata' });
+    }
+  } catch (error) {
+    console.error('Error checking in', error);
+    res.status(500).json({ error: 'Unable to process check-in' });
   }
 });
 

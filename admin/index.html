@@ -479,6 +479,9 @@
                 <a href="#faculty">Gestione docenti</a>
                 <a href="#blog">Gestione blog</a>
                 <a href="#partners">Gestione partner</a>
+                <a href="#lms-courses">Corsi LMS</a>
+                <a href="#lms-modules">Moduli e Lezioni</a>
+                <a href="#lms-enrollments">Iscrizioni</a>
                 <a href="#" id="logout-btn" onclick="adminLogout(); return false;" style="background: rgba(255,255,255,0.15);">Esci</a>
             </div>
         </div>
@@ -928,6 +931,243 @@
                 </table>
             </div>
         </section>
+
+        <!-- ============================================ -->
+        <!-- CORSI LMS -->
+        <!-- ============================================ -->
+        <section id="lms-courses">
+            <header>
+                <h2>Corsi LMS</h2>
+                <p class="section-description">Gestisci i corsi della piattaforma e-learning e le relative edizioni.</p>
+            </header>
+
+            <form id="lms-course-form">
+                <div class="form-grid">
+                    <label>
+                        Titolo corso
+                        <input type="text" id="lms-course-title" name="title" required placeholder="Es. Master Carbon Farming">
+                    </label>
+                    <label>
+                        Slug (URL)
+                        <input type="text" id="lms-course-slug" name="slug" placeholder="es. master-carbon-farming">
+                    </label>
+                    <label>
+                        Cover image URL
+                        <input type="url" id="lms-course-cover" name="coverImageUrl" placeholder="https://...">
+                    </label>
+                </div>
+                <label style="margin-top: 18px;">
+                    Descrizione
+                    <textarea id="lms-course-description" name="description" placeholder="Descrizione del corso"></textarea>
+                </label>
+                <div class="actions">
+                    <label class="switch">
+                        <input type="checkbox" id="lms-course-published">
+                        <span class="slider"></span>
+                        Pubblicato
+                    </label>
+                    <button class="primary" type="submit">Salva corso</button>
+                    <button class="secondary" type="button" id="lms-course-reset" hidden>Annulla modifica</button>
+                </div>
+            </form>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Titolo</th>
+                            <th>Slug</th>
+                            <th>Stato</th>
+                            <th style="width: 220px;">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lms-courses-table-body">
+                        <tr data-empty-lms-courses>
+                            <td colspan="4" class="empty-state">Nessun corso LMS creato.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Edizioni del corso selezionato -->
+            <div id="lms-editions-panel" style="display: none; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--gray-200);">
+                <h3 style="font-size: 1.2rem; margin: 0 0 16px; color: var(--green-700);">
+                    Edizioni di: <span id="lms-editions-course-name"></span>
+                </h3>
+                <form id="lms-edition-form">
+                    <div class="form-grid">
+                        <label>
+                            Nome edizione
+                            <input type="text" id="lms-edition-name" name="editionName" required placeholder="Es. A.A. 2025/2026">
+                        </label>
+                        <label>
+                            Data inizio
+                            <input type="text" id="lms-edition-start" name="startDate" placeholder="YYYY-MM-DD">
+                        </label>
+                        <label>
+                            Data fine
+                            <input type="text" id="lms-edition-end" name="endDate" placeholder="YYYY-MM-DD">
+                        </label>
+                        <label>
+                            Max studenti
+                            <input type="number" id="lms-edition-max" name="maxStudents" min="0" placeholder="Es. 30">
+                        </label>
+                    </div>
+                    <div class="actions">
+                        <label class="switch">
+                            <input type="checkbox" id="lms-edition-active" checked>
+                            <span class="slider"></span>
+                            Attiva
+                        </label>
+                        <button class="primary" type="submit">Salva edizione</button>
+                        <button class="secondary" type="button" id="lms-edition-reset" hidden>Annulla modifica</button>
+                    </div>
+                </form>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Inizio</th>
+                                <th>Fine</th>
+                                <th>Max</th>
+                                <th>Stato</th>
+                                <th style="width: 180px;">Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lms-editions-table-body">
+                            <tr data-empty-lms-editions>
+                                <td colspan="6" class="empty-state">Nessuna edizione per questo corso.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================ -->
+        <!-- MODULI E LEZIONI LMS -->
+        <!-- ============================================ -->
+        <section id="lms-modules">
+            <header>
+                <h2>Moduli e Lezioni LMS</h2>
+                <p class="section-description">Gestisci moduli e lezioni on-demand per ogni corso.</p>
+            </header>
+
+            <div style="margin-bottom: 24px;">
+                <label>
+                    Seleziona corso
+                    <select id="lms-mod-course-select" style="margin-top: 8px;">
+                        <option value="">-- Seleziona un corso --</option>
+                    </select>
+                </label>
+            </div>
+
+            <div id="lms-mod-panel" style="display: none;">
+                <!-- Moduli -->
+                <h3 style="font-size: 1.2rem; margin: 0 0 16px; color: var(--green-700);">Moduli</h3>
+                <form id="lms-module-form">
+                    <div class="form-grid">
+                        <label>
+                            Titolo modulo
+                            <input type="text" id="lms-mod-title" name="title" required placeholder="Es. Modulo 1 - Introduzione">
+                        </label>
+                        <label>
+                            Ordine
+                            <input type="number" id="lms-mod-order" name="sortOrder" min="0" placeholder="0">
+                        </label>
+                    </div>
+                    <label style="margin-top: 18px;">
+                        Descrizione
+                        <textarea id="lms-mod-description" name="description" placeholder="Descrizione del modulo" rows="2"></textarea>
+                    </label>
+                    <div class="actions">
+                        <label class="switch">
+                            <input type="checkbox" id="lms-mod-published" checked>
+                            <span class="slider"></span>
+                            Pubblicato
+                        </label>
+                        <button class="primary" type="submit">Salva modulo</button>
+                        <button class="secondary" type="button" id="lms-mod-reset" hidden>Annulla modifica</button>
+                    </div>
+                </form>
+
+                <div id="lms-modules-list" style="margin-top: 24px;"></div>
+            </div>
+        </section>
+
+        <!-- ============================================ -->
+        <!-- ISCRIZIONI -->
+        <!-- ============================================ -->
+        <section id="lms-enrollments">
+            <header>
+                <h2>Iscrizioni</h2>
+                <p class="section-description">Gestisci le iscrizioni degli studenti alle edizioni dei corsi.</p>
+            </header>
+
+            <div style="margin-bottom: 24px;">
+                <label>
+                    Seleziona edizione corso
+                    <select id="lms-enroll-edition-select" style="margin-top: 8px;">
+                        <option value="">-- Seleziona un'edizione --</option>
+                    </select>
+                </label>
+            </div>
+
+            <div id="lms-enroll-panel" style="display: none;">
+                <!-- Aggiungi singolo -->
+                <h3 style="font-size: 1.2rem; margin: 0 0 16px; color: var(--green-700);">Aggiungi studente</h3>
+                <form id="lms-enroll-form">
+                    <div class="form-grid">
+                        <label>
+                            Email
+                            <input type="text" id="lms-enroll-email" name="email" required placeholder="studente@email.com">
+                        </label>
+                        <label>
+                            Ruolo
+                            <select id="lms-enroll-role" name="role">
+                                <option value="student">Studente</option>
+                                <option value="teacher">Docente</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="actions">
+                        <button class="primary" type="submit">Iscrivi</button>
+                    </div>
+                </form>
+
+                <!-- Import/Export CSV -->
+                <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--gray-200); display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                    <label class="secondary-button" style="cursor: pointer; padding: 10px 18px; border-radius: 999px; display: inline-block;">
+                        Importa CSV
+                        <input type="file" id="lms-enroll-csv" accept=".csv" style="display: none;">
+                    </label>
+                    <button type="button" class="secondary" id="lms-enroll-export">Esporta CSV</button>
+                    <span style="color: var(--gray-500); font-size: 0.85rem;">CSV: colonne email, role (opzionale)</span>
+                </div>
+
+                <!-- Lista iscritti -->
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Nome</th>
+                                <th>Ruolo</th>
+                                <th>Stato</th>
+                                <th>Data iscrizione</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lms-enroll-table-body">
+                            <tr data-empty-lms-enroll>
+                                <td colspan="5" class="empty-state">Nessun iscritto per questa edizione.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
     </main>
 
     <template id="faculty-row-template">
@@ -1068,7 +1308,7 @@
                 sessionStorage.setItem('adminToken', adminToken);
                 await checkAuth();
                 // Carica i dati dopo il login
-                loadFaculty(); loadBlogPosts(); loadPartners(); loadModules(); loadLessons();
+                loadFaculty(); loadBlogPosts(); loadPartners(); loadModules(); loadLessons(); loadLmsCourses();
             } catch (err) {
                 errorEl.textContent = 'Errore di connessione';
                 errorEl.style.display = 'block';
@@ -1996,6 +2236,736 @@
 
         // ========== END CALENDAR ==========
 
+        // ============================================
+        // LMS COURSES
+        // ============================================
+        state.lmsCourses = [];
+        state.lmsEditions = [];
+        state.editingLmsCourseId = null;
+        state.editingLmsEditionId = null;
+        state.selectedEditionCourseId = null;
+        // LMS Modules & Lessons
+        state.lmsModules = [];
+        state.lmsLessons = [];
+        state.lmsAssets = [];
+        state.editingLmsModuleId = null;
+        state.editingLmsLessonId = null;
+        state.selectedLmsCourseId = null;
+        state.selectedLmsModuleId = null;
+        // Enrollments
+        state.lmsEnrollments = [];
+        state.selectedEnrollEditionId = null;
+
+        function resetLmsCourseForm() {
+            document.getElementById('lms-course-form').reset();
+            document.getElementById('lms-course-published').checked = false;
+            document.getElementById('lms-course-reset').hidden = true;
+            state.editingLmsCourseId = null;
+            document.getElementById('lms-course-form').querySelector('button.primary').textContent = 'Salva corso';
+        }
+
+        function resetLmsEditionForm() {
+            document.getElementById('lms-edition-form').reset();
+            document.getElementById('lms-edition-active').checked = true;
+            document.getElementById('lms-edition-reset').hidden = true;
+            state.editingLmsEditionId = null;
+            document.getElementById('lms-edition-form').querySelector('button.primary').textContent = 'Salva edizione';
+        }
+
+        async function loadLmsCourses() {
+            try {
+                const courses = await apiRequest('/api/lms/courses');
+                state.lmsCourses = courses;
+                renderLmsCoursesTable();
+                updateLmsCourseSelects();
+            } catch (error) {
+                state.lmsCourses = [];
+            }
+        }
+
+        function renderLmsCoursesTable() {
+            const tbody = document.getElementById('lms-courses-table-body');
+            tbody.querySelectorAll('tr:not([data-empty-lms-courses])').forEach(r => r.remove());
+
+            state.lmsCourses.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.dataset.id = c.id;
+                const pill = c.isPublished
+                    ? '<span class="status-pill" data-status="published">Pubblicato</span>'
+                    : '<span class="status-pill" data-status="draft">Bozza</span>';
+                tr.innerHTML = `
+                    <td>${c.title}</td>
+                    <td>${c.slug || '—'}</td>
+                    <td>${pill}</td>
+                    <td>
+                        <div class="actions">
+                            <button type="button" class="secondary" data-edit>Modifica</button>
+                            <button type="button" class="secondary" data-editions>Edizioni</button>
+                            <button type="button" class="danger" data-delete>Elimina</button>
+                        </div>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+
+            toggleEmptyState(tbody, state.lmsCourses.length > 0, '[data-empty-lms-courses]');
+        }
+
+        function updateLmsCourseSelects() {
+            // Module page course select
+            const modSelect = document.getElementById('lms-mod-course-select');
+            const curMod = modSelect.value;
+            modSelect.innerHTML = '<option value="">-- Seleziona un corso --</option>';
+            state.lmsCourses.forEach(c => {
+                modSelect.innerHTML += `<option value="${c.id}">${c.title}</option>`;
+            });
+            if (curMod) modSelect.value = curMod;
+
+            // Enrollment edition select needs courses+editions
+            updateEnrollEditionSelect();
+        }
+
+        document.getElementById('lms-course-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                title: document.getElementById('lms-course-title').value.trim(),
+                slug: document.getElementById('lms-course-slug').value.trim() || null,
+                description: document.getElementById('lms-course-description').value.trim() || null,
+                coverImageUrl: document.getElementById('lms-course-cover').value.trim() || null,
+                isPublished: document.getElementById('lms-course-published').checked
+            };
+            if (!payload.title) { showToast('Inserisci il titolo del corso', 'error'); return; }
+            try {
+                const method = state.editingLmsCourseId ? 'PUT' : 'POST';
+                const url = state.editingLmsCourseId ? `/api/lms/courses/${state.editingLmsCourseId}` : '/api/lms/courses';
+                await apiRequest(url, { method, body: JSON.stringify(payload) });
+                showToast('Corso salvato');
+                resetLmsCourseForm();
+                loadLmsCourses();
+            } catch (error) {}
+        });
+
+        document.getElementById('lms-courses-table-body').addEventListener('click', async (e) => {
+            const row = e.target.closest('tr[data-id]');
+            if (!row) return;
+            const id = row.dataset.id;
+
+            if (e.target.closest('[data-edit]')) {
+                const c = state.lmsCourses.find(x => x.id === id);
+                if (!c) return;
+                document.getElementById('lms-course-title').value = c.title || '';
+                document.getElementById('lms-course-slug').value = c.slug || '';
+                document.getElementById('lms-course-description').value = c.description || '';
+                document.getElementById('lms-course-cover').value = c.coverImageUrl || '';
+                document.getElementById('lms-course-published').checked = Boolean(c.isPublished);
+                document.getElementById('lms-course-reset').hidden = false;
+                document.getElementById('lms-course-form').querySelector('button.primary').textContent = 'Aggiorna corso';
+                state.editingLmsCourseId = id;
+                document.getElementById('lms-course-form').scrollIntoView({ behavior: 'smooth' });
+            }
+            if (e.target.closest('[data-editions]')) {
+                state.selectedEditionCourseId = id;
+                const c = state.lmsCourses.find(x => x.id === id);
+                document.getElementById('lms-editions-course-name').textContent = c ? c.title : '';
+                document.getElementById('lms-editions-panel').style.display = '';
+                loadLmsEditions(id);
+                document.getElementById('lms-editions-panel').scrollIntoView({ behavior: 'smooth' });
+            }
+            if (e.target.closest('[data-delete]')) {
+                if (!confirm('Eliminare questo corso? Tutte le edizioni, moduli e lezioni associati verranno eliminati.')) return;
+                try {
+                    await apiRequest(`/api/lms/courses/${id}`, { method: 'DELETE' });
+                    showToast('Corso eliminato');
+                    if (state.selectedEditionCourseId === id) {
+                        document.getElementById('lms-editions-panel').style.display = 'none';
+                    }
+                    loadLmsCourses();
+                } catch (error) {}
+            }
+        });
+
+        document.getElementById('lms-course-reset').addEventListener('click', resetLmsCourseForm);
+
+        // --- EDITIONS ---
+
+        async function loadLmsEditions(courseId) {
+            try {
+                const editions = await apiRequest(`/api/lms/course-editions?courseId=${courseId}`);
+                state.lmsEditions = editions;
+                renderLmsEditionsTable();
+                updateEnrollEditionSelect();
+            } catch (error) {
+                state.lmsEditions = [];
+            }
+        }
+
+        function renderLmsEditionsTable() {
+            const tbody = document.getElementById('lms-editions-table-body');
+            tbody.querySelectorAll('tr:not([data-empty-lms-editions])').forEach(r => r.remove());
+
+            state.lmsEditions.forEach(ed => {
+                const tr = document.createElement('tr');
+                tr.dataset.id = ed.id;
+                const pill = ed.isActive
+                    ? '<span class="status-pill" data-status="published">Attiva</span>'
+                    : '<span class="status-pill" data-status="draft">Inattiva</span>';
+                tr.innerHTML = `
+                    <td>${ed.editionName}</td>
+                    <td>${ed.startDate || '—'}</td>
+                    <td>${ed.endDate || '—'}</td>
+                    <td>${ed.maxStudents || '—'}</td>
+                    <td>${pill}</td>
+                    <td>
+                        <div class="actions">
+                            <button type="button" class="secondary" data-edit>Modifica</button>
+                            <button type="button" class="danger" data-delete>Elimina</button>
+                        </div>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+
+            toggleEmptyState(tbody, state.lmsEditions.length > 0, '[data-empty-lms-editions]');
+        }
+
+        document.getElementById('lms-edition-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!state.selectedEditionCourseId) { showToast('Seleziona prima un corso', 'error'); return; }
+            const payload = {
+                courseId: state.selectedEditionCourseId,
+                editionName: document.getElementById('lms-edition-name').value.trim(),
+                startDate: document.getElementById('lms-edition-start').value.trim() || null,
+                endDate: document.getElementById('lms-edition-end').value.trim() || null,
+                maxStudents: document.getElementById('lms-edition-max').value === '' ? null : Number(document.getElementById('lms-edition-max').value),
+                isActive: document.getElementById('lms-edition-active').checked
+            };
+            if (!payload.editionName) { showToast('Inserisci il nome dell\'edizione', 'error'); return; }
+            try {
+                const method = state.editingLmsEditionId ? 'PUT' : 'POST';
+                const url = state.editingLmsEditionId ? `/api/lms/course-editions/${state.editingLmsEditionId}` : '/api/lms/course-editions';
+                await apiRequest(url, { method, body: JSON.stringify(payload) });
+                showToast('Edizione salvata');
+                resetLmsEditionForm();
+                loadLmsEditions(state.selectedEditionCourseId);
+            } catch (error) {}
+        });
+
+        document.getElementById('lms-editions-table-body').addEventListener('click', async (e) => {
+            const row = e.target.closest('tr[data-id]');
+            if (!row) return;
+            const id = row.dataset.id;
+
+            if (e.target.closest('[data-edit]')) {
+                const ed = state.lmsEditions.find(x => x.id === id);
+                if (!ed) return;
+                document.getElementById('lms-edition-name').value = ed.editionName || '';
+                document.getElementById('lms-edition-start').value = ed.startDate ? ed.startDate.split('T')[0] : '';
+                document.getElementById('lms-edition-end').value = ed.endDate ? ed.endDate.split('T')[0] : '';
+                document.getElementById('lms-edition-max').value = ed.maxStudents ?? '';
+                document.getElementById('lms-edition-active').checked = Boolean(ed.isActive);
+                document.getElementById('lms-edition-reset').hidden = false;
+                document.getElementById('lms-edition-form').querySelector('button.primary').textContent = 'Aggiorna edizione';
+                state.editingLmsEditionId = id;
+            }
+            if (e.target.closest('[data-delete]')) {
+                if (!confirm('Eliminare questa edizione?')) return;
+                try {
+                    await apiRequest(`/api/lms/course-editions/${id}`, { method: 'DELETE' });
+                    showToast('Edizione eliminata');
+                    loadLmsEditions(state.selectedEditionCourseId);
+                } catch (error) {}
+            }
+        });
+
+        document.getElementById('lms-edition-reset').addEventListener('click', resetLmsEditionForm);
+
+        // ============================================
+        // LMS MODULES & LESSONS
+        // ============================================
+
+        function resetLmsModuleForm() {
+            document.getElementById('lms-module-form').reset();
+            document.getElementById('lms-mod-published').checked = true;
+            document.getElementById('lms-mod-reset').hidden = true;
+            state.editingLmsModuleId = null;
+            document.getElementById('lms-module-form').querySelector('button.primary').textContent = 'Salva modulo';
+        }
+
+        document.getElementById('lms-mod-course-select').addEventListener('change', (e) => {
+            const courseId = e.target.value;
+            state.selectedLmsCourseId = courseId || null;
+            state.selectedLmsModuleId = null;
+            if (courseId) {
+                document.getElementById('lms-mod-panel').style.display = '';
+                loadLmsModules(courseId);
+            } else {
+                document.getElementById('lms-mod-panel').style.display = 'none';
+            }
+        });
+
+        async function loadLmsModules(courseId) {
+            try {
+                const modules = await apiRequest(`/api/lms/modules?courseId=${courseId}`);
+                state.lmsModules = modules;
+                renderLmsModulesList();
+            } catch (error) {
+                state.lmsModules = [];
+            }
+        }
+
+        function renderLmsModulesList() {
+            const container = document.getElementById('lms-modules-list');
+            container.innerHTML = '';
+
+            if (state.lmsModules.length === 0) {
+                container.innerHTML = '<div class="empty-state">Nessun modulo per questo corso. Creane uno con il form sopra.</div>';
+                return;
+            }
+
+            state.lmsModules.forEach(mod => {
+                const div = document.createElement('div');
+                div.style.cssText = 'border: 1px solid var(--gray-200); border-radius: 12px; padding: 16px; margin-bottom: 16px;';
+                div.dataset.moduleId = mod.id;
+
+                const statusPill = mod.isPublished
+                    ? '<span class="status-pill" data-status="published">Pubblicato</span>'
+                    : '<span class="status-pill" data-status="draft">Bozza</span>';
+
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div>
+                            <strong>${mod.title}</strong> ${statusPill}
+                            <span style="color: var(--gray-500); font-size: 0.85rem; margin-left: 8px;">Ordine: ${mod.sortOrder}</span>
+                        </div>
+                        <div class="actions" style="margin: 0;">
+                            <button type="button" class="secondary" data-edit-lms-mod="${mod.id}">Modifica</button>
+                            <button type="button" class="secondary" data-toggle-lessons="${mod.id}">Lezioni</button>
+                            <button type="button" class="danger" data-delete-lms-mod="${mod.id}">Elimina</button>
+                        </div>
+                    </div>
+                    ${mod.description ? `<p style="color: var(--gray-500); font-size: 0.9rem; margin: 0;">${mod.description}</p>` : ''}
+                    <div class="lms-lessons-panel" data-lessons-for="${mod.id}" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--gray-200);"></div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        document.getElementById('lms-module-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!state.selectedLmsCourseId) { showToast('Seleziona prima un corso', 'error'); return; }
+            const payload = {
+                courseId: state.selectedLmsCourseId,
+                title: document.getElementById('lms-mod-title').value.trim(),
+                description: document.getElementById('lms-mod-description').value.trim() || null,
+                sortOrder: document.getElementById('lms-mod-order').value === '' ? 0 : Number(document.getElementById('lms-mod-order').value),
+                isPublished: document.getElementById('lms-mod-published').checked
+            };
+            if (!payload.title) { showToast('Inserisci il titolo del modulo', 'error'); return; }
+            try {
+                const method = state.editingLmsModuleId ? 'PUT' : 'POST';
+                const url = state.editingLmsModuleId ? `/api/lms/modules/${state.editingLmsModuleId}` : '/api/lms/modules';
+                await apiRequest(url, { method, body: JSON.stringify(payload) });
+                showToast('Modulo salvato');
+                resetLmsModuleForm();
+                loadLmsModules(state.selectedLmsCourseId);
+            } catch (error) {}
+        });
+
+        document.getElementById('lms-mod-reset').addEventListener('click', resetLmsModuleForm);
+
+        document.getElementById('lms-modules-list').addEventListener('click', async (e) => {
+            const editBtn = e.target.closest('[data-edit-lms-mod]');
+            const deleteBtn = e.target.closest('[data-delete-lms-mod]');
+            const toggleBtn = e.target.closest('[data-toggle-lessons]');
+
+            if (editBtn) {
+                const id = editBtn.dataset.editLmsMod;
+                const mod = state.lmsModules.find(m => m.id === id);
+                if (!mod) return;
+                document.getElementById('lms-mod-title').value = mod.title || '';
+                document.getElementById('lms-mod-description').value = mod.description || '';
+                document.getElementById('lms-mod-order').value = mod.sortOrder ?? '';
+                document.getElementById('lms-mod-published').checked = Boolean(mod.isPublished);
+                document.getElementById('lms-mod-reset').hidden = false;
+                document.getElementById('lms-module-form').querySelector('button.primary').textContent = 'Aggiorna modulo';
+                state.editingLmsModuleId = id;
+                document.getElementById('lms-module-form').scrollIntoView({ behavior: 'smooth' });
+            }
+
+            if (deleteBtn) {
+                const id = deleteBtn.dataset.deleteLmsMod;
+                if (!confirm('Eliminare questo modulo e tutte le sue lezioni?')) return;
+                try {
+                    await apiRequest(`/api/lms/modules/${id}`, { method: 'DELETE' });
+                    showToast('Modulo eliminato');
+                    loadLmsModules(state.selectedLmsCourseId);
+                } catch (error) {}
+            }
+
+            if (toggleBtn) {
+                const modId = toggleBtn.dataset.toggleLessons;
+                const panel = document.querySelector(`[data-lessons-for="${modId}"]`);
+                if (panel.style.display === 'none') {
+                    panel.style.display = '';
+                    state.selectedLmsModuleId = modId;
+                    loadLmsLessons(modId, panel);
+                } else {
+                    panel.style.display = 'none';
+                }
+            }
+        });
+
+        async function loadLmsLessons(moduleId, panel) {
+            try {
+                const lessons = await apiRequest(`/api/lms/lessons?moduleId=${moduleId}`);
+                state.lmsLessons = lessons;
+                renderLmsLessonsPanel(moduleId, lessons, panel);
+            } catch (error) {
+                panel.innerHTML = '<p style="color: #b91c1c;">Errore nel caricamento lezioni.</p>';
+            }
+        }
+
+        function renderLmsLessonsPanel(moduleId, lessons, panel) {
+            let html = `
+                <h4 style="margin: 0 0 12px; color: var(--green-700);">Lezioni del modulo</h4>
+                <form data-lms-lesson-form="${moduleId}">
+                    <div class="form-grid">
+                        <label>Titolo <input type="text" data-field="title" required placeholder="Titolo lezione"></label>
+                        <label>Video URL <input type="url" data-field="videoUrl" placeholder="https://..."></label>
+                        <label>Provider
+                            <select data-field="videoProvider">
+                                <option value="">Nessuno</option>
+                                <option value="vimeo">Vimeo</option>
+                                <option value="youtube">YouTube</option>
+                                <option value="mux">Mux</option>
+                                <option value="s3">S3</option>
+                                <option value="other">Altro</option>
+                            </select>
+                        </label>
+                        <label>Durata (sec) <input type="number" data-field="durationSeconds" min="0" placeholder="Es. 3600"></label>
+                        <label>Ordine <input type="number" data-field="sortOrder" min="0" value="0"></label>
+                    </div>
+                    <label style="margin-top: 12px;">Descrizione <textarea data-field="description" rows="2" placeholder="Descrizione lezione"></textarea></label>
+                    <div class="actions">
+                        <label class="switch"><input type="checkbox" data-field="isFree"><span class="slider"></span> Gratuita</label>
+                        <label class="switch"><input type="checkbox" data-field="isPublished" checked><span class="slider"></span> Pubblicata</label>
+                        <button class="primary" type="submit">Salva lezione</button>
+                        <button class="secondary" type="button" data-cancel-lesson style="display:none;">Annulla</button>
+                    </div>
+                </form>
+            `;
+
+            if (lessons.length === 0) {
+                html += '<div class="empty-state" style="margin-top: 16px;">Nessuna lezione in questo modulo.</div>';
+            } else {
+                html += '<div style="margin-top: 16px;">';
+                lessons.forEach(l => {
+                    const pub = l.isPublished
+                        ? '<span class="status-pill" data-status="published">Pubblicata</span>'
+                        : '<span class="status-pill" data-status="draft">Bozza</span>';
+                    const dur = l.durationSeconds ? `${Math.floor(l.durationSeconds / 60)} min` : '';
+                    html += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--gray-200);" data-lesson-id="${l.id}">
+                            <div>
+                                <strong>${l.title}</strong> ${pub}
+                                <span style="color: var(--gray-500); font-size: 0.85rem; margin-left: 8px;">${dur}</span>
+                            </div>
+                            <div class="actions" style="margin: 0;">
+                                <button type="button" class="secondary" data-edit-lms-lesson="${l.id}" data-module-id="${moduleId}">Modifica</button>
+                                <button type="button" class="secondary" data-toggle-assets="${l.id}">Assets</button>
+                                <button type="button" class="danger" data-delete-lms-lesson="${l.id}" data-module-id="${moduleId}">Elimina</button>
+                            </div>
+                        </div>
+                        <div data-assets-for="${l.id}" style="display: none; padding: 8px 0 8px 24px;"></div>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            panel.innerHTML = html;
+
+            // Lesson form handler
+            const form = panel.querySelector(`[data-lms-lesson-form="${moduleId}"]`);
+            let editingId = null;
+
+            form.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const payload = {
+                    moduleId: moduleId,
+                    title: form.querySelector('[data-field="title"]').value.trim(),
+                    description: form.querySelector('[data-field="description"]').value.trim() || null,
+                    videoUrl: form.querySelector('[data-field="videoUrl"]').value.trim() || null,
+                    videoProvider: form.querySelector('[data-field="videoProvider"]').value || null,
+                    durationSeconds: form.querySelector('[data-field="durationSeconds"]').value === '' ? null : Number(form.querySelector('[data-field="durationSeconds"]').value),
+                    sortOrder: Number(form.querySelector('[data-field="sortOrder"]').value) || 0,
+                    isFree: form.querySelector('[data-field="isFree"]').checked,
+                    isPublished: form.querySelector('[data-field="isPublished"]').checked
+                };
+                if (!payload.title) { showToast('Inserisci il titolo', 'error'); return; }
+                try {
+                    const method = editingId ? 'PUT' : 'POST';
+                    const url = editingId ? `/api/lms/lessons/${editingId}` : '/api/lms/lessons';
+                    await apiRequest(url, { method, body: JSON.stringify(payload) });
+                    showToast('Lezione salvata');
+                    editingId = null;
+                    loadLmsLessons(moduleId, panel);
+                } catch (error) {}
+            });
+
+            const cancelBtn = form.querySelector('[data-cancel-lesson]');
+            cancelBtn.addEventListener('click', () => {
+                editingId = null;
+                form.reset();
+                form.querySelector('[data-field="isPublished"]').checked = true;
+                cancelBtn.style.display = 'none';
+                form.querySelector('button.primary').textContent = 'Salva lezione';
+            });
+
+            // Edit/delete lessons + assets toggle
+            panel.addEventListener('click', async (ev) => {
+                const editLessonBtn = ev.target.closest('[data-edit-lms-lesson]');
+                const deleteLessonBtn = ev.target.closest('[data-delete-lms-lesson]');
+                const toggleAssetsBtn = ev.target.closest('[data-toggle-assets]');
+                const deleteAssetBtn = ev.target.closest('[data-delete-asset]');
+
+                if (editLessonBtn) {
+                    const lid = editLessonBtn.dataset.editLmsLesson;
+                    const lesson = state.lmsLessons.find(l => l.id === lid);
+                    if (!lesson) return;
+                    form.querySelector('[data-field="title"]').value = lesson.title || '';
+                    form.querySelector('[data-field="description"]').value = lesson.description || '';
+                    form.querySelector('[data-field="videoUrl"]').value = lesson.videoUrl || '';
+                    form.querySelector('[data-field="videoProvider"]').value = lesson.videoProvider || '';
+                    form.querySelector('[data-field="durationSeconds"]').value = lesson.durationSeconds ?? '';
+                    form.querySelector('[data-field="sortOrder"]').value = lesson.sortOrder ?? 0;
+                    form.querySelector('[data-field="isFree"]').checked = Boolean(lesson.isFree);
+                    form.querySelector('[data-field="isPublished"]').checked = Boolean(lesson.isPublished);
+                    editingId = lid;
+                    cancelBtn.style.display = '';
+                    form.querySelector('button.primary').textContent = 'Aggiorna lezione';
+                    form.scrollIntoView({ behavior: 'smooth' });
+                }
+
+                if (deleteLessonBtn) {
+                    const lid = deleteLessonBtn.dataset.deleteLmsLesson;
+                    const mid = deleteLessonBtn.dataset.moduleId;
+                    if (!confirm('Eliminare questa lezione?')) return;
+                    try {
+                        await apiRequest(`/api/lms/lessons/${lid}`, { method: 'DELETE' });
+                        showToast('Lezione eliminata');
+                        loadLmsLessons(mid, panel);
+                    } catch (error) {}
+                }
+
+                if (toggleAssetsBtn) {
+                    const lid = toggleAssetsBtn.dataset.toggleAssets;
+                    const assetsDiv = panel.querySelector(`[data-assets-for="${lid}"]`);
+                    if (assetsDiv.style.display === 'none') {
+                        assetsDiv.style.display = '';
+                        loadLmsAssets(lid, assetsDiv, moduleId, panel);
+                    } else {
+                        assetsDiv.style.display = 'none';
+                    }
+                }
+
+                if (deleteAssetBtn) {
+                    const aid = deleteAssetBtn.dataset.deleteAsset;
+                    const lid = deleteAssetBtn.dataset.lessonId;
+                    if (!confirm('Eliminare questo asset?')) return;
+                    try {
+                        await apiRequest(`/api/lms/lesson-assets/${aid}`, { method: 'DELETE' });
+                        showToast('Asset eliminato');
+                        const assetsDiv = panel.querySelector(`[data-assets-for="${lid}"]`);
+                        loadLmsAssets(lid, assetsDiv, moduleId, panel);
+                    } catch (error) {}
+                }
+            });
+        }
+
+        async function loadLmsAssets(lessonId, container, moduleId, parentPanel) {
+            try {
+                const assets = await apiRequest(`/api/lms/lesson-assets?lessonId=${lessonId}`);
+                let html = `
+                    <form data-asset-form="${lessonId}" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 8px;">
+                        <label style="flex: 1; min-width: 120px;">Titolo <input type="text" data-field="title" required placeholder="Slide 1" style="width: 100%;"></label>
+                        <label>Tipo
+                            <select data-field="assetType">
+                                <option value="pdf">PDF</option>
+                                <option value="slide">Slide</option>
+                                <option value="link">Link</option>
+                                <option value="file">File</option>
+                                <option value="other">Altro</option>
+                            </select>
+                        </label>
+                        <label style="flex: 2; min-width: 180px;">URL <input type="url" data-field="url" required placeholder="https://..." style="width: 100%;"></label>
+                        <button class="primary" type="submit" style="padding: 10px 16px;">Aggiungi</button>
+                    </form>
+                `;
+
+                if (assets.length === 0) {
+                    html += '<span style="color: var(--gray-500); font-size: 0.85rem;">Nessun asset.</span>';
+                } else {
+                    assets.forEach(a => {
+                        html += `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 0.9rem;">
+                                <span><strong>${a.title}</strong> (${a.assetType}) — <a href="${a.url}" target="_blank" rel="noopener">apri</a></span>
+                                <button type="button" class="danger" data-delete-asset="${a.id}" data-lesson-id="${lessonId}" style="padding: 4px 10px; font-size: 0.8rem;">Elimina</button>
+                            </div>
+                        `;
+                    });
+                }
+                container.innerHTML = html;
+
+                // Asset form handler
+                const assetForm = container.querySelector(`[data-asset-form="${lessonId}"]`);
+                assetForm.addEventListener('submit', async (ev) => {
+                    ev.preventDefault();
+                    const payload = {
+                        lessonId: lessonId,
+                        title: assetForm.querySelector('[data-field="title"]').value.trim(),
+                        assetType: assetForm.querySelector('[data-field="assetType"]').value,
+                        url: assetForm.querySelector('[data-field="url"]').value.trim()
+                    };
+                    if (!payload.title || !payload.url) { showToast('Compila titolo e URL', 'error'); return; }
+                    try {
+                        await apiRequest('/api/lms/lesson-assets', { method: 'POST', body: JSON.stringify(payload) });
+                        showToast('Asset aggiunto');
+                        loadLmsAssets(lessonId, container, moduleId, parentPanel);
+                    } catch (error) {}
+                });
+            } catch (error) {
+                container.innerHTML = '<span style="color: #b91c1c;">Errore caricamento assets.</span>';
+            }
+        }
+
+        // ============================================
+        // ENROLLMENTS
+        // ============================================
+
+        async function updateEnrollEditionSelect() {
+            const select = document.getElementById('lms-enroll-edition-select');
+            const cur = select.value;
+            select.innerHTML = '<option value="">-- Seleziona un\'edizione --</option>';
+
+            for (const course of state.lmsCourses) {
+                try {
+                    const editions = await apiRequest(`/api/lms/course-editions?courseId=${course.id}`);
+                    editions.forEach(ed => {
+                        select.innerHTML += `<option value="${ed.id}">${course.title} — ${ed.editionName}</option>`;
+                    });
+                } catch (error) {}
+            }
+            if (cur) select.value = cur;
+        }
+
+        document.getElementById('lms-enroll-edition-select').addEventListener('change', (e) => {
+            const editionId = e.target.value;
+            state.selectedEnrollEditionId = editionId || null;
+            if (editionId) {
+                document.getElementById('lms-enroll-panel').style.display = '';
+                loadLmsEnrollments(editionId);
+            } else {
+                document.getElementById('lms-enroll-panel').style.display = 'none';
+            }
+        });
+
+        async function loadLmsEnrollments(editionId) {
+            try {
+                const enrollments = await apiRequest(`/api/lms/enrollments?courseEditionId=${editionId}`);
+                state.lmsEnrollments = enrollments;
+                renderEnrollmentsTable();
+            } catch (error) {
+                state.lmsEnrollments = [];
+            }
+        }
+
+        function renderEnrollmentsTable() {
+            const tbody = document.getElementById('lms-enroll-table-body');
+            tbody.querySelectorAll('tr:not([data-empty-lms-enroll])').forEach(r => r.remove());
+
+            state.lmsEnrollments.forEach(en => {
+                const tr = document.createElement('tr');
+                const statusMap = { active: 'Attivo', suspended: 'Sospeso', completed: 'Completato', cancelled: 'Cancellato' };
+                const statusClass = en.status === 'active' ? 'published' : 'draft';
+                tr.innerHTML = `
+                    <td>${en.email}</td>
+                    <td>${[en.firstName, en.lastName].filter(Boolean).join(' ') || '—'}</td>
+                    <td>${en.role || '—'}</td>
+                    <td><span class="status-pill" data-status="${statusClass}">${statusMap[en.status] || en.status}</span></td>
+                    <td>${en.enrolledAt ? new Date(en.enrolledAt).toLocaleDateString('it-IT') : '—'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            toggleEmptyState(tbody, state.lmsEnrollments.length > 0, '[data-empty-lms-enroll]');
+        }
+
+        document.getElementById('lms-enroll-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!state.selectedEnrollEditionId) { showToast('Seleziona un\'edizione', 'error'); return; }
+            const email = document.getElementById('lms-enroll-email').value.trim();
+            const role = document.getElementById('lms-enroll-role').value;
+            if (!email) { showToast('Inserisci l\'email', 'error'); return; }
+            try {
+                await apiRequest('/api/lms/enrollments/bulk', {
+                    method: 'POST',
+                    body: JSON.stringify([{ email, courseEditionId: state.selectedEnrollEditionId, role }])
+                });
+                showToast('Studente iscritto');
+                document.getElementById('lms-enroll-form').reset();
+                loadLmsEnrollments(state.selectedEnrollEditionId);
+            } catch (error) {}
+        });
+
+        // CSV Import
+        document.getElementById('lms-enroll-csv').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file || !state.selectedEnrollEditionId) return;
+            const text = await file.text();
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+            // Skip header if present
+            const start = lines[0].toLowerCase().includes('email') ? 1 : 0;
+            const items = [];
+            for (let i = start; i < lines.length; i++) {
+                const parts = lines[i].split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+                if (parts[0]) {
+                    items.push({
+                        email: parts[0],
+                        courseEditionId: state.selectedEnrollEditionId,
+                        role: parts[1] || 'student'
+                    });
+                }
+            }
+            if (items.length === 0) { showToast('Nessun record valido nel CSV', 'error'); return; }
+            try {
+                const result = await apiRequest('/api/lms/enrollments/bulk', {
+                    method: 'POST',
+                    body: JSON.stringify(items)
+                });
+                const enrolled = result.filter(r => !r.skipped).length;
+                const skipped = result.filter(r => r.skipped).length;
+                showToast(`Importati: ${enrolled}, Duplicati: ${skipped}`);
+                loadLmsEnrollments(state.selectedEnrollEditionId);
+            } catch (error) {}
+            e.target.value = '';
+        });
+
+        // CSV Export
+        document.getElementById('lms-enroll-export').addEventListener('click', () => {
+            if (!state.lmsEnrollments.length) { showToast('Nessun dato da esportare', 'error'); return; }
+            let csv = 'email,nome,cognome,ruolo,stato,data_iscrizione\n';
+            state.lmsEnrollments.forEach(en => {
+                csv += `"${en.email}","${en.firstName || ''}","${en.lastName || ''}","${en.role}","${en.status}","${en.enrolledAt || ''}"\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'iscrizioni.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // ========== END LMS ==========
+
         const facultyForm = document.getElementById('faculty-form');
         facultyForm.querySelector('button.primary').dataset.defaultText = 'Salva docente';
         const blogForm = document.getElementById('blog-form');
@@ -2013,6 +2983,7 @@
         loadPartners();
         loadModules();
         loadLessons();
+        loadLmsCourses();
     </script>
 </body>
 </html>

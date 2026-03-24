@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check-in Presenze - Carbon Farming Master</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --green-900:#1b3a2d; --green-700:#245a3d; --green-500:#2c7a4b; --green-100:#ecf6f0; --orange-500:#ff7a1a; --gray-900:#1c1c1c; --gray-700:#3d3d3d; --gray-500:#6b6b6b; --gray-200:#d9d9d9; --gray-100:#f3f4f6; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--gray-100); color: var(--gray-900); min-height: 100vh; }
+        header { background: linear-gradient(135deg, rgba(27,58,45,0.9), rgba(44,122,75,0.85)); color: white; padding: 24px; box-shadow: 0 10px 40px rgba(27,58,45,0.25); }
+        .header-content { max-width: 600px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        header h1 { font-size: 1.4rem; margin: 0; }
+        .nav-links { display: flex; gap: 10px; flex-wrap: wrap; }
+        .nav-links a { color: white; text-decoration: none; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.3); font-weight: 500; font-size: 0.9rem; transition: background 0.2s; }
+        .nav-links a:hover { background: rgba(255,255,255,0.15); }
+        main { max-width: 500px; margin: 40px auto; padding: 0 24px 40px; }
+        .card { background: white; border-radius: 20px; padding: 36px; box-shadow: 0 8px 30px rgba(31,41,55,0.08); border: 1px solid rgba(36,90,61,0.08); text-align: center; }
+        .card h2 { font-size: 1.4rem; margin: 0 0 8px; color: var(--green-900); }
+        .card p { color: var(--gray-500); font-size: 0.95rem; margin: 0 0 28px; }
+        .pin-inputs { display: flex; gap: 8px; justify-content: center; margin-bottom: 24px; }
+        .pin-inputs input {
+            width: 52px; height: 64px; text-align: center; font-size: 1.8rem; font-weight: 700;
+            border: 2px solid var(--gray-200); border-radius: 12px;
+            outline: none; transition: border-color 0.2s;
+            color: var(--green-900);
+        }
+        .pin-inputs input:focus { border-color: var(--green-500); }
+        .btn { display: inline-block; padding: 14px 32px; border-radius: 12px; border: none; font-weight: 600; font-size: 1rem; cursor: pointer; transition: opacity 0.2s; }
+        .btn-primary { background: linear-gradient(135deg, var(--green-700), var(--green-500)); color: white; width: 100%; }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .result { margin-top: 20px; padding: 16px; border-radius: 12px; font-weight: 500; display: none; }
+        .result.success { background: #f0fdf4; border: 1px solid #22c55e; color: #166534; }
+        .result.error { background: #fef2f2; border: 1px solid #ef4444; color: #991b1b; }
+        @media (max-width: 640px) {
+            .header-content { flex-direction: column; align-items: flex-start; }
+            .pin-inputs input { width: 44px; height: 56px; font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div><h1>Carbon Farming Master</h1></div>
+            <div class="nav-links">
+                <a href="/learn/index.html">Dashboard</a>
+                <a href="/learn/checkin.html">Check-in</a>
+                <a href="/learn/profile.html">Profilo</a>
+                <a href="#" id="logout-btn">Esci</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="card">
+            <h2>Check-in Presenza</h2>
+            <p>Inserisci il codice PIN mostrato dal docente per registrare la tua presenza.</p>
+
+            <div class="pin-inputs" id="pin-inputs">
+                <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" data-index="0" autofocus>
+                <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" data-index="1">
+                <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" data-index="2">
+                <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" data-index="3">
+                <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" data-index="4">
+                <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" data-index="5">
+            </div>
+
+            <button class="btn btn-primary" id="checkin-btn" disabled>Registra presenza</button>
+
+            <div class="result" id="result"></div>
+        </div>
+    </main>
+
+    <script>
+    (function() {
+        'use strict';
+
+        const token = sessionStorage.getItem('learnToken');
+        if (!token) { window.location.href = '/learn/login.html'; }
+
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            sessionStorage.removeItem('learnToken');
+            sessionStorage.removeItem('learnUser');
+            window.location.href = '/learn/login.html';
+        });
+
+        const inputs = document.querySelectorAll('#pin-inputs input');
+        const checkinBtn = document.getElementById('checkin-btn');
+        const resultDiv = document.getElementById('result');
+
+        function getPin() {
+            return Array.from(inputs).map(i => i.value).join('');
+        }
+
+        function updateButton() {
+            checkinBtn.disabled = getPin().length !== 6;
+        }
+
+        // Auto-advance on input, allow backspace
+        inputs.forEach((input, idx) => {
+            input.addEventListener('input', (e) => {
+                const val = e.target.value.replace(/[^0-9]/g, '');
+                e.target.value = val.slice(0, 1);
+                if (val && idx < inputs.length - 1) {
+                    inputs[idx + 1].focus();
+                }
+                updateButton();
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' && !input.value && idx > 0) {
+                    inputs[idx - 1].focus();
+                    inputs[idx - 1].value = '';
+                    updateButton();
+                }
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (getPin().length === 6) submitCheckin();
+                }
+            });
+
+            // Handle paste of full code
+            input.addEventListener('paste', (e) => {
+                e.preventDefault();
+                const pasted = (e.clipboardData.getData('text') || '').replace(/[^0-9]/g, '');
+                for (let i = 0; i < Math.min(pasted.length, 6); i++) {
+                    inputs[i].value = pasted[i];
+                }
+                const focusIdx = Math.min(pasted.length, 5);
+                inputs[focusIdx].focus();
+                updateButton();
+            });
+        });
+
+        checkinBtn.addEventListener('click', submitCheckin);
+
+        async function submitCheckin() {
+            const code = getPin();
+            if (code.length !== 6) return;
+
+            checkinBtn.disabled = true;
+            resultDiv.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/attendance/checkin', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ code })
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.style.display = '';
+                    resultDiv.textContent = data.message + (data.lessonTitle ? ` — ${data.lessonTitle}` : '');
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.style.display = '';
+                    resultDiv.textContent = data.error || 'Errore nel check-in';
+                    checkinBtn.disabled = false;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.style.display = '';
+                resultDiv.textContent = 'Errore di connessione. Riprova.';
+                checkinBtn.disabled = false;
+            }
+        }
+    })();
+    </script>
+</body>
+</html>

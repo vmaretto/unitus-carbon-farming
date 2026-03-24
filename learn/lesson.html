@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lezione - Carbon Farming Master</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+    <style>
+        :root { --green-900:#1b3a2d; --green-700:#245a3d; --green-500:#2c7a4b; --green-100:#ecf6f0; --orange-500:#ff7a1a; --gray-900:#1c1c1c; --gray-700:#3d3d3d; --gray-500:#6b6b6b; --gray-200:#d9d9d9; --gray-100:#f3f4f6; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--gray-100); color: var(--gray-900); min-height: 100vh; }
+        header { background: linear-gradient(135deg, rgba(27,58,45,0.9), rgba(44,122,75,0.85)); color: white; padding: 24px; box-shadow: 0 10px 40px rgba(27,58,45,0.25); }
+        .header-content { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        header h1 { font-size: 1.4rem; margin: 0; }
+        .nav-links { display: flex; gap: 10px; flex-wrap: wrap; }
+        .nav-links a { color: white; text-decoration: none; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.3); font-weight: 500; font-size: 0.9rem; transition: background 0.2s; }
+        .nav-links a:hover { background: rgba(255,255,255,0.15); }
+        main { max-width: 1200px; margin: 24px auto; padding: 0 24px 40px; }
+        .breadcrumb { font-size: 0.85rem; color: var(--gray-500); margin-bottom: 16px; }
+        .breadcrumb a { color: var(--green-500); text-decoration: none; }
+        .breadcrumb a:hover { text-decoration: underline; }
+        .lesson-layout { display: flex; gap: 24px; align-items: flex-start; }
+        .video-section { flex: 7; min-width: 0; }
+        .materials-section { flex: 3; min-width: 250px; }
+        .card { background: white; border-radius: 20px; padding: 28px; box-shadow: 0 8px 30px rgba(31,41,55,0.08); border: 1px solid rgba(36,90,61,0.08); margin-bottom: 24px; }
+        .card h2 { font-size: 1.3rem; margin: 0 0 16px; color: var(--green-900); }
+        .card h3 { font-size: 1.05rem; margin: 0 0 12px; color: var(--green-900); }
+
+        /* Video container with watermark */
+        .video-container { position: relative; border-radius: 12px; overflow: hidden; background: #000; }
+        .video-container video { width: 100%; display: block; }
+        .watermark {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none; z-index: 10;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.1rem; font-weight: 600; color: rgba(255,255,255,0.12);
+            text-align: center; line-height: 1.8;
+            letter-spacing: 0.5px;
+            transform: rotate(-25deg);
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .lesson-title-bar { margin-top: 16px; }
+        .lesson-title-bar h2 { margin-bottom: 4px; }
+        .lesson-meta { color: var(--gray-500); font-size: 0.85rem; display: flex; gap: 16px; flex-wrap: wrap; }
+        .lesson-description { color: var(--gray-700); font-size: 0.95rem; margin-top: 12px; line-height: 1.6; }
+
+        /* Progress indicator */
+        .progress-info { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+        .progress-bar { background: var(--gray-200); border-radius: 999px; height: 6px; flex: 1; overflow: hidden; }
+        .progress-fill { background: linear-gradient(90deg, var(--green-500), #4ade80); height: 100%; border-radius: 999px; transition: width 0.5s ease; }
+        .progress-text { font-size: 0.8rem; color: var(--gray-500); white-space: nowrap; }
+
+        /* Materials */
+        .asset-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--gray-200); margin-bottom: 8px; text-decoration: none; color: var(--gray-900); transition: border-color 0.2s, background 0.2s; }
+        .asset-item:hover { border-color: var(--green-500); background: var(--green-100); }
+        .asset-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--green-100); color: var(--green-700); display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 700; flex-shrink: 0; }
+        .asset-info { flex: 1; min-width: 0; }
+        .asset-title { font-weight: 500; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .asset-type { font-size: 0.75rem; color: var(--gray-500); text-transform: uppercase; }
+        .no-materials { color: var(--gray-500); font-size: 0.9rem; text-align: center; padding: 24px 0; }
+        .no-video { color: var(--gray-500); text-align: center; padding: 60px 20px; }
+        .no-video p { font-size: 1rem; }
+
+        /* Quiz styles */
+        .quiz-section { margin-top: 0; }
+        .question { background: var(--gray-100); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+        .question-text { font-weight: 600; font-size: 0.95rem; margin-bottom: 12px; color: var(--green-900); }
+        .question-number { color: var(--gray-500); font-size: 0.8rem; margin-bottom: 4px; }
+        .option-label { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--gray-200); margin-bottom: 6px; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: white; font-size: 0.9rem; }
+        .option-label:hover { border-color: var(--green-500); background: var(--green-100); }
+        .option-label input { accent-color: var(--green-500); }
+        .option-label.correct { border-color: #22c55e; background: #f0fdf4; }
+        .option-label.incorrect { border-color: #ef4444; background: #fef2f2; }
+        .quiz-result { padding: 20px; border-radius: 14px; text-align: center; margin-bottom: 16px; }
+        .quiz-result.passed { background: #f0fdf4; border: 1px solid #22c55e; color: #166534; }
+        .quiz-result.failed { background: #fef2f2; border: 1px solid #ef4444; color: #991b1b; }
+        .quiz-result h3 { margin: 0 0 8px; }
+        .quiz-result p { margin: 0; font-size: 0.9rem; }
+        .quiz-meta { color: var(--gray-500); font-size: 0.85rem; margin-bottom: 16px; display: flex; gap: 16px; flex-wrap: wrap; }
+        .quiz-actions { display: flex; gap: 12px; justify-content: center; margin-top: 16px; }
+
+        /* Buttons */
+        .btn { padding: 12px 24px; border-radius: 12px; border: none; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: opacity 0.2s; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: linear-gradient(135deg, var(--green-700), var(--green-500)); color: white; }
+        .btn-primary:hover:not(:disabled) { opacity: 0.9; }
+        .btn-secondary { background: var(--gray-200); color: var(--gray-900); }
+        .btn-secondary:hover:not(:disabled) { background: var(--gray-500); color: white; }
+
+        /* Completion */
+        .completion-section { text-align: center; }
+        .completion-criteria { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; text-align: left; }
+        .criterion { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; padding: 8px 14px; border-radius: 10px; background: var(--gray-100); }
+        .criterion-icon { font-size: 1.1rem; }
+        .criterion.met .criterion-icon { color: #22c55e; }
+        .criterion.unmet .criterion-icon { color: var(--gray-500); }
+        .completed-badge { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; background: #f0fdf4; border: 1px solid #22c55e; color: #166534; border-radius: 12px; font-weight: 600; font-size: 1rem; }
+
+        @media (max-width: 768px) {
+            .lesson-layout { flex-direction: column; }
+            .materials-section { min-width: unset; }
+        }
+        @media (max-width: 640px) {
+            .header-content { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div><h1>Carbon Farming Master</h1></div>
+            <div class="nav-links">
+                <a href="/learn/index.html">Dashboard</a>
+                <a href="/learn/checkin.html">Check-in</a>
+                <a href="/learn/profile.html">Profilo</a>
+                <a href="#" id="logout-btn">Esci</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="breadcrumb">
+            <a href="/learn/index.html">Dashboard</a> &rsaquo;
+            <a href="#" id="breadcrumb-course">Corso</a> &rsaquo;
+            <span id="breadcrumb-lesson">Lezione</span>
+        </div>
+
+        <div class="lesson-layout">
+            <!-- Video column (70%) -->
+            <div class="video-section">
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div class="video-container" id="video-container">
+                        <div class="no-video" id="no-video">
+                            <p>Caricamento video...</p>
+                        </div>
+                        <video id="player" playsinline style="display:none;"></video>
+                        <div class="watermark" id="watermark"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="lesson-title-bar">
+                        <h2 id="lesson-title">Caricamento...</h2>
+                        <div class="lesson-meta" id="lesson-meta"></div>
+                    </div>
+                    <div class="progress-info">
+                        <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+                        <div class="progress-text" id="progress-text">0%</div>
+                    </div>
+                    <div class="lesson-description" id="lesson-description"></div>
+                </div>
+
+                <!-- Quiz section -->
+                <div class="card quiz-section" id="quiz-section" style="display: none;">
+                    <h2 id="quiz-title">Quiz di verifica</h2>
+                    <div class="quiz-meta" id="quiz-meta"></div>
+                    <div id="quiz-result-area"></div>
+                    <div id="quiz-questions"></div>
+                    <div class="quiz-actions" id="quiz-actions" style="display: none;">
+                        <button class="btn btn-primary" id="quiz-submit-btn">Invia risposte</button>
+                    </div>
+                    <div id="quiz-attempts-area" style="margin-top: 16px;"></div>
+                </div>
+
+                <!-- Completion section -->
+                <div class="card completion-section" id="completion-section">
+                    <h2>Completamento lezione</h2>
+                    <div class="completion-criteria" id="completion-criteria"></div>
+                    <div id="completion-action"></div>
+                </div>
+            </div>
+
+            <!-- Materials column (30%) -->
+            <div class="materials-section">
+                <div class="card">
+                    <h3>Materiali</h3>
+                    <div id="materials-list">
+                        <div class="no-materials">Caricamento...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+    <script>
+    (function() {
+        'use strict';
+
+        // --- Auth ---
+        const token = sessionStorage.getItem('learnToken');
+        if (!token) { window.location.href = '/learn/login.html'; }
+
+        let currentUser = {};
+        try {
+            const stored = sessionStorage.getItem('learnUser');
+            if (stored) currentUser = JSON.parse(stored);
+        } catch(e) {}
+
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            sessionStorage.removeItem('learnToken');
+            sessionStorage.removeItem('learnUser');
+            window.location.href = '/learn/login.html';
+        });
+
+        const params = new URLSearchParams(window.location.search);
+        const lessonId = params.get('id');
+        if (!lessonId) { window.location.href = '/learn/index.html'; }
+
+        // --- Copy protection ---
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+            }
+        });
+
+        // --- API helper ---
+        async function api(url, options = {}) {
+            const res = await fetch(url, {
+                ...options,
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {})
+                }
+            });
+            if (res.status === 401) {
+                sessionStorage.removeItem('learnToken');
+                window.location.href = '/learn/login.html';
+                return null;
+            }
+            if (!res.ok) throw new Error('API error ' + res.status);
+            return res.json();
+        }
+
+        // --- Segment tracking ---
+        // Tracks unique 1-second segments that have been actually watched
+        class SegmentTracker {
+            constructor(durationSeconds) {
+                this.duration = durationSeconds || 0;
+                this.segments = new Set();
+            }
+
+            loadSegments(savedSegments) {
+                if (Array.isArray(savedSegments)) {
+                    // Segments saved as [start, end] pairs
+                    savedSegments.forEach(([s, e]) => {
+                        for (let i = s; i < e; i++) this.segments.add(i);
+                    });
+                }
+            }
+
+            markWatched(fromSec, toSec) {
+                const start = Math.floor(fromSec);
+                const end = Math.floor(toSec);
+                for (let i = start; i < end; i++) {
+                    this.segments.add(i);
+                }
+            }
+
+            getPercentage() {
+                if (!this.duration || this.duration <= 0) return 0;
+                return Math.min(Math.round((this.segments.size / this.duration) * 100), 100);
+            }
+
+            // Compress segments into [start, end] ranges for storage
+            toRanges() {
+                if (!this.segments.size) return [];
+                const sorted = [...this.segments].sort((a, b) => a - b);
+                const ranges = [];
+                let start = sorted[0];
+                let end = start + 1;
+                for (let i = 1; i < sorted.length; i++) {
+                    if (sorted[i] === end) {
+                        end++;
+                    } else {
+                        ranges.push([start, end]);
+                        start = sorted[i];
+                        end = start + 1;
+                    }
+                }
+                ranges.push([start, end]);
+                return ranges;
+            }
+        }
+
+        // --- Watermark ---
+        function setupWatermark() {
+            const name = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ') || currentUser.email || 'Studente';
+            const date = new Date().toLocaleDateString('it-IT');
+            document.getElementById('watermark').textContent = `${name}\n${date}`;
+        }
+
+        // --- Main ---
+        let plyrInstance = null;
+        let segmentTracker = null;
+        let lastTrackedTime = 0;
+        let sessionStartTime = Date.now();
+        let saveInterval = null;
+        let currentLesson = null;
+        let currentQuiz = null;
+        let quizPassed = false;
+
+        async function loadLesson() {
+            try {
+                const [lesson, assets] = await Promise.all([
+                    api(`/api/lms/lessons/${lessonId}`),
+                    api(`/api/lms/lesson-assets?lessonId=${lessonId}`)
+                ]);
+
+                if (!lesson) return;
+                currentLesson = lesson;
+
+                // Title and meta
+                document.getElementById('lesson-title').textContent = lesson.title;
+                document.getElementById('breadcrumb-lesson').textContent = lesson.title;
+                document.title = `${lesson.title} - Carbon Farming Master`;
+
+                const metaParts = [];
+                if (lesson.durationSeconds) {
+                    const mins = Math.round(lesson.durationSeconds / 60);
+                    metaParts.push(`${mins} min`);
+                }
+                if (lesson.videoProvider) metaParts.push(lesson.videoProvider);
+                document.getElementById('lesson-meta').textContent = metaParts.join(' — ');
+
+                if (lesson.description) {
+                    document.getElementById('lesson-description').textContent = lesson.description;
+                }
+
+                // Course breadcrumb link
+                if (lesson.moduleId) {
+                    const courseLink = document.getElementById('breadcrumb-course');
+                    courseLink.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        window.history.back();
+                    });
+                }
+
+                // Determine video URL: prefer recording_final asset, fallback to lesson videoUrl
+                let videoUrl = lesson.videoUrl;
+                if (assets && assets.length) {
+                    const recording = assets.find(a => a.assetType === 'recording_final');
+                    if (recording) videoUrl = recording.url;
+                }
+
+                // Update progress display
+                const progress = lesson.progress;
+                if (progress) {
+                    updateProgressUI(progress.progressPercent || 0);
+                }
+
+                // Init segment tracker
+                segmentTracker = new SegmentTracker(lesson.durationSeconds);
+                if (progress && progress.watchedSegments) {
+                    segmentTracker.loadSegments(progress.watchedSegments);
+                }
+
+                // Setup video
+                if (videoUrl) {
+                    setupVideo(videoUrl, progress);
+                } else {
+                    document.getElementById('no-video').innerHTML = '<p>Video non ancora disponibile per questa lezione.</p>';
+                }
+
+                // Setup materials
+                renderMaterials(assets ? assets.filter(a => a.assetType !== 'recording_final') : []);
+
+                // Setup watermark
+                setupWatermark();
+
+                // Load quiz if exists
+                await loadQuiz();
+
+                // Update completion section
+                updateCompletionUI();
+
+            } catch (error) {
+                console.error('Error loading lesson', error);
+                document.getElementById('lesson-title').textContent = 'Errore nel caricamento';
+            }
+        }
+
+        function setupVideo(videoUrl, progress) {
+            const videoEl = document.getElementById('player');
+            videoEl.style.display = '';
+            document.getElementById('no-video').style.display = 'none';
+
+            videoEl.src = videoUrl;
+
+            plyrInstance = new Plyr(videoEl, {
+                speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
+                controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'fullscreen'],
+                settings: ['speed'],
+                keyboard: { focused: true, global: false },
+                tooltips: { controls: true, seek: true }
+            });
+
+            // Resume from last position
+            if (progress && progress.lastPositionSeconds > 0) {
+                plyrInstance.once('canplay', () => {
+                    plyrInstance.currentTime = progress.lastPositionSeconds;
+                });
+            }
+
+            // Track playback for segment tracking
+            plyrInstance.on('timeupdate', () => {
+                const currentTime = plyrInstance.currentTime;
+                // Only track if playing forward in small increments (not seeking)
+                if (currentTime > lastTrackedTime && (currentTime - lastTrackedTime) < 3) {
+                    segmentTracker.markWatched(lastTrackedTime, currentTime);
+                }
+                lastTrackedTime = currentTime;
+            });
+
+            plyrInstance.on('seeking', () => {
+                // Update lastTrackedTime on seek so we don't count skipped segments
+                lastTrackedTime = plyrInstance.currentTime;
+            });
+
+            // Update duration once metadata is loaded
+            plyrInstance.on('loadedmetadata', () => {
+                if (plyrInstance.duration > 0) {
+                    segmentTracker.duration = Math.floor(plyrInstance.duration);
+                }
+            });
+
+            // Save progress every 10 seconds
+            saveInterval = setInterval(saveProgress, 10000);
+
+            // Save on pause and on page unload
+            plyrInstance.on('pause', saveProgress);
+            window.addEventListener('beforeunload', saveProgress);
+        }
+
+        function updateProgressUI(percent) {
+            document.getElementById('progress-fill').style.width = percent + '%';
+            document.getElementById('progress-text').textContent = percent + '%';
+        }
+
+        async function saveProgress() {
+            if (!plyrInstance || !segmentTracker) return;
+
+            const watchPercentage = segmentTracker.getPercentage();
+            const timeSpentSeconds = Math.round((Date.now() - sessionStartTime) / 1000);
+
+            updateProgressUI(watchPercentage);
+
+            try {
+                await api(`/api/lms/lessons/${lessonId}/progress`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        lastPositionSec: Math.floor(plyrInstance.currentTime),
+                        watchPercentage: watchPercentage,
+                        timeSpentSeconds: timeSpentSeconds,
+                        watchedSegments: segmentTracker.toRanges()
+                    })
+                });
+            } catch (e) {
+                console.error('Error saving progress', e);
+            }
+        }
+
+        function renderMaterials(assets) {
+            const container = document.getElementById('materials-list');
+            if (!assets || !assets.length) {
+                container.innerHTML = '<div class="no-materials">Nessun materiale disponibile.</div>';
+                return;
+            }
+
+            const iconMap = {
+                pdf: 'PDF',
+                slide: 'PPT',
+                link: 'URL',
+                file: 'FILE',
+                other: 'DOC'
+            };
+
+            container.innerHTML = assets.map(a => `
+                <a class="asset-item" href="${escapeHtml(a.url)}" target="_blank" rel="noopener">
+                    <div class="asset-icon">${iconMap[a.assetType] || 'DOC'}</div>
+                    <div class="asset-info">
+                        <div class="asset-title">${escapeHtml(a.title)}</div>
+                        <div class="asset-type">${escapeHtml(a.assetType)}</div>
+                    </div>
+                </a>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // --- Quiz ---
+        async function loadQuiz() {
+            try {
+                const quizzes = await api(`/api/lms/quizzes?lessonId=${lessonId}`);
+                if (!quizzes || !quizzes.length) {
+                    document.getElementById('quiz-section').style.display = 'none';
+                    return;
+                }
+
+                const quizSummary = quizzes[0];
+                // Load full quiz with questions
+                const quiz = await api(`/api/lms/quizzes/${quizSummary.id}`);
+                if (!quiz) return;
+                currentQuiz = quiz;
+
+                document.getElementById('quiz-section').style.display = '';
+                document.getElementById('quiz-title').textContent = quiz.title || 'Quiz di verifica';
+
+                const metaParts = [];
+                metaParts.push(`Punteggio minimo: ${quiz.passingScore}%`);
+                if (quiz.timeLimitMinutes) metaParts.push(`Tempo: ${quiz.timeLimitMinutes} min`);
+                if (quiz.maxAttempts > 0) metaParts.push(`Max tentativi: ${quiz.maxAttempts}`);
+                document.getElementById('quiz-meta').textContent = metaParts.join(' — ');
+
+                // Load previous attempts
+                const attempts = await api(`/api/lms/quizzes/${quiz.id}/attempts`);
+                quizPassed = attempts && attempts.some(a => a.passed);
+
+                if (quizPassed) {
+                    const best = attempts.find(a => a.passed);
+                    document.getElementById('quiz-result-area').innerHTML = `
+                        <div class="quiz-result passed">
+                            <h3>Quiz superato!</h3>
+                            <p>Punteggio: ${best.score}% (minimo: ${quiz.passingScore}%)</p>
+                        </div>
+                    `;
+                    renderAttempts(attempts);
+                    updateCompletionUI();
+                    return;
+                }
+
+                // Show attempts history
+                renderAttempts(attempts);
+
+                // Render questions
+                renderQuizQuestions(quiz.questions);
+            } catch (error) {
+                console.error('Error loading quiz', error);
+            }
+        }
+
+        function renderQuizQuestions(questions) {
+            const container = document.getElementById('quiz-questions');
+            if (!questions || !questions.length) {
+                container.innerHTML = '<p style="color: var(--gray-500);">Nessuna domanda disponibile.</p>';
+                return;
+            }
+
+            container.innerHTML = questions.map((q, i) => {
+                const inputType = q.questionType === 'multiple_choice' ? 'checkbox' : 'radio';
+                const options = (q.options || []).map((opt, j) => `
+                    <label class="option-label" data-question="${q.id}" data-option="${j}">
+                        <input type="${inputType}" name="q_${q.id}" value="${escapeHtml(JSON.stringify(opt))}" />
+                        <span>${escapeHtml(String(opt))}</span>
+                    </label>
+                `).join('');
+
+                return `
+                    <div class="question" data-question-id="${q.id}">
+                        <div class="question-number">Domanda ${i + 1} di ${questions.length} (${q.points} ${q.points === 1 ? 'punto' : 'punti'})</div>
+                        <div class="question-text">${escapeHtml(q.questionText)}</div>
+                        ${options}
+                    </div>
+                `;
+            }).join('');
+
+            // Show submit button
+            document.getElementById('quiz-actions').style.display = '';
+            document.getElementById('quiz-submit-btn').onclick = submitQuiz;
+        }
+
+        async function submitQuiz() {
+            if (!currentQuiz) return;
+            const answers = {};
+
+            currentQuiz.questions.forEach(q => {
+                if (q.questionType === 'multiple_choice') {
+                    const checked = document.querySelectorAll(`input[name="q_${q.id}"]:checked`);
+                    answers[q.id] = Array.from(checked).map(el => JSON.parse(el.value));
+                } else {
+                    const checked = document.querySelector(`input[name="q_${q.id}"]:checked`);
+                    answers[q.id] = checked ? JSON.parse(checked.value) : null;
+                }
+            });
+
+            try {
+                document.getElementById('quiz-submit-btn').disabled = true;
+                const result = await api(`/api/lms/quizzes/${currentQuiz.id}/submit`, {
+                    method: 'POST',
+                    body: JSON.stringify({ answers })
+                });
+                if (!result) return;
+
+                // Show result
+                const resultArea = document.getElementById('quiz-result-area');
+                const cls = result.passed ? 'passed' : 'failed';
+                resultArea.innerHTML = `
+                    <div class="quiz-result ${cls}">
+                        <h3>${result.passed ? 'Quiz superato!' : 'Quiz non superato'}</h3>
+                        <p>Punteggio: ${result.score}% (minimo: ${result.passingScore}%)</p>
+                    </div>
+                `;
+
+                // Highlight correct/incorrect answers
+                if (result.results) {
+                    Object.entries(result.results).forEach(([qId, r]) => {
+                        const questionDiv = document.querySelector(`[data-question-id="${qId}"]`);
+                        if (!questionDiv) return;
+                        const labels = questionDiv.querySelectorAll('.option-label');
+                        labels.forEach(label => {
+                            const input = label.querySelector('input');
+                            const val = JSON.parse(input.value);
+                            const correctAnswer = r.correctAnswer;
+                            const isCorrectOption = Array.isArray(correctAnswer)
+                                ? correctAnswer.includes(val)
+                                : val === correctAnswer;
+
+                            if (isCorrectOption) {
+                                label.classList.add('correct');
+                            } else if (input.checked && !isCorrectOption) {
+                                label.classList.add('incorrect');
+                            }
+                            input.disabled = true;
+                        });
+                    });
+                }
+
+                quizPassed = result.passed;
+
+                if (result.passed) {
+                    document.getElementById('quiz-actions').style.display = 'none';
+                } else {
+                    // Allow retry
+                    document.getElementById('quiz-actions').innerHTML = `
+                        <button class="btn btn-secondary" onclick="retryQuiz()">Riprova</button>
+                    `;
+                }
+
+                // Reload attempts
+                const attempts = await api(`/api/lms/quizzes/${currentQuiz.id}/attempts`);
+                renderAttempts(attempts);
+
+                // Update completion criteria
+                updateCompletionUI();
+            } catch (error) {
+                console.error('Error submitting quiz', error);
+                document.getElementById('quiz-submit-btn').disabled = false;
+            }
+        }
+
+        // Exposed globally for onclick
+        window.retryQuiz = function() {
+            document.getElementById('quiz-result-area').innerHTML = '';
+            renderQuizQuestions(currentQuiz.questions);
+        };
+
+        function renderAttempts(attempts) {
+            const container = document.getElementById('quiz-attempts-area');
+            if (!attempts || !attempts.length) {
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = `
+                <details style="font-size: 0.85rem;">
+                    <summary style="cursor: pointer; color: var(--gray-500); margin-bottom: 8px;">Storico tentativi (${attempts.length})</summary>
+                    ${attempts.map(a => `
+                        <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--gray-200);">
+                            <span>${a.passed ? '&#10003;' : '&#10007;'} Punteggio: ${a.score}%</span>
+                            <span style="color: var(--gray-500);">${new Date(a.completedAt).toLocaleString('it-IT')}</span>
+                        </div>
+                    `).join('')}
+                </details>
+            `;
+        }
+
+        // --- Completion ---
+        function updateCompletionUI() {
+            const section = document.getElementById('completion-section');
+            const criteriaDiv = document.getElementById('completion-criteria');
+            const actionDiv = document.getElementById('completion-action');
+
+            if (!currentLesson) return;
+
+            const progress = currentLesson.progress;
+
+            // Already completed?
+            if (progress && progress.completedAt) {
+                criteriaDiv.innerHTML = '';
+                actionDiv.innerHTML = '<div class="completed-badge">&#10003; Lezione completata</div>';
+                return;
+            }
+
+            const videoPercent = segmentTracker ? segmentTracker.getPercentage() : (progress ? progress.progressPercent : 0);
+            const videoOk = videoPercent >= 80;
+
+            const timeSpent = Math.round((Date.now() - sessionStartTime) / 1000);
+            const minTime = currentLesson.durationSeconds ? Math.floor(currentLesson.durationSeconds * 0.75) : 0;
+            const timeOk = !currentLesson.durationSeconds || (timeSpent >= minTime);
+
+            const hasQuiz = currentQuiz !== null;
+            const quizOk = !hasQuiz || quizPassed;
+
+            criteriaDiv.innerHTML = `
+                <div class="criterion ${videoOk ? 'met' : 'unmet'}">
+                    <span class="criterion-icon">${videoOk ? '&#10003;' : '&#9675;'}</span>
+                    <span>Video guardato almeno 80% (attuale: ${videoPercent}%)</span>
+                </div>
+                <div class="criterion ${timeOk ? 'met' : 'unmet'}">
+                    <span class="criterion-icon">${timeOk ? '&#10003;' : '&#9675;'}</span>
+                    <span>Tempo minimo sulla pagina${minTime > 0 ? ` (${formatTime(minTime)} richiesti, ${formatTime(timeSpent)} trascorsi)` : ''}</span>
+                </div>
+                ${hasQuiz ? `
+                <div class="criterion ${quizOk ? 'met' : 'unmet'}">
+                    <span class="criterion-icon">${quizOk ? '&#10003;' : '&#9675;'}</span>
+                    <span>Quiz superato${currentQuiz ? ` (minimo ${currentQuiz.passingScore}%)` : ''}</span>
+                </div>
+                ` : ''}
+            `;
+
+            const allMet = videoOk && timeOk && quizOk;
+            if (allMet) {
+                actionDiv.innerHTML = '<button class="btn btn-primary" id="complete-btn">Completa lezione</button>';
+                document.getElementById('complete-btn').onclick = completeLesson;
+            } else {
+                actionDiv.innerHTML = '<p style="color: var(--gray-500); font-size: 0.9rem;">Soddisfa tutti i criteri per completare la lezione.</p>';
+            }
+        }
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return m > 0 ? `${m}m ${s}s` : `${s}s`;
+        }
+
+        async function completeLesson() {
+            try {
+                // Save progress one last time before completing
+                await saveProgress();
+
+                const result = await api(`/api/lms/lessons/${lessonId}/complete`, {
+                    method: 'POST',
+                    body: JSON.stringify({})
+                });
+
+                if (!result) return;
+
+                if (result.completed) {
+                    currentLesson.progress = currentLesson.progress || {};
+                    currentLesson.progress.completedAt = new Date().toISOString();
+                    updateCompletionUI();
+                }
+            } catch (error) {
+                // API returns 400 with criteria details
+                if (error.message && error.message.includes('400')) {
+                    // Refresh criteria display
+                    updateCompletionUI();
+                }
+                console.error('Error completing lesson', error);
+            }
+        }
+
+        // Periodically update completion UI
+        setInterval(updateCompletionUI, 15000);
+
+        loadLesson();
+    })();
+    </script>
+</body>
+</html>

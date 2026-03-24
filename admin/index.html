@@ -266,6 +266,17 @@
             margin-top: 24px;
         }
 
+        /* Workflow pipeline */
+        .wf-col { flex: 1; min-width: 160px; background: var(--gray-100); border-radius: 12px; padding: 12px; }
+        .wf-col-header { font-weight: 600; font-size: 0.8rem; text-transform: uppercase; color: var(--gray-500); margin-bottom: 10px; text-align: center; letter-spacing: 0.5px; }
+        .wf-card { background: white; border-radius: 10px; padding: 12px; margin-bottom: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid rgba(0,0,0,0.06); font-size: 0.85rem; }
+        .wf-card-title { font-weight: 600; color: var(--green-900); margin-bottom: 4px; word-break: break-word; }
+        .wf-card-meta { color: var(--gray-500); font-size: 0.75rem; margin-bottom: 8px; }
+        .wf-card-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+        .wf-card-actions button { padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--gray-200); background: white; cursor: pointer; font-weight: 500; }
+        .wf-card-actions button.action { background: var(--green-100); color: var(--green-700); border-color: var(--green-500); }
+        .wf-card-actions button:hover { opacity: 0.8; }
+
         .toast {
             position: fixed;
             right: 24px;
@@ -482,6 +493,8 @@
                 <a href="#lms-courses">Corsi LMS</a>
                 <a href="#lms-modules">Moduli e Lezioni</a>
                 <a href="#lms-enrollments">Iscrizioni</a>
+                <a href="#attendance">Presenze</a>
+                <a href="#workflow">Produzione</a>
                 <a href="#" id="logout-btn" onclick="adminLogout(); return false;" style="background: rgba(255,255,255,0.15);">Esci</a>
             </div>
         </div>
@@ -1163,6 +1176,214 @@
                             <tr data-empty-lms-enroll>
                                 <td colspan="5" class="empty-state">Nessun iscritto per questa edizione.</td>
                             </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================ -->
+        <!-- PRESENZE -->
+        <!-- ============================================ -->
+        <section id="attendance">
+            <header>
+                <h2>Presenze</h2>
+                <p class="section-description">Gestisci le presenze degli studenti: genera codici PIN, importa report Teams, visualizza ed esporta i dati.</p>
+            </header>
+
+            <div style="margin-bottom: 24px;">
+                <label>
+                    Seleziona edizione corso
+                    <select id="att-edition-select" style="margin-top: 8px;">
+                        <option value="">-- Seleziona un'edizione --</option>
+                    </select>
+                </label>
+            </div>
+
+            <div id="att-panel" style="display: none;">
+                <!-- Genera codice PIN -->
+                <div style="margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--gray-200);">
+                    <h3 style="font-size: 1.1rem; margin: 0 0 12px; color: var(--green-700);">Genera codice PIN</h3>
+                    <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+                        <label style="flex: 1; min-width: 200px;">
+                            Lezione
+                            <select id="att-lesson-select" style="margin-top: 4px;">
+                                <option value="">-- Seleziona lezione --</option>
+                            </select>
+                        </label>
+                        <button class="primary" id="att-generate-pin">Genera PIN</button>
+                    </div>
+                    <div id="att-pin-display" style="display: none; margin-top: 16px; text-align: center; padding: 32px; background: var(--green-100); border-radius: 14px;">
+                        <div style="font-size: 0.9rem; color: var(--gray-500); margin-bottom: 8px;">Codice PIN (valido 15 minuti)</div>
+                        <div id="att-pin-code" style="font-size: 4rem; font-weight: 700; letter-spacing: 12px; color: var(--green-900);"></div>
+                        <div id="att-pin-expiry" style="font-size: 0.85rem; color: var(--gray-500); margin-top: 8px;"></div>
+                    </div>
+                </div>
+
+                <!-- Import CSV Teams -->
+                <div style="margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--gray-200);">
+                    <h3 style="font-size: 1.1rem; margin: 0 0 12px; color: var(--green-700);">Import CSV Teams</h3>
+                    <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+                        <label style="flex: 1; min-width: 200px;">
+                            Lezione
+                            <select id="att-csv-lesson-select" style="margin-top: 4px;">
+                                <option value="">-- Seleziona lezione --</option>
+                            </select>
+                        </label>
+                        <label class="secondary-button" style="cursor: pointer; padding: 10px 18px; border-radius: 999px; display: inline-block;">
+                            Carica CSV
+                            <input type="file" id="att-csv-file" accept=".csv" style="display: none;">
+                        </label>
+                    </div>
+                    <div id="att-csv-result" style="margin-top: 8px; font-size: 0.9rem;"></div>
+                    <p style="color: var(--gray-500); font-size: 0.8rem; margin-top: 8px;">CSV colonne: nome, email, orario_ingresso, orario_uscita</p>
+                </div>
+
+                <!-- Report presenze -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                    <h3 style="font-size: 1.1rem; margin: 0; color: var(--green-700);">Report presenze</h3>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                        <select id="att-filter-type" style="font-size: 0.85rem;">
+                            <option value="">Tutti i tipi</option>
+                            <option value="in_person">In persona</option>
+                            <option value="remote_live">Da remoto</option>
+                            <option value="async">Asincrona</option>
+                        </select>
+                        <button class="secondary" id="att-export-csv">Esporta CSV</button>
+                        <button class="secondary" id="att-refresh">Aggiorna</button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Cognome</th>
+                                <th>Nome</th>
+                                <th>Email</th>
+                                <th>In persona</th>
+                                <th>Da remoto</th>
+                                <th>Asincrona</th>
+                                <th>Totale</th>
+                                <th>%</th>
+                            </tr>
+                        </thead>
+                        <tbody id="att-report-body">
+                            <tr><td colspan="8" class="empty-state">Seleziona un'edizione per visualizzare il report.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================ -->
+        <!-- PRODUZIONE CONTENUTI -->
+        <!-- ============================================ -->
+        <section id="workflow">
+            <header>
+                <h2>Produzione Contenuti</h2>
+                <p class="section-description">Gestisci il workflow di produzione: da registrazione a pubblicazione, passando per trascrizione e avatar AI.</p>
+            </header>
+
+            <div style="margin-bottom: 24px; display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;">
+                <label style="flex: 1; min-width: 200px;">
+                    Corso
+                    <select id="wf-course-select" style="margin-top: 4px;">
+                        <option value="">-- Tutti i corsi --</option>
+                    </select>
+                </label>
+                <label style="flex: 1; min-width: 200px;">
+                    Nuova registrazione — Lezione LMS
+                    <select id="wf-lesson-select" style="margin-top: 4px;">
+                        <option value="">-- Seleziona lezione --</option>
+                    </select>
+                </label>
+                <div style="display: flex; gap: 8px; align-items: flex-end;">
+                    <label style="flex: 1; min-width: 200px;">
+                        URL video sorgente
+                        <input type="url" id="wf-source-url" placeholder="https://..." style="margin-top: 4px;">
+                    </label>
+                    <button class="primary" id="wf-upload-btn">Carica</button>
+                </div>
+            </div>
+
+            <!-- Pipeline visuale -->
+            <div id="wf-pipeline" style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 12px; min-height: 200px;">
+                <div class="wf-col" data-stage="uploaded">
+                    <div class="wf-col-header">Caricato</div>
+                    <div class="wf-col-cards"></div>
+                </div>
+                <div class="wf-col" data-stage="transcribing">
+                    <div class="wf-col-header">Trascrizione</div>
+                    <div class="wf-col-cards"></div>
+                </div>
+                <div class="wf-col" data-stage="transcript_ready">
+                    <div class="wf-col-header">Transcript pronto</div>
+                    <div class="wf-col-cards"></div>
+                </div>
+                <div class="wf-col" data-stage="teacher_review_transcript">
+                    <div class="wf-col-header">Revisione docente</div>
+                    <div class="wf-col-cards"></div>
+                </div>
+                <div class="wf-col" data-stage="avatar_rendering">
+                    <div class="wf-col-header">Avatar rendering</div>
+                    <div class="wf-col-cards"></div>
+                </div>
+                <div class="wf-col" data-stage="teacher_review_video">
+                    <div class="wf-col-header">Revisione video</div>
+                    <div class="wf-col-cards"></div>
+                </div>
+                <div class="wf-col" data-stage="published">
+                    <div class="wf-col-header">Pubblicato</div>
+                    <div class="wf-col-cards"></div>
+                </div>
+            </div>
+
+            <!-- Consensi docenti -->
+            <div style="margin-top: 32px; padding-top: 24px; border-top: 2px solid var(--gray-200);">
+                <h3 style="font-size: 1.1rem; margin: 0 0 16px; color: var(--green-700);">Consensi docenti</h3>
+                <form id="wf-consent-form" style="margin-bottom: 16px;">
+                    <div class="form-grid">
+                        <label>
+                            Docente
+                            <select id="wf-consent-teacher" required>
+                                <option value="">-- Seleziona docente --</option>
+                            </select>
+                        </label>
+                        <label>
+                            Tipo consenso
+                            <select id="wf-consent-type">
+                                <option value="recording">Registrazione</option>
+                                <option value="publication">Pubblicazione</option>
+                                <option value="avatar">Avatar AI</option>
+                            </select>
+                        </label>
+                        <label>
+                            URL documento
+                            <input type="url" id="wf-consent-doc" placeholder="https://...">
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; padding-top: 20px;">
+                            <input type="checkbox" id="wf-consent-granted" checked> Concesso
+                        </label>
+                    </div>
+                    <div class="actions">
+                        <button class="primary" type="submit">Registra consenso</button>
+                    </div>
+                </form>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Docente</th>
+                                <th>Tipo</th>
+                                <th>Concesso</th>
+                                <th>Data</th>
+                                <th>Documento</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="wf-consents-body">
+                            <tr><td colspan="6" class="empty-state">Nessun consenso registrato.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -2322,6 +2543,10 @@
 
             // Enrollment edition select needs courses+editions
             updateEnrollEditionSelect();
+            // Attendance edition select
+            updateAttEditionSelect();
+            // Workflow section
+            if (typeof initWorkflowSection === 'function') initWorkflowSection();
         }
 
         document.getElementById('lms-course-form').addEventListener('submit', async (e) => {
@@ -2671,10 +2896,12 @@
                             <div class="actions" style="margin: 0;">
                                 <button type="button" class="secondary" data-edit-lms-lesson="${l.id}" data-module-id="${moduleId}">Modifica</button>
                                 <button type="button" class="secondary" data-toggle-assets="${l.id}">Assets</button>
+                                <button type="button" class="secondary" data-toggle-quiz="${l.id}">Quiz</button>
                                 <button type="button" class="danger" data-delete-lms-lesson="${l.id}" data-module-id="${moduleId}">Elimina</button>
                             </div>
                         </div>
                         <div data-assets-for="${l.id}" style="display: none; padding: 8px 0 8px 24px;"></div>
+                        <div data-quiz-for="${l.id}" style="display: none; padding: 8px 0 8px 24px;"></div>
                     `;
                 });
                 html += '</div>';
@@ -2725,6 +2952,9 @@
                 const deleteLessonBtn = ev.target.closest('[data-delete-lms-lesson]');
                 const toggleAssetsBtn = ev.target.closest('[data-toggle-assets]');
                 const deleteAssetBtn = ev.target.closest('[data-delete-asset]');
+                const toggleQuizBtn = ev.target.closest('[data-toggle-quiz]');
+                const deleteQuestionBtn = ev.target.closest('[data-delete-question]');
+                const deleteQuizBtn = ev.target.closest('[data-delete-quiz]');
 
                 if (editLessonBtn) {
                     const lid = editLessonBtn.dataset.editLmsLesson;
@@ -2775,6 +3005,41 @@
                         showToast('Asset eliminato');
                         const assetsDiv = panel.querySelector(`[data-assets-for="${lid}"]`);
                         loadLmsAssets(lid, assetsDiv, moduleId, panel);
+                    } catch (error) {}
+                }
+
+                if (toggleQuizBtn) {
+                    const lid = toggleQuizBtn.dataset.toggleQuiz;
+                    const quizDiv = panel.querySelector(`[data-quiz-for="${lid}"]`);
+                    if (quizDiv.style.display === 'none') {
+                        quizDiv.style.display = '';
+                        loadLmsQuiz(lid, quizDiv);
+                    } else {
+                        quizDiv.style.display = 'none';
+                    }
+                }
+
+                if (deleteQuestionBtn) {
+                    const qid = deleteQuestionBtn.dataset.deleteQuestion;
+                    const lid = deleteQuestionBtn.dataset.lessonId;
+                    if (!confirm('Eliminare questa domanda?')) return;
+                    try {
+                        await apiRequest(`/api/lms/quiz-questions/${qid}`, { method: 'DELETE' });
+                        showToast('Domanda eliminata');
+                        const quizDiv = panel.querySelector(`[data-quiz-for="${lid}"]`);
+                        loadLmsQuiz(lid, quizDiv);
+                    } catch (error) {}
+                }
+
+                if (deleteQuizBtn) {
+                    const qzid = deleteQuizBtn.dataset.deleteQuiz;
+                    const lid = deleteQuizBtn.dataset.lessonId;
+                    if (!confirm('Eliminare questo quiz e tutte le sue domande?')) return;
+                    try {
+                        await apiRequest(`/api/lms/quizzes/${qzid}`, { method: 'DELETE' });
+                        showToast('Quiz eliminato');
+                        const quizDiv = panel.querySelector(`[data-quiz-for="${lid}"]`);
+                        loadLmsQuiz(lid, quizDiv);
                     } catch (error) {}
                 }
             });
@@ -2833,6 +3098,162 @@
                 });
             } catch (error) {
                 container.innerHTML = '<span style="color: #b91c1c;">Errore caricamento assets.</span>';
+            }
+        }
+
+        // ============================================
+        // QUIZ MANAGEMENT (inside lesson panels)
+        // ============================================
+
+        async function loadLmsQuiz(lessonId, container) {
+            try {
+                const quizzes = await apiRequest(`/api/lms/quizzes?lessonId=${lessonId}`);
+                const quiz = quizzes.length ? quizzes[0] : null;
+
+                let html = '';
+
+                if (!quiz) {
+                    // Form to create quiz
+                    html = `
+                        <h4 style="margin: 0 0 12px; color: var(--green-700);">Quiz della lezione</h4>
+                        <form data-quiz-create-form="${lessonId}">
+                            <div class="form-grid">
+                                <label>Titolo quiz <input type="text" data-field="title" required placeholder="Quiz di verifica"></label>
+                                <label>Punteggio minimo (%) <input type="number" data-field="passingScore" min="0" max="100" value="70"></label>
+                                <label>Limite tempo (min) <input type="number" data-field="timeLimitMinutes" min="0" placeholder="Opzionale"></label>
+                                <label>Max tentativi (0=illimitati) <input type="number" data-field="maxAttempts" min="0" value="0"></label>
+                            </div>
+                            <div class="actions">
+                                <label class="switch"><input type="checkbox" data-field="isPublished" checked><span class="slider"></span> Pubblicato</label>
+                                <button class="primary" type="submit">Crea quiz</button>
+                            </div>
+                        </form>
+                    `;
+                    container.innerHTML = html;
+
+                    const createForm = container.querySelector(`[data-quiz-create-form="${lessonId}"]`);
+                    createForm.addEventListener('submit', async (ev) => {
+                        ev.preventDefault();
+                        const payload = {
+                            lessonId: lessonId,
+                            title: createForm.querySelector('[data-field="title"]').value.trim(),
+                            passingScore: Number(createForm.querySelector('[data-field="passingScore"]').value) || 70,
+                            timeLimitMinutes: createForm.querySelector('[data-field="timeLimitMinutes"]').value ? Number(createForm.querySelector('[data-field="timeLimitMinutes"]').value) : null,
+                            maxAttempts: Number(createForm.querySelector('[data-field="maxAttempts"]').value) || 0,
+                            isPublished: createForm.querySelector('[data-field="isPublished"]').checked
+                        };
+                        if (!payload.title) { showToast('Inserisci il titolo del quiz', 'error'); return; }
+                        try {
+                            await apiRequest('/api/lms/quizzes', { method: 'POST', body: JSON.stringify(payload) });
+                            showToast('Quiz creato');
+                            loadLmsQuiz(lessonId, container);
+                        } catch (error) {}
+                    });
+                    return;
+                }
+
+                // Quiz exists — show quiz info + questions
+                const questions = await apiRequest(`/api/lms/quiz-questions?quizId=${quiz.id}`);
+
+                html = `
+                    <h4 style="margin: 0 0 8px; color: var(--green-700);">Quiz: ${quiz.title}</h4>
+                    <div style="font-size: 0.85rem; color: var(--gray-500); margin-bottom: 12px;">
+                        Punteggio minimo: ${quiz.passingScore}%
+                        ${quiz.timeLimitMinutes ? ` — Tempo: ${quiz.timeLimitMinutes} min` : ''}
+                        ${quiz.maxAttempts > 0 ? ` — Max tentativi: ${quiz.maxAttempts}` : ''}
+                        — ${quiz.isPublished ? 'Pubblicato' : 'Bozza'}
+                        <button type="button" class="danger" data-delete-quiz="${quiz.id}" data-lesson-id="${lessonId}" style="margin-left: 12px; padding: 2px 8px; font-size: 0.8rem;">Elimina quiz</button>
+                    </div>
+
+                    <h5 style="margin: 16px 0 8px; color: var(--green-900);">Domande (${questions.length})</h5>
+                    <form data-question-form="${quiz.id}">
+                        <div class="form-grid">
+                            <label style="grid-column: 1/-1;">Testo domanda <textarea data-field="questionText" rows="2" required placeholder="Scrivi la domanda..."></textarea></label>
+                            <label>Tipo
+                                <select data-field="questionType">
+                                    <option value="single_choice">Scelta singola</option>
+                                    <option value="multiple_choice">Scelta multipla</option>
+                                    <option value="true_false">Vero/Falso</option>
+                                </select>
+                            </label>
+                            <label>Punti <input type="number" data-field="points" min="1" value="1"></label>
+                            <label>Ordine <input type="number" data-field="sortOrder" min="0" value="${questions.length}"></label>
+                            <label style="grid-column: 1/-1;">Opzioni (JSON array, es: ["Opz A","Opz B","Opz C"])
+                                <input type="text" data-field="options" placeholder='["Opzione 1","Opzione 2","Opzione 3"]'>
+                            </label>
+                            <label style="grid-column: 1/-1;">Risposta corretta (JSON, es: "Opz A" o ["Opz A","Opz B"])
+                                <input type="text" data-field="correctAnswer" placeholder='"Opzione 1"'>
+                            </label>
+                        </div>
+                        <div class="actions">
+                            <button class="primary" type="submit">Aggiungi domanda</button>
+                        </div>
+                    </form>
+                `;
+
+                // List existing questions
+                if (questions.length > 0) {
+                    html += '<div style="margin-top: 12px;">';
+                    questions.forEach((q, i) => {
+                        const typeLabel = { single_choice: 'Scelta singola', multiple_choice: 'Scelta multipla', true_false: 'V/F' }[q.questionType] || q.questionType;
+                        html += `
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--gray-200); font-size: 0.9rem;">
+                                <div>
+                                    <strong>${i + 1}. ${q.questionText}</strong><br>
+                                    <span style="color: var(--gray-500);">${typeLabel} — ${q.points} pt — Opzioni: ${JSON.stringify(q.options)} — Risposta: ${JSON.stringify(q.correctAnswer)}</span>
+                                </div>
+                                <button type="button" class="danger" data-delete-question="${q.id}" data-lesson-id="${lessonId}" style="padding: 2px 8px; font-size: 0.8rem; flex-shrink: 0; margin-left: 8px;">Elimina</button>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+
+                container.innerHTML = html;
+
+                // Question form handler
+                const qForm = container.querySelector(`[data-question-form="${quiz.id}"]`);
+                const typeSelect = qForm.querySelector('[data-field="questionType"]');
+
+                // Auto-fill options for true_false
+                typeSelect.addEventListener('change', () => {
+                    if (typeSelect.value === 'true_false') {
+                        qForm.querySelector('[data-field="options"]').value = '["Vero","Falso"]';
+                    }
+                });
+
+                qForm.addEventListener('submit', async (ev) => {
+                    ev.preventDefault();
+                    let options, correctAnswer;
+                    try {
+                        options = JSON.parse(qForm.querySelector('[data-field="options"]').value || '[]');
+                    } catch (e) {
+                        showToast('Opzioni JSON non valido', 'error'); return;
+                    }
+                    try {
+                        correctAnswer = JSON.parse(qForm.querySelector('[data-field="correctAnswer"]').value || 'null');
+                    } catch (e) {
+                        showToast('Risposta corretta JSON non valida', 'error'); return;
+                    }
+
+                    const payload = {
+                        quizId: quiz.id,
+                        questionText: qForm.querySelector('[data-field="questionText"]').value.trim(),
+                        questionType: typeSelect.value,
+                        options: options,
+                        correctAnswer: correctAnswer,
+                        points: Number(qForm.querySelector('[data-field="points"]').value) || 1,
+                        sortOrder: Number(qForm.querySelector('[data-field="sortOrder"]').value) || 0
+                    };
+                    if (!payload.questionText) { showToast('Inserisci il testo della domanda', 'error'); return; }
+                    try {
+                        await apiRequest('/api/lms/quiz-questions', { method: 'POST', body: JSON.stringify(payload) });
+                        showToast('Domanda aggiunta');
+                        loadLmsQuiz(lessonId, container);
+                    } catch (error) {}
+                });
+            } catch (error) {
+                container.innerHTML = '<span style="color: #b91c1c;">Errore caricamento quiz.</span>';
             }
         }
 
@@ -2963,6 +3384,455 @@
             a.click();
             URL.revokeObjectURL(url);
         });
+
+        // ============================================
+        // ATTENDANCE / PRESENZE
+        // ============================================
+
+        state.attendanceReport = [];
+
+        async function updateAttEditionSelect() {
+            const select = document.getElementById('att-edition-select');
+            const cur = select.value;
+            select.innerHTML = '<option value="">-- Seleziona un\'edizione --</option>';
+            for (const course of state.lmsCourses) {
+                try {
+                    const editions = await apiRequest(`/api/lms/course-editions?courseId=${course.id}`);
+                    editions.forEach(ed => {
+                        select.innerHTML += `<option value="${ed.id}">${course.title} — ${ed.editionName}</option>`;
+                    });
+                } catch (error) {}
+            }
+            if (cur) select.value = cur;
+        }
+
+        async function loadAttLessons(courseEditionId) {
+            // Popola i selettori lezione
+            const selects = [document.getElementById('att-lesson-select'), document.getElementById('att-csv-lesson-select')];
+            selects.forEach(s => { s.innerHTML = '<option value="">-- Seleziona lezione --</option>'; });
+
+            try {
+                // Prendi il course_id dall'edizione
+                const editions = [];
+                for (const course of state.lmsCourses) {
+                    const eds = await apiRequest(`/api/lms/course-editions?courseId=${course.id}`);
+                    eds.forEach(ed => editions.push({ ...ed, courseId: course.id }));
+                }
+                const edition = editions.find(e => e.id === courseEditionId);
+                if (!edition) return;
+
+                // Lezioni del calendario
+                const lessons = await apiRequest('/api/lessons');
+                const filtered = lessons.filter(l => l.status !== 'cancelled');
+                filtered.sort((a, b) => new Date(b.startDatetime) - new Date(a.startDatetime));
+
+                filtered.forEach(l => {
+                    const date = new Date(l.startDatetime).toLocaleDateString('it-IT');
+                    const label = `${date} — ${l.title}`;
+                    selects.forEach(s => {
+                        s.innerHTML += `<option value="${l.id}">${label}</option>`;
+                    });
+                });
+            } catch (error) {
+                console.error('Error loading lessons for attendance', error);
+            }
+        }
+
+        document.getElementById('att-edition-select').addEventListener('change', async (e) => {
+            const editionId = e.target.value;
+            if (editionId) {
+                document.getElementById('att-panel').style.display = '';
+                await loadAttLessons(editionId);
+                loadAttReport(editionId);
+            } else {
+                document.getElementById('att-panel').style.display = 'none';
+            }
+        });
+
+        // Generate PIN
+        document.getElementById('att-generate-pin').addEventListener('click', async () => {
+            const lessonId = document.getElementById('att-lesson-select').value;
+            if (!lessonId) { showToast('Seleziona una lezione', 'error'); return; }
+            try {
+                const result = await apiRequest('/api/attendance/generate-code', {
+                    method: 'POST',
+                    body: JSON.stringify({ lessonId })
+                });
+                document.getElementById('att-pin-display').style.display = '';
+                document.getElementById('att-pin-code').textContent = result.code;
+                const expiry = new Date(result.expiresAt);
+                document.getElementById('att-pin-expiry').textContent = `Scade alle ${expiry.toLocaleTimeString('it-IT')}`;
+                showToast('Codice PIN generato');
+            } catch (error) {
+                showToast('Errore nella generazione del PIN', 'error');
+            }
+        });
+
+        // Import CSV Teams
+        document.getElementById('att-csv-file').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            const lessonId = document.getElementById('att-csv-lesson-select').value;
+            if (!file) return;
+            if (!lessonId) { showToast('Seleziona prima una lezione', 'error'); e.target.value = ''; return; }
+
+            const text = await file.text();
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+            // Skip header
+            const start = (lines[0].toLowerCase().includes('nome') || lines[0].toLowerCase().includes('email') || lines[0].toLowerCase().includes('name')) ? 1 : 0;
+            const participants = [];
+
+            for (let i = start; i < lines.length; i++) {
+                // Handle both comma and tab separated
+                const sep = lines[i].includes('\t') ? '\t' : ',';
+                const parts = lines[i].split(sep).map(s => s.trim().replace(/^"|"$/g, ''));
+                // Expected columns: nome, email, orario_ingresso, orario_uscita
+                if (parts.length >= 2) {
+                    participants.push({
+                        name: parts[0],
+                        email: parts[1],
+                        joinTime: parts[2] || null,
+                        leaveTime: parts[3] || null
+                    });
+                }
+            }
+
+            if (!participants.length) { showToast('Nessun partecipante trovato nel CSV', 'error'); e.target.value = ''; return; }
+
+            try {
+                const result = await apiRequest('/api/attendance/import-csv', {
+                    method: 'POST',
+                    body: JSON.stringify({ lessonId, participants })
+                });
+                const resultDiv = document.getElementById('att-csv-result');
+                resultDiv.innerHTML = `<span style="color: var(--green-700);">Importati: ${result.imported}</span> — Duplicati: ${result.skipped} — Non trovati: ${result.notFound}`;
+                showToast(`Importati ${result.imported} partecipanti`);
+
+                // Refresh report
+                const editionId = document.getElementById('att-edition-select').value;
+                if (editionId) loadAttReport(editionId);
+            } catch (error) {
+                showToast('Errore nell\'import CSV', 'error');
+            }
+            e.target.value = '';
+        });
+
+        // Report presenze
+        async function loadAttReport(courseEditionId) {
+            const type = document.getElementById('att-filter-type').value;
+            try {
+                const params = new URLSearchParams();
+                if (type) params.set('type', type);
+                const data = await apiRequest(`/api/attendance/report/${courseEditionId}?${params}`);
+                state.attendanceReport = data.students || [];
+                renderAttReport(data);
+            } catch (error) {
+                console.error('Error loading attendance report', error);
+            }
+        }
+
+        function renderAttReport(data) {
+            const tbody = document.getElementById('att-report-body');
+            if (!data.students || !data.students.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nessun dato di presenze.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.students.map(s => `
+                <tr>
+                    <td>${s.lastName || ''}</td>
+                    <td>${s.firstName || ''}</td>
+                    <td>${s.email}</td>
+                    <td>${s.inPerson}</td>
+                    <td>${s.remoteLive}</td>
+                    <td>${s.async}</td>
+                    <td><strong>${s.total}</strong>/${s.totalLessons}</td>
+                    <td>${s.percentage}%</td>
+                </tr>
+            `).join('');
+        }
+
+        document.getElementById('att-filter-type').addEventListener('change', () => {
+            const editionId = document.getElementById('att-edition-select').value;
+            if (editionId) loadAttReport(editionId);
+        });
+
+        document.getElementById('att-refresh').addEventListener('click', () => {
+            const editionId = document.getElementById('att-edition-select').value;
+            if (editionId) loadAttReport(editionId);
+        });
+
+        // Export CSV
+        document.getElementById('att-export-csv').addEventListener('click', async () => {
+            const editionId = document.getElementById('att-edition-select').value;
+            if (!editionId) { showToast('Seleziona un\'edizione', 'error'); return; }
+            try {
+                const response = await fetch(`/api/attendance/export/${editionId}`, {
+                    headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem('adminToken') }
+                });
+                if (!response.ok) throw new Error('Export failed');
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `presenze_${editionId}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                showToast('Errore nell\'export CSV', 'error');
+            }
+        });
+
+        // ============================================
+        // WORKFLOW PRODUZIONE CONTENUTI
+        // ============================================
+
+        state.workflows = [];
+
+        async function loadWfCourseSelect() {
+            const select = document.getElementById('wf-course-select');
+            select.innerHTML = '<option value="">-- Tutti i corsi --</option>';
+            state.lmsCourses.forEach(c => {
+                select.innerHTML += `<option value="${c.id}">${c.title}</option>`;
+            });
+        }
+
+        async function loadWfLessonSelect() {
+            const select = document.getElementById('wf-lesson-select');
+            select.innerHTML = '<option value="">-- Seleziona lezione --</option>';
+            // Load all LMS lessons
+            try {
+                const courseId = document.getElementById('wf-course-select').value;
+                let lessons = [];
+                if (courseId) {
+                    const modules = await apiRequest(`/api/lms/modules?course_id=${courseId}`);
+                    for (const mod of modules) {
+                        const modLessons = await apiRequest(`/api/lms/lessons?moduleId=${mod.id}`);
+                        modLessons.forEach(l => lessons.push({ ...l, moduleTitle: mod.title }));
+                    }
+                }
+                lessons.forEach(l => {
+                    select.innerHTML += `<option value="${l.id}">${l.moduleTitle ? l.moduleTitle + ' — ' : ''}${l.title}</option>`;
+                });
+            } catch (error) {}
+        }
+
+        document.getElementById('wf-course-select').addEventListener('change', () => {
+            loadWfLessonSelect();
+            loadWorkflows();
+        });
+
+        // Upload recording
+        document.getElementById('wf-upload-btn').addEventListener('click', async () => {
+            const lmsLessonId = document.getElementById('wf-lesson-select').value;
+            const sourceVideoUrl = document.getElementById('wf-source-url').value.trim();
+            if (!lmsLessonId) { showToast('Seleziona una lezione', 'error'); return; }
+            if (!sourceVideoUrl) { showToast('Inserisci URL video', 'error'); return; }
+            try {
+                await apiRequest('/api/workflow/upload-recording', {
+                    method: 'POST',
+                    body: JSON.stringify({ lmsLessonId, sourceVideoUrl })
+                });
+                showToast('Registrazione caricata');
+                document.getElementById('wf-source-url').value = '';
+                loadWorkflows();
+            } catch (error) { showToast('Errore nel caricamento', 'error'); }
+        });
+
+        async function loadWorkflows() {
+            const courseId = document.getElementById('wf-course-select').value;
+            try {
+                const params = courseId ? `?courseId=${courseId}` : '';
+                const workflows = await apiRequest(`/api/workflow/status${params}`);
+                state.workflows = workflows;
+                renderPipeline(workflows);
+            } catch (error) {
+                console.error('Error loading workflows', error);
+            }
+        }
+
+        function renderPipeline(workflows) {
+            // Clear all columns
+            document.querySelectorAll('.wf-col-cards').forEach(c => { c.innerHTML = ''; });
+
+            workflows.forEach(wf => {
+                const col = document.querySelector(`.wf-col[data-stage="${wf.stage}"] .wf-col-cards`);
+                if (!col) return;
+
+                const date = wf.updatedAt ? new Date(wf.updatedAt).toLocaleDateString('it-IT') : '';
+                let actions = '';
+
+                switch (wf.stage) {
+                    case 'uploaded':
+                        actions = `<button class="action" data-wf-action="transcribe" data-wf-id="${wf.id}">Avvia trascrizione</button>`;
+                        break;
+                    case 'transcript_ready':
+                        actions = `<button class="action" data-wf-action="send-review" data-wf-id="${wf.id}">Invia a docente</button>`;
+                        if (wf.reviewerNotes) actions += `<div style="color: #b91c1c; font-size: 0.75rem; margin-top: 4px;">Note: ${wf.reviewerNotes}</div>`;
+                        break;
+                    case 'teacher_review_transcript':
+                        actions = `<button data-wf-action="approve-transcript" data-wf-id="${wf.id}">Approva (admin)</button>`;
+                        if (wf.reviewToken) {
+                            actions += `<button data-wf-action="copy-link" data-wf-token="${wf.reviewToken}">Copia link</button>`;
+                        }
+                        break;
+                    case 'avatar_rendering':
+                        actions = `<button class="action" data-wf-action="generate-avatar" data-wf-id="${wf.id}">Genera avatar</button>`;
+                        break;
+                    case 'teacher_review_video':
+                        actions = `<button data-wf-action="approve-video" data-wf-id="${wf.id}">Approva (admin)</button>`;
+                        if (wf.reviewToken) {
+                            actions += `<button data-wf-action="copy-link" data-wf-token="${wf.reviewToken}">Copia link</button>`;
+                        }
+                        break;
+                    case 'published':
+                        actions = `<button class="action" data-wf-action="publish" data-wf-id="${wf.id}">Pubblica su LMS</button>`;
+                        break;
+                }
+
+                col.innerHTML += `
+                    <div class="wf-card">
+                        <div class="wf-card-title">${wf.lessonTitle || 'Lezione'}</div>
+                        <div class="wf-card-meta">${wf.moduleTitle || ''} — ${date}</div>
+                        <div class="wf-card-actions">${actions}</div>
+                    </div>
+                `;
+            });
+
+            // Show empty state for empty columns
+            document.querySelectorAll('.wf-col-cards').forEach(c => {
+                if (!c.innerHTML.trim()) {
+                    c.innerHTML = '<div style="color: var(--gray-500); font-size: 0.8rem; text-align: center; padding: 16px 0;">Vuoto</div>';
+                }
+            });
+        }
+
+        // Pipeline action handlers (delegated)
+        document.getElementById('wf-pipeline').addEventListener('click', async (e) => {
+            const btn = e.target.closest('[data-wf-action]');
+            if (!btn) return;
+
+            const action = btn.dataset.wfAction;
+            const wfId = btn.dataset.wfId;
+
+            try {
+                switch (action) {
+                    case 'transcribe':
+                        await apiRequest(`/api/workflow/${wfId}/transcribe`, { method: 'POST' });
+                        showToast('Trascrizione avviata');
+                        break;
+                    case 'send-review':
+                        const reviewResult = await apiRequest(`/api/workflow/${wfId}/send-for-review`, { method: 'POST' });
+                        if (reviewResult.reviewUrl) {
+                            await navigator.clipboard.writeText(window.location.origin + reviewResult.reviewUrl).catch(() => {});
+                            showToast('Inviato per revisione — link copiato');
+                        } else {
+                            showToast('Inviato per revisione');
+                        }
+                        break;
+                    case 'approve-transcript':
+                        await apiRequest(`/api/workflow/${wfId}/approve-transcript`, { method: 'PUT', body: '{}' });
+                        showToast('Transcript approvato');
+                        break;
+                    case 'generate-avatar':
+                        const avatarResult = await apiRequest(`/api/workflow/${wfId}/generate-avatar`, { method: 'POST' });
+                        if (avatarResult.reviewUrl) {
+                            await navigator.clipboard.writeText(window.location.origin + avatarResult.reviewUrl).catch(() => {});
+                            showToast('Avatar generato — link revisione copiato');
+                        } else {
+                            showToast('Avatar generato');
+                        }
+                        break;
+                    case 'approve-video':
+                        await apiRequest(`/api/workflow/${wfId}/approve-video`, { method: 'PUT', body: '{}' });
+                        showToast('Video approvato');
+                        break;
+                    case 'publish':
+                        await apiRequest(`/api/workflow/${wfId}/publish`, { method: 'POST' });
+                        showToast('Pubblicato su LMS');
+                        break;
+                    case 'copy-link':
+                        const token = btn.dataset.wfToken;
+                        const url = window.location.origin + `/review.html?token=${token}`;
+                        await navigator.clipboard.writeText(url).catch(() => {});
+                        showToast('Link copiato negli appunti');
+                        return; // Don't reload
+                }
+                loadWorkflows();
+            } catch (error) {
+                showToast('Errore nell\'operazione', 'error');
+            }
+        });
+
+        // --- Consensi docenti ---
+        async function loadWfConsents() {
+            try {
+                const consents = await apiRequest('/api/teacher-consents');
+                const tbody = document.getElementById('wf-consents-body');
+                if (!consents.length) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nessun consenso registrato.</td></tr>';
+                    return;
+                }
+                const typeLabels = { recording: 'Registrazione', publication: 'Pubblicazione', avatar: 'Avatar AI' };
+                tbody.innerHTML = consents.map(c => `
+                    <tr>
+                        <td>${c.teacherName || ''}</td>
+                        <td>${typeLabels[c.consentType] || c.consentType}</td>
+                        <td>${c.isGranted ? '<span style="color: #22c55e;">&#10003; Si</span>' : '<span style="color: #ef4444;">&#10007; No</span>'}</td>
+                        <td>${c.signedAt ? new Date(c.signedAt).toLocaleDateString('it-IT') : '—'}</td>
+                        <td>${c.documentUrl ? '<a href="' + c.documentUrl + '" target="_blank" rel="noopener">Apri</a>' : '—'}</td>
+                        <td><button class="danger" data-delete-consent="${c.id}" style="padding: 2px 8px; font-size: 0.8rem;">Elimina</button></td>
+                    </tr>
+                `).join('');
+            } catch (error) {}
+        }
+
+        async function loadWfTeacherSelect() {
+            const select = document.getElementById('wf-consent-teacher');
+            select.innerHTML = '<option value="">-- Seleziona docente --</option>';
+            try {
+                const faculty = await apiRequest('/api/faculty');
+                faculty.forEach(f => {
+                    select.innerHTML += `<option value="${f.id}">${f.name}</option>`;
+                });
+            } catch (error) {}
+        }
+
+        document.getElementById('wf-consent-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                teacherId: document.getElementById('wf-consent-teacher').value,
+                consentType: document.getElementById('wf-consent-type').value,
+                documentUrl: document.getElementById('wf-consent-doc').value.trim() || null,
+                isGranted: document.getElementById('wf-consent-granted').checked
+            };
+            if (!payload.teacherId) { showToast('Seleziona un docente', 'error'); return; }
+            try {
+                await apiRequest('/api/teacher-consents', { method: 'POST', body: JSON.stringify(payload) });
+                showToast('Consenso registrato');
+                document.getElementById('wf-consent-form').reset();
+                document.getElementById('wf-consent-granted').checked = true;
+                loadWfConsents();
+            } catch (error) { showToast('Errore', 'error'); }
+        });
+
+        document.getElementById('wf-consents-body').addEventListener('click', async (e) => {
+            const btn = e.target.closest('[data-delete-consent]');
+            if (!btn) return;
+            if (!confirm('Eliminare questo consenso?')) return;
+            try {
+                await apiRequest(`/api/teacher-consents/${btn.dataset.deleteConsent}`, { method: 'DELETE' });
+                showToast('Consenso eliminato');
+                loadWfConsents();
+            } catch (error) {}
+        });
+
+        // Init workflow section when LMS courses are loaded
+        function initWorkflowSection() {
+            loadWfCourseSelect();
+            loadWfLessonSelect();
+            loadWorkflows();
+            loadWfConsents();
+            loadWfTeacherSelect();
+        }
 
         // ========== END LMS ==========
 

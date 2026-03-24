@@ -1819,7 +1819,28 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
       FROM lms_lessons WHERE id = $1
     `, [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Lesson not found' });
-    res.json(rows[0]);
+
+    const lesson = rows[0];
+
+    // If student is authenticated, include their progress
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const payload = verifyToken(authHeader.slice(7));
+      if (payload && payload.userId) {
+        const { rows: progressRows } = await pool.query(`
+          SELECT progress_percent AS "progressPercent",
+                 last_position_seconds AS "lastPositionSeconds",
+                 time_spent_seconds AS "timeSpentSeconds",
+                 watched_segments AS "watchedSegments",
+                 completed_at AS "completedAt"
+          FROM lesson_progress
+          WHERE user_id = $1 AND lms_lesson_id = $2
+        `, [payload.userId, req.params.id]);
+        lesson.progress = progressRows[0] || null;
+      }
+    }
+
+    res.json(lesson);
   } catch (error) {
     console.error('Error fetching LMS lesson', error);
     res.status(500).json({ error: 'Unable to retrieve LMS lesson' });
@@ -2233,17 +2254,470 @@ app.get('/api/lms/my-progress', requireStudent, async (req, res) => {
   }
 });
 
-// Check-in presenze con PIN
+// Salva progresso video lezione
+app.post('/api/lms/lessons/:id/progress', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { lastPositionSec, watchPercentage, timeSpentSeconds, watchedSegments } = req.body;
+  const lessonId = req.params.id;
+  const userId = req.user.userId;
+
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO lesson_progress (id, user_id, lms_lesson_id, last_position_seconds, progress_percent, time_spent_seconds, watched_segments)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (user_id, lms_lesson_id) DO UPDATE SET
+        last_position_seconds = GREATEST(lesson_progress.last_position_seconds, $4),
+        progress_percent = GREATEST(lesson_progress.progress_percent, $5),
+        time_spent_seconds = $6,
+        watched_segments = $7,
+        updated_at = NOW()
+      RETURNING progress_percent AS "progressPercent",
+                last_position_seconds AS "lastPositionSeconds",
+                time_spent_seconds AS "timeSpentSeconds",
+                completed_at AS "completedAt"
+    `, [uuidv4(), userId, lessonId,
+        lastPositionSec || 0,
+        Math.min(Math.max(Math.round(watchPercentage || 0), 0), 100),
+        timeSpentSeconds || 0,
+        JSON.stringify(watchedSegments || [])]);
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error saving lesson progress', error);
+    res.status(500).json({ error: 'Unable to save progress' });
+  }
+});
+
+// --- QUIZ ---
+
+// Admin: CRUD quiz per lezione
+app.get('/api/lms/quizzes', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { lessonId } = req.query;
+    const filters = [];
+    const values = [];
+    if (lessonId) {
+      filters.push(`lms_lesson_id = $${filters.length + 1}`);
+      values.push(lessonId);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const { rows } = await pool.query(`
+      SELECT id, lms_lesson_id AS "lessonId", lms_module_id AS "moduleId",
+             title, description, passing_score AS "passingScore",
+             max_attempts AS "maxAttempts", time_limit_minutes AS "timeLimitMinutes",
+             is_published AS "isPublished",
+             created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM quizzes ${where}
+      ORDER BY created_at ASC
+    `, values);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching quizzes', error);
+    res.status(500).json({ error: 'Unable to retrieve quizzes' });
+  }
+});
+
+// Student: carica quiz con domande (senza risposte corrette)
+app.get('/api/lms/quizzes/:id', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows: quizRows } = await pool.query(`
+      SELECT id, lms_lesson_id AS "lessonId", lms_module_id AS "moduleId",
+             title, description, passing_score AS "passingScore",
+             max_attempts AS "maxAttempts", time_limit_minutes AS "timeLimitMinutes",
+             is_published AS "isPublished"
+      FROM quizzes WHERE id = $1
+    `, [req.params.id]);
+    if (!quizRows.length) return res.status(404).json({ error: 'Quiz not found' });
+
+    const quiz = quizRows[0];
+
+    const { rows: questions } = await pool.query(`
+      SELECT id, question_text AS "questionText",
+             question_type AS "questionType", options, points,
+             sort_order AS "sortOrder"
+      FROM quiz_questions WHERE quiz_id = $1
+      ORDER BY sort_order ASC, created_at ASC
+    `, [req.params.id]);
+
+    quiz.questions = questions;
+    res.json(quiz);
+  } catch (error) {
+    console.error('Error fetching quiz', error);
+    res.status(500).json({ error: 'Unable to retrieve quiz' });
+  }
+});
+
+app.post('/api/lms/quizzes', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { lessonId, moduleId, title, description, passingScore, maxAttempts, timeLimitMinutes, isPublished } = req.body;
+  if (!title || (!lessonId && !moduleId)) {
+    return res.status(400).json({ error: 'title and lessonId or moduleId are required' });
+  }
+  try {
+    const id = uuidv4();
+    const { rows } = await pool.query(`
+      INSERT INTO quizzes (id, lms_lesson_id, lms_module_id, title, description, passing_score, max_attempts, time_limit_minutes, is_published)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, lms_lesson_id AS "lessonId", lms_module_id AS "moduleId",
+                title, description, passing_score AS "passingScore",
+                max_attempts AS "maxAttempts", time_limit_minutes AS "timeLimitMinutes",
+                is_published AS "isPublished"
+    `, [id, lessonId || null, moduleId || null, title, description || null,
+        passingScore || 70, maxAttempts || 0, timeLimitMinutes || null, isPublished !== false]);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating quiz', error);
+    res.status(500).json({ error: 'Unable to create quiz' });
+  }
+});
+
+app.put('/api/lms/quizzes/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { title, description, passingScore, maxAttempts, timeLimitMinutes, isPublished } = req.body;
+  try {
+    const { query, values } = buildUpdateQuery('quizzes', {
+      title, description,
+      passing_score: passingScore,
+      max_attempts: maxAttempts,
+      time_limit_minutes: timeLimitMinutes,
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
+    }, req.params.id);
+    const { rows } = await pool.query(query, values);
+    if (!rows.length) return res.status(404).json({ error: 'Quiz not found' });
+    const r = rows[0];
+    res.json({
+      id: r.id, lessonId: r.lms_lesson_id, moduleId: r.lms_module_id,
+      title: r.title, description: r.description, passingScore: r.passing_score,
+      maxAttempts: r.max_attempts, timeLimitMinutes: r.time_limit_minutes,
+      isPublished: r.is_published
+    });
+  } catch (error) {
+    console.error('Error updating quiz', error);
+    res.status(500).json({ error: 'Unable to update quiz' });
+  }
+});
+
+app.delete('/api/lms/quizzes/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM quizzes WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Quiz not found' });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting quiz', error);
+    res.status(500).json({ error: 'Unable to delete quiz' });
+  }
+});
+
+// --- QUIZ QUESTIONS ---
+
+app.get('/api/lms/quiz-questions', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { quizId } = req.query;
+    if (!quizId) return res.status(400).json({ error: 'quizId is required' });
+    const { rows } = await pool.query(`
+      SELECT id, quiz_id AS "quizId", question_text AS "questionText",
+             question_type AS "questionType", options,
+             correct_answer AS "correctAnswer", points,
+             sort_order AS "sortOrder"
+      FROM quiz_questions WHERE quiz_id = $1
+      ORDER BY sort_order ASC, created_at ASC
+    `, [quizId]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching quiz questions', error);
+    res.status(500).json({ error: 'Unable to retrieve questions' });
+  }
+});
+
+app.post('/api/lms/quiz-questions', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { quizId, questionText, questionType, options, correctAnswer, points, sortOrder } = req.body;
+  if (!quizId || !questionText) {
+    return res.status(400).json({ error: 'quizId and questionText are required' });
+  }
+  try {
+    const id = uuidv4();
+    const { rows } = await pool.query(`
+      INSERT INTO quiz_questions (id, quiz_id, question_text, question_type, options, correct_answer, points, sort_order)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, quiz_id AS "quizId", question_text AS "questionText",
+                question_type AS "questionType", options,
+                correct_answer AS "correctAnswer", points,
+                sort_order AS "sortOrder"
+    `, [id, quizId, questionText, questionType || 'single_choice',
+        JSON.stringify(options || []), JSON.stringify(correctAnswer || null),
+        points || 1, sortOrder || 0]);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating quiz question', error);
+    res.status(500).json({ error: 'Unable to create question' });
+  }
+});
+
+app.put('/api/lms/quiz-questions/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { questionText, questionType, options, correctAnswer, points, sortOrder } = req.body;
+  try {
+    const { query, values } = buildUpdateQuery('quiz_questions', {
+      question_text: questionText,
+      question_type: questionType,
+      options: options !== undefined ? JSON.stringify(options) : undefined,
+      correct_answer: correctAnswer !== undefined ? JSON.stringify(correctAnswer) : undefined,
+      points, sort_order: sortOrder
+    }, req.params.id);
+    const { rows } = await pool.query(query, values);
+    if (!rows.length) return res.status(404).json({ error: 'Question not found' });
+    const r = rows[0];
+    res.json({
+      id: r.id, quizId: r.quiz_id, questionText: r.question_text,
+      questionType: r.question_type, options: r.options,
+      correctAnswer: r.correct_answer, points: r.points, sortOrder: r.sort_order
+    });
+  } catch (error) {
+    console.error('Error updating quiz question', error);
+    res.status(500).json({ error: 'Unable to update question' });
+  }
+});
+
+app.delete('/api/lms/quiz-questions/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM quiz_questions WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Question not found' });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting quiz question', error);
+    res.status(500).json({ error: 'Unable to delete question' });
+  }
+});
+
+// --- QUIZ SUBMIT & ATTEMPTS ---
+
+// Studente invia risposte quiz
+app.post('/api/lms/quizzes/:id/submit', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { answers } = req.body;
+  const quizId = req.params.id;
+  const userId = req.user.userId;
+
+  if (!answers || typeof answers !== 'object') {
+    return res.status(400).json({ error: 'answers object is required' });
+  }
+
+  try {
+    // Load quiz
+    const { rows: quizRows } = await pool.query(
+      'SELECT * FROM quizzes WHERE id = $1', [quizId]
+    );
+    if (!quizRows.length) return res.status(404).json({ error: 'Quiz not found' });
+    const quiz = quizRows[0];
+
+    // Check max attempts
+    if (quiz.max_attempts > 0) {
+      const { rows: countRows } = await pool.query(
+        'SELECT COUNT(*)::int AS total FROM quiz_attempts WHERE user_id = $1 AND quiz_id = $2 AND completed_at IS NOT NULL',
+        [userId, quizId]
+      );
+      if (countRows[0].total >= quiz.max_attempts) {
+        return res.status(400).json({ error: 'Numero massimo di tentativi raggiunto' });
+      }
+    }
+
+    // Load questions with correct answers
+    const { rows: questions } = await pool.query(
+      'SELECT id, correct_answer, points, question_type FROM quiz_questions WHERE quiz_id = $1',
+      [quizId]
+    );
+
+    // Score calculation
+    let totalPoints = 0;
+    let earnedPoints = 0;
+    const results = {};
+
+    questions.forEach(q => {
+      totalPoints += q.points;
+      const studentAnswer = answers[q.id];
+      const correct = q.correct_answer;
+      let isCorrect = false;
+
+      if (q.question_type === 'multiple_choice') {
+        // Both are arrays — compare sorted
+        const sa = Array.isArray(studentAnswer) ? [...studentAnswer].sort() : [];
+        const ca = Array.isArray(correct) ? [...correct].sort() : [];
+        isCorrect = sa.length === ca.length && sa.every((v, i) => v === ca[i]);
+      } else {
+        // single_choice or true_false — direct compare
+        isCorrect = JSON.stringify(studentAnswer) === JSON.stringify(correct);
+      }
+
+      if (isCorrect) earnedPoints += q.points;
+      results[q.id] = { correct: isCorrect, correctAnswer: correct };
+    });
+
+    const score = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+    const passed = score >= quiz.passing_score;
+
+    // Save attempt
+    const attemptId = uuidv4();
+    await pool.query(`
+      INSERT INTO quiz_attempts (id, user_id, quiz_id, score, passed, answers, completed_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    `, [attemptId, userId, quizId, score, passed, JSON.stringify(answers)]);
+
+    res.json({ attemptId, score, passed, passingScore: quiz.passing_score, results });
+  } catch (error) {
+    console.error('Error submitting quiz', error);
+    res.status(500).json({ error: 'Unable to submit quiz' });
+  }
+});
+
+// Storico tentativi studente per un quiz
+app.get('/api/lms/quizzes/:id/attempts', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, score, passed, started_at AS "startedAt", completed_at AS "completedAt"
+      FROM quiz_attempts
+      WHERE user_id = $1 AND quiz_id = $2
+      ORDER BY completed_at DESC
+    `, [req.user.userId, req.params.id]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching quiz attempts', error);
+    res.status(500).json({ error: 'Unable to retrieve attempts' });
+  }
+});
+
+// --- COMPLETAMENTO LEZIONE ---
+
+// Verifica criteri e segna lezione come completata
+app.post('/api/lms/lessons/:id/complete', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const lessonId = req.params.id;
+  const userId = req.user.userId;
+
+  try {
+    // 1. Carica lezione
+    const { rows: lessonRows } = await pool.query(
+      'SELECT id, duration_seconds FROM lms_lessons WHERE id = $1', [lessonId]
+    );
+    if (!lessonRows.length) return res.status(404).json({ error: 'Lesson not found' });
+    const lesson = lessonRows[0];
+
+    // 2. Carica progresso studente
+    const { rows: progressRows } = await pool.query(
+      'SELECT progress_percent, time_spent_seconds, completed_at FROM lesson_progress WHERE user_id = $1 AND lms_lesson_id = $2',
+      [userId, lessonId]
+    );
+
+    if (!progressRows.length) {
+      return res.status(400).json({ error: 'Nessun progresso registrato', criteria: { video: false, time: false, quiz: false } });
+    }
+
+    const progress = progressRows[0];
+    if (progress.completed_at) {
+      return res.json({ completed: true, message: 'Lezione già completata', completedAt: progress.completed_at });
+    }
+
+    // Criterio 1: video >= 80%
+    const videoOk = progress.progress_percent >= 80;
+
+    // Criterio 2: tempo permanenza >= 75% durata video
+    const minTime = lesson.duration_seconds ? Math.floor(lesson.duration_seconds * 0.75) : 0;
+    const timeOk = !lesson.duration_seconds || (progress.time_spent_seconds >= minTime);
+
+    // Criterio 3: quiz superato (se esiste)
+    const { rows: quizRows } = await pool.query(
+      'SELECT id, passing_score FROM quizzes WHERE lms_lesson_id = $1 AND is_published = true LIMIT 1',
+      [lessonId]
+    );
+
+    let quizOk = true;
+    if (quizRows.length) {
+      const quiz = quizRows[0];
+      const { rows: passedRows } = await pool.query(
+        'SELECT id FROM quiz_attempts WHERE user_id = $1 AND quiz_id = $2 AND passed = true LIMIT 1',
+        [userId, quiz.id]
+      );
+      quizOk = passedRows.length > 0;
+    }
+
+    const criteria = { video: videoOk, time: timeOk, quiz: quizOk };
+
+    if (!videoOk || !timeOk || !quizOk) {
+      return res.status(400).json({
+        error: 'Criteri di completamento non soddisfatti',
+        criteria,
+        details: {
+          videoPercent: progress.progress_percent,
+          videoRequired: 80,
+          timeSpent: progress.time_spent_seconds,
+          timeRequired: minTime,
+          quizPassed: quizOk,
+          hasQuiz: quizRows.length > 0
+        }
+      });
+    }
+
+    // Tutti i criteri soddisfatti — segna completata
+    await pool.query(
+      'UPDATE lesson_progress SET completed_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND lms_lesson_id = $2',
+      [userId, lessonId]
+    );
+
+    // Crea automaticamente presenza asincrona
+    await pool.query(`
+      INSERT INTO attendance (id, user_id, lms_lesson_id, attendance_type, method)
+      VALUES ($1, $2, $3, 'async', 'auto_tracking')
+      ON CONFLICT DO NOTHING
+    `, [uuidv4(), userId, lessonId]);
+
+    res.json({ completed: true, message: 'Lezione completata!', criteria });
+  } catch (error) {
+    console.error('Error completing lesson', error);
+    res.status(500).json({ error: 'Unable to complete lesson' });
+  }
+});
+
+// --- PRESENZE ---
+
+// Admin: genera codice PIN per una lezione
+app.post('/api/attendance/generate-code', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { lessonId } = req.body;
+  if (!lessonId) return res.status(400).json({ error: 'lessonId is required' });
+
+  try {
+    // Genera PIN 6 cifre
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minuti
+    const id = uuidv4();
+
+    await pool.query(`
+      INSERT INTO attendance_codes (id, lesson_id, code, code_type, expires_at)
+      VALUES ($1, $2, $3, 'pin', $4)
+    `, [id, lessonId, code, expiresAt]);
+
+    res.status(201).json({ id, code, expiresAt: expiresAt.toISOString(), lessonId });
+  } catch (error) {
+    console.error('Error generating attendance code', error);
+    res.status(500).json({ error: 'Unable to generate code' });
+  }
+});
+
+// Studente: check-in con PIN
 app.post('/api/attendance/checkin', requireStudent, async (req, res) => {
   if (!ensurePool(res)) return;
   const { code } = req.body;
   if (!code) return res.status(400).json({ error: 'Code is required' });
 
   try {
-    // Trova il codice valido
     const { rows: codes } = await pool.query(
       `SELECT ac.id, ac.lesson_id FROM attendance_codes ac
-       WHERE ac.code = $1 AND ac.expires_at > NOW() AND ac.is_used = false
+       WHERE ac.code = $1 AND ac.expires_at > NOW()
        LIMIT 1`,
       [code.trim()]
     );
@@ -2254,22 +2728,639 @@ app.post('/api/attendance/checkin', requireStudent, async (req, res) => {
 
     const lessonId = codes[0].lesson_id;
 
-    // Registra presenza
+    // Carica info lezione per la risposta
+    const { rows: lessonRows } = await pool.query(
+      'SELECT title, start_datetime FROM lessons WHERE id = $1', [lessonId]
+    );
+
     const { rows } = await pool.query(`
-      INSERT INTO attendance (id, user_id, lesson_id, method)
-      VALUES ($1, $2, $3, 'pin')
+      INSERT INTO attendance (id, user_id, lesson_id, attendance_type, method)
+      VALUES ($1, $2, $3, 'in_person', 'pin')
       ON CONFLICT (user_id, lesson_id) DO NOTHING
       RETURNING id
     `, [uuidv4(), req.user.userId, lessonId]);
 
+    const lessonTitle = lessonRows.length ? lessonRows[0].title : '';
+
     if (rows.length) {
-      res.json({ success: true, message: 'Presenza registrata' });
+      res.json({ success: true, message: 'Presenza registrata', lessonTitle });
     } else {
-      res.json({ success: true, message: 'Presenza già registrata' });
+      res.json({ success: true, message: 'Presenza già registrata', lessonTitle });
     }
   } catch (error) {
     console.error('Error checking in', error);
     res.status(500).json({ error: 'Unable to process check-in' });
+  }
+});
+
+// Admin: import CSV report partecipanti Teams
+app.post('/api/attendance/import-csv', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { lessonId, participants } = req.body;
+  if (!lessonId || !Array.isArray(participants)) {
+    return res.status(400).json({ error: 'lessonId and participants array are required' });
+  }
+
+  try {
+    let imported = 0;
+    let skipped = 0;
+    let notFound = 0;
+
+    for (const p of participants) {
+      const email = (p.email || '').trim().toLowerCase();
+      if (!email) { skipped++; continue; }
+
+      // Cerca utente per email
+      const { rows: userRows } = await pool.query(
+        'SELECT id FROM users WHERE LOWER(email) = $1', [email]
+      );
+
+      if (!userRows.length) { notFound++; continue; }
+
+      const { rowCount } = await pool.query(`
+        INSERT INTO attendance (id, user_id, lesson_id, attendance_type, method, check_in_at, check_out_at)
+        VALUES ($1, $2, $3, 'remote_live', 'csv_import', $4, $5)
+        ON CONFLICT (user_id, lesson_id) DO NOTHING
+      `, [uuidv4(), userRows[0].id, lessonId,
+          p.joinTime || new Date().toISOString(),
+          p.leaveTime || null]);
+
+      if (rowCount > 0) imported++; else skipped++;
+    }
+
+    res.json({ imported, skipped, notFound });
+  } catch (error) {
+    console.error('Error importing attendance CSV', error);
+    res.status(500).json({ error: 'Unable to import attendance' });
+  }
+});
+
+// Admin: report presenze aggregato per course edition
+app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { courseEditionId } = req.params;
+  const { lessonId, studentId, type } = req.query;
+
+  try {
+    // Studenti iscritti a questa edizione
+    const { rows: students } = await pool.query(`
+      SELECT u.id, u.email, u.first_name AS "firstName", u.last_name AS "lastName"
+      FROM enrollments e
+      JOIN users u ON u.id = e.user_id
+      WHERE e.course_edition_id = $1 AND e.status = 'active'
+      ORDER BY u.last_name ASC, u.first_name ASC
+    `, [courseEditionId]);
+
+    // Lezioni del calendario per i moduli del corso di questa edizione
+    const { rows: calendarLessons } = await pool.query(`
+      SELECT l.id, l.title, l.start_datetime AS "startDatetime"
+      FROM lessons l
+      JOIN modules m ON m.id = l.module_id
+      JOIN course_editions ce ON ce.course_id = (
+        SELECT course_id FROM course_editions WHERE id = $1
+      )
+      WHERE l.status != 'cancelled'
+      ORDER BY l.start_datetime ASC
+    `, [courseEditionId]);
+
+    // LMS lessons del corso (per presenze async)
+    const { rows: lmsLessons } = await pool.query(`
+      SELECT ll.id, ll.title
+      FROM lms_lessons ll
+      JOIN lms_modules lm ON lm.id = ll.lms_module_id
+      JOIN course_editions ce ON ce.course_id = lm.course_id
+      WHERE ce.id = $1 AND ll.is_published = true
+      ORDER BY lm.sort_order ASC, ll.sort_order ASC
+    `, [courseEditionId]);
+
+    const totalLessons = calendarLessons.length + lmsLessons.length;
+    const studentIds = students.map(s => s.id);
+
+    // Build filters for attendance query
+    let attendanceQuery = `
+      SELECT a.user_id, a.lesson_id, a.lms_lesson_id, a.attendance_type, a.method,
+             a.check_in_at, a.check_out_at
+      FROM attendance a
+      WHERE a.user_id = ANY($1)
+    `;
+    const values = [studentIds];
+    let paramIdx = 2;
+
+    if (lessonId) {
+      attendanceQuery += ` AND (a.lesson_id = $${paramIdx} OR a.lms_lesson_id = $${paramIdx})`;
+      values.push(lessonId);
+      paramIdx++;
+    }
+    if (type) {
+      attendanceQuery += ` AND a.attendance_type = $${paramIdx}`;
+      values.push(type);
+      paramIdx++;
+    }
+
+    const { rows: attendances } = await pool.query(attendanceQuery, values);
+
+    // Aggregate per student
+    const report = students.map(s => {
+      const studentAttendances = attendances.filter(a => a.user_id === s.id);
+      let filteredAttendances = studentAttendances;
+      if (studentId && s.id !== studentId) return null;
+
+      const inPerson = filteredAttendances.filter(a => a.attendance_type === 'in_person').length;
+      const remoteLive = filteredAttendances.filter(a => a.attendance_type === 'remote_live').length;
+      const async = filteredAttendances.filter(a => a.attendance_type === 'async').length;
+      const total = inPerson + remoteLive + async;
+      const percentage = totalLessons > 0 ? Math.round((total / totalLessons) * 100) : 0;
+
+      return {
+        id: s.id,
+        email: s.email,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        inPerson,
+        remoteLive,
+        async: async,
+        total,
+        totalLessons,
+        percentage,
+        attendances: filteredAttendances.map(a => ({
+          lessonId: a.lesson_id,
+          lmsLessonId: a.lms_lesson_id,
+          type: a.attendance_type,
+          method: a.method,
+          checkInAt: a.check_in_at
+        }))
+      };
+    }).filter(Boolean);
+
+    res.json({
+      students: report,
+      calendarLessons,
+      lmsLessons,
+      totalLessons
+    });
+  } catch (error) {
+    console.error('Error fetching attendance report', error);
+    res.status(500).json({ error: 'Unable to retrieve attendance report' });
+  }
+});
+
+// Admin: export CSV del report presenze
+app.get('/api/attendance/export/:courseEditionId', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { courseEditionId } = req.params;
+
+  try {
+    const { rows: students } = await pool.query(`
+      SELECT u.id, u.email, u.first_name, u.last_name
+      FROM enrollments e
+      JOIN users u ON u.id = e.user_id
+      WHERE e.course_edition_id = $1 AND e.status = 'active'
+      ORDER BY u.last_name ASC, u.first_name ASC
+    `, [courseEditionId]);
+
+    const studentIds = students.map(s => s.id);
+
+    const { rows: attendances } = await pool.query(
+      'SELECT user_id, attendance_type FROM attendance WHERE user_id = ANY($1)',
+      [studentIds]
+    );
+
+    // Count total lessons
+    const { rows: countRows } = await pool.query(`
+      SELECT
+        (SELECT COUNT(*)::int FROM lessons l
+         JOIN modules m ON m.id = l.module_id
+         WHERE l.status != 'cancelled') +
+        (SELECT COUNT(*)::int FROM lms_lessons ll
+         JOIN lms_modules lm ON lm.id = ll.lms_module_id
+         JOIN course_editions ce ON ce.course_id = lm.course_id
+         WHERE ce.id = $1 AND ll.is_published = true) AS total
+    `, [courseEditionId]);
+    const totalLessons = countRows[0]?.total || 0;
+
+    let csv = 'cognome,nome,email,in_persona,da_remoto,asincrona,totale,lezioni_totali,percentuale\n';
+    students.forEach(s => {
+      const sa = attendances.filter(a => a.user_id === s.id);
+      const inPerson = sa.filter(a => a.attendance_type === 'in_person').length;
+      const remoteLive = sa.filter(a => a.attendance_type === 'remote_live').length;
+      const asyncCount = sa.filter(a => a.attendance_type === 'async').length;
+      const total = inPerson + remoteLive + asyncCount;
+      const pct = totalLessons > 0 ? Math.round((total / totalLessons) * 100) : 0;
+      csv += `"${s.last_name}","${s.first_name}","${s.email}",${inPerson},${remoteLive},${asyncCount},${total},${totalLessons},${pct}%\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="presenze_${courseEditionId}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting attendance CSV', error);
+    res.status(500).json({ error: 'Unable to export attendance' });
+  }
+});
+
+// Admin: lista presenze per una lezione specifica
+app.get('/api/attendance/lesson/:lessonId', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT a.id, a.user_id AS "userId", u.email, u.first_name AS "firstName", u.last_name AS "lastName",
+             a.attendance_type AS "attendanceType", a.method, a.check_in_at AS "checkInAt"
+      FROM attendance a
+      JOIN users u ON u.id = a.user_id
+      WHERE a.lesson_id = $1
+      ORDER BY a.check_in_at DESC
+    `, [req.params.lessonId]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching lesson attendance', error);
+    res.status(500).json({ error: 'Unable to retrieve attendance' });
+  }
+});
+
+// --- WORKFLOW PRODUZIONE CONTENUTI ---
+
+// Admin: carica URL registrazione per una lezione LMS
+app.post('/api/workflow/upload-recording', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { lmsLessonId, sourceVideoUrl } = req.body;
+  if (!lmsLessonId || !sourceVideoUrl) {
+    return res.status(400).json({ error: 'lmsLessonId and sourceVideoUrl are required' });
+  }
+  try {
+    const id = uuidv4();
+    const { rows } = await pool.query(`
+      INSERT INTO content_workflow (id, lms_lesson_id, source_video_url, stage, started_at)
+      VALUES ($1, $2, $3, 'uploaded', NOW())
+      ON CONFLICT (lms_lesson_id) DO UPDATE SET
+        source_video_url = $3, stage = 'uploaded', updated_at = NOW()
+      RETURNING *
+    `, [id, lmsLessonId, sourceVideoUrl]);
+    res.status(201).json(formatWorkflow(rows[0]));
+  } catch (error) {
+    console.error('Error uploading recording', error);
+    res.status(500).json({ error: 'Unable to upload recording' });
+  }
+});
+
+// Admin: avvia trascrizione (simulata)
+app.post('/api/workflow/:id/transcribe', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      UPDATE content_workflow
+      SET stage = 'transcript_ready',
+          transcript_text = '[Trascrizione automatica placeholder — in futuro Whisper API]\n\nBuongiorno a tutti. Oggi parleremo di carbon farming e delle pratiche agricole sostenibili per il sequestro del carbonio nel suolo...',
+          updated_at = NOW()
+      WHERE id = $1 AND stage = 'uploaded'
+      RETURNING *
+    `, [req.params.id]);
+    if (!rows.length) return res.status(400).json({ error: 'Workflow not found or not in uploaded stage' });
+    res.json(formatWorkflow(rows[0]));
+  } catch (error) {
+    console.error('Error starting transcription', error);
+    res.status(500).json({ error: 'Unable to start transcription' });
+  }
+});
+
+// Admin/docente: legge transcript
+app.get('/api/workflow/:id/transcript', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, transcript_text, stage FROM content_workflow WHERE id = $1', [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Workflow not found' });
+    res.json({ id: rows[0].id, transcriptText: rows[0].transcript_text, stage: rows[0].stage });
+  } catch (error) {
+    console.error('Error fetching transcript', error);
+    res.status(500).json({ error: 'Unable to retrieve transcript' });
+  }
+});
+
+// Admin: invia transcript al docente per revisione (genera review token)
+app.post('/api/workflow/:id/send-for-review', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const reviewToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 giorni
+
+    const { rows } = await pool.query(`
+      UPDATE content_workflow
+      SET stage = 'teacher_review_transcript',
+          review_token = $2,
+          review_token_expires_at = $3,
+          updated_at = NOW()
+      WHERE id = $1 AND stage = 'transcript_ready'
+      RETURNING *
+    `, [req.params.id, reviewToken, expiresAt]);
+    if (!rows.length) return res.status(400).json({ error: 'Workflow not found or not in transcript_ready stage' });
+
+    const wf = formatWorkflow(rows[0]);
+    wf.reviewUrl = `/review.html?token=${reviewToken}`;
+    res.json(wf);
+  } catch (error) {
+    console.error('Error sending for review', error);
+    res.status(500).json({ error: 'Unable to send for review' });
+  }
+});
+
+// Docente: approva transcript (via review token)
+app.put('/api/workflow/:id/approve-transcript', async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { reviewToken } = req.body;
+
+  try {
+    // Accept via admin auth OR review token
+    let condition = 'id = $1';
+    const values = [req.params.id];
+
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const payload = verifyToken(authHeader.slice(7));
+      if (!payload || payload.role !== 'admin') {
+        if (!reviewToken) return res.status(401).json({ error: 'Authentication required' });
+      }
+    }
+
+    if (reviewToken) {
+      condition += ' AND review_token = $2 AND review_token_expires_at > NOW()';
+      values.push(reviewToken);
+    }
+
+    const { rows } = await pool.query(`
+      UPDATE content_workflow
+      SET stage = 'avatar_rendering', review_token = NULL, review_token_expires_at = NULL, updated_at = NOW()
+      WHERE ${condition} AND stage = 'teacher_review_transcript'
+      RETURNING *
+    `, values);
+    if (!rows.length) return res.status(400).json({ error: 'Workflow not found, invalid token, or not in review stage' });
+    res.json(formatWorkflow(rows[0]));
+  } catch (error) {
+    console.error('Error approving transcript', error);
+    res.status(500).json({ error: 'Unable to approve transcript' });
+  }
+});
+
+// Docente: richiedi modifiche transcript (via review token)
+app.put('/api/workflow/:id/request-changes', async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { reviewToken, notes } = req.body;
+
+  try {
+    let condition = 'id = $1';
+    const values = [req.params.id];
+
+    if (reviewToken) {
+      condition += ' AND review_token = $2 AND review_token_expires_at > NOW()';
+      values.push(reviewToken);
+    } else {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ error: 'Authentication required' });
+      const payload = verifyToken(authHeader.slice(7));
+      if (!payload || payload.role !== 'admin') return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const notesIdx = values.length + 1;
+    const { rows } = await pool.query(`
+      UPDATE content_workflow
+      SET stage = 'transcript_ready', reviewer_notes = $${notesIdx}, updated_at = NOW()
+      WHERE ${condition} AND stage IN ('teacher_review_transcript', 'teacher_review_video')
+      RETURNING *
+    `, [...values, notes || null]);
+    if (!rows.length) return res.status(400).json({ error: 'Workflow not found or not in review stage' });
+    res.json(formatWorkflow(rows[0]));
+  } catch (error) {
+    console.error('Error requesting changes', error);
+    res.status(500).json({ error: 'Unable to request changes' });
+  }
+});
+
+// Admin: simula generazione avatar
+app.post('/api/workflow/:id/generate-avatar', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const avatarUrl = `https://placeholder-avatar.example.com/video_${req.params.id}.mp4`;
+    const reviewToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    const { rows } = await pool.query(`
+      UPDATE content_workflow
+      SET stage = 'teacher_review_video',
+          avatar_video_url = $2,
+          review_token = $3,
+          review_token_expires_at = $4,
+          updated_at = NOW()
+      WHERE id = $1 AND stage = 'avatar_rendering'
+      RETURNING *
+    `, [req.params.id, avatarUrl, reviewToken, expiresAt]);
+    if (!rows.length) return res.status(400).json({ error: 'Workflow not found or not in avatar_rendering stage' });
+
+    const wf = formatWorkflow(rows[0]);
+    wf.reviewUrl = `/review.html?token=${reviewToken}`;
+    res.json(wf);
+  } catch (error) {
+    console.error('Error generating avatar', error);
+    res.status(500).json({ error: 'Unable to generate avatar' });
+  }
+});
+
+// Docente: approva video (via review token)
+app.put('/api/workflow/:id/approve-video', async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { reviewToken } = req.body;
+
+  try {
+    let condition = 'id = $1';
+    const values = [req.params.id];
+
+    if (reviewToken) {
+      condition += ' AND review_token = $2 AND review_token_expires_at > NOW()';
+      values.push(reviewToken);
+    } else {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ error: 'Authentication required' });
+      const payload = verifyToken(authHeader.slice(7));
+      if (!payload || payload.role !== 'admin') return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const { rows } = await pool.query(`
+      UPDATE content_workflow
+      SET stage = 'published', review_token = NULL, review_token_expires_at = NULL,
+          completed_at = NOW(), updated_at = NOW()
+      WHERE ${condition} AND stage = 'teacher_review_video'
+      RETURNING *
+    `, values);
+    if (!rows.length) return res.status(400).json({ error: 'Workflow not found or not in teacher_review_video stage' });
+    res.json(formatWorkflow(rows[0]));
+  } catch (error) {
+    console.error('Error approving video', error);
+    res.status(500).json({ error: 'Unable to approve video' });
+  }
+});
+
+// Admin: pubblica — copia avatar_video_url in lesson_assets
+app.post('/api/workflow/:id/publish', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows: wfRows } = await pool.query(
+      'SELECT * FROM content_workflow WHERE id = $1 AND stage = \'published\'', [req.params.id]
+    );
+    if (!wfRows.length) return res.status(400).json({ error: 'Workflow not found or not in published stage' });
+
+    const wf = wfRows[0];
+    const videoUrl = wf.avatar_video_url || wf.source_video_url;
+    if (!videoUrl) return res.status(400).json({ error: 'No video URL available' });
+
+    // Remove existing recording_final and insert new one
+    await pool.query(
+      "DELETE FROM lesson_assets WHERE lms_lesson_id = $1 AND asset_type = 'recording_final'",
+      [wf.lms_lesson_id]
+    );
+    await pool.query(`
+      INSERT INTO lesson_assets (id, lms_lesson_id, title, asset_type, url, sort_order)
+      VALUES ($1, $2, 'Video lezione', 'recording_final', $3, 0)
+    `, [uuidv4(), wf.lms_lesson_id, videoUrl]);
+
+    // Aggiorna anche video_url nella lezione LMS
+    await pool.query(
+      'UPDATE lms_lessons SET video_url = $1, updated_at = NOW() WHERE id = $2',
+      [videoUrl, wf.lms_lesson_id]
+    );
+
+    res.json({ published: true, lessonId: wf.lms_lesson_id, videoUrl });
+  } catch (error) {
+    console.error('Error publishing workflow', error);
+    res.status(500).json({ error: 'Unable to publish' });
+  }
+});
+
+// Admin: lista workflow con stato
+app.get('/api/workflow/status', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { courseId } = req.query;
+    let query = `
+      SELECT cw.*, ll.title AS lesson_title, lm.title AS module_title
+      FROM content_workflow cw
+      JOIN lms_lessons ll ON ll.id = cw.lms_lesson_id
+      JOIN lms_modules lm ON lm.id = ll.lms_module_id
+    `;
+    const values = [];
+    if (courseId) {
+      query += ' WHERE lm.course_id = $1';
+      values.push(courseId);
+    }
+    query += ' ORDER BY cw.updated_at DESC';
+
+    const { rows } = await pool.query(query, values);
+    res.json(rows.map(formatWorkflow));
+  } catch (error) {
+    console.error('Error fetching workflow status', error);
+    res.status(500).json({ error: 'Unable to retrieve workflow status' });
+  }
+});
+
+// Review token: carica dati per la pagina di revisione docente
+app.get('/api/workflow/review/:token', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT cw.*, ll.title AS lesson_title, lm.title AS module_title
+      FROM content_workflow cw
+      JOIN lms_lessons ll ON ll.id = cw.lms_lesson_id
+      JOIN lms_modules lm ON lm.id = ll.lms_module_id
+      WHERE cw.review_token = $1 AND cw.review_token_expires_at > NOW()
+    `, [req.params.token]);
+    if (!rows.length) return res.status(404).json({ error: 'Link non valido o scaduto' });
+    const wf = formatWorkflow(rows[0]);
+    res.json(wf);
+  } catch (error) {
+    console.error('Error fetching review', error);
+    res.status(500).json({ error: 'Unable to retrieve review data' });
+  }
+});
+
+function formatWorkflow(r) {
+  return {
+    id: r.id,
+    lmsLessonId: r.lms_lesson_id,
+    lessonTitle: r.lesson_title,
+    moduleTitle: r.module_title,
+    stage: r.stage,
+    sourceVideoUrl: r.source_video_url,
+    transcriptText: r.transcript_text,
+    transcriptUrl: r.transcript_url,
+    avatarVideoUrl: r.avatar_video_url,
+    reviewerNotes: r.reviewer_notes,
+    assignedTo: r.assigned_to,
+    reviewToken: r.review_token,
+    startedAt: r.started_at,
+    completedAt: r.completed_at,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  };
+}
+
+// --- CONSENSI DOCENTI ---
+
+app.post('/api/teacher-consents', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { teacherId, lessonId, consentType, isGranted, documentUrl, notes } = req.body;
+  if (!teacherId || !consentType) {
+    return res.status(400).json({ error: 'teacherId and consentType are required' });
+  }
+  try {
+    const id = uuidv4();
+    const { rows } = await pool.query(`
+      INSERT INTO teacher_consents (id, teacher_id, lesson_id, consent_type, is_granted, signed_at, document_url, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, teacher_id AS "teacherId", lesson_id AS "lessonId",
+                consent_type AS "consentType", is_granted AS "isGranted",
+                signed_at AS "signedAt", document_url AS "documentUrl", notes
+    `, [id, teacherId, lessonId || null, consentType, Boolean(isGranted),
+        isGranted ? new Date() : null, documentUrl || null, notes || null]);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating teacher consent', error);
+    res.status(500).json({ error: 'Unable to create consent' });
+  }
+});
+
+app.get('/api/teacher-consents', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { teacherId } = req.query;
+    let query = `
+      SELECT tc.id, tc.teacher_id AS "teacherId", f.name AS "teacherName",
+             tc.lesson_id AS "lessonId", tc.consent_type AS "consentType",
+             tc.is_granted AS "isGranted", tc.signed_at AS "signedAt",
+             tc.document_url AS "documentUrl", tc.notes, tc.created_at AS "createdAt"
+      FROM teacher_consents tc
+      JOIN faculty f ON f.id = tc.teacher_id
+    `;
+    const values = [];
+    if (teacherId) {
+      query += ' WHERE tc.teacher_id = $1';
+      values.push(teacherId);
+    }
+    query += ' ORDER BY tc.created_at DESC';
+    const { rows } = await pool.query(query, values);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching teacher consents', error);
+    res.status(500).json({ error: 'Unable to retrieve consents' });
+  }
+});
+
+app.delete('/api/teacher-consents/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM teacher_consents WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Consent not found' });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting consent', error);
+    res.status(500).json({ error: 'Unable to delete consent' });
   }
 });
 

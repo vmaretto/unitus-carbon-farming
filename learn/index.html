@@ -158,8 +158,17 @@
                     const liveSection = document.getElementById('live-section');
                     if (upcoming.length > 0) {
                         const next = upcoming[0];
-                        const dt = new Date(next.startDatetime).toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
-                        const teamsLink = next.locationRemote ? `<a href="${next.locationRemote}" target="_blank" rel="noopener">Entra in Teams</a>` : '';
+                        const startTime = new Date(next.startDatetime);
+                        const endTime = new Date(startTime.getTime() + (next.durationMinutes || 120) * 60000);
+                        const thirtyMinBefore = new Date(startTime.getTime() - 30 * 60000);
+                        const dt = startTime.toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+
+                        // Mostra bottone Teams solo da 30 min prima fino a fine lezione
+                        const teamsActive = next.locationRemote && now >= thirtyMinBefore && now <= endTime;
+                        const teamsLink = teamsActive
+                            ? `<a href="${next.locationRemote}" target="_blank" rel="noopener">Entra in Teams</a>`
+                            : (next.locationRemote ? `<span style="opacity:0.6; font-size:0.85rem;">Link Teams attivo 30 min prima</span>` : '');
+
                         liveSection.innerHTML = `
                             <div class="live-banner">
                                 <div>

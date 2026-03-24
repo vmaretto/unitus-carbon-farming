@@ -132,18 +132,30 @@
                 document.title = `${course.title} - Carbon Farming Master`;
 
                 // Load modules for this course
-                const modulesRes = await fetch(`/api/lms/modules?course_id=${courseId}`);
+                const modulesRes = await fetch(`/api/lms/modules?courseId=${courseId}`);
                 const modules = modulesRes.ok ? await modulesRes.json() : [];
 
                 // Load lessons for this course
-                const lessonsRes = await fetch(`/api/lms/lessons?course_id=${courseId}`);
+                const lessonsRes = await fetch(`/api/lms/lessons?courseId=${courseId}`);
                 const lessons = lessonsRes.ok ? await lessonsRes.json() : [];
 
-                // Load student progress
-                const progress = await api('/api/lms/my-progress') || [];
+                // Load individual lesson progress for this student
+                let lessonProgressList = [];
+                try {
+                    const progressRes = await fetch(`/api/lms/lessons/progress?courseId=${courseId}`, {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (progressRes.ok) {
+                        lessonProgressList = await progressRes.json();
+                    }
+                } catch (e) {
+                    console.warn('Could not load lesson progress', e);
+                }
 
                 const progressMap = {};
-                progress.forEach(p => { progressMap[p.lessonId] = p; });
+                if (Array.isArray(lessonProgressList)) {
+                    lessonProgressList.forEach(p => { progressMap[p.lessonId || p.lms_lesson_id] = p; });
+                }
 
                 const modulesList = document.getElementById('modules-list');
 
@@ -171,7 +183,7 @@
 
                 modules.forEach(mod => {
                     const modLessons = (lessonsByModule[mod.id] || []).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-                    const completedInMod = modLessons.filter(l => progressMap[l.id] && progressMap[l.id].completed).length;
+                    const completedInMod = modLessons.filter(l => progressMap[l.id] && progressMap[l.id].completedAt).length;
 
                     const modDiv = document.createElement('div');
                     modDiv.className = 'module';
@@ -188,7 +200,7 @@
 
                     modLessons.forEach(lesson => {
                         const lProgress = progressMap[lesson.id];
-                        const isCompleted = lProgress && lProgress.completed;
+                        const isCompleted = lProgress && lProgress.completedAt;
                         const iconClass = isCompleted ? 'completed' : 'available';
                         const icon = isCompleted ? '&#10003;' : '&#9654;';
                         const durationMin = lesson.durationMinutes ? `${lesson.durationMinutes} min` : '';
@@ -220,7 +232,7 @@
 
                     unassignedLessons.forEach(lesson => {
                         const lProgress = progressMap[lesson.id];
-                        const isCompleted = lProgress && lProgress.completed;
+                        const isCompleted = lProgress && lProgress.completedAt;
                         const iconClass = isCompleted ? 'completed' : 'available';
                         const icon = isCompleted ? '&#10003;' : '&#9654;';
 

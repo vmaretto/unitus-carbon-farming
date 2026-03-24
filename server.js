@@ -1798,22 +1798,29 @@ app.delete('/api/lms/modules/:id', requireAdmin, async (req, res) => {
 app.get('/api/lms/lessons', async (req, res) => {
   if (!ensurePool(res)) return;
   try {
-    const { moduleId } = req.query;
+    const { moduleId, courseId } = req.query;
     const filters = [];
     const values = [];
     if (moduleId) {
-      filters.push(`lms_module_id = $${filters.length + 1}`);
+      filters.push(`ll.lms_module_id = $${filters.length + 1}`);
       values.push(moduleId);
     }
+    if (courseId) {
+      filters.push(`m.course_id = $${filters.length + 1}`);
+      values.push(courseId);
+    }
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const needsJoin = courseId;
     const { rows } = await pool.query(`
-      SELECT id, lms_module_id AS "moduleId", title, description,
-             video_url AS "videoUrl", video_provider AS "videoProvider",
-             duration_seconds AS "durationSeconds", sort_order AS "sortOrder",
-             is_free AS "isFree", is_published AS "isPublished",
-             created_at AS "createdAt", updated_at AS "updatedAt"
-      FROM lms_lessons ${where}
-      ORDER BY sort_order ASC, created_at ASC
+      SELECT ll.id, ll.lms_module_id AS "moduleId", ll.title, ll.description,
+             ll.video_url AS "videoUrl", ll.video_provider AS "videoProvider",
+             ll.duration_seconds AS "durationSeconds", ll.sort_order AS "sortOrder",
+             ll.is_free AS "isFree", ll.is_published AS "isPublished",
+             ll.created_at AS "createdAt", ll.updated_at AS "updatedAt"
+      FROM lms_lessons ll
+      ${needsJoin ? 'JOIN lms_modules m ON m.id = ll.lms_module_id' : ''}
+      ${where}
+      ORDER BY ll.sort_order ASC, ll.created_at ASC
     `, values);
     res.json(rows);
   } catch (error) {
@@ -2266,6 +2273,35 @@ app.get('/api/lms/my-progress', requireStudent, async (req, res) => {
   } catch (error) {
     console.error('Error fetching student progress', error);
     res.status(500).json({ error: 'Unable to retrieve progress' });
+  }
+});
+
+// Progresso individuale per lezione (usato nella pagina corso)
+app.get('/api/lms/lessons/progress', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { courseId } = req.query;
+    let query = `
+      SELECT lp.lms_lesson_id AS "lessonId",
+             lp.progress_percent AS "progressPercent",
+             lp.completed_at AS "completedAt"
+      FROM lesson_progress lp
+      WHERE lp.user_id = $1
+    `;
+    const values = [req.user.userId];
+    if (courseId) {
+      query += ` AND lp.lms_lesson_id IN (
+        SELECT ll.id FROM lms_lessons ll
+        JOIN lms_modules m ON m.id = ll.lms_module_id
+        WHERE m.course_id = $2
+      )`;
+      values.push(courseId);
+    }
+    const { rows } = await pool.query(query, values);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching lesson progress', error);
+    res.status(500).json({ error: 'Unable to retrieve lesson progress' });
   }
 });
 

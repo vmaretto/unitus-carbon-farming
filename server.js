@@ -14,6 +14,7 @@ const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
 // ============================================
 // AUTENTICAZIONE ADMIN
 // ============================================
+const RESEND_API_KEY = process.env.RESEND_API_KEY || null;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
 const JWT_SECRET = process.env.JWT_SECRET || (ADMIN_PASSWORD ? crypto.randomBytes(32).toString('hex') : null);
 
@@ -2055,14 +2056,64 @@ app.post('/api/auth/magic-link', async (req, res) => {
       [tokenHash, expiresAt, user.id]
     );
 
-    // MVP: stampa il link nel log del server
     const baseUrl = req.protocol + '://' + req.get('host');
     const magicLink = `${baseUrl}/api/auth/verify-magic/${rawToken}`;
-    console.log(`\n========== MAGIC LINK ==========`);
-    console.log(`User: ${email}`);
-    console.log(`Link: ${magicLink}`);
-    console.log(`Expires: ${expiresAt.toISOString()}`);
-    console.log(`================================\n`);
+
+    // Invio email con Resend
+    if (RESEND_API_KEY) {
+      const fromEmail = process.env.RESEND_FROM || 'Carbon Farming Master <onboarding@resend.dev>';
+      try {
+        const emailRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: fromEmail,
+            to: [email.trim().toLowerCase()],
+            subject: 'Accedi al Master Carbon Farming',
+            html: `
+              <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                  <h2 style="color: #2c7a4b; margin: 0;">Master Carbon Farming</h2>
+                  <p style="color: #666; font-size: 14px;">Università della Tuscia</p>
+                </div>
+                <div style="background: #f9fafb; border-radius: 12px; padding: 30px; text-align: center;">
+                  <p style="font-size: 16px; color: #333; margin-bottom: 20px;">
+                    Clicca il pulsante qui sotto per accedere alla piattaforma:
+                  </p>
+                  <a href="${magicLink}" style="display: inline-block; background: #2c7a4b; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+                    Accedi alla piattaforma
+                  </a>
+                  <p style="font-size: 13px; color: #999; margin-top: 20px;">
+                    Il link è valido per 15 minuti. Se non hai richiesto l'accesso, ignora questa email.
+                  </p>
+                </div>
+                <p style="font-size: 12px; color: #ccc; text-align: center; margin-top: 30px;">
+                  Master Universitario di II livello in Carbon Farming — UNITUS Academy
+                </p>
+              </div>
+            `
+          })
+        });
+        const emailResult = await emailRes.json();
+        if (!emailRes.ok) {
+          console.error('Resend error:', emailResult);
+        } else {
+          console.log('Magic link email sent to', email, 'id:', emailResult.id);
+        }
+      } catch (emailErr) {
+        console.error('Failed to send magic link email:', emailErr);
+      }
+    } else {
+      // Fallback: stampa il link nel log (development)
+      console.log(`\n========== MAGIC LINK ==========`);
+      console.log(`User: ${email}`);
+      console.log(`Link: ${magicLink}`);
+      console.log(`Expires: ${expiresAt.toISOString()}`);
+      console.log(`================================\n`);
+    }
 
     res.json({ message: 'Se l\'indirizzo email è registrato, riceverai un link di accesso.' });
   } catch (error) {

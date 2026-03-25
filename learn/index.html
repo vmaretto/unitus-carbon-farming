@@ -31,6 +31,10 @@
         .live-banner h3 { margin: 0; color: white; }
         .live-banner p { margin: 4px 0 0; opacity: 0.9; font-size: 0.9rem; }
         .live-banner a { background: rgba(255,255,255,0.2); color: white; padding: 10px 20px; border-radius: 999px; text-decoration: none; font-weight: 600; }
+        .zoom-btn { display: inline-block; padding: 10px 20px; border-radius: 999px; font-weight: 600; text-align: center; }
+        .zoom-btn.active { background: rgba(255,255,255,0.2); color: white; text-decoration: none; cursor: pointer; }
+        .zoom-btn.active:hover { background: rgba(255,255,255,0.35); }
+        .zoom-btn.disabled { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); cursor: not-allowed; }
         .empty { color: var(--gray-500); text-align: center; padding: 32px; }
         @media (max-width: 640px) { .header-content { flex-direction: column; align-items: flex-start; } }
     </style>
@@ -170,8 +174,8 @@
                         // Mostra bottone Zoom solo da 30 min prima fino a fine lezione
                         const teamsActive = next.locationRemote && now >= thirtyMinBefore && now <= endTime;
                         const teamsLink = teamsActive
-                            ? `<a href="${next.locationRemote}" target="_blank" rel="noopener">Entra in Zoom</a>`
-                            : (next.locationRemote ? `<span style="opacity:0.6; font-size:0.85rem;">Link Zoom attivo 30 min prima</span>` : '');
+                            ? `<a href="${next.locationRemote}" target="_blank" rel="noopener" class="zoom-btn active">Collegati</a>`
+                            : (next.locationRemote ? `<span class="zoom-btn disabled">Collegati</span><br><small style="opacity:0.6;">Attivo 30 min prima</small>` : '');
 
                         liveSection.innerHTML = `
                             <div class="live-banner">

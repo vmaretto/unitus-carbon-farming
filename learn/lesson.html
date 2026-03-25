@@ -188,6 +188,7 @@
     </main>
 
     <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
     <script>
     (function() {
         'use strict';
@@ -402,45 +403,52 @@
         }
 
         function setupVideo(videoUrl, progress) {
-            const videoContainer = document.getElementById('video-container');
-            const videoEl = document.getElementById('player');
-            document.getElementById('no-video').style.display = 'none';
+            try {
+                const videoContainer = document.getElementById('video-container');
+                const videoEl = document.getElementById('player');
+                document.getElementById('no-video').style.display = 'none';
 
-            // Check if it's a YouTube URL
-            const youtubeMatch = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
-            
-            if (youtubeMatch) {
-                // YouTube video - create div for Plyr YouTube provider
-                const youtubeId = youtubeMatch[1];
-                videoEl.style.display = 'none';
+                // Check if it's a YouTube URL
+                const youtubeMatch = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
                 
-                // Create YouTube embed div
-                const ytDiv = document.createElement('div');
-                ytDiv.id = 'player-youtube';
-                ytDiv.setAttribute('data-plyr-provider', 'youtube');
-                ytDiv.setAttribute('data-plyr-embed-id', youtubeId);
-                videoContainer.insertBefore(ytDiv, videoContainer.firstChild);
-                
-                plyrInstance = new Plyr(ytDiv, {
-                    speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
-                    controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'fullscreen'],
-                    settings: ['speed'],
-                    keyboard: { focused: true, global: false },
-                    tooltips: { controls: true, seek: true },
-                    youtube: { noCookie: true, rel: 0, showinfo: 0, iv_load_policy: 3, modestbranding: 1 }
-                });
-            } else {
-                // Regular video file
-                videoEl.style.display = '';
-                videoEl.src = videoUrl;
+                if (youtubeMatch) {
+                    // YouTube video - use iframe embed directly (more reliable than Plyr YouTube provider)
+                    const youtubeId = youtubeMatch[1];
+                    videoEl.style.display = 'none';
+                    
+                    // Create YouTube iframe
+                    const iframe = document.createElement('iframe');
+                    iframe.id = 'player-youtube';
+                    iframe.width = '100%';
+                    iframe.height = '100%';
+                    iframe.style.aspectRatio = '16/9';
+                    iframe.style.border = 'none';
+                    iframe.src = `https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0&modestbranding=1`;
+                    iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+                    iframe.allowFullscreen = true;
+                    videoContainer.insertBefore(iframe, videoContainer.firstChild);
+                    
+                    // No Plyr tracking for YouTube iframe - simplified
+                    console.log('YouTube video loaded:', youtubeId);
+                    return; // Skip Plyr setup for YouTube
+                } else {
+                    // Regular video file
+                    videoEl.style.display = '';
+                    videoEl.src = videoUrl;
 
-                plyrInstance = new Plyr(videoEl, {
-                    speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
-                    controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'fullscreen'],
-                    settings: ['speed'],
-                    keyboard: { focused: true, global: false },
-                    tooltips: { controls: true, seek: true }
-                });
+                    plyrInstance = new Plyr(videoEl, {
+                        speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
+                        controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'fullscreen'],
+                        settings: ['speed'],
+                        keyboard: { focused: true, global: false },
+                        tooltips: { controls: true, seek: true }
+                    });
+                }
+            } catch (error) {
+                console.error('Error setting up video:', error);
+                document.getElementById('no-video').style.display = '';
+                document.getElementById('no-video').innerHTML = '<p>Errore nel caricamento del video. Riprova più tardi.</p>';
+                return;
             }
 
             // Resume from last position

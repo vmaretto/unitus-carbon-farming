@@ -1872,6 +1872,7 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
              video_url AS "videoUrl", video_provider AS "videoProvider",
              duration_seconds AS "durationSeconds", sort_order AS "sortOrder",
              is_free AS "isFree", is_published AS "isPublished",
+             materials,
              created_at AS "createdAt", updated_at AS "updatedAt"
       FROM lms_lessons WHERE id = $1
     `, [req.params.id]);
@@ -1906,20 +1907,22 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
 
 app.post('/api/lms/lessons', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
-  const { moduleId, title, description, videoUrl, videoProvider, durationSeconds, sortOrder, isFree, isPublished } = req.body;
+  const { moduleId, title, description, videoUrl, videoProvider, durationSeconds, sortOrder, isFree, isPublished, materials } = req.body;
   if (!moduleId || !title) return res.status(400).json({ error: 'moduleId and title are required' });
   try {
     const id = uuidv4();
     const { rows } = await pool.query(`
-      INSERT INTO lms_lessons (id, lms_module_id, title, description, video_url, video_provider, duration_seconds, sort_order, is_free, is_published)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      INSERT INTO lms_lessons (id, lms_module_id, title, description, video_url, video_provider, duration_seconds, sort_order, is_free, is_published, materials)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING id, lms_module_id AS "moduleId", title, description,
                 video_url AS "videoUrl", video_provider AS "videoProvider",
                 duration_seconds AS "durationSeconds", sort_order AS "sortOrder",
                 is_free AS "isFree", is_published AS "isPublished",
+                materials,
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `, [id, moduleId, title, description || null, videoUrl || null, videoProvider || null,
-        durationSeconds || null, typeof sortOrder === 'number' ? sortOrder : 0, Boolean(isFree), isPublished !== false]);
+        durationSeconds || null, typeof sortOrder === 'number' ? sortOrder : 0, Boolean(isFree), isPublished !== false,
+        JSON.stringify(materials || [])]);
     res.status(201).json(rows[0]);
   } catch (error) {
     console.error('Error creating LMS lesson', error);
@@ -1929,15 +1932,19 @@ app.post('/api/lms/lessons', requireAdmin, async (req, res) => {
 
 app.put('/api/lms/lessons/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
-  const { moduleId, title, description, videoUrl, videoProvider, durationSeconds, sortOrder, isFree, isPublished } = req.body;
+  const { moduleId, title, description, videoUrl, videoProvider, durationSeconds, sortOrder, isFree, isPublished, materials } = req.body;
   try {
-    const { query, values } = buildUpdateQuery('lms_lessons', {
+    const updateFields = {
       lms_module_id: moduleId, title, description,
       video_url: videoUrl, video_provider: videoProvider,
       duration_seconds: durationSeconds, sort_order: sortOrder,
       is_free: typeof isFree === 'boolean' ? isFree : undefined,
       is_published: typeof isPublished === 'boolean' ? isPublished : undefined
-    }, req.params.id);
+    };
+    if (materials !== undefined) {
+      updateFields.materials = JSON.stringify(materials);
+    }
+    const { query, values } = buildUpdateQuery('lms_lessons', updateFields, req.params.id);
     const { rows } = await pool.query(query, values);
     if (!rows.length) return res.status(404).json({ error: 'Lesson not found' });
     const r = rows[0];

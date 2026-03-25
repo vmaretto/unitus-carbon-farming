@@ -2909,6 +2909,16 @@
                         <label>Ordine <input type="number" data-field="sortOrder" min="0" value="0"></label>
                     </div>
                     <label style="margin-top: 12px;">Descrizione <textarea data-field="description" rows="2" placeholder="Descrizione lezione"></textarea></label>
+                    <div style="margin-top: 12px; padding: 12px; background: var(--gray-100); border-radius: 8px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">📎 Materiali (PDF, slide, documenti)</label>
+                        <div data-materials-list style="margin-bottom: 8px;"></div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <input type="text" data-material-name placeholder="Nome (es. Slide lezione)" style="flex: 1; min-width: 150px;">
+                            <input type="url" data-material-url placeholder="URL (Google Drive, Dropbox...)" style="flex: 2; min-width: 200px;">
+                            <button type="button" class="secondary" data-add-material>+ Aggiungi</button>
+                        </div>
+                    </div>
+                    <input type="hidden" data-field="materials" value="[]">
                     <div class="actions">
                         <label class="switch"><input type="checkbox" data-field="isFree"><span class="slider"></span> Gratuita</label>
                         <label class="switch"><input type="checkbox" data-field="isPublished" checked><span class="slider"></span> Pubblicata</label>
@@ -2952,6 +2962,48 @@
             // Lesson form handler
             const form = panel.querySelector(`[data-lms-lesson-form="${moduleId}"]`);
             let editingId = null;
+            let currentMaterials = [];
+            
+            // Helper per renderizzare la lista materiali
+            function renderMaterialsList() {
+                const listDiv = form.querySelector('[data-materials-list]');
+                if (!currentMaterials.length) {
+                    listDiv.innerHTML = '<span style="color: var(--gray-500); font-size: 0.85rem;">Nessun materiale aggiunto</span>';
+                } else {
+                    listDiv.innerHTML = currentMaterials.map((m, i) => `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: white; border-radius: 4px; margin-bottom: 4px;">
+                            <span>📄 <a href="${m.url}" target="_blank" rel="noopener">${m.name}</a></span>
+                            <button type="button" class="danger" data-remove-material="${i}" style="padding: 2px 8px; font-size: 0.75rem;">✕</button>
+                        </div>
+                    `).join('');
+                }
+                form.querySelector('[data-field="materials"]').value = JSON.stringify(currentMaterials);
+            }
+            
+            // Aggiungi materiale
+            form.querySelector('[data-add-material]').addEventListener('click', () => {
+                const nameInput = form.querySelector('[data-material-name]');
+                const urlInput = form.querySelector('[data-material-url]');
+                const name = nameInput.value.trim();
+                const url = urlInput.value.trim();
+                if (!name || !url) { showToast('Inserisci nome e URL', 'error'); return; }
+                currentMaterials.push({ name, url });
+                renderMaterialsList();
+                nameInput.value = '';
+                urlInput.value = '';
+            });
+            
+            // Rimuovi materiale
+            form.querySelector('[data-materials-list]').addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-remove-material]');
+                if (btn) {
+                    const idx = parseInt(btn.dataset.removeMaterial, 10);
+                    currentMaterials.splice(idx, 1);
+                    renderMaterialsList();
+                }
+            });
+            
+            renderMaterialsList();
 
             form.addEventListener('submit', async (ev) => {
                 ev.preventDefault();
@@ -2964,7 +3016,8 @@
                     durationSeconds: form.querySelector('[data-field="durationSeconds"]').value === '' ? null : Number(form.querySelector('[data-field="durationSeconds"]').value),
                     sortOrder: Number(form.querySelector('[data-field="sortOrder"]').value) || 0,
                     isFree: form.querySelector('[data-field="isFree"]').checked,
-                    isPublished: form.querySelector('[data-field="isPublished"]').checked
+                    isPublished: form.querySelector('[data-field="isPublished"]').checked,
+                    materials: currentMaterials
                 };
                 if (!payload.title) { showToast('Inserisci il titolo', 'error'); return; }
                 try {
@@ -2973,6 +3026,7 @@
                     await apiRequest(url, { method, body: JSON.stringify(payload) });
                     showToast('Lezione salvata');
                     editingId = null;
+                    currentMaterials = [];
                     loadLmsLessons(moduleId, panel);
                 } catch (error) {}
             });
@@ -3008,6 +3062,9 @@
                     form.querySelector('[data-field="sortOrder"]').value = lesson.sortOrder ?? 0;
                     form.querySelector('[data-field="isFree"]').checked = Boolean(lesson.isFree);
                     form.querySelector('[data-field="isPublished"]').checked = Boolean(lesson.isPublished);
+                    // Carica materiali esistenti
+                    currentMaterials = Array.isArray(lesson.materials) ? [...lesson.materials] : [];
+                    renderMaterialsList();
                     editingId = lid;
                     cancelBtn.style.display = '';
                     form.querySelector('button.primary').textContent = 'Aggiorna lezione';

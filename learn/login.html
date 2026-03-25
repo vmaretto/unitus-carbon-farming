@@ -49,7 +49,7 @@
 
     <script>
         // Se già loggato, vai alla dashboard
-        const token = sessionStorage.getItem('learnToken');
+        const token = localStorage.getItem('learnToken');
         if (token) window.location.href = '/learn/index.html';
 
         document.getElementById('login-form').addEventListener('submit', async (e) => {

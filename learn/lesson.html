@@ -193,19 +193,19 @@
         'use strict';
 
         // --- Auth ---
-        const token = sessionStorage.getItem('learnToken');
+        const token = localStorage.getItem('learnToken');
         if (!token) { window.location.href = '/learn/login.html'; }
 
         let currentUser = {};
         try {
-            const stored = sessionStorage.getItem('learnUser');
+            const stored = localStorage.getItem('learnUser');
             if (stored) currentUser = JSON.parse(stored);
         } catch(e) {}
 
         document.getElementById('logout-btn').addEventListener('click', (e) => {
             e.preventDefault();
-            sessionStorage.removeItem('learnToken');
-            sessionStorage.removeItem('learnUser');
+            localStorage.removeItem('learnToken');
+            localStorage.removeItem('learnUser');
             window.location.href = '/learn/login.html';
         });
 
@@ -232,7 +232,7 @@
                 }
             });
             if (res.status === 401) {
-                sessionStorage.removeItem('learnToken');
+                localStorage.removeItem('learnToken');
                 window.location.href = '/learn/login.html';
                 return null;
             }

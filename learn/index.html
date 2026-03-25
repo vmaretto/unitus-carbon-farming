@@ -71,40 +71,40 @@
             const hash = window.location.hash;
             if (hash.startsWith('#token=')) {
                 const t = hash.slice(7);
-                sessionStorage.setItem('learnToken', t);
+                localStorage.setItem('learnToken', t);
                 // Parse user info from JWT
                 try {
                     const payload = JSON.parse(atob(t.split('.')[1]));
                     if (payload.firstName || payload.lastName) {
-                        sessionStorage.setItem('learnUser', JSON.stringify(payload));
+                        localStorage.setItem('learnUser', JSON.stringify(payload));
                     }
                 } catch (e) {}
                 window.location.hash = '';
                 return t;
             }
-            return sessionStorage.getItem('learnToken');
+            return localStorage.getItem('learnToken');
         }
 
         const token = getToken();
         if (!token) { window.location.href = '/learn/login.html'; }
 
         let userInfo = {};
-        try { userInfo = JSON.parse(sessionStorage.getItem('learnUser') || '{}'); } catch(e) {}
+        try { userInfo = JSON.parse(localStorage.getItem('learnUser') || '{}'); } catch(e) {}
 
         const welcomeName = [userInfo.firstName, userInfo.lastName].filter(Boolean).join(' ') || userInfo.email || '';
         if (welcomeName) document.getElementById('welcome-msg').textContent = `Ciao, ${welcomeName}!`;
 
         document.getElementById('logout-btn').addEventListener('click', (e) => {
             e.preventDefault();
-            sessionStorage.removeItem('learnToken');
-            sessionStorage.removeItem('learnUser');
+            localStorage.removeItem('learnToken');
+            localStorage.removeItem('learnUser');
             window.location.href = '/learn/login.html';
         });
 
         async function api(url) {
             const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
             if (res.status === 401) {
-                sessionStorage.removeItem('learnToken');
+                localStorage.removeItem('learnToken');
                 window.location.href = '/learn/login.html';
                 return null;
             }

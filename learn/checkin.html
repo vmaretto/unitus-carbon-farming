@@ -79,13 +79,13 @@
     (function() {
         'use strict';
 
-        const token = sessionStorage.getItem('learnToken');
+        const token = localStorage.getItem('learnToken');
         if (!token) { window.location.href = '/learn/login.html'; }
 
         document.getElementById('logout-btn').addEventListener('click', (e) => {
             e.preventDefault();
-            sessionStorage.removeItem('learnToken');
-            sessionStorage.removeItem('learnUser');
+            localStorage.removeItem('learnToken');
+            localStorage.removeItem('learnUser');
             window.location.href = '/learn/login.html';
         });
 

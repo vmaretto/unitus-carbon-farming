@@ -153,42 +153,106 @@
                 console.error('Error loading dashboard', error);
             }
 
-            // Carica prossima lezione live
+            // Carica lezioni di oggi e prossime
             try {
                 const lessonsRes = await fetch('/api/lessons');
                 if (lessonsRes.ok) {
                     const lessons = await lessonsRes.json();
                     const now = new Date();
-                    const upcoming = lessons
-                        .filter(l => new Date(l.startDatetime) > now && l.status !== 'cancelled')
+                    const todayStr = now.toISOString().split('T')[0];
+                    
+                    // Filtra lezioni di oggi e future, ordinate per orario
+                    const relevantLessons = lessons
+                        .filter(l => {
+                            const lessonDate = new Date(l.startDatetime);
+                            const lessonDateStr = lessonDate.toISOString().split('T')[0];
+                            const endTime = new Date(lessonDate.getTime() + (l.durationMinutes || 120) * 60000);
+                            return l.status !== 'cancelled' && (lessonDateStr >= todayStr || endTime > now);
+                        })
                         .sort((a, b) => new Date(a.startDatetime) - new Date(b.startDatetime));
 
                     const liveSection = document.getElementById('live-section');
-                    if (upcoming.length > 0) {
-                        const next = upcoming[0];
+                    
+                    // Prendi le lezioni di oggi
+                    const todaysLessons = relevantLessons.filter(l => {
+                        const lessonDateStr = new Date(l.startDatetime).toISOString().split('T')[0];
+                        return lessonDateStr === todayStr;
+                    });
+                    
+                    if (todaysLessons.length > 0) {
+                        let bannersHtml = '';
+                        
+                        todaysLessons.forEach((lesson, index) => {
+                            const startTime = new Date(lesson.startDatetime);
+                            const endTime = new Date(startTime.getTime() + (lesson.durationMinutes || 120) * 60000);
+                            const thirtyMinBefore = new Date(startTime.getTime() - 30 * 60000);
+                            const dt = startTime.toLocaleString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                            const endDt = endTime.toLocaleString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                            
+                            // Controlla se c'è una lezione precedente ancora in corso
+                            let previousInProgress = false;
+                            if (index > 0) {
+                                const prevLesson = todaysLessons[index - 1];
+                                const prevStart = new Date(prevLesson.startDatetime);
+                                const prevEnd = new Date(prevStart.getTime() + (prevLesson.durationMinutes || 120) * 60000);
+                                if (now < prevEnd && now >= thirtyMinBefore) {
+                                    previousInProgress = true;
+                                }
+                            }
+                            
+                            // Stato del link Zoom
+                            const zoomActive = lesson.locationRemote && now >= thirtyMinBefore && now <= endTime;
+                            let zoomHtml = '';
+                            
+                            if (lesson.locationRemote) {
+                                if (zoomActive) {
+                                    const warningMsg = previousInProgress 
+                                        ? `<br><small style="color: #fbbf24;">⚠️ Lezione precedente ancora in corso</small>` 
+                                        : '';
+                                    zoomHtml = `<div style="text-align: right;"><a href="${lesson.locationRemote}" target="_blank" rel="noopener" class="zoom-btn active">Collegati</a>${warningMsg}</div>`;
+                                } else if (now < thirtyMinBefore) {
+                                    const activeTime = thirtyMinBefore.toLocaleString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                                    zoomHtml = `<div style="text-align: right;"><span class="zoom-btn disabled">Collegati</span><br><small style="opacity:0.6;">Attivo dalle ${activeTime}</small></div>`;
+                                }
+                            }
+                            
+                            // Stato della lezione
+                            let statusBadge = '';
+                            if (now >= startTime && now <= endTime) {
+                                statusBadge = '<span style="background: #22c55e; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 8px;">IN CORSO</span>';
+                            } else if (now > endTime) {
+                                statusBadge = '<span style="background: rgba(255,255,255,0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 8px;">CONCLUSA</span>';
+                            }
+                            
+                            bannersHtml += `
+                                <div class="live-banner" style="margin-bottom: 8px;">
+                                    <div>
+                                        <h3>${lesson.title}${statusBadge}</h3>
+                                        <p>${dt} - ${endDt}${lesson.locationPhysical ? ' &bull; ' + lesson.locationPhysical : ''}</p>
+                                    </div>
+                                    ${zoomHtml}
+                                </div>
+                            `;
+                        });
+                        
+                        liveSection.innerHTML = `<h4 style="margin: 0 0 12px; color: var(--green-700);">Lezioni di oggi</h4>${bannersHtml}`;
+                    } else if (relevantLessons.length > 0) {
+                        // Mostra prossima lezione futura
+                        const next = relevantLessons[0];
                         const startTime = new Date(next.startDatetime);
-                        const endTime = new Date(startTime.getTime() + (next.durationMinutes || 120) * 60000);
-                        const thirtyMinBefore = new Date(startTime.getTime() - 30 * 60000);
                         const dt = startTime.toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
-
-                        // Mostra bottone Zoom solo da 30 min prima fino a fine lezione
-                        const teamsActive = next.locationRemote && now >= thirtyMinBefore && now <= endTime;
-                        const teamsLink = teamsActive
-                            ? `<a href="${next.locationRemote}" target="_blank" rel="noopener" class="zoom-btn active">Collegati</a>`
-                            : (next.locationRemote ? `<span class="zoom-btn disabled">Collegati</span><br><small style="opacity:0.6;">Attivo 30 min prima</small>` : '');
-
+                        
                         liveSection.innerHTML = `
                             <div class="live-banner">
                                 <div>
                                     <h3>Prossima lezione: ${next.title}</h3>
                                     <p>${dt}${next.locationPhysical ? ' &bull; ' + next.locationPhysical : ''}</p>
                                 </div>
-                                ${teamsLink}
                             </div>
                         `;
                     }
                 }
-            } catch (e) {}
+            } catch (e) { console.error(e); }
         }
 
         loadDashboard();

@@ -2408,15 +2408,26 @@ app.post('/api/lms/lessons/:id/progress', requireStudent, async (req, res) => {
 
 // --- QUIZ ---
 
-// Admin: CRUD quiz per lezione
-app.get('/api/lms/quizzes', requireAdmin, async (req, res) => {
+// Get quizzes - public for students (only published), full access for admin
+app.get('/api/lms/quizzes', async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { lessonId } = req.query;
     const filters = [];
     const values = [];
+    
+    // Check if admin token is present
+    const authHeader = req.headers.authorization;
+    const isAdmin = authHeader && authHeader.startsWith('Bearer ') && 
+                    authHeader.slice(7) === ADMIN_PASSWORD;
+    
+    // Non-admin users only see published quizzes
+    if (!isAdmin) {
+      filters.push('is_published = true');
+    }
+    
     if (lessonId) {
-      filters.push(`lms_lesson_id = $${filters.length + 1}`);
+      filters.push(`lms_lesson_id = $${values.length + 1}`);
       values.push(lessonId);
     }
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';

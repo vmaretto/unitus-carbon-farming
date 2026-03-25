@@ -155,6 +155,63 @@
             width: 100%;
         }
         
+        .nav-links .area-riservata {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .nav-links .info-tooltip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            font-size: 11px;
+            border: 1.5px solid rgba(255,255,255,0.7);
+            border-radius: 50%;
+            cursor: help;
+            position: relative;
+        }
+
+        .nav-links .info-tooltip::before {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 400;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 100;
+        }
+
+        .nav-links .info-tooltip::after {
+            content: "";
+            position: absolute;
+            bottom: calc(100% + 2px);
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: #333;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+        }
+
+        .nav-links .info-tooltip:hover::before,
+        .nav-links .info-tooltip:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+
         .nav-links a.active {
             color: #ffd7c1;
         }
@@ -3116,6 +3173,7 @@
                     <a href="index.html#info">Iscrizioni</a>
                     <a href="faq.html">FAQ</a>
                     <a href="blog.html">Blog</a>
+                    <a href="/learn/login.html" class="area-riservata">Area Riservata <span class="info-tooltip" data-tooltip="Per studenti e docenti">i</span></a>
                 </div>
             </div>
         </nav>

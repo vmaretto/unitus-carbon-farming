@@ -1829,6 +1829,35 @@ app.get('/api/lms/lessons', async (req, res) => {
   }
 });
 
+// Progresso individuale per lezione (usato nella pagina corso) - DEVE essere prima di /lessons/:id
+app.get('/api/lms/lessons/progress', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { courseId } = req.query;
+    let query = `
+      SELECT lp.lms_lesson_id AS "lessonId",
+             lp.progress_percent AS "progressPercent",
+             lp.completed_at AS "completedAt"
+      FROM lesson_progress lp
+      WHERE lp.user_id = $1
+    `;
+    const values = [req.user.userId];
+    if (courseId) {
+      query += ` AND lp.lms_lesson_id IN (
+        SELECT ll.id FROM lms_lessons ll
+        JOIN lms_modules m ON m.id = ll.lms_module_id
+        WHERE m.course_id = $2
+      )`;
+      values.push(courseId);
+    }
+    const { rows } = await pool.query(query, values);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching lesson progress', error);
+    res.status(500).json({ error: 'Unable to retrieve lesson progress' });
+  }
+});
+
 app.get('/api/lms/lessons/:id', async (req, res) => {
   if (!ensurePool(res)) return;
   try {
@@ -2273,35 +2302,6 @@ app.get('/api/lms/my-progress', requireStudent, async (req, res) => {
   } catch (error) {
     console.error('Error fetching student progress', error);
     res.status(500).json({ error: 'Unable to retrieve progress' });
-  }
-});
-
-// Progresso individuale per lezione (usato nella pagina corso)
-app.get('/api/lms/lessons/progress', requireStudent, async (req, res) => {
-  if (!ensurePool(res)) return;
-  try {
-    const { courseId } = req.query;
-    let query = `
-      SELECT lp.lms_lesson_id AS "lessonId",
-             lp.progress_percent AS "progressPercent",
-             lp.completed_at AS "completedAt"
-      FROM lesson_progress lp
-      WHERE lp.user_id = $1
-    `;
-    const values = [req.user.userId];
-    if (courseId) {
-      query += ` AND lp.lms_lesson_id IN (
-        SELECT ll.id FROM lms_lessons ll
-        JOIN lms_modules m ON m.id = ll.lms_module_id
-        WHERE m.course_id = $2
-      )`;
-      values.push(courseId);
-    }
-    const { rows } = await pool.query(query, values);
-    res.json(rows);
-  } catch (error) {
-    console.error('Error fetching lesson progress', error);
-    res.status(500).json({ error: 'Unable to retrieve lesson progress' });
   }
 });
 

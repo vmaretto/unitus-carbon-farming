@@ -3338,7 +3338,7 @@
                 const statusMap = { active: 'Attivo', suspended: 'Sospeso', completed: 'Completato', cancelled: 'Cancellato' };
                 const statusClass = en.status === 'active' ? 'published' : 'draft';
                 const lastLogin = en.lastLoginAt 
-                    ? new Date(en.lastLoginAt).toLocaleDateString('it-IT') 
+                    ? new Date(en.lastLoginAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                     : '<span style="color: #b91c1c;">Mai</span>';
                 tr.innerHTML = `
                     <td>${en.email}</td>

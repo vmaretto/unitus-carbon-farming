@@ -2133,7 +2133,8 @@ app.get('/api/lms/enrollments', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT e.id, e.user_id AS "userId", e.course_edition_id AS "courseEditionId",
              e.status, e.enrolled_at AS "enrolledAt", e.completed_at AS "completedAt",
-             u.email, u.first_name AS "firstName", u.last_name AS "lastName", u.role
+             u.email, u.first_name AS "firstName", u.last_name AS "lastName", u.role,
+             u.last_login_at AS "lastLoginAt"
       FROM enrollments e
       JOIN users u ON u.id = e.user_id
       WHERE e.course_edition_id = $1

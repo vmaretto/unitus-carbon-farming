@@ -1179,12 +1179,13 @@
                                 <th>Ruolo</th>
                                 <th>Stato</th>
                                 <th>Data iscrizione</th>
+                                <th>Ultimo accesso</th>
                                 <th style="width: 140px;">Azioni</th>
                             </tr>
                         </thead>
                         <tbody id="lms-enroll-table-body">
                             <tr data-empty-lms-enroll>
-                                <td colspan="6" class="empty-state">Nessun iscritto per questa edizione.</td>
+                                <td colspan="7" class="empty-state">Nessun iscritto per questa edizione.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -3336,12 +3337,16 @@
                 tr.dataset.id = en.id;
                 const statusMap = { active: 'Attivo', suspended: 'Sospeso', completed: 'Completato', cancelled: 'Cancellato' };
                 const statusClass = en.status === 'active' ? 'published' : 'draft';
+                const lastLogin = en.lastLoginAt 
+                    ? new Date(en.lastLoginAt).toLocaleDateString('it-IT') 
+                    : '<span style="color: #b91c1c;">Mai</span>';
                 tr.innerHTML = `
                     <td>${en.email}</td>
                     <td>${[en.firstName, en.lastName].filter(Boolean).join(' ') || '—'}</td>
                     <td>${en.role || '—'}</td>
                     <td><span class="status-pill" data-status="${statusClass}">${statusMap[en.status] || en.status}</span></td>
                     <td>${en.enrolledAt ? new Date(en.enrolledAt).toLocaleDateString('it-IT') : '—'}</td>
+                    <td>${lastLogin}</td>
                     <td>
                         <div class="actions">
                             <button type="button" class="secondary" data-edit-enroll>Modifica</button>

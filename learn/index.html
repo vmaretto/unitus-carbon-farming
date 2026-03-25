@@ -71,21 +71,25 @@
             const hash = window.location.hash;
             if (hash.startsWith('#token=')) {
                 const t = hash.slice(7);
-                localStorage.setItem('learnToken', t);
-                // Parse user info from JWT
                 try {
+                    localStorage.setItem('learnToken', t);
+                    // Parse user info from JWT
                     const payload = JSON.parse(atob(t.split('.')[1]));
                     if (payload.firstName || payload.lastName) {
                         localStorage.setItem('learnUser', JSON.stringify(payload));
                     }
-                } catch (e) {}
-                window.location.hash = '';
+                    // Clean URL without reload
+                    history.replaceState(null, '', window.location.pathname + window.location.search);
+                } catch (e) {
+                    console.error('Token parse error:', e);
+                }
                 return t;
             }
             return localStorage.getItem('learnToken');
         }
 
         const token = getToken();
+        console.log('Token loaded:', token ? 'yes (' + token.substring(0,20) + '...)' : 'no');
         if (!token) { window.location.href = '/learn/login.html'; }
 
         let userInfo = {};

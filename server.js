@@ -2922,7 +2922,41 @@ app.post('/api/attendance/checkin', requireStudent, async (req, res) => {
   }
 });
 
-// Admin: import CSV report partecipanti Teams
+// Admin: check-in manuale per ritardatari
+app.post('/api/attendance/manual-checkin', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { lessonId, userId, type } = req.body;
+  if (!lessonId || !userId) {
+    return res.status(400).json({ error: 'lessonId and userId are required' });
+  }
+  
+  try {
+    const attendanceId = uuidv4();
+    const attendanceType = type || 'in_person';
+    
+    // Controlla se esiste già
+    const { rows: existing } = await pool.query(
+      'SELECT id FROM attendance WHERE lesson_id = $1 AND user_id = $2',
+      [lessonId, userId]
+    );
+    
+    if (existing.length > 0) {
+      return res.status(409).json({ error: 'Presenza già registrata per questa lezione' });
+    }
+    
+    await pool.query(`
+      INSERT INTO attendance (id, lesson_id, user_id, check_in_time, attendance_type, verified)
+      VALUES ($1, $2, $3, NOW(), $4, true)
+    `, [attendanceId, lessonId, userId, attendanceType]);
+    
+    res.status(201).json({ success: true, id: attendanceId });
+  } catch (error) {
+    console.error('Error manual check-in', error);
+    res.status(500).json({ error: 'Unable to register attendance' });
+  }
+});
+
+// Admin: import CSV report partecipanti Zoom/Teams
 app.post('/api/attendance/import-csv', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   const { lessonId, participants } = req.body;

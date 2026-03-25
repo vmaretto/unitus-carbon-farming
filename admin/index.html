@@ -1231,9 +1231,38 @@
                     </div>
                 </div>
 
-                <!-- Import CSV Teams -->
+                <!-- Check-in manuale -->
                 <div style="margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--gray-200);">
-                    <h3 style="font-size: 1.1rem; margin: 0 0 12px; color: var(--green-700);">Import CSV Teams</h3>
+                    <h3 style="font-size: 1.1rem; margin: 0 0 12px; color: var(--green-700);">Check-in manuale</h3>
+                    <p style="color: var(--gray-500); font-size: 0.85rem; margin-bottom: 12px;">Per ritardatari o studenti che non hanno fatto check-in con PIN</p>
+                    <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+                        <label style="flex: 1; min-width: 200px;">
+                            Lezione
+                            <select id="att-manual-lesson-select" style="margin-top: 4px;">
+                                <option value="">-- Seleziona lezione --</option>
+                            </select>
+                        </label>
+                        <label style="flex: 1; min-width: 200px;">
+                            Studente
+                            <select id="att-manual-student-select" style="margin-top: 4px;">
+                                <option value="">-- Seleziona studente --</option>
+                            </select>
+                        </label>
+                        <label style="min-width: 120px;">
+                            Tipo
+                            <select id="att-manual-type" style="margin-top: 4px;">
+                                <option value="in_person">In presenza</option>
+                                <option value="remote_live">Da remoto</option>
+                            </select>
+                        </label>
+                        <button class="primary" id="att-manual-checkin">Segna presente</button>
+                    </div>
+                    <div id="att-manual-result" style="margin-top: 8px; font-size: 0.9rem;"></div>
+                </div>
+
+                <!-- Import CSV Teams/Zoom -->
+                <div style="margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--gray-200);">
+                    <h3 style="font-size: 1.1rem; margin: 0 0 12px; color: var(--green-700);">Import CSV Zoom/Teams</h3>
                     <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
                         <label style="flex: 1; min-width: 200px;">
                             Lezione
@@ -3510,8 +3539,26 @@
 
         async function loadAttLessons(courseEditionId) {
             // Popola i selettori lezione
-            const selects = [document.getElementById('att-lesson-select'), document.getElementById('att-csv-lesson-select')];
+            const selects = [
+                document.getElementById('att-lesson-select'), 
+                document.getElementById('att-csv-lesson-select'),
+                document.getElementById('att-manual-lesson-select')
+            ];
             selects.forEach(s => { s.innerHTML = '<option value="">-- Seleziona lezione --</option>'; });
+            
+            // Popola anche il selettore studenti per check-in manuale
+            const studentSelect = document.getElementById('att-manual-student-select');
+            studentSelect.innerHTML = '<option value="">-- Seleziona studente --</option>';
+            try {
+                const enrollments = await apiRequest(`/api/lms/enrollments?courseEditionId=${courseEditionId}`);
+                enrollments.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+                enrollments.forEach(en => {
+                    const name = [en.lastName, en.firstName].filter(Boolean).join(' ') || en.email;
+                    studentSelect.innerHTML += `<option value="${en.userId}">${name}</option>`;
+                });
+            } catch (error) {
+                console.error('Error loading students for manual checkin', error);
+            }
 
             try {
                 // Prendi il course_id dall'edizione
@@ -3570,7 +3617,37 @@
             }
         });
 
-        // Import CSV Teams
+        // Check-in manuale
+        document.getElementById('att-manual-checkin').addEventListener('click', async () => {
+            const lessonId = document.getElementById('att-manual-lesson-select').value;
+            const userId = document.getElementById('att-manual-student-select').value;
+            const type = document.getElementById('att-manual-type').value;
+            const resultDiv = document.getElementById('att-manual-result');
+            
+            if (!lessonId) { showToast('Seleziona una lezione', 'error'); return; }
+            if (!userId) { showToast('Seleziona uno studente', 'error'); return; }
+            
+            try {
+                await apiRequest('/api/attendance/manual-checkin', {
+                    method: 'POST',
+                    body: JSON.stringify({ lessonId, userId, type })
+                });
+                resultDiv.innerHTML = '<span style="color: var(--green-700);">✓ Presenza registrata</span>';
+                showToast('Presenza registrata');
+                
+                // Reset e refresh
+                document.getElementById('att-manual-student-select').value = '';
+                const editionId = document.getElementById('att-edition-select').value;
+                if (editionId) loadAttReport(editionId);
+                
+                setTimeout(() => { resultDiv.innerHTML = ''; }, 3000);
+            } catch (error) {
+                resultDiv.innerHTML = '<span style="color: #b91c1c;">Errore: ' + (error.message || 'check-in fallito') + '</span>';
+                showToast('Errore nel check-in', 'error');
+            }
+        });
+
+        // Import CSV Teams/Zoom
         document.getElementById('att-csv-file').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             const lessonId = document.getElementById('att-csv-lesson-select').value;

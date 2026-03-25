@@ -2027,6 +2027,44 @@ app.delete('/api/lms/lesson-assets/:id', requireAdmin, async (req, res) => {
 
 // --- ENROLLMENTS ---
 
+// Admin: stato magic link degli studenti
+app.get('/api/admin/magic-link-status', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { courseEditionId } = req.query;
+  try {
+    let query = `
+      SELECT u.email, u.first_name AS "firstName", u.last_name AS "lastName",
+             CASE WHEN u.token_hash IS NOT NULL THEN true ELSE false END AS "hasRequestedLink",
+             u.last_login_at AS "lastLoginAt"
+      FROM users u
+    `;
+    const values = [];
+    if (courseEditionId) {
+      query += `
+        JOIN enrollments e ON e.user_id = u.id
+        WHERE e.course_edition_id = $1
+      `;
+      values.push(courseEditionId);
+    }
+    query += ' ORDER BY u.last_login_at DESC NULLS LAST, u.email';
+    
+    const { rows } = await pool.query(query, values);
+    
+    const requested = rows.filter(r => r.hasRequestedLink || r.lastLoginAt);
+    const notRequested = rows.filter(r => !r.hasRequestedLink && !r.lastLoginAt);
+    
+    res.json({
+      total: rows.length,
+      requested: requested.length,
+      notRequested: notRequested.length,
+      students: rows
+    });
+  } catch (error) {
+    console.error('Error fetching magic link status', error);
+    res.status(500).json({ error: 'Unable to retrieve status' });
+  }
+});
+
 app.post('/api/lms/enrollments/bulk', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   const items = req.body;

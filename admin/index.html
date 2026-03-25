@@ -3271,20 +3271,30 @@
         // ENROLLMENTS
         // ============================================
 
+        let _enrollEditionSelectUpdating = false;
         async function updateEnrollEditionSelect() {
+            // Evita chiamate multiple simultanee
+            if (_enrollEditionSelectUpdating) return;
+            _enrollEditionSelectUpdating = true;
+            
             const select = document.getElementById('lms-enroll-edition-select');
             const cur = select.value;
             select.innerHTML = '<option value="">-- Seleziona un\'edizione --</option>';
 
+            const addedIds = new Set();
             for (const course of state.lmsCourses) {
                 try {
                     const editions = await apiRequest(`/api/lms/course-editions?courseId=${course.id}`);
                     editions.forEach(ed => {
-                        select.innerHTML += `<option value="${ed.id}">${course.title} — ${ed.editionName}</option>`;
+                        if (!addedIds.has(ed.id)) {
+                            addedIds.add(ed.id);
+                            select.innerHTML += `<option value="${ed.id}">${course.title} — ${ed.editionName}</option>`;
+                        }
                     });
                 } catch (error) {}
             }
             if (cur) select.value = cur;
+            _enrollEditionSelectUpdating = false;
         }
 
         document.getElementById('lms-enroll-edition-select').addEventListener('change', (e) => {
@@ -3467,19 +3477,30 @@
 
         state.attendanceReport = [];
 
+        let _attEditionSelectUpdating = false;
         async function updateAttEditionSelect() {
+            // Evita chiamate multiple simultanee
+            if (_attEditionSelectUpdating) return;
+            _attEditionSelectUpdating = true;
+            
             const select = document.getElementById('att-edition-select');
             const cur = select.value;
             select.innerHTML = '<option value="">-- Seleziona un\'edizione --</option>';
+            
+            const addedIds = new Set();
             for (const course of state.lmsCourses) {
                 try {
                     const editions = await apiRequest(`/api/lms/course-editions?courseId=${course.id}`);
                     editions.forEach(ed => {
-                        select.innerHTML += `<option value="${ed.id}">${course.title} — ${ed.editionName}</option>`;
+                        if (!addedIds.has(ed.id)) {
+                            addedIds.add(ed.id);
+                            select.innerHTML += `<option value="${ed.id}">${course.title} — ${ed.editionName}</option>`;
+                        }
                     });
                 } catch (error) {}
             }
             if (cur) select.value = cur;
+            _attEditionSelectUpdating = false;
         }
 
         async function loadAttLessons(courseEditionId) {

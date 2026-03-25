@@ -1137,6 +1137,14 @@
                             <input type="text" id="lms-enroll-email" name="email" required placeholder="studente@email.com">
                         </label>
                         <label>
+                            Nome
+                            <input type="text" id="lms-enroll-firstname" name="firstName" placeholder="Nome">
+                        </label>
+                        <label>
+                            Cognome
+                            <input type="text" id="lms-enroll-lastname" name="lastName" placeholder="Cognome">
+                        </label>
+                        <label>
                             Ruolo
                             <select id="lms-enroll-role" name="role">
                                 <option value="student">Studente</option>
@@ -1147,6 +1155,7 @@
                     </div>
                     <div class="actions">
                         <button class="primary" type="submit">Iscrivi</button>
+                        <button class="secondary" type="button" id="lms-enroll-reset" hidden>Annulla modifica</button>
                     </div>
                 </form>
 
@@ -1170,11 +1179,12 @@
                                 <th>Ruolo</th>
                                 <th>Stato</th>
                                 <th>Data iscrizione</th>
+                                <th style="width: 140px;">Azioni</th>
                             </tr>
                         </thead>
                         <tbody id="lms-enroll-table-body">
                             <tr data-empty-lms-enroll>
-                                <td colspan="5" class="empty-state">Nessun iscritto per questa edizione.</td>
+                                <td colspan="6" class="empty-state">Nessun iscritto per questa edizione.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -3298,12 +3308,22 @@
             }
         }
 
+        state.editingEnrollmentId = null;
+
+        function resetEnrollmentForm() {
+            document.getElementById('lms-enroll-form').reset();
+            document.getElementById('lms-enroll-reset').hidden = true;
+            state.editingEnrollmentId = null;
+            document.getElementById('lms-enroll-form').querySelector('button.primary').textContent = 'Iscrivi';
+        }
+
         function renderEnrollmentsTable() {
             const tbody = document.getElementById('lms-enroll-table-body');
             tbody.querySelectorAll('tr:not([data-empty-lms-enroll])').forEach(r => r.remove());
 
             state.lmsEnrollments.forEach(en => {
                 const tr = document.createElement('tr');
+                tr.dataset.id = en.id;
                 const statusMap = { active: 'Attivo', suspended: 'Sospeso', completed: 'Completato', cancelled: 'Cancellato' };
                 const statusClass = en.status === 'active' ? 'published' : 'draft';
                 tr.innerHTML = `
@@ -3312,6 +3332,12 @@
                     <td>${en.role || '—'}</td>
                     <td><span class="status-pill" data-status="${statusClass}">${statusMap[en.status] || en.status}</span></td>
                     <td>${en.enrolledAt ? new Date(en.enrolledAt).toLocaleDateString('it-IT') : '—'}</td>
+                    <td>
+                        <div class="actions">
+                            <button type="button" class="secondary" data-edit-enroll>Modifica</button>
+                            <button type="button" class="danger" data-delete-enroll>Elimina</button>
+                        </div>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -3319,19 +3345,69 @@
             toggleEmptyState(tbody, state.lmsEnrollments.length > 0, '[data-empty-lms-enroll]');
         }
 
+        document.getElementById('lms-enroll-table-body').addEventListener('click', async (e) => {
+            const row = e.target.closest('tr[data-id]');
+            if (!row) return;
+            const id = row.dataset.id;
+
+            if (e.target.closest('[data-edit-enroll]')) {
+                const en = state.lmsEnrollments.find(x => x.id === id);
+                if (!en) return;
+                document.getElementById('lms-enroll-email').value = en.email || '';
+                document.getElementById('lms-enroll-firstname').value = en.firstName || '';
+                document.getElementById('lms-enroll-lastname').value = en.lastName || '';
+                document.getElementById('lms-enroll-role').value = en.role || 'student';
+                document.getElementById('lms-enroll-reset').hidden = false;
+                document.getElementById('lms-enroll-form').querySelector('button.primary').textContent = 'Aggiorna';
+                state.editingEnrollmentId = id;
+                document.getElementById('lms-enroll-form').scrollIntoView({ behavior: 'smooth' });
+            }
+
+            if (e.target.closest('[data-delete-enroll]')) {
+                if (!confirm('Eliminare questa iscrizione?')) return;
+                try {
+                    await apiRequest(`/api/lms/enrollments/${id}`, { method: 'DELETE' });
+                    showToast('Iscrizione eliminata');
+                    loadLmsEnrollments(state.selectedEnrollEditionId);
+                } catch (error) {}
+            }
+        });
+
+        document.getElementById('lms-enroll-reset').addEventListener('click', resetEnrollmentForm);
+
         document.getElementById('lms-enroll-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!state.selectedEnrollEditionId) { showToast('Seleziona un\'edizione', 'error'); return; }
             const email = document.getElementById('lms-enroll-email').value.trim();
+            const firstName = document.getElementById('lms-enroll-firstname').value.trim();
+            const lastName = document.getElementById('lms-enroll-lastname').value.trim();
             const role = document.getElementById('lms-enroll-role').value;
             if (!email) { showToast('Inserisci l\'email', 'error'); return; }
+            
             try {
-                await apiRequest('/api/lms/enrollments/bulk', {
-                    method: 'POST',
-                    body: JSON.stringify([{ email, courseEditionId: state.selectedEnrollEditionId, role }])
-                });
-                showToast('Studente iscritto');
-                document.getElementById('lms-enroll-form').reset();
+                if (state.editingEnrollmentId) {
+                    // Update existing enrollment
+                    await apiRequest(`/api/lms/enrollments/${state.editingEnrollmentId}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ email, firstName: firstName || null, lastName: lastName || null, role })
+                    });
+                    showToast('Iscrizione aggiornata');
+                    resetEnrollmentForm();
+                } else {
+                    // Create new enrollment
+                    await apiRequest('/api/lms/enrollments/bulk', {
+                        method: 'POST',
+                        body: JSON.stringify([{ 
+                            email, 
+                            courseEditionId: state.selectedEnrollEditionId, 
+                            role,
+                            firstName: firstName || null,
+                            lastName: lastName || null
+                        }])
+                    });
+                    showToast('Studente iscritto');
+                    document.getElementById('lms-enroll-form').reset();
+                }
                 loadLmsEnrollments(state.selectedEnrollEditionId);
             } catch (error) {}
         });

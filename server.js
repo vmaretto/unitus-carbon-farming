@@ -2031,12 +2031,12 @@ app.post('/api/lms/enrollments/bulk', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   const items = req.body;
   if (!Array.isArray(items) || !items.length) {
-    return res.status(400).json({ error: 'Request body must be a non-empty array of {email, courseEditionId, role}' });
+    return res.status(400).json({ error: 'Request body must be a non-empty array of {email, courseEditionId, role, firstName?, lastName?}' });
   }
   try {
     const results = [];
     for (const item of items) {
-      const { email, courseEditionId, role } = item;
+      const { email, courseEditionId, role, firstName, lastName } = item;
       if (!email || !courseEditionId) {
         results.push({ email, error: 'email and courseEditionId are required' });
         continue;
@@ -2046,10 +2046,15 @@ app.post('/api/lms/enrollments/bulk', requireAdmin, async (req, res) => {
       const { rows: existingUsers } = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
       if (existingUsers.length) {
         userId = existingUsers[0].id;
-        // Update role if provided
-        if (role) {
-          await pool.query('UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2', [role, userId]);
-        }
+        // Update user data if provided
+        await pool.query(`
+          UPDATE users SET 
+            role = COALESCE($1, role),
+            first_name = COALESCE(NULLIF($2, ''), first_name),
+            last_name = COALESCE(NULLIF($3, ''), last_name),
+            updated_at = NOW() 
+          WHERE id = $4
+        `, [role, firstName || '', lastName || '', userId]);
       } else {
         // Create user with a random password hash (they'll reset it)
         const newId = uuidv4();
@@ -2057,7 +2062,7 @@ app.post('/api/lms/enrollments/bulk', requireAdmin, async (req, res) => {
         await pool.query(`
           INSERT INTO users (id, email, password_hash, first_name, last_name, role)
           VALUES ($1, $2, $3, $4, $5, $6)
-        `, [newId, email, placeholderHash, '', '', role || 'student']);
+        `, [newId, email, placeholderHash, firstName || '', lastName || '', role || 'student']);
         userId = newId;
       }
       // Enroll
@@ -2100,6 +2105,60 @@ app.get('/api/lms/enrollments', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error fetching enrollments', error);
     res.status(500).json({ error: 'Unable to retrieve enrollments' });
+  }
+});
+
+// Update enrollment
+app.put('/api/lms/enrollments/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { id } = req.params;
+  const { email, firstName, lastName, role, status } = req.body;
+  
+  try {
+    // Get enrollment to find user_id
+    const { rows: enrollments } = await pool.query('SELECT user_id FROM enrollments WHERE id = $1', [id]);
+    if (!enrollments.length) {
+      return res.status(404).json({ error: 'Enrollment not found' });
+    }
+    const userId = enrollments[0].user_id;
+    
+    // Update user
+    await pool.query(`
+      UPDATE users SET
+        email = COALESCE($1, email),
+        first_name = COALESCE($2, first_name),
+        last_name = COALESCE($3, last_name),
+        role = COALESCE($4, role),
+        updated_at = NOW()
+      WHERE id = $5
+    `, [email, firstName, lastName, role, userId]);
+    
+    // Update enrollment status if provided
+    if (status) {
+      await pool.query('UPDATE enrollments SET status = $1 WHERE id = $2', [status, id]);
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating enrollment', error);
+    res.status(500).json({ error: 'Unable to update enrollment' });
+  }
+});
+
+// Delete enrollment
+app.delete('/api/lms/enrollments/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { id } = req.params;
+  
+  try {
+    const { rowCount } = await pool.query('DELETE FROM enrollments WHERE id = $1', [id]);
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'Enrollment not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting enrollment', error);
+    res.status(500).json({ error: 'Unable to delete enrollment' });
   }
 });
 

@@ -808,12 +808,7 @@
                                             <span class="detail-value">${lesson.locationPhysical}</span>
                                         </div>
                                     ` : ''}
-                                    ${lesson.locationRemote ? `
-                                        <div class="detail-item">
-                                            <span class="detail-label">💻 Online</span>
-                                            <span class="detail-value"><a href="${lesson.locationRemote}" target="_blank">Collegati</a></span>
-                                        </div>
-                                    ` : ''}
+
                                     <div class="detail-item">
                                         <span class="detail-label">⏱️ Durata</span>
                                         <span class="detail-value">${formatDuration(lesson.durationMinutes || 120)}</span>
@@ -903,7 +898,7 @@ DTSTART:${formatIcalDate(start)}
 DTEND:${formatIcalDate(end)}
 SUMMARY:${lesson.title}
 DESCRIPTION:${(lesson.teacherName || lesson.externalTeacherName) ? 'Docente: ' + (lesson.teacherName || lesson.externalTeacherName) : ''}${lesson.description ? '\\n' + lesson.description : ''}
-LOCATION:${lesson.locationPhysical || lesson.locationRemote || 'Da definire'}
+LOCATION:${lesson.locationPhysical || 'Da definire'}
 STATUS:${lesson.status === 'confirmed' ? 'CONFIRMED' : 'TENTATIVE'}
 END:VEVENT
 `;

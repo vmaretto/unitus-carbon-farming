@@ -336,21 +336,19 @@
                     document.getElementById('lesson-description').textContent = lesson.description;
                 }
 
-                // Course breadcrumb link - get course name from my-courses
+                // Course breadcrumb link - get course name from my-courses (non-blocking)
                 const courseLink = document.getElementById('breadcrumb-course');
-                try {
-                    const courses = await api('/api/lms/my-courses');
+                fetch('/api/lms/my-courses', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                }).then(r => r.ok ? r.json() : null).then(courses => {
                     if (courses && courses.length > 0) {
-                        // Find the course that contains this lesson's module
                         const course = courses.find(c => c.id === lesson.courseId) || courses[0];
                         if (course) {
                             courseLink.textContent = course.title;
                             courseLink.href = `/learn/course.html?id=${course.id}`;
                         }
                     }
-                } catch (e) {
-                    console.warn('Could not load course name for breadcrumb');
-                }
+                }).catch(() => {});
                 courseLink.addEventListener('click', (e) => {
                     if (!courseLink.href || courseLink.href === '#') {
                         e.preventDefault();

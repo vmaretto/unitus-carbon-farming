@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz - Master Carbon Farming</title>
+    <link rel="icon" type="image/png" href="/assets/img/favicon.png">
+    <style>
+        :root {
+            --green-50: #f0fdf4; --green-100: #dcfce7; --green-200: #bbf7d0;
+            --green-500: #22c55e; --green-600: #16a34a; --green-700: #15803d; --green-900: #14532d;
+            --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
+            --gray-500: #6b7280; --gray-700: #374151; --gray-900: #111827;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--gray-50); min-height: 100vh; }
+        
+        .header { background: linear-gradient(135deg, var(--green-700) 0%, var(--green-600) 100%); color: white; padding: 16px 24px; }
+        .header h1 { font-size: 1.25rem; font-weight: 600; }
+        .header a { color: white; text-decoration: none; opacity: 0.9; }
+        .header a:hover { opacity: 1; }
+        
+        .container { max-width: 800px; margin: 0 auto; padding: 24px; }
+        
+        .quiz-info { background: white; border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .quiz-info h2 { color: var(--green-900); margin-bottom: 8px; }
+        .quiz-info p { color: var(--gray-500); }
+        .quiz-meta { display: flex; gap: 24px; margin-top: 16px; flex-wrap: wrap; }
+        .quiz-meta span { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; color: var(--gray-700); }
+        
+        .question-card { background: white; border-radius: 16px; padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .question-number { font-size: 0.85rem; color: var(--green-600); font-weight: 600; margin-bottom: 8px; }
+        .question-text { font-size: 1.1rem; color: var(--gray-900); margin-bottom: 16px; line-height: 1.5; }
+        
+        .options { display: flex; flex-direction: column; gap: 10px; }
+        .option { display: flex; align-items: center; padding: 14px 16px; border: 2px solid var(--gray-200); border-radius: 10px; cursor: pointer; transition: all 0.2s; }
+        .option:hover { border-color: var(--green-500); background: var(--green-50); }
+        .option.selected { border-color: var(--green-500); background: var(--green-100); }
+        .option.correct { border-color: #16a34a; background: #dcfce7; }
+        .option.incorrect { border-color: #dc2626; background: #fef2f2; }
+        .option input { display: none; }
+        .option-letter { width: 28px; height: 28px; border-radius: 50%; background: var(--gray-100); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.85rem; margin-right: 12px; }
+        .option.selected .option-letter { background: var(--green-500); color: white; }
+        .option-text { flex: 1; }
+        
+        .progress-bar { height: 6px; background: var(--gray-200); border-radius: 3px; margin-bottom: 24px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--green-500); transition: width 0.3s; }
+        
+        .nav-buttons { display: flex; justify-content: space-between; margin-top: 24px; gap: 12px; }
+        .btn { padding: 12px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; font-size: 1rem; }
+        .btn-primary { background: var(--green-600); color: white; }
+        .btn-primary:hover { background: var(--green-700); }
+        .btn-primary:disabled { background: var(--gray-300); cursor: not-allowed; }
+        .btn-secondary { background: var(--gray-100); color: var(--gray-700); }
+        .btn-secondary:hover { background: var(--gray-200); }
+        
+        .results { background: white; border-radius: 16px; padding: 32px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .results h2 { font-size: 1.5rem; margin-bottom: 8px; }
+        .results.passed h2 { color: #16a34a; }
+        .results.failed h2 { color: #dc2626; }
+        .score-circle { width: 150px; height: 150px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 24px auto; }
+        .score-circle.passed { background: linear-gradient(135deg, #dcfce7, #bbf7d0); border: 4px solid #16a34a; }
+        .score-circle.failed { background: linear-gradient(135deg, #fef2f2, #fecaca); border: 4px solid #dc2626; }
+        .score-value { font-size: 2.5rem; font-weight: 700; }
+        .score-label { font-size: 0.9rem; color: var(--gray-500); }
+        
+        .results-details { margin-top: 24px; text-align: left; }
+        .result-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--gray-100); }
+        
+        .loading { text-align: center; padding: 48px; color: var(--gray-500); }
+        .loading-spinner { width: 40px; height: 40px; border: 3px solid var(--gray-200); border-top-color: var(--green-500); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .timer { position: fixed; top: 80px; right: 24px; background: white; padding: 12px 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-weight: 600; }
+        .timer.warning { color: #dc2626; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="display: flex; justify-content: space-between; align-items: center; max-width: 800px; margin: 0 auto;">
+            <h1>📝 Quiz</h1>
+            <a href="/learn/">← Torna alla dashboard</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="content">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <p>Caricamento quiz...</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="timer" class="timer" style="display: none;">
+        ⏱️ <span id="timer-value">00:00</span>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const quizId = params.get('quizId');
+        const resourceId = params.get('resourceId');
+        const lessonId = params.get('lessonId');
+
+        let questions = [];
+        let currentQuestion = 0;
+        let answers = [];
+        let attemptId = null;
+        let startTime = null;
+        let timerInterval = null;
+
+        async function loadQuiz() {
+            try {
+                if (resourceId) {
+                    // Load resource quiz
+                    const res = await fetch(`/api/resources/${resourceId}`);
+                    if (!res.ok) throw new Error('Quiz non trovato');
+                    const resource = await res.json();
+                    
+                    if (!resource.url.startsWith('data:application/json,')) {
+                        throw new Error('Formato quiz non valido');
+                    }
+                    const quizData = JSON.parse(decodeURIComponent(resource.url.replace('data:application/json,', '')));
+                    questions = quizData.questions;
+                    renderQuizInfo(quizData.title || resource.title, questions.length);
+                } else if (quizId) {
+                    // Load lesson quiz
+                    const res = await fetch(`/api/lms/quizzes/${quizId}`);
+                    if (!res.ok) throw new Error('Quiz non trovato');
+                    const quiz = await res.json();
+                    
+                    const qRes = await fetch(`/api/lms/quiz-questions?quizId=${quizId}`);
+                    questions = await qRes.json();
+                    questions = questions.map(q => ({
+                        questionText: q.questionText,
+                        options: q.options,
+                        correctAnswer: q.correctAnswer,
+                        points: q.points
+                    }));
+                    renderQuizInfo(quiz.title, questions.length, quiz.timeLimitMinutes, quiz.passingScore);
+                } else {
+                    throw new Error('Quiz ID mancante');
+                }
+
+                // Initialize answers array
+                answers = questions.map(() => null);
+
+                // Start attempt
+                const startRes = await fetch('/api/quiz-attempts/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ quizId, resourceId })
+                });
+                if (!startRes.ok) {
+                    const err = await startRes.json();
+                    throw new Error(err.error || 'Errore nell\'avvio del quiz');
+                }
+                const attempt = await startRes.json();
+                attemptId = attempt.id;
+                startTime = Date.now();
+
+                // Start timer
+                document.getElementById('timer').style.display = 'block';
+                timerInterval = setInterval(updateTimer, 1000);
+
+                renderQuestion();
+            } catch (error) {
+                document.getElementById('content').innerHTML = `
+                    <div class="quiz-info">
+                        <h2>❌ Errore</h2>
+                        <p>${error.message}</p>
+                        <br>
+                        <a href="/learn/" class="btn btn-secondary">Torna alla dashboard</a>
+                    </div>
+                `;
+            }
+        }
+
+        function renderQuizInfo(title, numQuestions, timeLimit, passingScore) {
+            // Just store for later use
+            window.quizTitle = title;
+            window.numQuestions = numQuestions;
+            window.timeLimit = timeLimit;
+            window.passingScore = passingScore || 70;
+        }
+
+        function updateTimer() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const secs = (elapsed % 60).toString().padStart(2, '0');
+            document.getElementById('timer-value').textContent = `${mins}:${secs}`;
+        }
+
+        function renderQuestion() {
+            const q = questions[currentQuestion];
+            const progress = ((currentQuestion + 1) / questions.length) * 100;
+            const selectedAnswer = answers[currentQuestion];
+
+            document.getElementById('content').innerHTML = `
+                <div class="quiz-info">
+                    <h2>${window.quizTitle || 'Quiz'}</h2>
+                    <div class="quiz-meta">
+                        <span>📝 ${questions.length} domande</span>
+                        <span>🎯 Min. ${window.passingScore || 70}% per passare</span>
+                    </div>
+                </div>
+
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${progress}%"></div>
+                </div>
+
+                <div class="question-card">
+                    <div class="question-number">Domanda ${currentQuestion + 1} di ${questions.length}</div>
+                    <div class="question-text">${q.questionText}</div>
+                    <div class="options">
+                        ${q.options.map((opt, i) => `
+                            <label class="option ${selectedAnswer === opt ? 'selected' : ''}" data-option="${opt}">
+                                <input type="radio" name="answer" value="${opt}" ${selectedAnswer === opt ? 'checked' : ''}>
+                                <span class="option-letter">${String.fromCharCode(65 + i)}</span>
+                                <span class="option-text">${opt}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div class="nav-buttons">
+                    <button class="btn btn-secondary" onclick="prevQuestion()" ${currentQuestion === 0 ? 'disabled' : ''}>
+                        ← Precedente
+                    </button>
+                    ${currentQuestion === questions.length - 1 
+                        ? `<button class="btn btn-primary" onclick="submitQuiz()" id="submit-btn">Invia quiz ✓</button>`
+                        : `<button class="btn btn-primary" onclick="nextQuestion()">Successiva →</button>`
+                    }
+                </div>
+            `;
+
+            // Add click handlers to options
+            document.querySelectorAll('.option').forEach(opt => {
+                opt.addEventListener('click', () => {
+                    document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+                    opt.classList.add('selected');
+                    answers[currentQuestion] = opt.dataset.option;
+                });
+            });
+        }
+
+        function nextQuestion() {
+            if (currentQuestion < questions.length - 1) {
+                currentQuestion++;
+                renderQuestion();
+                window.scrollTo(0, 0);
+            }
+        }
+
+        function prevQuestion() {
+            if (currentQuestion > 0) {
+                currentQuestion--;
+                renderQuestion();
+                window.scrollTo(0, 0);
+            }
+        }
+
+        async function submitQuiz() {
+            const unanswered = answers.filter(a => a === null).length;
+            if (unanswered > 0) {
+                if (!confirm(`Hai ${unanswered} domande senza risposta. Vuoi inviare comunque?`)) {
+                    return;
+                }
+            }
+
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Invio in corso...';
+
+            clearInterval(timerInterval);
+
+            try {
+                const res = await fetch(`/api/quiz-attempts/${attemptId}/submit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        answers: answers.map((a, i) => ({ questionIndex: i, selectedAnswer: a }))
+                    })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Errore nell\'invio');
+                }
+
+                const result = await res.json();
+                renderResults(result);
+            } catch (error) {
+                alert('Errore: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = 'Invia quiz ✓';
+            }
+        }
+
+        function renderResults(result) {
+            document.getElementById('timer').style.display = 'none';
+            
+            const mins = Math.floor(result.timeSpentSeconds / 60);
+            const secs = result.timeSpentSeconds % 60;
+
+            document.getElementById('content').innerHTML = `
+                <div class="results ${result.passed ? 'passed' : 'failed'}">
+                    <h2>${result.passed ? '🎉 Complimenti!' : '😔 Non superato'}</h2>
+                    <p>${result.passed ? 'Hai superato il quiz!' : `Punteggio minimo richiesto: ${result.passingScore}%`}</p>
+                    
+                    <div class="score-circle ${result.passed ? 'passed' : 'failed'}">
+                        <span class="score-value">${result.percentage}%</span>
+                        <span class="score-label">${result.score}/${result.totalPoints} punti</span>
+                    </div>
+
+                    <div class="results-details">
+                        <div class="result-row">
+                            <span>Risposte corrette</span>
+                            <strong>${result.answers.filter(a => a.isCorrect).length} / ${result.answers.length}</strong>
+                        </div>
+                        <div class="result-row">
+                            <span>Tempo impiegato</span>
+                            <strong>${mins}:${secs.toString().padStart(2, '0')}</strong>
+                        </div>
+                        <div class="result-row">
+                            <span>Punteggio minimo</span>
+                            <strong>${result.passingScore}%</strong>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 24px;">
+                        <button class="btn btn-secondary" onclick="showAnswers()">Vedi risposte</button>
+                        <a href="/learn/" class="btn btn-primary" style="display: inline-block; margin-left: 12px; text-decoration: none;">Torna alla dashboard</a>
+                    </div>
+                </div>
+            `;
+
+            window.quizResult = result;
+        }
+
+        function showAnswers() {
+            const result = window.quizResult;
+            let html = `
+                <div class="quiz-info">
+                    <h2>📋 Riepilogo risposte</h2>
+                    <p>Punteggio: ${result.percentage}% (${result.score}/${result.totalPoints})</p>
+                </div>
+            `;
+
+            questions.forEach((q, i) => {
+                const answer = result.answers[i];
+                html += `
+                    <div class="question-card">
+                        <div class="question-number">Domanda ${i + 1}</div>
+                        <div class="question-text">${q.questionText}</div>
+                        <div class="options">
+                            ${q.options.map((opt, j) => {
+                                let cls = '';
+                                if (opt === answer.correctAnswer) cls = 'correct';
+                                else if (opt === answer.selectedAnswer && !answer.isCorrect) cls = 'incorrect';
+                                return `
+                                    <div class="option ${cls}">
+                                        <span class="option-letter">${String.fromCharCode(65 + j)}</span>
+                                        <span class="option-text">${opt}</span>
+                                        ${opt === answer.correctAnswer ? '<span style="margin-left: auto; color: #16a34a;">✓ Corretta</span>' : ''}
+                                        ${opt === answer.selectedAnswer && !answer.isCorrect ? '<span style="margin-left: auto; color: #dc2626;">✗ Tua risposta</span>' : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                <div style="text-align: center; margin-top: 24px;">
+                    <a href="/learn/" class="btn btn-primary" style="text-decoration: none;">Torna alla dashboard</a>
+                </div>
+            `;
+
+            document.getElementById('content').innerHTML = html;
+            window.scrollTo(0, 0);
+        }
+
+        // Start
+        loadQuiz();
+    </script>
+</body>
+</html>

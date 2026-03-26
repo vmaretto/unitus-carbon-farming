@@ -76,6 +76,14 @@
                 <div class="loading">Caricamento...</div>
             </div>
         </div>
+
+        <!-- Quiz -->
+        <div class="card" id="quiz-section" style="display: none;">
+            <h2><span class="icon">📝</span> Quiz</h2>
+            <div class="resource-list" id="quiz-list">
+                <div class="loading">Caricamento...</div>
+            </div>
+        </div>
     </main>
 
     <script>
@@ -90,9 +98,22 @@
             window.location.href = '/learn/login.html';
         });
 
-        const typeIcons = { video: '▶️', pdf: '📑', document: '📝', audio: '🎧', link: '🔗' };
+        const typeIcons = { video: '▶️', pdf: '📑', document: '📝', audio: '🎧', link: '🔗', quiz: '📝' };
 
         function renderResource(item) {
+            // Quiz: link alla pagina quiz invece del URL diretto
+            if (item.resourceType === 'quiz') {
+                return `
+                    <a href="/learn/quiz.html?resourceId=${item.id}" class="resource-item">
+                        <div class="resource-icon quiz" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">📝</div>
+                        <div class="resource-info">
+                            <p class="resource-title">${item.title}</p>
+                            ${item.description ? `<p class="resource-desc">${item.description}</p>` : ''}
+                        </div>
+                        <span class="resource-arrow" style="background: #8b5cf6; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem;">Fai il quiz →</span>
+                    </a>
+                `;
+            }
             return `
                 <a href="${item.url}" target="_blank" rel="noopener" class="resource-item">
                     <div class="resource-icon ${item.resourceType}">${typeIcons[item.resourceType] || '📎'}</div>
@@ -112,6 +133,7 @@
 
                 const videos = resources.filter(r => r.resourceType === 'video');
                 const docs = resources.filter(r => ['pdf', 'document', 'audio', 'link'].includes(r.resourceType));
+                const quizzes = resources.filter(r => r.resourceType === 'quiz');
 
                 const videoList = document.getElementById('video-list');
                 const docList = document.getElementById('doc-list');
@@ -126,6 +148,14 @@
                     docList.innerHTML = docs.map(renderResource).join('');
                 } else {
                     docList.innerHTML = '<div class="empty">Nessun documento disponibile</div>';
+                }
+
+                // Quiz section
+                const quizSection = document.getElementById('quiz-section');
+                const quizList = document.getElementById('quiz-list');
+                if (quizzes.length > 0) {
+                    quizSection.style.display = 'block';
+                    quizList.innerHTML = quizzes.map(renderResource).join('');
                 }
             } catch (error) {
                 console.error('Error loading resources:', error);

@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-26-v10'; // Per debug deploy
+const BUILD_VERSION = '2026-03-26-v11'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -1130,6 +1130,23 @@ app.get('/api/resources', async (req, res) => {
   } catch (error) {
     console.error('Error fetching resources', error);
     res.status(500).json({ error: 'Unable to retrieve resources' });
+  }
+});
+
+// Get single resource by ID
+app.get('/api/resources/:id', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, title, description, resource_type AS "resourceType",
+             url, thumbnail_url AS "thumbnailUrl", is_published AS "isPublished"
+      FROM resources WHERE id = $1
+    `, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Resource not found' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching resource', error);
+    res.status(500).json({ error: 'Unable to retrieve resource' });
   }
 });
 
@@ -4153,6 +4170,220 @@ async function handler(req, res) {
 
   return app(req, res);
 }
+
+// ============================================
+// QUIZ ATTEMPTS API
+// ============================================
+
+// Get quiz attempts for admin (all or filtered by quiz/resource/user)
+app.get('/api/quiz-attempts', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { quizId, resourceId, userId } = req.query;
+    let sql = `
+      SELECT qa.*, u.email, u.first_name AS "firstName", u.last_name AS "lastName",
+             q.title AS "quizTitle", r.title AS "resourceTitle"
+      FROM quiz_attempts qa
+      JOIN users u ON u.id = qa.user_id
+      LEFT JOIN quizzes q ON q.id = qa.quiz_id
+      LEFT JOIN resources r ON r.id = qa.resource_id
+      WHERE 1=1
+    `;
+    const params = [];
+    if (quizId) { params.push(quizId); sql += ` AND qa.quiz_id = $${params.length}`; }
+    if (resourceId) { params.push(resourceId); sql += ` AND qa.resource_id = $${params.length}`; }
+    if (userId) { params.push(userId); sql += ` AND qa.user_id = $${params.length}`; }
+    sql += ' ORDER BY qa.created_at DESC LIMIT 500';
+    
+    const { rows } = await pool.query(sql, params);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching quiz attempts', error);
+    res.status(500).json({ error: 'Unable to fetch quiz attempts' });
+  }
+});
+
+// Start a quiz attempt (student)
+app.post('/api/quiz-attempts/start', async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  // Get user from magic link token cookie or session
+  const token = req.cookies?.studentToken;
+  if (!token) {
+    return res.status(401).json({ error: 'Non autenticato. Effettua il login.' });
+  }
+
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+
+    const { quizId, resourceId } = req.body;
+    if (!quizId && !resourceId) {
+      return res.status(400).json({ error: 'quizId o resourceId obbligatorio' });
+    }
+
+    // Count previous attempts
+    const countSql = quizId 
+      ? 'SELECT COUNT(*) FROM quiz_attempts WHERE user_id = $1 AND quiz_id = $2'
+      : 'SELECT COUNT(*) FROM quiz_attempts WHERE user_id = $1 AND resource_id = $2';
+    const { rows: countRows } = await pool.query(countSql, [userId, quizId || resourceId]);
+    const attemptNumber = parseInt(countRows[0].count) + 1;
+
+    // Create attempt
+    const { rows } = await pool.query(`
+      INSERT INTO quiz_attempts (user_id, quiz_id, resource_id, attempt_number, started_at)
+      VALUES ($1, $2, $3, $4, NOW())
+      RETURNING id, attempt_number AS "attemptNumber", started_at AS "startedAt"
+    `, [userId, quizId || null, resourceId || null, attemptNumber]);
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error starting quiz attempt', error);
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ error: 'Sessione non valida. Effettua il login.' });
+    }
+    res.status(500).json({ error: 'Errore nell\'avvio del quiz' });
+  }
+});
+
+// Submit quiz answers (student)
+app.post('/api/quiz-attempts/:id/submit', async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const token = req.cookies?.studentToken;
+  if (!token) {
+    return res.status(401).json({ error: 'Non autenticato' });
+  }
+
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+    const attemptId = req.params.id;
+    const { answers } = req.body; // [{questionIndex, selectedAnswer}]
+
+    // Verify attempt belongs to user
+    const { rows: attempts } = await pool.query(
+      'SELECT * FROM quiz_attempts WHERE id = $1 AND user_id = $2',
+      [attemptId, userId]
+    );
+    if (!attempts.length) {
+      return res.status(404).json({ error: 'Tentativo non trovato' });
+    }
+    const attempt = attempts[0];
+    if (attempt.completed_at) {
+      return res.status(400).json({ error: 'Quiz già completato' });
+    }
+
+    // Get questions based on quiz_id or resource_id
+    let questions = [];
+    let passingScore = 70;
+
+    if (attempt.quiz_id) {
+      const { rows: quizRows } = await pool.query('SELECT passing_score FROM quizzes WHERE id = $1', [attempt.quiz_id]);
+      passingScore = quizRows[0]?.passing_score || 70;
+      
+      const { rows: questionRows } = await pool.query(`
+        SELECT question_text, options, correct_answer, points 
+        FROM quiz_questions WHERE quiz_id = $1 ORDER BY sort_order
+      `, [attempt.quiz_id]);
+      questions = questionRows;
+    } else if (attempt.resource_id) {
+      // Resource quiz - get from URL data
+      const { rows: resourceRows } = await pool.query('SELECT url FROM resources WHERE id = $1', [attempt.resource_id]);
+      if (resourceRows.length && resourceRows[0].url.startsWith('data:application/json,')) {
+        const quizData = JSON.parse(decodeURIComponent(resourceRows[0].url.replace('data:application/json,', '')));
+        questions = quizData.questions.map(q => ({
+          question_text: q.questionText,
+          options: q.options,
+          correct_answer: q.correctAnswer,
+          points: q.points || 1
+        }));
+      }
+    }
+
+    // Calculate score
+    let score = 0;
+    let totalPoints = 0;
+    const gradedAnswers = answers.map((a, i) => {
+      const question = questions[a.questionIndex] || questions[i];
+      if (!question) return { ...a, isCorrect: false, points: 0 };
+      
+      totalPoints += question.points || 1;
+      const isCorrect = a.selectedAnswer === question.correct_answer;
+      if (isCorrect) score += question.points || 1;
+      
+      return {
+        ...a,
+        isCorrect,
+        correctAnswer: question.correct_answer,
+        points: isCorrect ? (question.points || 1) : 0
+      };
+    });
+
+    const percentage = totalPoints > 0 ? Math.round((score / totalPoints) * 100) : 0;
+    const passed = percentage >= passingScore;
+    const timeSpent = Math.floor((Date.now() - new Date(attempt.started_at).getTime()) / 1000);
+
+    // Update attempt
+    const { rows: updated } = await pool.query(`
+      UPDATE quiz_attempts SET
+        answers = $1,
+        score = $2,
+        total_points = $3,
+        percentage = $4,
+        passed = $5,
+        completed_at = NOW(),
+        time_spent_seconds = $6
+      WHERE id = $7
+      RETURNING *
+    `, [JSON.stringify(gradedAnswers), score, totalPoints, percentage, passed, timeSpent, attemptId]);
+
+    res.json({
+      score,
+      totalPoints,
+      percentage,
+      passed,
+      passingScore,
+      timeSpentSeconds: timeSpent,
+      answers: gradedAnswers
+    });
+  } catch (error) {
+    console.error('Error submitting quiz', error);
+    res.status(500).json({ error: 'Errore nell\'invio del quiz' });
+  }
+});
+
+// Get student's own attempts
+app.get('/api/quiz-attempts/my', async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const token = req.cookies?.studentToken;
+  if (!token) {
+    return res.status(401).json({ error: 'Non autenticato' });
+  }
+
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+
+    const { rows } = await pool.query(`
+      SELECT qa.*, q.title AS "quizTitle", r.title AS "resourceTitle"
+      FROM quiz_attempts qa
+      LEFT JOIN quizzes q ON q.id = qa.quiz_id
+      LEFT JOIN resources r ON r.id = qa.resource_id
+      WHERE qa.user_id = $1
+      ORDER BY qa.created_at DESC
+    `, [userId]);
+
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching my attempts', error);
+    res.status(500).json({ error: 'Errore nel recupero dei tentativi' });
+  }
+});
 
 if (require.main === module) {
   ensureDatabaseInitialized()

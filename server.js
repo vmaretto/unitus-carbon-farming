@@ -1142,7 +1142,7 @@ app.post('/api/resources', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Title, resourceType, and url are required' });
   }
 
-  if (!['video', 'pdf', 'document', 'audio', 'link'].includes(resourceType)) {
+  if (!['video', 'pdf', 'document', 'audio', 'link', 'quiz'].includes(resourceType)) {
     return res.status(400).json({ error: 'Invalid resource type' });
   }
 

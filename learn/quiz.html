@@ -146,9 +146,13 @@
                 answers = questions.map(() => null);
 
                 // Start attempt
+                const token = localStorage.getItem('learnToken');
                 const startRes = await fetch('/api/quiz-attempts/start', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
                     body: JSON.stringify({ quizId, resourceId })
                 });
                 if (!startRes.ok) {
@@ -275,9 +279,13 @@
             clearInterval(timerInterval);
 
             try {
+                const token = localStorage.getItem('learnToken');
                 const res = await fetch(`/api/quiz-attempts/${attemptId}/submit`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
                     body: JSON.stringify({
                         answers: answers.map((a, i) => ({ questionIndex: i, selectedAnswer: a }))
                     })

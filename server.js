@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-26-v12'; // Per debug deploy
+const BUILD_VERSION = '2026-03-26-v13'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -4207,11 +4207,12 @@ app.get('/api/quiz-attempts', requireAdmin, async (req, res) => {
 app.post('/api/quiz-attempts/start', async (req, res) => {
   if (!ensurePool(res)) return;
   
-  // Get user from magic link token cookie or session
-  const token = req.cookies?.studentToken;
-  if (!token) {
+  // Get user from Authorization header
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Non autenticato. Effettua il login.' });
   }
+  const token = authHeader.split(' ')[1];
 
   try {
     const jwt = require('jsonwebtoken');
@@ -4251,10 +4252,11 @@ app.post('/api/quiz-attempts/start', async (req, res) => {
 app.post('/api/quiz-attempts/:id/submit', async (req, res) => {
   if (!ensurePool(res)) return;
   
-  const token = req.cookies?.studentToken;
-  if (!token) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Non autenticato' });
   }
+  const token = authHeader.split(' ')[1];
 
   try {
     const jwt = require('jsonwebtoken');
@@ -4359,10 +4361,11 @@ app.post('/api/quiz-attempts/:id/submit', async (req, res) => {
 app.get('/api/quiz-attempts/my', async (req, res) => {
   if (!ensurePool(res)) return;
   
-  const token = req.cookies?.studentToken;
-  if (!token) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Non autenticato' });
   }
+  const token = authHeader.split(' ')[1];
 
   try {
     const jwt = require('jsonwebtoken');

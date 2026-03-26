@@ -12,6 +12,7 @@
     "@vercel/blob": "^2.3.1",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "pg": "^8.11.3",
     "puppeteer": "^24.37.2",

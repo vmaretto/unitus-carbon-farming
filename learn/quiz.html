@@ -97,6 +97,12 @@
     </div>
 
     <script>
+        // Auth check
+        const learnToken = localStorage.getItem('learnToken');
+        if (!learnToken) {
+            window.location.href = '/learn/login.html?redirect=' + encodeURIComponent(window.location.href);
+        }
+
         const params = new URLSearchParams(window.location.search);
         const quizId = params.get('quizId');
         const resourceId = params.get('resourceId');

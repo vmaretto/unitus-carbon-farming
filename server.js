@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const port = process.env.PORT || 3000;
-const BUILD_VERSION = '2026-03-25-v2'; // Per debug deploy
+const BUILD_VERSION = '2026-03-26-v1'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {

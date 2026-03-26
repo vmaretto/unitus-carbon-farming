@@ -3484,6 +3484,42 @@ Buono studio!</textarea>
                     // Form to create quiz
                     html = `
                         <h4 style="margin: 0 0 12px; color: var(--green-700);">Quiz della lezione</h4>
+                        
+                        <!-- Genera con AI -->
+                        <div style="margin-bottom: 16px; padding: 16px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #0ea5e9; border-radius: 10px;">
+                            <h5 style="margin: 0 0 8px; color: #0369a1; display: flex; align-items: center; gap: 8px;">
+                                🤖 Genera quiz con AI
+                            </h5>
+                            <p style="margin: 0 0 12px; font-size: 0.85rem; color: #64748b;">
+                                Claude analizza i materiali della lezione e genera automaticamente domande di verifica.
+                            </p>
+                            <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                                <label style="margin: 0;">
+                                    Domande
+                                    <select data-ai-num-questions style="margin-left: 6px;">
+                                        <option value="5">5</option>
+                                        <option value="10" selected>10</option>
+                                        <option value="15">15</option>
+                                        <option value="20">20</option>
+                                    </select>
+                                </label>
+                                <label style="margin: 0;">
+                                    Difficoltà
+                                    <select data-ai-difficulty style="margin-left: 6px;">
+                                        <option value="easy">Facile</option>
+                                        <option value="intermediate" selected>Media</option>
+                                        <option value="advanced">Difficile</option>
+                                    </select>
+                                </label>
+                                <button type="button" class="primary" data-generate-ai-quiz="${lessonId}" style="background: #0ea5e9;">
+                                    🤖 Genera domande
+                                </button>
+                            </div>
+                            <div data-ai-quiz-preview style="margin-top: 12px; display: none;"></div>
+                        </div>
+
+                        <p style="text-align: center; color: var(--gray-400); margin: 12px 0;">— oppure crea manualmente —</p>
+
                         <form data-quiz-create-form="${lessonId}">
                             <div class="form-grid">
                                 <label>Titolo quiz <input type="text" data-field="title" required placeholder="Quiz di verifica"></label>
@@ -3498,6 +3534,112 @@ Buono studio!</textarea>
                         </form>
                     `;
                     container.innerHTML = html;
+
+                    // Handler per generazione AI
+                    const aiBtn = container.querySelector(`[data-generate-ai-quiz="${lessonId}"]`);
+                    const aiPreview = container.querySelector('[data-ai-quiz-preview]');
+                    let generatedQuestions = [];
+
+                    aiBtn.addEventListener('click', async () => {
+                        const numQuestions = container.querySelector('[data-ai-num-questions]').value;
+                        const difficulty = container.querySelector('[data-ai-difficulty]').value;
+                        
+                        aiBtn.disabled = true;
+                        aiBtn.textContent = '⏳ Generazione in corso...';
+                        aiPreview.style.display = 'none';
+
+                        try {
+                            const result = await apiRequest('/api/lms/quizzes/generate', {
+                                method: 'POST',
+                                body: JSON.stringify({ lessonId, numQuestions: parseInt(numQuestions), difficulty })
+                            });
+
+                            generatedQuestions = result.questions || [];
+                            
+                            if (generatedQuestions.length === 0) {
+                                aiPreview.innerHTML = '<p style="color: #b91c1c;">Nessuna domanda generata. Assicurati che la lezione abbia materiali caricati.</p>';
+                                aiPreview.style.display = 'block';
+                                return;
+                            }
+
+                            // Mostra anteprima
+                            let previewHtml = `
+                                <h5 style="margin: 12px 0 8px; color: #0369a1;">📋 Anteprima (${generatedQuestions.length} domande)</h5>
+                                <div style="max-height: 300px; overflow-y: auto; background: white; border-radius: 8px; padding: 12px;">
+                            `;
+                            generatedQuestions.forEach((q, i) => {
+                                previewHtml += `
+                                    <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb;">
+                                        <p style="margin: 0 0 6px; font-weight: 600;">${i + 1}. ${q.questionText}</p>
+                                        <ul style="margin: 0; padding-left: 20px; font-size: 0.9rem;">
+                                            ${q.options.map(opt => `<li style="color: ${opt === q.correctAnswer ? '#16a34a' : '#64748b'};">${opt} ${opt === q.correctAnswer ? '✓' : ''}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                `;
+                            });
+                            previewHtml += `
+                                </div>
+                                <div style="margin-top: 12px; display: flex; gap: 12px;">
+                                    <button type="button" class="primary" data-save-ai-quiz style="background: #16a34a;">✅ Salva quiz</button>
+                                    <button type="button" class="secondary" data-discard-ai-quiz>❌ Annulla</button>
+                                </div>
+                            `;
+                            aiPreview.innerHTML = previewHtml;
+                            aiPreview.style.display = 'block';
+
+                            // Handler salvataggio
+                            aiPreview.querySelector('[data-save-ai-quiz]').addEventListener('click', async () => {
+                                try {
+                                    // Crea il quiz
+                                    const quizResult = await apiRequest('/api/lms/quizzes', {
+                                        method: 'POST',
+                                        body: JSON.stringify({
+                                            lessonId,
+                                            title: 'Quiz di verifica - ' + result.lessonTitle,
+                                            passingScore: 70,
+                                            isPublished: false
+                                        })
+                                    });
+
+                                    // Aggiungi le domande
+                                    for (let i = 0; i < generatedQuestions.length; i++) {
+                                        const q = generatedQuestions[i];
+                                        await apiRequest('/api/lms/quiz-questions', {
+                                            method: 'POST',
+                                            body: JSON.stringify({
+                                                quizId: quizResult.id,
+                                                questionText: q.questionText,
+                                                questionType: 'single_choice',
+                                                options: q.options,
+                                                correctAnswer: q.correctAnswer,
+                                                points: q.points || 1,
+                                                sortOrder: i
+                                            })
+                                        });
+                                    }
+
+                                    showToast(`Quiz creato con ${generatedQuestions.length} domande!`, 'success');
+                                    loadLmsQuiz(lessonId, container);
+                                } catch (error) {
+                                    showToast('Errore nel salvataggio: ' + error.message, 'error');
+                                }
+                            });
+
+                            // Handler annulla
+                            aiPreview.querySelector('[data-discard-ai-quiz]').addEventListener('click', () => {
+                                generatedQuestions = [];
+                                aiPreview.style.display = 'none';
+                            });
+
+                        } catch (error) {
+                            showToast('Errore: ' + error.message, 'error');
+                            aiPreview.innerHTML = `<p style="color: #b91c1c;">Errore: ${error.message}</p>`;
+                            aiPreview.style.display = 'block';
+                        } finally {
+                            aiBtn.disabled = false;
+                            aiBtn.textContent = '🤖 Genera domande';
+                        }
+                    });
 
                     const createForm = container.querySelector(`[data-quiz-create-form="${lessonId}"]`);
                     createForm.addEventListener('submit', async (ev) => {

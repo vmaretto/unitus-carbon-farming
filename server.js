@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-26-v8'; // Per debug deploy
+const BUILD_VERSION = '2026-03-26-v9'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -2932,6 +2932,111 @@ app.delete('/api/lms/quizzes/:id', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error deleting quiz', error);
     res.status(500).json({ error: 'Unable to delete quiz' });
+  }
+});
+
+// --- GENERA QUIZ CON AI ---
+app.post('/api/lms/quizzes/generate', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const { lessonId, numQuestions = 5, difficulty = 'intermediate' } = req.body;
+  
+  if (!lessonId) {
+    return res.status(400).json({ error: 'lessonId è obbligatorio' });
+  }
+
+  try {
+    // 1. Recupera i materiali della lezione
+    const { rows: lessons } = await pool.query(`
+      SELECT title, description, materials FROM lessons WHERE id = $1
+    `, [lessonId]);
+    
+    if (!lessons.length) {
+      return res.status(404).json({ error: 'Lezione non trovata' });
+    }
+    
+    const lesson = lessons[0];
+    const materials = lesson.materials || [];
+    
+    // Costruisci il contesto dai materiali
+    let context = `Titolo lezione: ${lesson.title}\n`;
+    if (lesson.description) context += `Descrizione: ${lesson.description}\n`;
+    if (materials.length > 0) {
+      context += `\nMateriali disponibili:\n`;
+      materials.forEach(m => {
+        context += `- ${m.name} (${m.type}): ${m.url}\n`;
+      });
+    }
+
+    // 2. Chiama Claude per generare le domande
+    const Anthropic = require('@anthropic-ai/sdk').default;
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY
+    });
+
+    const difficultyMap = {
+      easy: 'semplice, adatta a principianti',
+      intermediate: 'di livello intermedio',
+      advanced: 'avanzata, che richiede conoscenza approfondita'
+    };
+
+    const prompt = `Sei un esperto di formazione e valutazione. Devi creare un quiz di verifica per una lezione universitaria.
+
+CONTESTO DELLA LEZIONE:
+${context}
+
+ISTRUZIONI:
+Genera esattamente ${numQuestions} domande a risposta multipla con difficoltà ${difficultyMap[difficulty] || 'intermedia'}.
+
+Per ogni domanda:
+- 4 opzioni di risposta (A, B, C, D)
+- Solo UNA risposta corretta
+- Le opzioni errate devono essere plausibili ma chiaramente distinguibili
+- Le domande devono testare la comprensione, non solo la memorizzazione
+
+FORMATO OUTPUT (JSON valido):
+{
+  "questions": [
+    {
+      "questionText": "Testo della domanda?",
+      "options": ["Opzione A", "Opzione B", "Opzione C", "Opzione D"],
+      "correctAnswer": "Opzione A",
+      "points": 1
+    }
+  ]
+}
+
+Rispondi SOLO con il JSON, nessun altro testo.`;
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    // 3. Parsa la risposta
+    const responseText = message.content[0].text;
+    let generated;
+    try {
+      // Cerca il JSON nella risposta
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Nessun JSON trovato');
+      generated = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.error('Error parsing AI response:', responseText);
+      return res.status(500).json({ error: 'Errore nel parsing della risposta AI' });
+    }
+
+    // 4. Restituisci le domande generate (non le salva ancora, l'admin deve confermare)
+    res.json({
+      lessonTitle: lesson.title,
+      numQuestions: generated.questions?.length || 0,
+      questions: generated.questions || []
+    });
+
+  } catch (error) {
+    console.error('Error generating quiz:', error);
+    res.status(500).json({ error: 'Errore nella generazione del quiz: ' + error.message });
   }
 });
 

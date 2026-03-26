@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const port = process.env.PORT || 3000;
-const BUILD_VERSION = '2026-03-26-v1'; // Per debug deploy
+const BUILD_VERSION = '2026-03-26-v2'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -2333,7 +2333,7 @@ app.get('/api/auth/verify-magic/:token', async (req, res) => {
     const user = rows[0];
     const firstName = user.first_name || '';
 
-    // Mostra pagina di conferma invece di login automatico (evita prefetch Outlook)
+    // Mostra pagina di conferma con JavaScript submit (evita prefetch Outlook che fa anche POST)
     res.send(`
       <!DOCTYPE html>
       <html><head>
@@ -2345,18 +2345,39 @@ app.get('/api/auth/verify-magic/:token', async (req, res) => {
           .card { background: white; border-radius: 20px; padding: 48px; text-align: center; box-shadow: 0 18px 45px rgba(31,41,55,0.12); max-width: 400px; }
           h2 { color: #1b3a2d; margin: 0 0 12px; }
           p { color: #6b6b6b; margin: 0 0 24px; }
-          form { margin: 0; }
           button { background: linear-gradient(120deg,#ff7a1a,#fbbc42); color: white; border: none; padding: 14px 32px; border-radius: 999px; font-weight: 600; font-size: 1rem; cursor: pointer; box-shadow: 0 12px 28px rgba(255,122,26,0.28); }
           button:hover { transform: translateY(-1px); }
+          button:disabled { opacity: 0.6; cursor: wait; }
         </style>
       </head><body>
         <div class="card">
           <h2>Ciao${firstName ? ' ' + firstName : ''}!</h2>
           <p>Clicca il pulsante per accedere alla piattaforma.</p>
-          <form method="POST" action="/api/auth/confirm-magic/${rawToken}">
-            <button type="submit">Accedi alla piattaforma</button>
-          </form>
+          <button id="login-btn" onclick="doLogin()">Accedi alla piattaforma</button>
         </div>
+        <script>
+          async function doLogin() {
+            const btn = document.getElementById('login-btn');
+            btn.disabled = true;
+            btn.textContent = 'Accesso in corso...';
+            try {
+              const res = await fetch('/api/auth/confirm-magic/${rawToken}', { method: 'POST' });
+              const data = await res.json();
+              if (data.token) {
+                localStorage.setItem('learnToken', data.token);
+                localStorage.setItem('learnUser', JSON.stringify(data.user || {}));
+                window.location.href = '/learn/index.html';
+              } else {
+                alert(data.error || 'Errore di accesso');
+                window.location.href = '/learn/login.html';
+              }
+            } catch (e) {
+              alert('Errore di connessione');
+              btn.disabled = false;
+              btn.textContent = 'Accedi alla piattaforma';
+            }
+          }
+        </script>
       </body></html>
     `);
   } catch (error) {
@@ -2365,9 +2386,9 @@ app.get('/api/auth/verify-magic/:token', async (req, res) => {
   }
 });
 
-// Conferma magic link (POST) - consuma il token
+// Conferma magic link (POST) - consuma il token, risponde JSON
 app.post('/api/auth/confirm-magic/:token', async (req, res) => {
-  if (!pool) return res.status(503).send('Database not configured');
+  if (!pool) return res.status(503).json({ error: 'Database not configured' });
 
   try {
     const rawToken = req.params.token;
@@ -2379,15 +2400,7 @@ app.post('/api/auth/confirm-magic/:token', async (req, res) => {
     );
 
     if (!rows.length) {
-      return res.status(400).send(`
-        <html><body style="font-family: Inter, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f3f4f6;">
-          <div style="text-align: center; padding: 40px;">
-            <h2>Link scaduto o non valido</h2>
-            <p>Richiedi un nuovo link di accesso.</p>
-            <a href="/learn/login.html" style="color: #2c7a4b;">Torna al login</a>
-          </div>
-        </body></html>
-      `);
+      return res.status(400).json({ error: 'Link scaduto o non valido' });
     }
 
     const user = rows[0];
@@ -2404,11 +2417,19 @@ app.post('/api/auth/confirm-magic/:token', async (req, res) => {
       role: user.role
     });
 
-    // Redirect a learn/ con token nel fragment (non va al server)
-    res.redirect(`/learn/index.html#token=${jwt}`);
+    // Risponde JSON invece di redirect
+    res.json({
+      token: jwt,
+      user: {
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        role: user.role
+      }
+    });
   } catch (error) {
     console.error('Error confirming magic link', error);
-    res.status(500).send('Errore interno');
+    res.status(500).json({ error: 'Errore interno' });
   }
 });
 

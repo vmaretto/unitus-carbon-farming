@@ -5,10 +5,38 @@ const path = require('path');
 const crypto = require('crypto');
 const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
+const multer = require('multer');
 
 const app = express();
 const port = process.env.PORT || 3000;
-const BUILD_VERSION = '2026-03-26-v3'; // Per debug deploy
+
+// Configurazione multer per upload file
+const uploadDir = path.join(__dirname, 'upload');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    // Sanitizza il nome file
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, safeName);
+  }
+});
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Tipo file non supportato'));
+    }
+  }
+});
+const BUILD_VERSION = '2026-03-26-v4'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -1220,6 +1248,20 @@ app.delete('/api/resources/:id', requireAdmin, async (req, res) => {
     console.error('Error deleting resource', error);
     res.status(500).json({ error: 'Unable to delete resource' });
   }
+});
+
+// Upload file per risorse
+app.post('/api/resources/upload', requireAdmin, upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Nessun file caricato' });
+  }
+  const url = `/upload/${req.file.filename}`;
+  res.json({ 
+    url,
+    filename: req.file.filename,
+    size: req.file.size,
+    mimetype: req.file.mimetype
+  });
 });
 
 // ============================================

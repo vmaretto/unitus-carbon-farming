@@ -1002,6 +1002,43 @@
                 </div>
             </form>
 
+            <!-- Notifica studenti -->
+            <div style="margin: 20px 0; padding: 16px; background: #f0fdf4; border-radius: 12px; border: 1px solid var(--green-200);">
+                <h4 style="margin: 0 0 12px; color: var(--green-700);">📧 Notifica Studenti</h4>
+                <p style="margin: 0 0 12px; color: var(--gray-600); font-size: 0.9rem;">Invia un'email a tutti gli studenti iscritti per avvisarli di nuovi contenuti caricati.</p>
+                <button type="button" id="notify-students-btn" class="secondary" style="background: var(--green-500); color: white;">
+                    ✉️ Invia notifica a tutti gli studenti
+                </button>
+            </div>
+
+            <!-- Modale notifica -->
+            <div id="notify-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+                <div style="background: white; padding: 24px; border-radius: 16px; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto;">
+                    <h3 style="margin: 0 0 16px;">📧 Invia notifica agli studenti</h3>
+                    <form id="notify-form">
+                        <label style="display: block; margin-bottom: 16px;">
+                            Oggetto email *
+                            <input type="text" id="notify-subject" required value="Nuovi contenuti disponibili - Master Carbon Farming" style="width: 100%; margin-top: 6px;">
+                        </label>
+                        <label style="display: block; margin-bottom: 16px;">
+                            Messaggio *
+                            <textarea id="notify-message" required rows="6" style="width: 100%; margin-top: 6px;" placeholder="Descrivi cosa è stato caricato...">Ciao,
+
+sono stati caricati nuovi materiali didattici nella piattaforma del Master Carbon Farming.
+
+Accedi alla sezione Risorse per consultarli:
+https://unitus.carbonfarmingmaster.it/learn/resources.html
+
+Buono studio!</textarea>
+                        </label>
+                        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                            <button type="button" class="secondary" onclick="closeNotifyModal()">Annulla</button>
+                            <button type="submit" style="background: var(--green-500); color: white;">Invia a tutti</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <div class="table-wrapper">
                 <table>
                     <thead>
@@ -1822,6 +1859,41 @@
                 toggleEmptyState(tableBody, false, '[data-empty-resource]');
             }
         }
+
+        // Notifica studenti
+        function openNotifyModal() {
+            document.getElementById('notify-modal').style.display = 'flex';
+        }
+        function closeNotifyModal() {
+            document.getElementById('notify-modal').style.display = 'none';
+        }
+        
+        document.getElementById('notify-students-btn').addEventListener('click', openNotifyModal);
+        
+        document.getElementById('notify-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const btn = event.target.querySelector('button[type="submit"]');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Invio in corso...';
+
+            try {
+                const result = await apiRequest('/api/resources/notify', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        subject: document.getElementById('notify-subject').value,
+                        message: document.getElementById('notify-message').value
+                    })
+                });
+                showToast(`✅ ${result.message}`, 'success');
+                closeNotifyModal();
+            } catch (error) {
+                showToast('Errore: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        });
 
         // Upload file handler
         document.getElementById('resource-file-input').addEventListener('change', async (event) => {

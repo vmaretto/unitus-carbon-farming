@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-26-v5'; // Per debug deploy
+const BUILD_VERSION = '2026-03-26-v6'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -1264,6 +1264,82 @@ app.post('/api/resources/upload', requireAdmin, upload.single('file'), async (re
   } catch (error) {
     console.error('Error uploading to Vercel Blob:', error);
     res.status(500).json({ error: 'Errore durante il caricamento: ' + error.message });
+  }
+});
+
+// Notifica studenti via email
+app.post('/api/resources/notify', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const { subject, message, courseEditionId } = req.body;
+  
+  if (!subject || !message) {
+    return res.status(400).json({ error: 'Oggetto e messaggio sono obbligatori' });
+  }
+
+  try {
+    // Prendi tutti gli studenti iscritti (attivi) alla course edition
+    const editionId = courseEditionId || '563e9876-8a08-4ee7-954a-79a16c39ab53'; // Default Master CF
+    
+    const { rows: students } = await pool.query(`
+      SELECT DISTINCT u.email, u.first_name, u.last_name
+      FROM enrollments e
+      JOIN users u ON u.id = e.user_id
+      WHERE e.course_edition_id = $1 AND e.status = 'active'
+    `, [editionId]);
+
+    if (students.length === 0) {
+      return res.json({ sent: 0, message: 'Nessuno studente iscritto trovato' });
+    }
+
+    // Invia email a ciascuno studente
+    const { Resend } = require('resend');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    
+    let sent = 0;
+    let errors = [];
+
+    for (const student of students) {
+      try {
+        const personalizedMessage = message
+          .replace('{nome}', student.first_name || 'Studente')
+          .replace('{cognome}', student.last_name || '');
+
+        await resend.emails.send({
+          from: process.env.RESEND_FROM || 'Master Carbon Farming <noreply@carbonfarmingmaster.it>',
+          to: student.email,
+          subject: subject,
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: linear-gradient(135deg, #166534 0%, #22c55e 100%); padding: 20px; border-radius: 12px 12px 0 0;">
+                <h1 style="color: white; margin: 0; font-size: 1.5rem;">🌱 Master Carbon Farming</h1>
+              </div>
+              <div style="background: #f9fafb; padding: 24px; border-radius: 0 0 12px 12px;">
+                <p style="white-space: pre-line; line-height: 1.6;">${personalizedMessage}</p>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+                <p style="color: #6b7280; font-size: 0.875rem;">
+                  Università della Tuscia - Master di II livello in Carbon Farming
+                </p>
+              </div>
+            </div>
+          `
+        });
+        sent++;
+      } catch (emailError) {
+        console.error(`Error sending to ${student.email}:`, emailError);
+        errors.push(student.email);
+      }
+    }
+
+    res.json({ 
+      sent, 
+      total: students.length,
+      errors: errors.length > 0 ? errors : undefined,
+      message: `Email inviata a ${sent}/${students.length} studenti`
+    });
+  } catch (error) {
+    console.error('Error notifying students:', error);
+    res.status(500).json({ error: 'Errore durante l\'invio delle notifiche' });
   }
 });
 

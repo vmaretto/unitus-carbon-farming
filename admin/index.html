@@ -1838,7 +1838,7 @@
             try {
                 const res = await fetch('/api/resources/upload', {
                     method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('adminToken') },
+                    headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem('adminToken') },
                     body: formData
                 });
                 if (!res.ok) {

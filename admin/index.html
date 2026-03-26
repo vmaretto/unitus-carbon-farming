@@ -490,6 +490,7 @@
                 <a href="#faculty">Gestione docenti</a>
                 <a href="#blog">Gestione blog</a>
                 <a href="#partners">Gestione partner</a>
+                <a href="#resources">Risorse</a>
                 <a href="#lms-courses">Percorsi Formativi</a>
                 <a href="#lms-modules">Moduli e Lezioni</a>
                 <a href="#lms-enrollments">Iscrizioni</a>
@@ -939,6 +940,74 @@
                     <tbody id="partner-table-body">
                         <tr class="empty-state" data-empty-partner>
                             <td colspan="5">Non ci sono partner configurati. Aggiungi il primo partner con il modulo qui sopra.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ============================================ -->
+        <!-- RISORSE -->
+        <!-- ============================================ -->
+        <section id="resources">
+            <header>
+                <h2>Gestione Risorse</h2>
+                <p class="section-description">Carica e gestisci materiali didattici: video, PDF, documenti e altri contenuti per gli studenti.</p>
+            </header>
+
+            <form id="resource-form">
+                <div class="form-grid">
+                    <label>
+                        Titolo *
+                        <input type="text" id="resource-title" name="title" required placeholder="Es. Seminario Carbon Farming">
+                    </label>
+                    <label>
+                        Tipo *
+                        <select id="resource-type" name="resourceType" required>
+                            <option value="">Seleziona tipo...</option>
+                            <option value="video">🎬 Video</option>
+                            <option value="pdf">📄 PDF</option>
+                            <option value="document">📝 Documento</option>
+                            <option value="audio">🎧 Audio</option>
+                            <option value="link">🔗 Link esterno</option>
+                        </select>
+                    </label>
+                    <label style="grid-column: 1 / -1;">
+                        URL risorsa *
+                        <input type="url" id="resource-url" name="url" required placeholder="https://vimeo.com/... o URL del file">
+                    </label>
+                    <label style="grid-column: 1 / -1;">
+                        Descrizione
+                        <input type="text" id="resource-description" name="description" placeholder="Breve descrizione della risorsa">
+                    </label>
+                    <label>
+                        Ordine
+                        <input type="number" id="resource-sort-order" name="sortOrder" placeholder="0">
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="resource-published" name="isPublished">
+                        Pubblicato (visibile agli studenti)
+                    </label>
+                </div>
+                <div class="form-buttons">
+                    <button type="submit" id="resource-submit-btn">Aggiungi risorsa</button>
+                    <button type="button" id="resource-cancel-btn" style="display:none;" onclick="resetResourceForm()">Annulla modifica</button>
+                </div>
+            </form>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Titolo</th>
+                            <th>Tipo</th>
+                            <th>Pubblicato</th>
+                            <th>Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resource-table-body">
+                        <tr class="empty-state" data-empty-resource>
+                            <td colspan="4">Non ci sono risorse caricate. Aggiungi la prima risorsa con il modulo qui sopra.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1569,7 +1638,7 @@
                 sessionStorage.setItem('adminToken', adminToken);
                 await checkAuth();
                 // Carica i dati dopo il login
-                loadFaculty(); loadBlogPosts(); loadPartners(); loadModules(); loadLessons(); loadLmsCourses();
+                loadFaculty(); loadBlogPosts(); loadPartners(); loadResources(); loadModules(); loadLessons(); loadLmsCourses();
             } catch (err) {
                 errorEl.textContent = 'Errore di connessione';
                 errorEl.style.display = 'block';
@@ -1593,11 +1662,13 @@
             editingFacultyId: null,
             editingPostId: null,
             editingPartnerId: null,
+            editingResourceId: null,
             editingModuleId: null,
             editingLessonId: null,
             faculty: [],
             blogPosts: [],
             partners: [],
+            resources: [],
             modules: [],
             lessons: [],
             calendarYear: new Date().getFullYear(),
@@ -1703,6 +1774,112 @@
             const button = form.querySelector('button.primary');
             button.textContent = button.dataset.defaultText || 'Salva partner';
         }
+
+        function resetResourceForm() {
+            const form = document.getElementById('resource-form');
+            form.reset();
+            document.getElementById('resource-published').checked = false;
+            document.getElementById('resource-cancel-btn').style.display = 'none';
+            state.editingResourceId = null;
+            document.getElementById('resource-submit-btn').textContent = 'Aggiungi risorsa';
+        }
+
+        async function loadResources() {
+            const tableBody = document.getElementById('resource-table-body');
+            tableBody.querySelectorAll('tr:not([data-empty-resource])').forEach((row) => row.remove());
+
+            try {
+                const items = await apiRequest('/api/resources');
+                state.resources = items;
+
+                const typeIcons = { video: '🎬', pdf: '📄', document: '📝', audio: '🎧', link: '🔗' };
+
+                items.forEach((item) => {
+                    const row = document.createElement('tr');
+                    row.dataset.id = item.id;
+                    row.innerHTML = `
+                        <td data-title><a href="${item.url}" target="_blank">${item.title}</a></td>
+                        <td data-type>${typeIcons[item.resourceType] || ''} ${item.resourceType}</td>
+                        <td data-status><span class="status-pill" data-status="${item.isPublished ? 'published' : 'draft'}">${item.isPublished ? 'Visibile' : 'Bozza'}</span></td>
+                        <td>
+                            <button data-edit class="icon-btn" title="Modifica">✏️</button>
+                            <button data-delete class="icon-btn danger" title="Elimina">🗑️</button>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+
+                toggleEmptyState(tableBody, items.length > 0, '[data-empty-resource]');
+            } catch (error) {
+                state.resources = [];
+                toggleEmptyState(tableBody, false, '[data-empty-resource]');
+            }
+        }
+
+        document.getElementById('resource-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const payload = {
+                title: document.getElementById('resource-title').value.trim(),
+                resourceType: document.getElementById('resource-type').value,
+                url: document.getElementById('resource-url').value.trim(),
+                description: document.getElementById('resource-description').value.trim() || null,
+                sortOrder: document.getElementById('resource-sort-order').value === '' ? null : Number(document.getElementById('resource-sort-order').value),
+                isPublished: document.getElementById('resource-published').checked
+            };
+
+            if (!payload.title || !payload.resourceType || !payload.url) {
+                showToast('Compila tutti i campi obbligatori', 'error');
+                return;
+            }
+
+            try {
+                const method = state.editingResourceId ? 'PUT' : 'POST';
+                const url = state.editingResourceId ? `/api/resources/${state.editingResourceId}` : '/api/resources';
+                await apiRequest(url, {
+                    method,
+                    body: JSON.stringify(payload)
+                });
+                showToast('Risorsa salvata con successo');
+                resetResourceForm();
+                loadResources();
+            } catch (error) {
+                // already handled in apiRequest
+            }
+        });
+
+        document.getElementById('resource-table-body').addEventListener('click', async (event) => {
+            const editButton = event.target.closest('button[data-edit]');
+            const deleteButton = event.target.closest('button[data-delete]');
+            const row = event.target.closest('tr[data-id]');
+            if (!row) return;
+            const id = row.dataset.id;
+
+            if (editButton) {
+                const current = state.resources.find((item) => item.id === id);
+                if (!current) return;
+                document.getElementById('resource-title').value = current.title || '';
+                document.getElementById('resource-type').value = current.resourceType || '';
+                document.getElementById('resource-url').value = current.url || '';
+                document.getElementById('resource-description').value = current.description || '';
+                document.getElementById('resource-sort-order').value = current.sortOrder ?? '';
+                document.getElementById('resource-published').checked = current.isPublished;
+                state.editingResourceId = id;
+                document.getElementById('resource-submit-btn').textContent = 'Salva modifiche';
+                document.getElementById('resource-cancel-btn').style.display = 'inline-block';
+                document.getElementById('resources').scrollIntoView({ behavior: 'smooth' });
+            }
+
+            if (deleteButton) {
+                if (!confirm('Eliminare questa risorsa?')) return;
+                try {
+                    await apiRequest(`/api/resources/${id}`, { method: 'DELETE' });
+                    showToast('Risorsa eliminata');
+                    loadResources();
+                } catch (error) {
+                    // handled
+                }
+            }
+        });
 
         async function loadFaculty() {
             const tableBody = document.getElementById('faculty-table-body');

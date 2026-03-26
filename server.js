@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const port = process.env.PORT || 3000;
-const BUILD_VERSION = '2026-03-26-v2'; // Per debug deploy
+const BUILD_VERSION = '2026-03-26-v3'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -1072,6 +1072,153 @@ app.delete('/api/partners/:id', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error deleting partner', error);
     res.status(500).json({ error: 'Unable to delete partner' });
+  }
+});
+
+// ============================================
+// API RISORSE
+// ============================================
+
+app.get('/api/resources', async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  try {
+    const { published, type } = req.query;
+    const filters = [];
+    const values = [];
+
+    if (published !== undefined) {
+      filters.push(`is_published = $${filters.length + 1}`);
+      values.push(published === 'true');
+    }
+
+    if (type !== undefined) {
+      filters.push(`resource_type = $${filters.length + 1}`);
+      values.push(type);
+    }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const sql = `
+      SELECT id, title, description, resource_type AS "resourceType",
+             url, thumbnail_url AS "thumbnailUrl", file_size_bytes AS "fileSizeBytes",
+             sort_order AS "sortOrder", is_published AS "isPublished",
+             created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM resources
+      ${where}
+      ORDER BY sort_order NULLS LAST, created_at DESC
+    `;
+
+    const { rows } = await pool.query(sql, values);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching resources', error);
+    res.status(500).json({ error: 'Unable to retrieve resources' });
+  }
+});
+
+app.post('/api/resources', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  const { title, description, resourceType, url, thumbnailUrl, fileSizeBytes, sortOrder, isPublished } = req.body;
+
+  if (!title || !resourceType || !url) {
+    return res.status(400).json({ error: 'Title, resourceType, and url are required' });
+  }
+
+  if (!['video', 'pdf', 'document', 'audio', 'link'].includes(resourceType)) {
+    return res.status(400).json({ error: 'Invalid resource type' });
+  }
+
+  try {
+    const id = uuidv4();
+    const insert = `
+      INSERT INTO resources (id, title, description, resource_type, url, thumbnail_url, file_size_bytes, sort_order, is_published)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, title, description, resource_type AS "resourceType",
+                url, thumbnail_url AS "thumbnailUrl", file_size_bytes AS "fileSizeBytes",
+                sort_order AS "sortOrder", is_published AS "isPublished",
+                created_at AS "createdAt", updated_at AS "updatedAt"
+    `;
+    const values = [
+      id,
+      title,
+      description || null,
+      resourceType,
+      url,
+      thumbnailUrl || null,
+      fileSizeBytes || null,
+      typeof sortOrder === 'number' ? sortOrder : null,
+      Boolean(isPublished)
+    ];
+
+    const { rows } = await pool.query(insert, values);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating resource', error);
+    res.status(500).json({ error: 'Unable to create resource' });
+  }
+});
+
+app.put('/api/resources/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  const { id } = req.params;
+  const { title, description, resourceType, url, thumbnailUrl, fileSizeBytes, sortOrder, isPublished } = req.body;
+
+  try {
+    const update = `
+      UPDATE resources
+      SET title = COALESCE($2, title),
+          description = COALESCE($3, description),
+          resource_type = COALESCE($4, resource_type),
+          url = COALESCE($5, url),
+          thumbnail_url = COALESCE($6, thumbnail_url),
+          file_size_bytes = COALESCE($7, file_size_bytes),
+          sort_order = COALESCE($8, sort_order),
+          is_published = COALESCE($9, is_published),
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, title, description, resource_type AS "resourceType",
+                url, thumbnail_url AS "thumbnailUrl", file_size_bytes AS "fileSizeBytes",
+                sort_order AS "sortOrder", is_published AS "isPublished",
+                created_at AS "createdAt", updated_at AS "updatedAt"
+    `;
+    const values = [
+      id,
+      title || null,
+      description,
+      resourceType || null,
+      url || null,
+      thumbnailUrl,
+      fileSizeBytes,
+      typeof sortOrder === 'number' ? sortOrder : null,
+      typeof isPublished === 'boolean' ? isPublished : null
+    ];
+
+    const { rows } = await pool.query(update, values);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error updating resource', error);
+    res.status(500).json({ error: 'Unable to update resource' });
+  }
+});
+
+app.delete('/api/resources/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  const { id } = req.params;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM resources WHERE id = $1', [id]);
+    if (!rowCount) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting resource', error);
+    res.status(500).json({ error: 'Unable to delete resource' });
   }
 });
 

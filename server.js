@@ -2088,7 +2088,7 @@ app.post('/api/lms/enrollments/bulk', requireAdmin, async (req, res) => {
       }
       // Find or create user
       let userId;
-      const { rows: existingUsers } = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+      const { rows: existingUsers } = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
       if (existingUsers.length) {
         userId = existingUsers[0].id;
         // Update user data if provided
@@ -2219,7 +2219,7 @@ app.post('/api/auth/magic-link', async (req, res) => {
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
   try {
-    const { rows } = await pool.query('SELECT id, role, is_active FROM users WHERE email = $1', [email.trim().toLowerCase()]);
+    const { rows } = await pool.query('SELECT id, role, is_active FROM users WHERE LOWER(email) = LOWER($1)', [email.trim()]);
     if (!rows.length) {
       // Non rivelare se l'utente esiste o meno
       return res.json({ message: 'Se l\'indirizzo email è registrato, riceverai un link di accesso.' });

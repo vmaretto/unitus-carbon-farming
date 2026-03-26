@@ -2305,8 +2305,68 @@ app.post('/api/auth/magic-link', async (req, res) => {
   }
 });
 
-// Verifica magic link token e crea sessione JWT
+// Verifica magic link token - mostra pagina di conferma (per evitare prefetch Outlook)
 app.get('/api/auth/verify-magic/:token', async (req, res) => {
+  if (!pool) return res.status(503).send('Database not configured');
+
+  try {
+    const rawToken = req.params.token;
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    const { rows } = await pool.query(
+      'SELECT id, email, first_name, last_name, role FROM users WHERE token_hash = $1 AND token_expires_at > NOW() AND is_active = true',
+      [tokenHash]
+    );
+
+    if (!rows.length) {
+      return res.status(400).send(`
+        <html><body style="font-family: Inter, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f3f4f6;">
+          <div style="text-align: center; padding: 40px;">
+            <h2>Link scaduto o non valido</h2>
+            <p>Richiedi un nuovo link di accesso.</p>
+            <a href="/learn/login.html" style="color: #2c7a4b;">Torna al login</a>
+          </div>
+        </body></html>
+      `);
+    }
+
+    const user = rows[0];
+    const firstName = user.first_name || '';
+
+    // Mostra pagina di conferma invece di login automatico (evita prefetch Outlook)
+    res.send(`
+      <!DOCTYPE html>
+      <html><head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Accedi - Carbon Farming Master</title>
+        <style>
+          body { font-family: Inter, system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f3f4f6; }
+          .card { background: white; border-radius: 20px; padding: 48px; text-align: center; box-shadow: 0 18px 45px rgba(31,41,55,0.12); max-width: 400px; }
+          h2 { color: #1b3a2d; margin: 0 0 12px; }
+          p { color: #6b6b6b; margin: 0 0 24px; }
+          form { margin: 0; }
+          button { background: linear-gradient(120deg,#ff7a1a,#fbbc42); color: white; border: none; padding: 14px 32px; border-radius: 999px; font-weight: 600; font-size: 1rem; cursor: pointer; box-shadow: 0 12px 28px rgba(255,122,26,0.28); }
+          button:hover { transform: translateY(-1px); }
+        </style>
+      </head><body>
+        <div class="card">
+          <h2>Ciao${firstName ? ' ' + firstName : ''}!</h2>
+          <p>Clicca il pulsante per accedere alla piattaforma.</p>
+          <form method="POST" action="/api/auth/confirm-magic/${rawToken}">
+            <button type="submit">Accedi alla piattaforma</button>
+          </form>
+        </div>
+      </body></html>
+    `);
+  } catch (error) {
+    console.error('Error verifying magic link', error);
+    res.status(500).send('Errore interno');
+  }
+});
+
+// Conferma magic link (POST) - consuma il token
+app.post('/api/auth/confirm-magic/:token', async (req, res) => {
   if (!pool) return res.status(503).send('Database not configured');
 
   try {
@@ -2347,7 +2407,7 @@ app.get('/api/auth/verify-magic/:token', async (req, res) => {
     // Redirect a learn/ con token nel fragment (non va al server)
     res.redirect(`/learn/index.html#token=${jwt}`);
   } catch (error) {
-    console.error('Error verifying magic link', error);
+    console.error('Error confirming magic link', error);
     res.status(500).send('Errore interno');
   }
 });

@@ -24,8 +24,11 @@
         .welcome { font-size: 1.1rem; margin: 0 0 4px; opacity: 0.9; }
         .progress-bar { background: var(--gray-200); border-radius: 999px; height: 8px; overflow: hidden; margin-top: 8px; }
         .progress-fill { background: linear-gradient(90deg, var(--green-500), #4ade80); height: 100%; border-radius: 999px; transition: width 0.5s ease; }
-        .course-card { border: 1px solid var(--gray-200); border-radius: 14px; padding: 20px; margin-bottom: 12px; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; }
-        .course-card:hover { border-color: var(--green-500); box-shadow: 0 4px 16px rgba(44,122,75,0.1); }
+        .course-card { border: 1px solid var(--gray-200); border-radius: 14px; padding: 20px; margin-bottom: 12px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .course-card:hover { border-color: var(--green-500); box-shadow: 0 4px 16px rgba(44,122,75,0.15); background: linear-gradient(90deg, white, #f0fdf4); }
+        .course-card::after { content: '→'; font-size: 1.5rem; color: var(--green-500); opacity: 0.5; transition: all 0.2s; }
+        .course-card:hover::after { opacity: 1; transform: translateX(4px); }
+        .course-card-content { flex: 1; }
         .course-meta { color: var(--gray-500); font-size: 0.85rem; margin-top: 4px; }
         .live-banner { background: linear-gradient(120deg, var(--green-700), var(--green-500)); color: white; border-radius: 14px; padding: 20px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
         .live-banner h3 { margin: 0; color: white; }
@@ -140,9 +143,11 @@
                     const div = document.createElement('div');
                     div.className = 'course-card';
                     div.innerHTML = `
-                        <h3>${c.title}</h3>
-                        <div class="course-meta">${c.editionName} &bull; ${completed}/${total} lezioni completate (${pct}%)</div>
-                        <div class="progress-bar"><div class="progress-fill" style="width: ${pct}%"></div></div>
+                        <div class="course-card-content">
+                            <h3>${c.title}</h3>
+                            <div class="course-meta">${c.editionName} &bull; ${completed}/${total} lezioni completate (${pct}%)</div>
+                            <div class="progress-bar"><div class="progress-fill" style="width: ${pct}%"></div></div>
+                        </div>
                     `;
                     div.addEventListener('click', () => {
                         window.location.href = `/learn/course.html?id=${c.id}`;

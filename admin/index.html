@@ -3187,6 +3187,7 @@ Buono studio!</textarea>
         function renderLmsLessonsPanel(moduleId, lessons, panel) {
             let html = `
                 <h4 style="margin: 0 0 12px; color: var(--green-700);">Lezioni del modulo</h4>
+                <div data-editing-lesson-title style="display: none; margin-bottom: 12px; padding: 10px 14px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; font-weight: 600; color: #92400e;">✏️ Modifica: <span></span></div>
                 <form data-lms-lesson-form="${moduleId}">
                     <div class="form-grid">
                         <label>Titolo <input type="text" data-field="title" required placeholder="Titolo lezione"></label>
@@ -3229,7 +3230,6 @@ Buono studio!</textarea>
                     </div>
                     <input type="hidden" data-field="materials" value="[]">
                     <div class="actions">
-                        <label class="switch"><input type="checkbox" data-field="isFree"><span class="slider"></span> Gratuita</label>
                         <label class="switch"><input type="checkbox" data-field="isPublished" checked><span class="slider"></span> Pubblicata</label>
                         <button class="primary" type="submit">Salva lezione</button>
                         <button class="secondary" type="button" data-cancel-lesson style="display:none;">Annulla</button>
@@ -3383,6 +3383,10 @@ Buono studio!</textarea>
                 form.querySelector('[data-field="isPublished"]').checked = true;
                 cancelBtn.style.display = 'none';
                 form.querySelector('button.primary').textContent = 'Salva lezione';
+                currentMaterials = [];
+                renderMaterialsList();
+                // Nascondi banner modifica
+                panel.querySelector('[data-editing-lesson-title]').style.display = 'none';
             });
 
             // Edit/delete lessons + assets toggle
@@ -3403,7 +3407,6 @@ Buono studio!</textarea>
                     form.querySelector('[data-field="videoProvider"]').value = lesson.videoProvider || '';
                     form.querySelector('[data-field="durationSeconds"]').value = lesson.durationSeconds ?? '';
                     form.querySelector('[data-field="sortOrder"]').value = lesson.sortOrder ?? 0;
-                    form.querySelector('[data-field="isFree"]').checked = Boolean(lesson.isFree);
                     form.querySelector('[data-field="isPublished"]').checked = Boolean(lesson.isPublished);
                     // Carica materiali esistenti
                     currentMaterials = Array.isArray(lesson.materials) ? [...lesson.materials] : [];
@@ -3411,6 +3414,10 @@ Buono studio!</textarea>
                     editingId = lid;
                     cancelBtn.style.display = '';
                     form.querySelector('button.primary').textContent = 'Aggiorna lezione';
+                    // Mostra banner con titolo lezione in modifica
+                    const editBanner = panel.querySelector('[data-editing-lesson-title]');
+                    editBanner.style.display = 'block';
+                    editBanner.querySelector('span').textContent = lesson.title;
                     form.scrollIntoView({ behavior: 'smooth' });
                 }
 

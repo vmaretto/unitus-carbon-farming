@@ -240,7 +240,15 @@
                         // Mostra prossima lezione futura
                         const next = relevantLessons[0];
                         const startTime = new Date(next.startDatetime);
+                        const thirtyMinBefore = new Date(startTime.getTime() - 30 * 60000);
                         const dt = startTime.toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+                        
+                        // Pulsante Zoom disabilitato con orario attivazione
+                        let zoomHtml = '';
+                        if (next.locationRemote) {
+                            const activeTime = thirtyMinBefore.toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                            zoomHtml = `<div style="text-align: right;"><span class="zoom-btn disabled">Collegati</span><br><small style="opacity:0.6;">Link attivo da ${activeTime}</small></div>`;
+                        }
                         
                         liveSection.innerHTML = `
                             <div class="live-banner">
@@ -248,6 +256,7 @@
                                     <h3>Prossima lezione: ${next.title}</h3>
                                     <p>${dt}${next.locationPhysical ? ' &bull; ' + next.locationPhysical : ''}</p>
                                 </div>
+                                ${zoomHtml}
                             </div>
                         `;
                     }

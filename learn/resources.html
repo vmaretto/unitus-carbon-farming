@@ -28,13 +28,15 @@
         .resource-icon { width: 48px; height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; }
         .resource-icon.video { background: linear-gradient(135deg, #ff6b6b, #ee5a5a); }
         .resource-icon.pdf { background: linear-gradient(135deg, #4ecdc4, #44a08d); }
-        .resource-icon.doc { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .resource-icon.document { background: linear-gradient(135deg, #667eea, #764ba2); }
         .resource-icon.audio { background: linear-gradient(135deg, #f093fb, #f5576c); }
+        .resource-icon.link { background: linear-gradient(135deg, #ffecd2, #fcb69f); }
         .resource-info { flex: 1; }
         .resource-title { font-weight: 600; color: var(--gray-900); margin: 0 0 4px; }
         .resource-desc { font-size: 0.85rem; color: var(--gray-500); margin: 0; }
         .resource-arrow { color: var(--gray-500); font-size: 1.2rem; }
         .empty { color: var(--gray-500); text-align: center; padding: 32px; }
+        .loading { text-align: center; padding: 40px; color: var(--gray-500); }
         @media (max-width: 640px) { 
             .header-content { flex-direction: column; align-items: flex-start; }
             .resource-item { flex-direction: column; text-align: center; }
@@ -63,22 +65,7 @@
         <div class="card">
             <h2><span class="icon">🎬</span> Video</h2>
             <div class="resource-list" id="video-list">
-                <a href="https://vimeo.com/1168272653" target="_blank" rel="noopener" class="resource-item">
-                    <div class="resource-icon video">▶️</div>
-                    <div class="resource-info">
-                        <p class="resource-title">Seminario Carbon Farming in Europa</p>
-                        <p class="resource-desc">Parlamentino INAIL Roma — 18 febbraio 2026</p>
-                    </div>
-                    <span class="resource-arrow">→</span>
-                </a>
-                <a href="https://vimeo.com/1168280691" target="_blank" rel="noopener" class="resource-item">
-                    <div class="resource-icon video">▶️</div>
-                    <div class="resource-info">
-                        <p class="resource-title">Trasformare la CO₂ in ricchezza agricola</p>
-                        <p class="resource-desc">Presentazione del Master Carbon Farming</p>
-                    </div>
-                    <span class="resource-arrow">→</span>
-                </a>
+                <div class="loading">Caricamento...</div>
             </div>
         </div>
 
@@ -86,30 +73,7 @@
         <div class="card">
             <h2><span class="icon">📄</span> Documenti</h2>
             <div class="resource-list" id="doc-list">
-                <a href="/upload/Piano_didattico.pdf" target="_blank" class="resource-item">
-                    <div class="resource-icon pdf">📑</div>
-                    <div class="resource-info">
-                        <p class="resource-title">Piano Didattico</p>
-                        <p class="resource-desc">Programma completo del Master</p>
-                    </div>
-                    <span class="resource-arrow">→</span>
-                </a>
-                <a href="/upload/SEMINARIO_CF_BRANDED.pdf" target="_blank" class="resource-item">
-                    <div class="resource-icon pdf">📑</div>
-                    <div class="resource-info">
-                        <p class="resource-title">Seminario Carbon Farming — Slide</p>
-                        <p class="resource-desc">Presentazione del seminario INAIL</p>
-                    </div>
-                    <span class="resource-arrow">→</span>
-                </a>
-            </div>
-        </div>
-
-        <!-- Trascrizioni -->
-        <div class="card">
-            <h2><span class="icon">📝</span> Trascrizioni</h2>
-            <div class="resource-list" id="transcript-list">
-                <div class="empty">Trascrizioni in arrivo...</div>
+                <div class="loading">Caricamento...</div>
             </div>
         </div>
     </main>
@@ -125,6 +89,52 @@
             localStorage.removeItem('learnUser');
             window.location.href = '/learn/login.html';
         });
+
+        const typeIcons = { video: '▶️', pdf: '📑', document: '📝', audio: '🎧', link: '🔗' };
+
+        function renderResource(item) {
+            return `
+                <a href="${item.url}" target="_blank" rel="noopener" class="resource-item">
+                    <div class="resource-icon ${item.resourceType}">${typeIcons[item.resourceType] || '📎'}</div>
+                    <div class="resource-info">
+                        <p class="resource-title">${item.title}</p>
+                        ${item.description ? `<p class="resource-desc">${item.description}</p>` : ''}
+                    </div>
+                    <span class="resource-arrow">→</span>
+                </a>
+            `;
+        }
+
+        async function loadResources() {
+            try {
+                const res = await fetch('/api/resources?published=true');
+                const resources = await res.json();
+
+                const videos = resources.filter(r => r.resourceType === 'video');
+                const docs = resources.filter(r => ['pdf', 'document', 'audio', 'link'].includes(r.resourceType));
+
+                const videoList = document.getElementById('video-list');
+                const docList = document.getElementById('doc-list');
+
+                if (videos.length > 0) {
+                    videoList.innerHTML = videos.map(renderResource).join('');
+                } else {
+                    videoList.innerHTML = '<div class="empty">Nessun video disponibile</div>';
+                }
+
+                if (docs.length > 0) {
+                    docList.innerHTML = docs.map(renderResource).join('');
+                } else {
+                    docList.innerHTML = '<div class="empty">Nessun documento disponibile</div>';
+                }
+            } catch (error) {
+                console.error('Error loading resources:', error);
+                document.getElementById('video-list').innerHTML = '<div class="empty">Errore nel caricamento</div>';
+                document.getElementById('doc-list').innerHTML = '<div class="empty">Errore nel caricamento</div>';
+            }
+        }
+
+        loadResources();
     </script>
 </body>
 </html>

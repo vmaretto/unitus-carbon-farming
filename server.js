@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-26-v9'; // Per debug deploy
+const BUILD_VERSION = '2026-03-26-v10'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -3036,6 +3036,111 @@ Rispondi SOLO con il JSON, nessun altro testo.`;
 
   } catch (error) {
     console.error('Error generating quiz:', error);
+    res.status(500).json({ error: 'Errore nella generazione del quiz: ' + error.message });
+  }
+});
+
+// --- GENERA QUIZ PRELIMINARE DA RISORSE ---
+app.post('/api/resources/generate-quiz', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const { numQuestions = 10, difficulty = 'intermediate', title = 'Quiz Preliminare' } = req.body;
+
+  try {
+    // 1. Recupera le risorse pubblicate
+    const { rows: resources } = await pool.query(`
+      SELECT title, description, resource_type, url FROM resources WHERE is_published = true ORDER BY sort_order
+    `);
+    
+    if (!resources.length) {
+      return res.status(400).json({ error: 'Nessuna risorsa pubblicata trovata. Pubblica almeno una risorsa prima di generare il quiz.' });
+    }
+    
+    // Costruisci il contesto dalle risorse
+    let context = `Risorse disponibili per il Master Carbon Farming:\n\n`;
+    resources.forEach((r, i) => {
+      context += `${i + 1}. ${r.title} (${r.resource_type})`;
+      if (r.description) context += ` - ${r.description}`;
+      context += `\n`;
+    });
+
+    // 2. Chiama Claude per generare le domande
+    const Anthropic = require('@anthropic-ai/sdk').default;
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY
+    });
+
+    const difficultyMap = {
+      easy: 'semplice, adatta a principianti che non conoscono l\'argomento',
+      intermediate: 'di livello intermedio, per verificare conoscenze di base',
+      advanced: 'avanzata, che richiede conoscenza approfondita del tema'
+    };
+
+    const prompt = `Sei un esperto di Carbon Farming e formazione. Devi creare un quiz preliminare di valutazione per un Master universitario.
+
+CONTESTO - MASTER CARBON FARMING:
+Il Carbon Farming è l'insieme di pratiche agricole che mirano a sequestrare carbonio nel suolo e nella biomassa vegetale, contribuendo alla mitigazione del cambiamento climatico e generando crediti di carbonio certificati.
+
+RISORSE DEL CORSO:
+${context}
+
+ISTRUZIONI:
+Genera esattamente ${numQuestions} domande a risposta multipla con difficoltà ${difficultyMap[difficulty] || 'intermedia'}.
+
+Le domande devono coprire:
+- Concetti base del carbon farming
+- Pratiche agricole sostenibili
+- Sequestro del carbonio nel suolo
+- Mercato dei crediti di carbonio
+- Normative e certificazioni
+- Benefici ambientali ed economici
+
+Per ogni domanda:
+- 4 opzioni di risposta (A, B, C, D)
+- Solo UNA risposta corretta
+- Le opzioni errate devono essere plausibili
+- Mescola domande teoriche e pratiche
+
+FORMATO OUTPUT (JSON valido):
+{
+  "questions": [
+    {
+      "questionText": "Testo della domanda?",
+      "options": ["Opzione A", "Opzione B", "Opzione C", "Opzione D"],
+      "correctAnswer": "Opzione A",
+      "points": 1
+    }
+  ]
+}
+
+Rispondi SOLO con il JSON, nessun altro testo.`;
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    // 3. Parsa la risposta
+    const responseText = message.content[0].text;
+    let generated;
+    try {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Nessun JSON trovato');
+      generated = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.error('Error parsing AI response:', responseText);
+      return res.status(500).json({ error: 'Errore nel parsing della risposta AI' });
+    }
+
+    res.json({
+      title: title,
+      numQuestions: generated.questions?.length || 0,
+      questions: generated.questions || []
+    });
+
+  } catch (error) {
+    console.error('Error generating preliminary quiz:', error);
     res.status(500).json({ error: 'Errore nella generazione del quiz: ' + error.message });
   }
 });

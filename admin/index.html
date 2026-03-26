@@ -3773,9 +3773,13 @@
         // CSV Export
         document.getElementById('lms-enroll-export').addEventListener('click', () => {
             if (!state.lmsEnrollments.length) { showToast('Nessun dato da esportare', 'error'); return; }
-            let csv = 'email,nome,cognome,ruolo,stato,data_iscrizione\n';
+            let csv = 'email,nome,cognome,ruolo,stato,data_iscrizione,ultimo_accesso,ha_acceduto\n';
             state.lmsEnrollments.forEach(en => {
-                csv += `"${en.email}","${en.firstName || ''}","${en.lastName || ''}","${en.role}","${en.status}","${en.enrolledAt || ''}"\n`;
+                const lastLogin = en.lastLoginAt 
+                    ? new Date(en.lastLoginAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                    : '';
+                const haAcceduto = en.lastLoginAt ? 'Sì' : 'No';
+                csv += `"${en.email}","${en.firstName || ''}","${en.lastName || ''}","${en.role}","${en.status}","${en.enrolledAt || ''}","${lastLogin}","${haAcceduto}"\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);

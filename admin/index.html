@@ -2804,7 +2804,7 @@ Buono studio!</textarea>
         // LMS Modules & Lessons
         state.lmsModules = [];
         state.lmsLessons = [];
-        state.lmsAssets = [];
+
         state.editingLmsModuleId = null;
         state.editingLmsLessonId = null;
         state.selectedLmsCourseId = null;
@@ -3206,13 +3206,26 @@ Buono studio!</textarea>
                     </div>
                     <label style="margin-top: 12px;">Descrizione <textarea data-field="description" rows="2" placeholder="Descrizione lezione"></textarea></label>
                     <div style="margin-top: 12px; padding: 12px; background: var(--gray-100); border-radius: 8px;">
-                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">📎 Materiali (PDF, slide, documenti)</label>
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">📎 Materiali della lezione</label>
                         <div data-materials-list style="margin-bottom: 8px;"></div>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <input type="text" data-material-name placeholder="Nome (es. Slide lezione)" style="flex: 1; min-width: 150px;">
-                            <input type="url" data-material-url placeholder="URL (Google Drive, Dropbox...)" style="flex: 2; min-width: 200px;">
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                            <select data-material-type style="min-width: 120px;">
+                                <option value="pdf">📄 PDF/Slide</option>
+                                <option value="video">🎬 Video</option>
+                                <option value="audio">🎧 Audio</option>
+                                <option value="document">📝 Documento</option>
+                                <option value="quiz">📝 Quiz</option>
+                                <option value="link">🔗 Link</option>
+                            </select>
+                            <input type="text" data-material-name placeholder="Nome materiale" style="flex: 1; min-width: 120px;">
+                            <input type="text" data-material-url placeholder="URL o carica file" style="flex: 2; min-width: 150px;">
+                            <label style="margin: 0; padding: 6px 12px; background: var(--green-500); color: white; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+                                📁
+                                <input type="file" data-material-file style="display: none;" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.mp3,.mp4,.m4a,.jpg,.jpeg,.png,.gif">
+                            </label>
                             <button type="button" class="secondary" data-add-material>+ Aggiungi</button>
                         </div>
+                        <small data-material-upload-status style="color: var(--gray-500); margin-top: 4px; display: block;"></small>
                     </div>
                     <input type="hidden" data-field="materials" value="[]">
                     <div class="actions">
@@ -3241,12 +3254,10 @@ Buono studio!</textarea>
                             </div>
                             <div class="actions" style="margin: 0;">
                                 <button type="button" class="secondary" data-edit-lms-lesson="${l.id}" data-module-id="${moduleId}">Modifica</button>
-                                <button type="button" class="secondary" data-toggle-assets="${l.id}">Assets</button>
                                 <button type="button" class="secondary" data-toggle-quiz="${l.id}">Quiz</button>
                                 <button type="button" class="danger" data-delete-lms-lesson="${l.id}" data-module-id="${moduleId}">Elimina</button>
                             </div>
                         </div>
-                        <div data-assets-for="${l.id}" style="display: none; padding: 8px 0 8px 24px;"></div>
                         <div data-quiz-for="${l.id}" style="display: none; padding: 8px 0 8px 24px;"></div>
                     `;
                 });
@@ -3261,6 +3272,7 @@ Buono studio!</textarea>
             let currentMaterials = [];
             
             // Helper per renderizzare la lista materiali
+            const typeIcons = { pdf: '📄', video: '🎬', audio: '🎧', document: '📝', quiz: '📝', link: '🔗' };
             function renderMaterialsList() {
                 const listDiv = form.querySelector('[data-materials-list]');
                 if (!currentMaterials.length) {
@@ -3268,7 +3280,7 @@ Buono studio!</textarea>
                 } else {
                     listDiv.innerHTML = currentMaterials.map((m, i) => `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: white; border-radius: 4px; margin-bottom: 4px;">
-                            <span>📄 <a href="${m.url}" target="_blank" rel="noopener">${m.name}</a></span>
+                            <span>${typeIcons[m.type] || '📄'} <a href="${m.url}" target="_blank" rel="noopener">${m.name}</a></span>
                             <button type="button" class="danger" data-remove-material="${i}" style="padding: 2px 8px; font-size: 0.75rem;">✕</button>
                         </div>
                     `).join('');
@@ -3276,17 +3288,54 @@ Buono studio!</textarea>
                 form.querySelector('[data-field="materials"]').value = JSON.stringify(currentMaterials);
             }
             
+            // Upload file per materiali lezione
+            form.querySelector('[data-material-file]').addEventListener('change', async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const statusEl = form.querySelector('[data-material-upload-status]');
+                statusEl.textContent = 'Caricamento in corso...';
+                statusEl.style.color = 'var(--orange-500)';
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const res = await fetch('/api/resources/upload', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem('adminToken') },
+                        body: formData
+                    });
+                    if (!res.ok) throw new Error((await res.json()).error || 'Upload fallito');
+                    const data = await res.json();
+                    form.querySelector('[data-material-url]').value = data.url;
+                    if (!form.querySelector('[data-material-name]').value) {
+                        form.querySelector('[data-material-name]').value = data.filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+                    }
+                    // Auto-detect tipo
+                    const ext = data.filename.split('.').pop().toLowerCase();
+                    const extTypeMap = { pdf: 'pdf', ppt: 'pdf', pptx: 'pdf', doc: 'document', docx: 'document', mp4: 'video', mp3: 'audio', m4a: 'audio' };
+                    if (extTypeMap[ext]) form.querySelector('[data-material-type]').value = extTypeMap[ext];
+                    statusEl.textContent = '✅ ' + data.filename;
+                    statusEl.style.color = 'var(--green-500)';
+                } catch (error) {
+                    statusEl.textContent = '❌ ' + error.message;
+                    statusEl.style.color = '#dc3545';
+                }
+                event.target.value = '';
+            });
+            
             // Aggiungi materiale
             form.querySelector('[data-add-material]').addEventListener('click', () => {
+                const typeInput = form.querySelector('[data-material-type]');
                 const nameInput = form.querySelector('[data-material-name]');
                 const urlInput = form.querySelector('[data-material-url]');
+                const type = typeInput.value;
                 const name = nameInput.value.trim();
                 const url = urlInput.value.trim();
                 if (!name || !url) { showToast('Inserisci nome e URL', 'error'); return; }
-                currentMaterials.push({ name, url });
+                currentMaterials.push({ type, name, url });
                 renderMaterialsList();
                 nameInput.value = '';
                 urlInput.value = '';
+                form.querySelector('[data-material-upload-status]').textContent = '';
             });
             
             // Rimuovi materiale
@@ -3340,8 +3389,6 @@ Buono studio!</textarea>
             panel.addEventListener('click', async (ev) => {
                 const editLessonBtn = ev.target.closest('[data-edit-lms-lesson]');
                 const deleteLessonBtn = ev.target.closest('[data-delete-lms-lesson]');
-                const toggleAssetsBtn = ev.target.closest('[data-toggle-assets]');
-                const deleteAssetBtn = ev.target.closest('[data-delete-asset]');
                 const toggleQuizBtn = ev.target.closest('[data-toggle-quiz]');
                 const deleteQuestionBtn = ev.target.closest('[data-delete-question]');
                 const deleteQuizBtn = ev.target.closest('[data-delete-quiz]');
@@ -3375,29 +3422,6 @@ Buono studio!</textarea>
                         await apiRequest(`/api/lms/lessons/${lid}`, { method: 'DELETE' });
                         showToast('Lezione eliminata');
                         loadLmsLessons(mid, panel);
-                    } catch (error) {}
-                }
-
-                if (toggleAssetsBtn) {
-                    const lid = toggleAssetsBtn.dataset.toggleAssets;
-                    const assetsDiv = panel.querySelector(`[data-assets-for="${lid}"]`);
-                    if (assetsDiv.style.display === 'none') {
-                        assetsDiv.style.display = '';
-                        loadLmsAssets(lid, assetsDiv, moduleId, panel);
-                    } else {
-                        assetsDiv.style.display = 'none';
-                    }
-                }
-
-                if (deleteAssetBtn) {
-                    const aid = deleteAssetBtn.dataset.deleteAsset;
-                    const lid = deleteAssetBtn.dataset.lessonId;
-                    if (!confirm('Eliminare questo asset?')) return;
-                    try {
-                        await apiRequest(`/api/lms/lesson-assets/${aid}`, { method: 'DELETE' });
-                        showToast('Asset eliminato');
-                        const assetsDiv = panel.querySelector(`[data-assets-for="${lid}"]`);
-                        loadLmsAssets(lid, assetsDiv, moduleId, panel);
                     } catch (error) {}
                 }
 
@@ -3436,62 +3460,6 @@ Buono studio!</textarea>
                     } catch (error) {}
                 }
             });
-        }
-
-        async function loadLmsAssets(lessonId, container, moduleId, parentPanel) {
-            try {
-                const assets = await apiRequest(`/api/lms/lesson-assets?lessonId=${lessonId}`);
-                let html = `
-                    <form data-asset-form="${lessonId}" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 8px;">
-                        <label style="flex: 1; min-width: 120px;">Titolo <input type="text" data-field="title" required placeholder="Slide 1" style="width: 100%;"></label>
-                        <label>Tipo
-                            <select data-field="assetType">
-                                <option value="pdf">PDF</option>
-                                <option value="slide">Slide</option>
-                                <option value="link">Link</option>
-                                <option value="file">File</option>
-                                <option value="other">Altro</option>
-                            </select>
-                        </label>
-                        <label style="flex: 2; min-width: 180px;">URL <input type="url" data-field="url" required placeholder="https://..." style="width: 100%;"></label>
-                        <button class="primary" type="submit" style="padding: 10px 16px;">Aggiungi</button>
-                    </form>
-                `;
-
-                if (assets.length === 0) {
-                    html += '<span style="color: var(--gray-500); font-size: 0.85rem;">Nessun asset.</span>';
-                } else {
-                    assets.forEach(a => {
-                        html += `
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 0.9rem;">
-                                <span><strong>${a.title}</strong> (${a.assetType}) — <a href="${a.url}" target="_blank" rel="noopener">apri</a></span>
-                                <button type="button" class="danger" data-delete-asset="${a.id}" data-lesson-id="${lessonId}" style="padding: 4px 10px; font-size: 0.8rem;">Elimina</button>
-                            </div>
-                        `;
-                    });
-                }
-                container.innerHTML = html;
-
-                // Asset form handler
-                const assetForm = container.querySelector(`[data-asset-form="${lessonId}"]`);
-                assetForm.addEventListener('submit', async (ev) => {
-                    ev.preventDefault();
-                    const payload = {
-                        lessonId: lessonId,
-                        title: assetForm.querySelector('[data-field="title"]').value.trim(),
-                        assetType: assetForm.querySelector('[data-field="assetType"]').value,
-                        url: assetForm.querySelector('[data-field="url"]').value.trim()
-                    };
-                    if (!payload.title || !payload.url) { showToast('Compila titolo e URL', 'error'); return; }
-                    try {
-                        await apiRequest('/api/lms/lesson-assets', { method: 'POST', body: JSON.stringify(payload) });
-                        showToast('Asset aggiunto');
-                        loadLmsAssets(lessonId, container, moduleId, parentPanel);
-                    } catch (error) {}
-                });
-            } catch (error) {
-                container.innerHTML = '<span style="color: #b91c1c;">Errore caricamento assets.</span>';
-            }
         }
 
         // ============================================

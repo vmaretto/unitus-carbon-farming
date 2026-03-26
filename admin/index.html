@@ -974,8 +974,14 @@
                     </label>
                     <label style="grid-column: 1 / -1;">
                         URL risorsa *
-                        <input type="text" id="resource-url" name="url" required placeholder="https://vimeo.com/... o /upload/nomefile.pdf">
-                        <small style="color: var(--gray-500); margin-top: 4px; display: block;">Per caricare nuovi file, contatta l'amministratore.</small>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" id="resource-url" name="url" required placeholder="https://vimeo.com/... o carica un file" style="flex: 1;">
+                            <label style="margin: 0; padding: 8px 16px; background: var(--green-500); color: white; border-radius: 8px; cursor: pointer; white-space: nowrap;">
+                                📁 Carica file
+                                <input type="file" id="resource-file-input" style="display: none;" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.mp3,.mp4,.m4a,.jpg,.jpeg,.png,.gif">
+                            </label>
+                        </div>
+                        <small id="upload-status" style="color: var(--gray-500); margin-top: 4px; display: block;"></small>
                     </label>
                     <label style="grid-column: 1 / -1;">
                         Descrizione
@@ -1816,6 +1822,46 @@
                 toggleEmptyState(tableBody, false, '[data-empty-resource]');
             }
         }
+
+        // Upload file handler
+        document.getElementById('resource-file-input').addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const statusEl = document.getElementById('upload-status');
+            statusEl.textContent = 'Caricamento in corso...';
+            statusEl.style.color = 'var(--orange-500)';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/api/resources/upload', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem('adminToken') },
+                    body: formData
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Upload fallito');
+                }
+                const data = await res.json();
+                document.getElementById('resource-url').value = data.url;
+                statusEl.textContent = '✅ File caricato: ' + data.filename;
+                statusEl.style.color = 'var(--green-500)';
+
+                // Auto-detect tipo
+                const ext = data.filename.split('.').pop().toLowerCase();
+                const typeMap = { pdf: 'pdf', doc: 'document', docx: 'document', ppt: 'document', pptx: 'document', mp3: 'audio', m4a: 'audio', mp4: 'video' };
+                if (typeMap[ext]) {
+                    document.getElementById('resource-type').value = typeMap[ext];
+                }
+            } catch (error) {
+                statusEl.textContent = '❌ Errore: ' + error.message;
+                statusEl.style.color = '#dc3545';
+            }
+            event.target.value = ''; // Reset input
+        });
 
         document.getElementById('resource-form').addEventListener('submit', async (event) => {
             event.preventDefault();

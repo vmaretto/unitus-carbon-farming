@@ -6,25 +6,14 @@ const crypto = require('crypto');
 const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
+const { put } = require('@vercel/blob');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Configurazione multer per upload file
-const uploadDir = path.join(__dirname, 'upload');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    // Sanitizza il nome file
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    cb(null, safeName);
-  }
-});
+// Configurazione multer per upload in memoria (per Vercel Blob)
 const upload = multer({ 
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB max
   fileFilter: (req, file, cb) => {
     const allowed = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
@@ -36,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-26-v4'; // Per debug deploy
+const BUILD_VERSION = '2026-03-26-v5'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -1251,17 +1240,31 @@ app.delete('/api/resources/:id', requireAdmin, async (req, res) => {
 });
 
 // Upload file per risorse
-app.post('/api/resources/upload', requireAdmin, upload.single('file'), (req, res) => {
+app.post('/api/resources/upload', requireAdmin, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nessun file caricato' });
   }
-  const url = `/upload/${req.file.filename}`;
-  res.json({ 
-    url,
-    filename: req.file.filename,
-    size: req.file.size,
-    mimetype: req.file.mimetype
-  });
+
+  try {
+    // Sanitizza il nome file
+    const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    
+    // Upload su Vercel Blob
+    const blob = await put(safeName, req.file.buffer, {
+      access: 'public',
+      contentType: req.file.mimetype
+    });
+
+    res.json({ 
+      url: blob.url,
+      filename: safeName,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    });
+  } catch (error) {
+    console.error('Error uploading to Vercel Blob:', error);
+    res.status(500).json({ error: 'Errore durante il caricamento: ' + error.message });
+  }
 });
 
 // ============================================

@@ -1937,11 +1937,12 @@ Buono studio!</textarea>
         // Carica lista studenti per autocomplete
         async function loadStudentsList() {
             try {
-                const students = await apiRequest('/api/lms/users');
+                const students = await apiRequest('/api/lms/enrollments?courseEditionId=563e9876-8a08-4ee7-954a-79a16c39ab53');
                 const datalist = document.getElementById('students-list');
-                datalist.innerHTML = students.map(s => 
-                    `<option value="${s.email}">${s.firstName || ''} ${s.lastName || ''} (${s.email})</option>`
-                ).join('');
+                datalist.innerHTML = students.map(s => {
+                    const name = [s.firstName, s.lastName].filter(Boolean).join(' ') || 'N/D';
+                    return `<option value="${s.email}">${name} — ${s.email}</option>`;
+                }).join('');
             } catch (e) {
                 console.error('Error loading students:', e);
             }

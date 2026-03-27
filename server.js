@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-27-v3'; // Per debug deploy
+const BUILD_VERSION = '2026-03-27-v4'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -4257,15 +4257,6 @@ app.delete('/api/teacher-consents/:id', requireAdmin, async (req, res) => {
   }
 });
 
-app.get('*', (req, res) => {
-  const filePath = path.join(staticRoot, req.path);
-  res.sendFile(filePath, (err) => {
-    if (err) {
-      res.status(404).send('Not found');
-    }
-  });
-});
-
 // ============================================
 // QUIZ ATTEMPTS API
 // ============================================
@@ -4624,6 +4615,16 @@ app.get('/api/documents/:id/export', requireAdmin, async (req, res) => {
     console.error('Error exporting signatures:', error);
     res.status(500).json({ error: 'Errore nell\'export' });
   }
+});
+
+// Catch-all per file statici (DEVE essere DOPO tutte le API routes!)
+app.get('*', (req, res) => {
+  const filePath = path.join(staticRoot, req.path);
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      res.status(404).send('Not found');
+    }
+  });
 });
 
 // Handler per Vercel serverless

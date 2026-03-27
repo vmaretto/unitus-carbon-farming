@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-27-v10'; // Per debug deploy
+const BUILD_VERSION = '2026-03-27-v11'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -4514,7 +4514,7 @@ app.get('/api/documents/:id/my-signature', requireStudent, async (req, res) => {
     const documentId = req.params.id;
     
     const { rows } = await pool.query(`
-      SELECT d.title, d.content, ds.consent_given, ds.signature_image, ds.signature_method, ds.signed_at
+      SELECT d.title, d.content, ds.consent_given, ds.signature_image, ds.signature_method, ds.signed_at, ds.signer_name, ds.signer_surname
       FROM document_signatures ds
       JOIN documents d ON d.id = ds.document_id
       WHERE ds.document_id = $1 AND ds.user_id = $2
@@ -4565,10 +4565,10 @@ app.post('/api/documents/:id/sign', requireStudent, async (req, res) => {
   try {
     const userId = req.user.userId;
     const documentId = req.params.id;
-    const { consentGiven, signatureImage, signatureMethod } = req.body;
+    const { consentGiven, signatureImage, signatureMethod, signerName, signerSurname } = req.body;
     
-    if (consentGiven === undefined || !signatureImage) {
-      return res.status(400).json({ error: 'Consenso e firma sono obbligatori' });
+    if (consentGiven === undefined || !signatureImage || !signerName || !signerSurname) {
+      return res.status(400).json({ error: 'Nome, cognome, consenso e firma sono obbligatori' });
     }
     
     // Verifica che il documento esista e sia per questo studente
@@ -4587,16 +4587,16 @@ app.post('/api/documents/:id/sign', requireStudent, async (req, res) => {
     const userAgent = req.headers['user-agent'];
     
     await pool.query(`
-      INSERT INTO document_signatures (document_id, user_id, consent_given, signature_image, signature_method, ip_address, user_agent)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO document_signatures (document_id, user_id, consent_given, signature_image, signature_method, ip_address, user_agent, signer_name, signer_surname)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       ON CONFLICT (document_id, user_id) DO UPDATE SET
-        consent_given = $3,
+        consent_given = $3, signer_name = $8, signer_surname = $9,
         signature_image = $4,
         signature_method = $5,
         ip_address = $6,
         user_agent = $7,
         signed_at = NOW()
-    `, [documentId, userId, consentGiven, signatureImage, signatureMethod || 'draw', ipAddress, userAgent]);
+    `, [documentId, userId, consentGiven, signatureImage, signatureMethod || 'draw', ipAddress, userAgent, signerName, signerSurname]);
     
     res.json({ success: true });
   } catch (error) {
@@ -4610,7 +4610,7 @@ app.get('/api/signatures/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { rows } = await pool.query(`
-      SELECT ds.*, u.email, u.first_name, u.last_name, d.title
+      SELECT ds.*, u.email, u.first_name, u.last_name, d.title, d.content
       FROM document_signatures ds
       JOIN users u ON u.id = ds.user_id
       JOIN documents d ON d.id = ds.document_id

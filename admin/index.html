@@ -2261,24 +2261,65 @@ Buono studio!</textarea>
                 modal.id = 'signature-view-modal';
                 modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1001; display: flex; align-items: center; justify-content: center;';
                 modal.innerHTML = `
-                    <div style="background: white; padding: 24px; border-radius: 16px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
-                        <h3 style="margin: 0 0 16px;">📄 Documento firmato</h3>
-                        <div style="background: ${sig.consent_given ? '#dcfce7' : '#fef2f2'}; border: 1px solid ${sig.consent_given ? '#16a34a' : '#dc2626'}; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                            <strong>${sig.consent_given ? '✅ Consenso prestato' : '❌ Consenso negato'}</strong><br>
-                            <span style="font-size: 0.85rem; color: #666;">
-                                ${sig.first_name || ''} ${sig.last_name || ''} (${sig.email})<br>
-                                Firmato: ${new Date(sig.signed_at).toLocaleString('it-IT')}<br>
-                                IP: ${sig.ip_address || 'N/D'}
-                            </span>
+                    <div style="background: white; padding: 0; border-radius: 16px; max-width: 800px; width: 95%; max-height: 95vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0,0,0,0.25);">
+                        <!-- Header documento -->
+                        <div style="background: linear-gradient(135deg, #166534 0%, #15803d 100%); color: white; padding: 20px 24px; border-radius: 16px 16px 0 0;">
+                            <h2 style="margin: 0; font-size: 1.3rem;">📄 ${sig.title}</h2>
+                            <div style="opacity: 0.9; margin-top: 4px; font-size: 0.9rem;">Documento firmato</div>
                         </div>
-                        <h4 style="margin: 0 0 8px;">✍️ Firma</h4>
-                        <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; text-align: center; background: #fafafa;">
-                            <img src="${sig.signature_image}" alt="Firma" style="max-width: 100%; max-height: 150px;">
-                            <div style="font-size: 0.8rem; color: #666; margin-top: 8px;">
-                                Metodo: ${sig.signature_method === 'upload' ? 'Immagine caricata' : 'Disegnata'}
+                        
+                        <!-- Contenuto documento -->
+                        <div style="padding: 24px;">
+                            <div style="border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; margin-bottom: 24px; background: #fafafa; max-height: 300px; overflow-y: auto;">
+                                ${sig.content || '<p style="color: #666;">Contenuto documento non disponibile</p>'}
+                            </div>
+                            
+                            <!-- Sezione dichiarazione -->
+                            <div style="border-top: 2px solid #e5e7eb; padding-top: 24px; margin-top: 24px;">
+                                <h3 style="margin: 0 0 16px; color: #166534;">📋 Dichiarazione</h3>
+                                
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                                    <div style="background: #f3f4f6; padding: 12px; border-radius: 8px;">
+                                        <div style="font-size: 0.8rem; color: #666; margin-bottom: 4px;">Nome</div>
+                                        <div style="font-weight: 600;">${sig.signer_name || sig.first_name || 'N/D'}</div>
+                                    </div>
+                                    <div style="background: #f3f4f6; padding: 12px; border-radius: 8px;">
+                                        <div style="font-size: 0.8rem; color: #666; margin-bottom: 4px;">Cognome</div>
+                                        <div style="font-weight: 600;">${sig.signer_surname || sig.last_name || 'N/D'}</div>
+                                    </div>
+                                </div>
+                                
+                                <div style="background: ${sig.consent_given ? '#dcfce7' : '#fef2f2'}; border: 2px solid ${sig.consent_given ? '#16a34a' : '#dc2626'}; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                                    <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 8px;">
+                                        ${sig.consent_given ? '✅ PRESTO IL CONSENSO' : '❌ NEGO IL CONSENSO'}
+                                    </div>
+                                    <div style="font-size: 0.85rem; color: #666;">
+                                        ${sig.consent_given ? "Autorizzo l'utilizzo di immagini e video" : "Parteciperò ma non desidero essere ripreso/a"}
+                                    </div>
+                                </div>
+                                
+                                <!-- Firma -->
+                                <div style="margin-bottom: 20px;">
+                                    <div style="font-size: 0.9rem; color: #666; margin-bottom: 8px;">Firma:</div>
+                                    <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; background: white; text-align: center;">
+                                        <img src="${sig.signature_image}" alt="Firma" style="max-width: 300px; max-height: 100px;">
+                                    </div>
+                                </div>
+                                
+                                <!-- Metadati -->
+                                <div style="background: #f9fafb; border-radius: 8px; padding: 12px; font-size: 0.8rem; color: #666;">
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
+                                        <div><strong>Email:</strong> ${sig.email}</div>
+                                        <div><strong>Data:</strong> ${new Date(sig.signed_at).toLocaleString('it-IT')}</div>
+                                        <div><strong>IP:</strong> ${sig.ip_address || 'N/D'}</div>
+                                        <div><strong>Metodo firma:</strong> ${sig.signature_method === 'upload' ? 'Immagine' : 'Disegno'}</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div style="margin-top: 16px; text-align: right;">
+                        
+                        <!-- Footer -->
+                        <div style="padding: 16px 24px; border-top: 1px solid #e5e7eb; text-align: right; background: #f9fafb; border-radius: 0 0 16px 16px;">
                             <button class="secondary" onclick="document.getElementById('signature-view-modal').remove()">Chiudi</button>
                         </div>
                     </div>

@@ -174,30 +174,61 @@
                 const data = await res.json();
                 
                 document.getElementById('content').innerHTML = `
-                    <div class="card">
-                        <h2>📋 ${data.title}</h2>
-                        <div style="background: ${data.consent_given ? 'var(--green-50)' : '#fef2f2'}; 
-                                    border: 1px solid ${data.consent_given ? 'var(--green-200)' : '#fecaca'}; 
-                                    border-radius: 10px; padding: 12px; margin-bottom: 16px;">
-                            <strong>${data.consent_given ? '✅ Hai prestato il consenso' : '❌ Hai negato il consenso'}</strong>
-                            <div style="font-size: 0.85rem; color: var(--gray-600);">
-                                Firmato il ${new Date(data.signed_at).toLocaleString('it-IT')}
+                    <div class="card" style="padding: 0; overflow: hidden;">
+                        <!-- Header -->
+                        <div style="background: linear-gradient(135deg, var(--green-700) 0%, var(--green-600) 100%); color: white; padding: 20px 24px;">
+                            <h2 style="margin: 0; font-size: 1.3rem;">📄 ${data.title}</h2>
+                            <div style="opacity: 0.9; margin-top: 4px; font-size: 0.9rem;">Documento firmato</div>
+                        </div>
+                        
+                        <div style="padding: 24px;">
+                            <!-- Contenuto documento -->
+                            <div class="document-content" style="margin-bottom: 24px;">
+                                ${data.content}
+                            </div>
+                            
+                            <!-- Sezione dichiarazione -->
+                            <div style="border-top: 2px solid var(--gray-200); padding-top: 24px;">
+                                <h3 style="margin: 0 0 16px; color: var(--green-700);">📋 La mia dichiarazione</h3>
+                                
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                                    <div style="background: var(--gray-50); padding: 12px; border-radius: 8px;">
+                                        <div style="font-size: 0.8rem; color: var(--gray-500); margin-bottom: 4px;">Nome</div>
+                                        <div style="font-weight: 600;">${data.signer_name || 'N/D'}</div>
+                                    </div>
+                                    <div style="background: var(--gray-50); padding: 12px; border-radius: 8px;">
+                                        <div style="font-size: 0.8rem; color: var(--gray-500); margin-bottom: 4px;">Cognome</div>
+                                        <div style="font-weight: 600;">${data.signer_surname || 'N/D'}</div>
+                                    </div>
+                                </div>
+                                
+                                <div style="background: ${data.consent_given ? 'var(--green-50)' : '#fef2f2'}; 
+                                            border: 2px solid ${data.consent_given ? 'var(--green-600)' : '#dc2626'}; 
+                                            border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                                    <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 8px;">
+                                        ${data.consent_given ? '✅ PRESTO IL CONSENSO' : '❌ NEGO IL CONSENSO'}
+                                    </div>
+                                    <div style="font-size: 0.85rem; color: var(--gray-600);">
+                                        ${data.consent_given ? "Autorizzo l'utilizzo di immagini e video" : "Parteciperò ma non desidero essere ripreso/a"}
+                                    </div>
+                                </div>
+                                
+                                <!-- Firma -->
+                                <div style="margin-bottom: 20px;">
+                                    <div style="font-size: 0.9rem; color: var(--gray-600); margin-bottom: 8px;">Firma:</div>
+                                    <div style="border: 1px solid var(--gray-200); border-radius: 8px; padding: 16px; background: white; text-align: center;">
+                                        <img src="${data.signature_image}" alt="Firma" style="max-width: 300px; max-height: 100px;">
+                                    </div>
+                                </div>
+                                
+                                <!-- Data firma -->
+                                <div style="background: var(--gray-50); border-radius: 8px; padding: 12px; font-size: 0.85rem; color: var(--gray-600); text-align: center;">
+                                    Firmato il ${new Date(data.signed_at).toLocaleString('it-IT')}
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="document-content" style="margin-bottom: 16px;">
-                            ${data.content}
-                        </div>
-                        
-                        <h3 style="margin-bottom: 12px;">✍️ La tua firma</h3>
-                        <div style="border: 1px solid var(--gray-200); border-radius: 10px; padding: 16px; background: white; text-align: center;">
-                            <img src="${data.signature_image}" alt="Firma" style="max-width: 300px; max-height: 100px;">
-                            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 8px;">
-                                Metodo: ${data.signature_method === 'upload' ? 'Immagine caricata' : 'Disegnata'}
-                            </div>
-                        </div>
-                        
-                        <div style="margin-top: 20px; text-align: center;">
+                        <div style="padding: 16px 24px; border-top: 1px solid var(--gray-200); background: var(--gray-50); text-align: center;">
                             <button class="btn btn-secondary" onclick="loadDocuments()">← Torna ai documenti</button>
                         </div>
                     </div>
@@ -211,10 +242,26 @@
             document.getElementById('content').innerHTML = `
                 <div class="card">
                     <h2>📋 ${doc.title}</h2>
-                    <p style="color: var(--gray-500); margin-bottom: 16px;">Leggi attentamente il documento e indica la tua scelta.</p>
+                    <p style="color: var(--gray-500); margin-bottom: 16px;">Leggi attentamente il documento, compila i dati richiesti e indica la tua scelta.</p>
                     
                     <div class="document-content">
                         ${doc.content}
+                    </div>
+                    
+                    <div style="margin: 24px 0; padding: 20px; background: var(--gray-50); border-radius: 12px; border: 1px solid var(--gray-200);">
+                        <h3 style="margin-bottom: 16px;">📝 I tuoi dati</h3>
+                        <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <label style="display: block; font-weight: 500; margin-bottom: 6px;">Nome *</label>
+                                <input type="text" id="signer-name" required placeholder="Il tuo nome" 
+                                       style="width: 100%; padding: 12px; border: 1px solid var(--gray-200); border-radius: 8px; font-size: 1rem;">
+                            </div>
+                            <div style="flex: 1; min-width: 200px;">
+                                <label style="display: block; font-weight: 500; margin-bottom: 6px;">Cognome *</label>
+                                <input type="text" id="signer-surname" required placeholder="Il tuo cognome"
+                                       style="width: 100%; padding: 12px; border: 1px solid var(--gray-200); border-radius: 8px; font-size: 1rem;">
+                            </div>
+                        </div>
                     </div>
                     
                     <h3>La tua scelta:</h3>
@@ -356,13 +403,19 @@
                 reader.readAsDataURL(file);
             }
             
+            // Name/surname inputs
+            document.getElementById('signer-name').addEventListener('input', updateSubmitButton);
+            document.getElementById('signer-surname').addEventListener('input', updateSubmitButton);
+            
             // Submit
             document.getElementById('submit-btn').addEventListener('click', submitSignature);
         }
 
         function updateSubmitButton() {
             const btn = document.getElementById('submit-btn');
-            btn.disabled = consentChoice === null || !signatureData;
+            const name = document.getElementById('signer-name')?.value?.trim();
+            const surname = document.getElementById('signer-surname')?.value?.trim();
+            btn.disabled = consentChoice === null || !signatureData || !name || !surname;
         }
 
         async function submitSignature() {
@@ -380,7 +433,9 @@
                     body: JSON.stringify({
                         consentGiven: consentChoice,
                         signatureImage: signatureData,
-                        signatureMethod: signatureMethod
+                        signatureMethod: signatureMethod,
+                        signerName: document.getElementById('signer-name').value.trim(),
+                        signerSurname: document.getElementById('signer-surname').value.trim()
                     })
                 });
                 

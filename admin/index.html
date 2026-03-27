@@ -1822,9 +1822,7 @@ Buono studio!</textarea>
                 const data = await res.json();
                 adminToken = data.token;
                 sessionStorage.setItem('adminToken', adminToken);
-                await checkAuth();
-                // Carica i dati dopo il login
-                loadFaculty(); loadBlogPosts(); loadPartners(); loadResources(); loadModules(); loadLessons(); loadLmsCourses();
+                await checkAuth(); // checkAuth già carica tutti i dati
             } catch (err) {
                 errorEl.textContent = 'Errore di connessione';
                 errorEl.style.display = 'block';

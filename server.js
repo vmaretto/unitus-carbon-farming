@@ -1328,7 +1328,7 @@ app.post('/api/resources/notify-test', requireAdmin, async (req, res) => {
     res.json({ success: true, message: `Email di test inviata a ${testEmail}` });
   } catch (error) {
     console.error('Error sending test email:', error);
-    res.status(500).json({ error: 'Errore durante l\'invio dell\'email di test' });
+    res.status(500).json({ error: 'Errore durante l\'invio dell\'email di test', details: error.message || String(error) });
   }
 });
 

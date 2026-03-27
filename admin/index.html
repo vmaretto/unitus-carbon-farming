@@ -4426,7 +4426,9 @@ Buono studio!</textarea>
             const id = row.dataset.id;
 
             if (e.target.closest('[data-edit-enroll]')) {
+                console.log('Edit clicked, id:', id);
                 const en = state.lmsEnrollments.find(x => x.id === id);
+                console.log('Found enrollment:', en);
                 if (!en) return;
                 document.getElementById('lms-enroll-email').value = en.email || '';
                 document.getElementById('lms-enroll-firstname').value = en.firstName || '';

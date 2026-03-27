@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-27-v16'; // Per debug deploy
+const BUILD_VERSION = '2026-03-27-v17'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {

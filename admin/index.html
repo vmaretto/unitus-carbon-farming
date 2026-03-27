@@ -1077,6 +1077,57 @@ Buono studio!</textarea>
                 </div>
             </div>
 
+            <!-- Sezione Documenti e Liberatorie -->
+            <div style="margin: 20px 0; padding: 16px; background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%); border-radius: 12px; border: 1px solid #eab308;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 style="margin: 0; color: #a16207;">📄 Documenti e Liberatorie</h4>
+                    <button id="add-document-btn" class="secondary" style="font-size: 0.85rem;">+ Nuovo documento</button>
+                </div>
+                <div id="documents-list" style="margin-bottom: 12px;">
+                    <p style="color: var(--gray-500); font-size: 0.9rem;">Caricamento...</p>
+                </div>
+            </div>
+            
+            <!-- Modale nuovo documento -->
+            <div id="document-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+                <div style="background: white; padding: 24px; border-radius: 16px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
+                    <h3 style="margin: 0 0 16px;">📄 Nuovo documento</h3>
+                    <form id="document-form">
+                        <label style="display: block; margin-bottom: 12px;">
+                            Titolo *
+                            <input type="text" id="doc-title" required style="width: 100%; margin-top: 6px;">
+                        </label>
+                        <label style="display: block; margin-bottom: 12px;">
+                            Contenuto (HTML) *
+                            <textarea id="doc-content" required rows="10" style="width: 100%; margin-top: 6px; font-family: monospace; font-size: 0.85rem;"></textarea>
+                        </label>
+                        <p style="font-size: 0.8rem; color: var(--gray-500); margin: -8px 0 12px;">
+                            Puoi usare HTML per formattare il documento. Esempio: &lt;h2&gt;Titolo&lt;/h2&gt;, &lt;p&gt;Paragrafo&lt;/p&gt;, &lt;ul&gt;&lt;li&gt;Elenco&lt;/li&gt;&lt;/ul&gt;
+                        </p>
+                        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                            <button type="button" class="secondary" onclick="closeDocumentModal()">Annulla</button>
+                            <button type="submit" style="background: var(--green-500); color: white;">Salva documento</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Modale firme documento -->
+            <div id="signatures-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+                <div style="background: white; padding: 24px; border-radius: 16px; max-width: 800px; width: 90%; max-height: 90vh; overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="margin: 0;">📝 Stato firme</h3>
+                        <button id="export-signatures-btn" class="secondary" style="font-size: 0.85rem;">📥 Esporta CSV</button>
+                    </div>
+                    <div id="signatures-content">
+                        <p>Caricamento...</p>
+                    </div>
+                    <div style="margin-top: 16px; text-align: right;">
+                        <button class="secondary" onclick="closeSignaturesModal()">Chiudi</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Quiz Preliminare con AI -->
             <div style="margin: 20px 0; padding: 16px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 12px; border: 1px solid #0ea5e9;">
                 <h4 style="margin: 0 0 12px; color: #0369a1;">🤖 Quiz Preliminare (AI)</h4>
@@ -2055,6 +2106,138 @@ Buono studio!</textarea>
             }
         });
 
+        // ============================================
+        // DOCUMENTI E LIBERATORIE
+        // ============================================
+        
+        let currentDocumentId = null;
+        
+        async function loadDocuments() {
+            try {
+                const docs = await apiRequest('/api/documents');
+                const container = document.getElementById('documents-list');
+                
+                if (docs.length === 0) {
+                    container.innerHTML = '<p style="color: var(--gray-500); font-size: 0.9rem;">Nessun documento caricato.</p>';
+                    return;
+                }
+                
+                container.innerHTML = docs.map(doc => `
+                    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>${doc.title}</strong>
+                                <span style="font-size: 0.8rem; color: var(--gray-500); margin-left: 8px;">
+                                    ${doc.signature_count || 0} firme (${doc.consent_count || 0} consensi)
+                                </span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="secondary" style="font-size: 0.8rem; padding: 4px 8px;" onclick="viewSignatures('${doc.id}', '${doc.title.replace(/'/g, "\\'")}')">
+                                    👁️ Firme
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                document.getElementById('documents-list').innerHTML = '<p style="color: red;">Errore nel caricamento</p>';
+            }
+        }
+        
+        function openDocumentModal() {
+            document.getElementById('document-modal').style.display = 'flex';
+        }
+        
+        function closeDocumentModal() {
+            document.getElementById('document-modal').style.display = 'none';
+            document.getElementById('document-form').reset();
+        }
+        
+        function closeSignaturesModal() {
+            document.getElementById('signatures-modal').style.display = 'none';
+        }
+        
+        async function viewSignatures(docId, docTitle) {
+            currentDocumentId = docId;
+            document.getElementById('signatures-modal').style.display = 'flex';
+            document.getElementById('signatures-content').innerHTML = '<p>Caricamento...</p>';
+            
+            try {
+                const [signatures, enrollments] = await Promise.all([
+                    apiRequest(`/api/documents/${docId}/signatures`),
+                    apiRequest('/api/lms/enrollments?courseEditionId=563e9876-8a08-4ee7-954a-79a16c39ab53')
+                ]);
+                
+                // Mappa firme per email
+                const signedMap = new Map(signatures.map(s => [s.email.toLowerCase(), s]));
+                
+                // Costruisci lista completa
+                let html = `<h4 style="margin: 0 0 12px;">${docTitle}</h4>`;
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">';
+                html += '<tr style="background: #f3f4f6;"><th style="padding: 8px; text-align: left;">Studente</th><th style="padding: 8px; text-align: left;">Email</th><th style="padding: 8px; text-align: center;">Stato</th><th style="padding: 8px; text-align: center;">Consenso</th><th style="padding: 8px; text-align: left;">Data</th></tr>';
+                
+                enrollments.forEach(student => {
+                    const sig = signedMap.get(student.email.toLowerCase());
+                    const name = [student.firstName, student.lastName].filter(Boolean).join(' ') || 'N/D';
+                    const stato = sig ? '✅ Firmato' : '⏳ In attesa';
+                    const consenso = sig ? (sig.consent_given ? '✓ Sì' : '✗ No') : '-';
+                    const data = sig ? new Date(sig.signed_at).toLocaleString('it-IT') : '-';
+                    
+                    html += `<tr style="border-bottom: 1px solid #e5e7eb;">
+                        <td style="padding: 8px;">${name}</td>
+                        <td style="padding: 8px;">${student.email}</td>
+                        <td style="padding: 8px; text-align: center;">${stato}</td>
+                        <td style="padding: 8px; text-align: center; ${sig && !sig.consent_given ? 'color: red;' : ''}">${consenso}</td>
+                        <td style="padding: 8px;">${data}</td>
+                    </tr>`;
+                });
+                
+                html += '</table>';
+                html += `<p style="margin-top: 12px; color: var(--gray-500); font-size: 0.85rem;">Firmati: ${signatures.length}/${enrollments.length}</p>`;
+                
+                document.getElementById('signatures-content').innerHTML = html;
+            } catch (error) {
+                document.getElementById('signatures-content').innerHTML = '<p style="color: red;">Errore: ' + error.message + '</p>';
+            }
+        }
+        
+        document.getElementById('add-document-btn').addEventListener('click', openDocumentModal);
+        
+        document.getElementById('document-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.textContent = 'Salvataggio...';
+            
+            try {
+                await apiRequest('/api/documents', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        title: document.getElementById('doc-title').value,
+                        content: document.getElementById('doc-content').value,
+                        courseEditionId: '563e9876-8a08-4ee7-954a-79a16c39ab53'
+                    })
+                });
+                showToast('✅ Documento salvato', 'success');
+                closeDocumentModal();
+                loadDocuments();
+            } catch (error) {
+                showToast('Errore: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Salva documento';
+            }
+        });
+        
+        document.getElementById('export-signatures-btn').addEventListener('click', () => {
+            if (currentDocumentId) {
+                window.open(`/api/documents/${currentDocumentId}/export?token=${adminToken}`, '_blank');
+            }
+        });
+        
+        // Carica documenti all'avvio
+        loadDocuments();
+        
         // Quiz preliminare con AI
         document.getElementById('generate-preliminary-quiz-btn').addEventListener('click', async () => {
             const btn = document.getElementById('generate-preliminary-quiz-btn');

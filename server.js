@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-27-v5'; // Per debug deploy
+const BUILD_VERSION = '2026-03-27-v6'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -4578,6 +4578,29 @@ app.get('/api/documents/:id/signatures', requireAdmin, async (req, res) => {
   }
 });
 
+// Admin: crea documento
+app.post('/api/documents', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { title, content, courseEditionId } = req.body;
+    
+    if (!title || !content) {
+      return res.status(400).json({ error: 'Titolo e contenuto sono obbligatori' });
+    }
+    
+    const { rows } = await pool.query(`
+      INSERT INTO documents (title, content, course_edition_id)
+      VALUES ($1, $2, $3)
+      RETURNING id, title
+    `, [title, content, courseEditionId || '563e9876-8a08-4ee7-954a-79a16c39ab53']);
+    
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error creating document:', error);
+    res.status(500).json({ error: 'Errore nella creazione del documento' });
+  }
+});
+
 // Admin: lista documenti
 app.get('/api/documents', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
@@ -4598,7 +4621,13 @@ app.get('/api/documents', requireAdmin, async (req, res) => {
 });
 
 // Admin: export firme CSV
-app.get('/api/documents/:id/export', requireAdmin, async (req, res) => {
+app.get('/api/documents/:id/export', (req, res, next) => {
+  // Permetti token anche come query param per download diretto
+  if (req.query.token && !req.headers.authorization) {
+    req.headers.authorization = 'Bearer ' + req.query.token;
+  }
+  requireAdmin(req, res, next);
+}, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { rows } = await pool.query(`

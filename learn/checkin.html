@@ -100,6 +100,16 @@
         function updateButton() {
             checkinBtn.disabled = getPin().length !== 6;
         }
+        
+        // Auto-fill da URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const codeFromUrl = urlParams.get('code');
+        if (codeFromUrl && codeFromUrl.length === 6) {
+            codeFromUrl.split('').forEach((digit, i) => {
+                if (inputs[i]) inputs[i].value = digit;
+            });
+            updateButton();
+        }
 
         // Auto-advance on input, allow backspace
         inputs.forEach((input, idx) => {
@@ -144,6 +154,7 @@
             if (code.length !== 6) return;
 
             checkinBtn.disabled = true;
+            checkinBtn.textContent = 'Verifica in corso...';
             resultDiv.style.display = 'none';
 
             try {
@@ -161,18 +172,21 @@
                 if (res.ok && data.success) {
                     resultDiv.className = 'result success';
                     resultDiv.style.display = '';
-                    resultDiv.textContent = data.message + (data.lessonTitle ? ` — ${data.lessonTitle}` : '');
+                    resultDiv.textContent = '✅ ' + data.message + (data.lessonTitle ? ` — ${data.lessonTitle}` : '');
+                    checkinBtn.textContent = 'Presenza registrata!';
                 } else {
                     resultDiv.className = 'result error';
                     resultDiv.style.display = '';
-                    resultDiv.textContent = data.error || 'Errore nel check-in';
+                    resultDiv.textContent = '❌ ' + (data.error || 'Errore nel check-in');
                     checkinBtn.disabled = false;
+                    checkinBtn.textContent = 'Registra presenza';
                 }
             } catch (error) {
                 resultDiv.className = 'result error';
                 resultDiv.style.display = '';
-                resultDiv.textContent = 'Errore di connessione. Riprova.';
+                resultDiv.textContent = '❌ Errore di connessione. Riprova.';
                 checkinBtn.disabled = false;
+                checkinBtn.textContent = 'Registra presenza';
             }
         }
     })();

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check-in Presenza - Master Carbon Farming</title>
+    <link rel="icon" type="image/png" href="/assets/img/favicon.png">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #166534 0%, #22c55e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            max-width: 500px;
+        }
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }
+        .qr-container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        #qr-code {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        #qr-code img, #qr-code canvas {
+            max-width: 280px;
+            height: auto;
+        }
+        .pin-display {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #166534;
+            letter-spacing: 8px;
+            font-family: 'Courier New', monospace;
+        }
+        .lesson-title {
+            color: #374151;
+            font-size: 1.1rem;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .expires {
+            color: #6b7280;
+            font-size: 0.9rem;
+            margin-top: 8px;
+        }
+        .instructions {
+            background: rgba(255,255,255,0.15);
+            border-radius: 12px;
+            padding: 20px;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+        .instructions ol {
+            text-align: left;
+            margin-left: 20px;
+        }
+        .instructions li {
+            margin: 8px 0;
+        }
+        .no-code {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            color: #374151;
+        }
+        .no-code h2 {
+            color: #dc2626;
+            margin-bottom: 12px;
+        }
+        .refresh-btn {
+            margin-top: 20px;
+            padding: 12px 24px;
+            background: white;
+            color: #166534;
+            border: none;
+            border-radius: 999px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .refresh-btn:hover {
+            background: #f0fdf4;
+        }
+        .countdown {
+            font-size: 1.2rem;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌱 Master Carbon Farming</h1>
+        <p class="subtitle">Registrazione presenza</p>
+        
+        <div id="content">
+            <div class="no-code">
+                <h2>Caricamento...</h2>
+            </div>
+        </div>
+        
+        <button class="refresh-btn" onclick="loadCode()">🔄 Aggiorna</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <script>
+        let countdownInterval;
+        
+        async function loadCode() {
+            try {
+                const res = await fetch('/api/attendance/active-code');
+                const data = await res.json();
+                
+                if (data.code) {
+                    renderCode(data);
+                } else {
+                    document.getElementById('content').innerHTML = `
+                        <div class="no-code">
+                            <h2>Nessun check-in attivo</h2>
+                            <p>Il docente deve attivare il check-in dalla dashboard admin.</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('content').innerHTML = `
+                    <div class="no-code">
+                        <h2>Errore di connessione</h2>
+                        <p>Impossibile caricare il codice. Riprova.</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function renderCode(data) {
+            const expiresAt = new Date(data.expiresAt);
+            
+            document.getElementById('content').innerHTML = `
+                <div class="qr-container">
+                    <div id="qr-code"></div>
+                    <div class="pin-display">${data.code}</div>
+                    <div class="lesson-title">${data.lessonTitle || 'Lezione'}</div>
+                    <div class="expires">Scade: <span id="countdown"></span></div>
+                </div>
+                <div class="instructions">
+                    <ol>
+                        <li>Apri la piattaforma: <strong>unitus.carbonfarmingmaster.it/learn</strong></li>
+                        <li>Vai su <strong>Check-in</strong> nel menu</li>
+                        <li>Scansiona il QR o inserisci il codice <strong>${data.code}</strong></li>
+                    </ol>
+                </div>
+            `;
+            
+            // Genera QR
+            const qrUrl = 'https://unitus.carbonfarmingmaster.it/learn/checkin.html?code=' + data.code;
+            QRCode.toCanvas(document.createElement('canvas'), qrUrl, { width: 280 }, (err, canvas) => {
+                if (!err) document.getElementById('qr-code').appendChild(canvas);
+            });
+            
+            // Countdown
+            updateCountdown(expiresAt);
+            if (countdownInterval) clearInterval(countdownInterval);
+            countdownInterval = setInterval(() => updateCountdown(expiresAt), 1000);
+        }
+        
+        function updateCountdown(expiresAt) {
+            const now = new Date();
+            const diff = expiresAt - now;
+            
+            if (diff <= 0) {
+                document.getElementById('countdown').textContent = 'SCADUTO';
+                document.getElementById('countdown').style.color = '#dc2626';
+                clearInterval(countdownInterval);
+                setTimeout(loadCode, 2000);
+                return;
+            }
+            
+            const mins = Math.floor(diff / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+            document.getElementById('countdown').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        loadCode();
+        // Auto-refresh ogni 30 secondi
+        setInterval(loadCode, 30000);
+    </script>
+</body>
+</html>

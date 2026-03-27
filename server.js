@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-27-v17'; // Per debug deploy
+const BUILD_VERSION = '2026-03-27-v18'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -3618,6 +3618,34 @@ app.post('/api/attendance/generate-code', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error generating attendance code', error);
     res.status(500).json({ error: 'Unable to generate code' });
+  }
+});
+
+// Pubblico: ottieni codice check-in attivo (per display)
+app.get('/api/attendance/active-code', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT ac.code, ac.expires_at, l.title as lesson_title
+      FROM attendance_codes ac
+      LEFT JOIN lessons l ON l.id = ac.lesson_id
+      WHERE ac.expires_at > NOW()
+      ORDER BY ac.created_at DESC
+      LIMIT 1
+    `);
+    
+    if (rows.length === 0) {
+      return res.json({ code: null });
+    }
+    
+    res.json({
+      code: rows[0].code,
+      expiresAt: rows[0].expires_at,
+      lessonTitle: rows[0].lesson_title
+    });
+  } catch (error) {
+    console.error('Error fetching active code:', error);
+    res.status(500).json({ error: 'Errore' });
   }
 });
 

@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-27-v6'; // Per debug deploy
+const BUILD_VERSION = '2026-03-27-v7'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -4485,6 +4485,52 @@ app.get('/api/quiz-attempts/my', async (req, res) => {
 // API DOCUMENTI E FIRME
 // ============================================
 
+// Documenti già firmati dallo studente
+app.get('/api/documents/my-signed', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const userId = req.user.userId;
+    
+    const { rows } = await pool.query(`
+      SELECT ds.document_id, d.title, ds.consent_given, ds.signed_at
+      FROM document_signatures ds
+      JOIN documents d ON d.id = ds.document_id
+      WHERE ds.user_id = $1
+      ORDER BY ds.signed_at DESC
+    `, [userId]);
+    
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching signed documents:', error);
+    res.status(500).json({ error: 'Errore nel caricamento documenti firmati' });
+  }
+});
+
+// Dettaglio firma studente per un documento
+app.get('/api/documents/:id/my-signature', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const userId = req.user.userId;
+    const documentId = req.params.id;
+    
+    const { rows } = await pool.query(`
+      SELECT d.title, d.content, ds.consent_given, ds.signature_image, ds.signature_method, ds.signed_at
+      FROM document_signatures ds
+      JOIN documents d ON d.id = ds.document_id
+      WHERE ds.document_id = $1 AND ds.user_id = $2
+    `, [documentId, userId]);
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Firma non trovata' });
+    }
+    
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching signature:', error);
+    res.status(500).json({ error: 'Errore nel caricamento firma' });
+  }
+});
+
 // Documenti da firmare per lo studente (pending)
 app.get('/api/documents/pending', requireStudent, async (req, res) => {
   if (!ensurePool(res)) return;
@@ -4556,6 +4602,29 @@ app.post('/api/documents/:id/sign', requireStudent, async (req, res) => {
   } catch (error) {
     console.error('Error signing document:', error);
     res.status(500).json({ error: 'Errore nella firma del documento' });
+  }
+});
+
+// Admin: dettaglio singola firma
+app.get('/api/signatures/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT ds.*, u.email, u.first_name, u.last_name, d.title
+      FROM document_signatures ds
+      JOIN users u ON u.id = ds.user_id
+      JOIN documents d ON d.id = ds.document_id
+      WHERE ds.id = $1
+    `, [req.params.id]);
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Firma non trovata' });
+    }
+    
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching signature:', error);
+    res.status(500).json({ error: 'Errore nel caricamento firma' });
   }
 });
 

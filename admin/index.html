@@ -2174,7 +2174,7 @@ Buono studio!</textarea>
                 // Costruisci lista completa
                 let html = `<h4 style="margin: 0 0 12px;">${docTitle}</h4>`;
                 html += '<table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">';
-                html += '<tr style="background: #f3f4f6;"><th style="padding: 8px; text-align: left;">Studente</th><th style="padding: 8px; text-align: left;">Email</th><th style="padding: 8px; text-align: center;">Stato</th><th style="padding: 8px; text-align: center;">Consenso</th><th style="padding: 8px; text-align: left;">Data</th></tr>';
+                html += '<tr style="background: #f3f4f6;"><th style="padding: 8px; text-align: left;">Studente</th><th style="padding: 8px; text-align: left;">Email</th><th style="padding: 8px; text-align: center;">Stato</th><th style="padding: 8px; text-align: center;">Consenso</th><th style="padding: 8px; text-align: left;">Data</th><th style="padding: 8px; text-align: center;">Firma</th></tr>';
                 
                 enrollments.forEach(student => {
                     const sig = signedMap.get(student.email.toLowerCase());
@@ -2182,6 +2182,7 @@ Buono studio!</textarea>
                     const stato = sig ? '✅ Firmato' : '⏳ In attesa';
                     const consenso = sig ? (sig.consent_given ? '✓ Sì' : '✗ No') : '-';
                     const data = sig ? new Date(sig.signed_at).toLocaleString('it-IT') : '-';
+                    const viewBtn = sig ? `<button class="secondary" style="font-size: 0.75rem; padding: 2px 6px;" onclick="viewStudentSignature('${sig.id}')">👁️</button>` : '';
                     
                     html += `<tr style="border-bottom: 1px solid #e5e7eb;">
                         <td style="padding: 8px;">${name}</td>
@@ -2189,6 +2190,7 @@ Buono studio!</textarea>
                         <td style="padding: 8px; text-align: center;">${stato}</td>
                         <td style="padding: 8px; text-align: center; ${sig && !sig.consent_given ? 'color: red;' : ''}">${consenso}</td>
                         <td style="padding: 8px;">${data}</td>
+                        <td style="padding: 8px; text-align: center;">${viewBtn}</td>
                     </tr>`;
                 });
                 
@@ -2234,6 +2236,43 @@ Buono studio!</textarea>
                 window.open(`/api/documents/${currentDocumentId}/export?token=${adminToken}`, '_blank');
             }
         });
+        
+        async function viewStudentSignature(signatureId) {
+            try {
+                const sig = await apiRequest(`/api/signatures/${signatureId}`);
+                
+                const modal = document.createElement('div');
+                modal.id = 'signature-view-modal';
+                modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1001; display: flex; align-items: center; justify-content: center;';
+                modal.innerHTML = `
+                    <div style="background: white; padding: 24px; border-radius: 16px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
+                        <h3 style="margin: 0 0 16px;">📄 Documento firmato</h3>
+                        <div style="background: ${sig.consent_given ? '#dcfce7' : '#fef2f2'}; border: 1px solid ${sig.consent_given ? '#16a34a' : '#dc2626'}; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                            <strong>${sig.consent_given ? '✅ Consenso prestato' : '❌ Consenso negato'}</strong><br>
+                            <span style="font-size: 0.85rem; color: #666;">
+                                ${sig.first_name || ''} ${sig.last_name || ''} (${sig.email})<br>
+                                Firmato: ${new Date(sig.signed_at).toLocaleString('it-IT')}<br>
+                                IP: ${sig.ip_address || 'N/D'}
+                            </span>
+                        </div>
+                        <h4 style="margin: 0 0 8px;">✍️ Firma</h4>
+                        <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; text-align: center; background: #fafafa;">
+                            <img src="${sig.signature_image}" alt="Firma" style="max-width: 100%; max-height: 150px;">
+                            <div style="font-size: 0.8rem; color: #666; margin-top: 8px;">
+                                Metodo: ${sig.signature_method === 'upload' ? 'Immagine caricata' : 'Disegnata'}
+                            </div>
+                        </div>
+                        <div style="margin-top: 16px; text-align: right;">
+                            <button class="secondary" onclick="document.getElementById('signature-view-modal').remove()">Chiudi</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+            } catch (error) {
+                showToast('Errore: ' + error.message, 'error');
+            }
+        }
         
         // Carica documenti all'avvio
         loadDocuments();

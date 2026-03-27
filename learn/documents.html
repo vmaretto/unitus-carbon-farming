@@ -100,28 +100,61 @@
 
         async function loadDocuments() {
             try {
-                const res = await fetch('/api/documents/pending', {
-                    headers: { 'Authorization': 'Bearer ' + token }
-                });
-                if (!res.ok) throw new Error('Errore nel caricamento');
-                const docs = await res.json();
+                // Carica sia documenti pending che firmati
+                const [pendingRes, signedRes] = await Promise.all([
+                    fetch('/api/documents/pending', { headers: { 'Authorization': 'Bearer ' + token } }),
+                    fetch('/api/documents/my-signed', { headers: { 'Authorization': 'Bearer ' + token } })
+                ]);
                 
-                if (docs.length === 0) {
-                    document.getElementById('content').innerHTML = `
-                        <div class="card">
-                            <div class="already-signed">
-                                <h3>✅ Nessun documento da firmare</h3>
-                                <p>Hai già firmato tutti i documenti richiesti.</p>
-                                <br>
-                                <a href="/learn/" class="btn btn-secondary">Torna alla dashboard</a>
-                            </div>
-                        </div>
-                    `;
+                if (!pendingRes.ok) throw new Error('Errore nel caricamento');
+                
+                const pendingDocs = await pendingRes.json();
+                const signedDocs = signedRes.ok ? await signedRes.json() : [];
+                
+                let html = '';
+                
+                // Documenti da firmare
+                if (pendingDocs.length > 0) {
+                    currentDocument = pendingDocs[0];
+                    renderDocument(currentDocument);
                     return;
                 }
                 
-                currentDocument = docs[0];
-                renderDocument(currentDocument);
+                // Se non ci sono pending, mostra i firmati
+                html += `<div class="card">
+                    <div class="already-signed">
+                        <h3>✅ Nessun documento da firmare</h3>
+                        <p>Hai già firmato tutti i documenti richiesti.</p>
+                    </div>
+                </div>`;
+                
+                if (signedDocs.length > 0) {
+                    html += `<div class="card" style="margin-top: 20px;">
+                        <h2>📋 Documenti firmati</h2>
+                        <p style="color: var(--gray-500); margin-bottom: 16px;">Clicca su un documento per visualizzarlo.</p>
+                        ${signedDocs.map(doc => `
+                            <div style="border: 1px solid var(--gray-200); border-radius: 10px; padding: 12px; margin-bottom: 10px; cursor: pointer;" 
+                                 onclick="viewSignedDocument('${doc.document_id}')">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <strong>${doc.title}</strong>
+                                        <div style="font-size: 0.85rem; color: var(--gray-500);">
+                                            ${doc.consent_given ? '✅ Consenso prestato' : '❌ Consenso negato'} • 
+                                            Firmato il ${new Date(doc.signed_at).toLocaleDateString('it-IT')}
+                                        </div>
+                                    </div>
+                                    <span style="color: var(--green-600);">→</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>`;
+                }
+                
+                html += `<div style="text-align: center; margin-top: 20px;">
+                    <a href="/learn/" class="btn btn-secondary">Torna alla dashboard</a>
+                </div>`;
+                
+                document.getElementById('content').innerHTML = html;
             } catch (error) {
                 document.getElementById('content').innerHTML = `
                     <div class="card">
@@ -129,6 +162,48 @@
                         <p>${error.message}</p>
                     </div>
                 `;
+            }
+        }
+        
+        async function viewSignedDocument(docId) {
+            try {
+                const res = await fetch(`/api/documents/${docId}/my-signature`, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) throw new Error('Errore nel caricamento');
+                const data = await res.json();
+                
+                document.getElementById('content').innerHTML = `
+                    <div class="card">
+                        <h2>📋 ${data.title}</h2>
+                        <div style="background: ${data.consent_given ? 'var(--green-50)' : '#fef2f2'}; 
+                                    border: 1px solid ${data.consent_given ? 'var(--green-200)' : '#fecaca'}; 
+                                    border-radius: 10px; padding: 12px; margin-bottom: 16px;">
+                            <strong>${data.consent_given ? '✅ Hai prestato il consenso' : '❌ Hai negato il consenso'}</strong>
+                            <div style="font-size: 0.85rem; color: var(--gray-600);">
+                                Firmato il ${new Date(data.signed_at).toLocaleString('it-IT')}
+                            </div>
+                        </div>
+                        
+                        <div class="document-content" style="margin-bottom: 16px;">
+                            ${data.content}
+                        </div>
+                        
+                        <h3 style="margin-bottom: 12px;">✍️ La tua firma</h3>
+                        <div style="border: 1px solid var(--gray-200); border-radius: 10px; padding: 16px; background: white; text-align: center;">
+                            <img src="${data.signature_image}" alt="Firma" style="max-width: 300px; max-height: 100px;">
+                            <div style="font-size: 0.8rem; color: var(--gray-500); margin-top: 8px;">
+                                Metodo: ${data.signature_method === 'upload' ? 'Immagine caricata' : 'Disegnata'}
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 20px; text-align: center;">
+                            <button class="btn btn-secondary" onclick="loadDocuments()">← Torna ai documenti</button>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                alert('Errore: ' + error.message);
             }
         }
 

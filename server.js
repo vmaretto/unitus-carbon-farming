@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-27-v11'; // Per debug deploy
+const BUILD_VERSION = '2026-03-27-v12'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -38,7 +38,58 @@ const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
 // AUTENTICAZIONE ADMIN
 // ============================================
 const RESEND_API_KEY = process.env.RESEND_API_KEY || null;
+const BREVO_API_KEY = process.env.BREVO_API_KEY || null;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
+
+// Helper per invio email con fallback Resend -> Brevo
+async function sendEmail({ to, subject, html, bcc, from }) {
+  const fromEmail = from || process.env.RESEND_FROM || 'Master Carbon Farming <noreply@carbonfarmingmaster.it>';
+  
+  // Prova prima con Resend
+  if (RESEND_API_KEY) {
+    try {
+      const { Resend } = require('resend');
+      const resend = new Resend(RESEND_API_KEY);
+      const emailData = { from: fromEmail, to, subject, html };
+      if (bcc) emailData.bcc = bcc;
+      await resend.emails.send(emailData);
+      return { success: true, provider: 'resend' };
+    } catch (resendError) {
+      console.log('Resend failed, trying Brevo...', resendError.message);
+    }
+  }
+  
+  // Fallback a Brevo
+  if (BREVO_API_KEY) {
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': BREVO_API_KEY,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: { name: 'Master Carbon Farming', email: 'noreply@carbonfarmingmaster.it' },
+          to: [{ email: to }],
+          bcc: bcc ? [{ email: bcc }] : undefined,
+          subject,
+          htmlContent: html
+        })
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Brevo error');
+      }
+      return { success: true, provider: 'brevo' };
+    } catch (brevoError) {
+      console.error('Brevo failed:', brevoError.message);
+      throw brevoError;
+    }
+  }
+  
+  throw new Error('Nessun provider email configurato');
+}
 const JWT_SECRET = process.env.JWT_SECRET || (ADMIN_PASSWORD ? crypto.randomBytes(32).toString('hex') : null);
 
 function generateToken(payload) {
@@ -1417,9 +1468,6 @@ app.post('/api/resources/notify', requireAdmin, async (req, res) => {
     }
 
     // Invia email a ciascuno studente
-    const { Resend } = require('resend');
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    
     let sent = 0;
     let errors = [];
 
@@ -1429,10 +1477,10 @@ app.post('/api/resources/notify', requireAdmin, async (req, res) => {
           .replace('{nome}', student.first_name || 'Studente')
           .replace('{cognome}', student.last_name || '');
 
-        const emailData = {
-          from: process.env.RESEND_FROM || 'Master Carbon Farming <noreply@carbonfarmingmaster.it>',
+        await sendEmail({
           to: student.email,
           subject: subject,
+          bcc: bccEmail,
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <div style="background: linear-gradient(135deg, #166534 0%, #22c55e 100%); padding: 20px; border-radius: 12px 12px 0 0;">
@@ -1447,14 +1495,7 @@ app.post('/api/resources/notify', requireAdmin, async (req, res) => {
               </div>
             </div>
           `
-        };
-        
-        // Aggiungi BCC se specificato
-        if (bccEmail) {
-          emailData.bcc = bccEmail;
-        }
-        
-        await resend.emails.send(emailData);
+        });
         sent++;
       } catch (emailError) {
         console.error(`Error sending to ${student.email}:`, emailError);

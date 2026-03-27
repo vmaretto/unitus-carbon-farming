@@ -1750,6 +1750,8 @@ Buono studio!</textarea>
                     mainContent.style.display = '';
                     headerEl.style.display = '';
                     document.getElementById('logout-btn').style.display = 'none';
+                    // Carica documenti
+                    if (typeof loadDocuments === 'function') loadDocuments();
                     return true;
                 }
             } catch (e) {
@@ -1766,6 +1768,8 @@ Buono studio!</textarea>
                         loginGate.style.display = 'none';
                         mainContent.style.display = '';
                         headerEl.style.display = '';
+                        // Carica documenti dopo autenticazione
+                        if (typeof loadDocuments === 'function') loadDocuments();
                         return true;
                     }
                 } catch (e) {}
@@ -2274,8 +2278,7 @@ Buono studio!</textarea>
             }
         }
         
-        // Carica documenti all'avvio
-        loadDocuments();
+        // Carica documenti quando autenticato (viene chiamato da checkAuth)
         
         // Quiz preliminare con AI
         document.getElementById('generate-preliminary-quiz-btn').addEventListener('click', async () => {

@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-27-v20'; // Per debug deploy
+const BUILD_VERSION = '2026-03-27-v21'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -3621,6 +3621,27 @@ app.post('/api/attendance/generate-code', requireAdmin, async (req, res) => {
   }
 });
 
+// Admin: lista lezioni per filtro report presenze
+app.get('/api/attendance/lessons/:courseEditionId', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { courseEditionId } = req.params;
+  try {
+    const { rows } = await pool.query(`
+      SELECT l.id, l.title, l.start_datetime AS "startDatetime"
+      FROM lessons l
+      JOIN modules m ON m.id = l.module_id
+      JOIN courses c ON c.id = m.course_id
+      JOIN course_editions ce ON ce.course_id = c.id
+      WHERE ce.id = $1 AND l.status != 'cancelled'
+      ORDER BY l.start_datetime ASC
+    `, [courseEditionId]);
+    res.json({ lessons: rows });
+  } catch (error) {
+    console.error('Error fetching lessons for attendance:', error);
+    res.status(500).json({ error: 'Errore' });
+  }
+});
+
 // Pubblico: ottieni codice check-in attivo (per display)
 app.get('/api/attendance/active-code', async (req, res) => {
   if (!ensurePool(res)) return;
@@ -3846,6 +3867,9 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
       const total = inPerson + remoteLive + async;
       const percentage = totalLessons > 0 ? Math.round((total / totalLessons) * 100) : 0;
 
+      // Per singola lezione, includi dettagli presenza
+      const singleLessonAttendance = lessonId && filteredAttendances.length > 0 ? filteredAttendances[0] : null;
+      
       return {
         id: s.id,
         email: s.email,
@@ -3857,6 +3881,10 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
         total,
         totalLessons,
         percentage,
+        // Campi per vista singola lezione
+        attendanceType: singleLessonAttendance?.attendance_type,
+        method: singleLessonAttendance?.method,
+        checkInAt: singleLessonAttendance?.check_in_at,
         attendances: filteredAttendances.map(a => ({
           lessonId: a.lesson_id,
           lmsLessonId: a.lms_lesson_id,

@@ -1539,29 +1539,38 @@ Buono studio!</textarea>
 
                 <!-- Report presenze -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
-                    <h3 style="font-size: 1.1rem; margin: 0; color: var(--green-700);">Report presenze</h3>
+                    <h3 style="font-size: 1.1rem; margin: 0; color: var(--green-700);">📊 Report presenze</h3>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                        <select id="att-filter-lesson" style="font-size: 0.85rem; min-width: 200px;">
+                            <option value="">📅 Tutte le lezioni</option>
+                        </select>
                         <select id="att-filter-type" style="font-size: 0.85rem;">
                             <option value="">Tutti i tipi</option>
-                            <option value="in_person">In persona</option>
-                            <option value="remote_live">Da remoto</option>
-                            <option value="async">Asincrona</option>
+                            <option value="in_person">🏫 In presenza</option>
+                            <option value="remote_live">💻 Da remoto</option>
+                            <option value="async">📹 Asincrona</option>
                         </select>
-                        <button class="secondary" id="att-export-csv">Esporta CSV</button>
-                        <button class="secondary" id="att-refresh">Aggiorna</button>
+                        <button class="secondary" id="att-export-csv">📥 Esporta CSV</button>
+                        <button class="secondary" id="att-refresh">🔄</button>
                     </div>
+                </div>
+                
+                <!-- Info lezione selezionata -->
+                <div id="att-lesson-info" style="display: none; background: var(--green-50); border: 1px solid var(--green-200); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <strong id="att-lesson-title"></strong>
+                    <span id="att-lesson-date" style="margin-left: 12px; color: var(--gray-600);"></span>
                 </div>
 
                 <div class="table-wrapper">
                     <table>
                         <thead>
-                            <tr>
+                            <tr id="att-table-header">
                                 <th>Cognome</th>
                                 <th>Nome</th>
                                 <th>Email</th>
-                                <th>In persona</th>
-                                <th>Da remoto</th>
-                                <th>Asincrona</th>
+                                <th>🏫 In presenza</th>
+                                <th>💻 Da remoto</th>
+                                <th>📹 Asincrona</th>
                                 <th>Totale</th>
                                 <th>%</th>
                             </tr>
@@ -4747,39 +4756,122 @@ Buono studio!</textarea>
         });
 
         // Report presenze
+        let attLessonsCache = [];
+        
+        async function loadAttLessons(courseEditionId) {
+            // Carica lista lezioni per il filtro
+            try {
+                const data = await apiRequest(`/api/attendance/lessons/${courseEditionId}`);
+                attLessonsCache = data.lessons || [];
+                const select = document.getElementById('att-filter-lesson');
+                select.innerHTML = '<option value="">📅 Tutte le lezioni (report totale)</option>' +
+                    attLessonsCache.map(l => {
+                        const date = l.startDatetime ? new Date(l.startDatetime).toLocaleDateString('it-IT') : '';
+                        return `<option value="${l.id}" data-title="${l.title}" data-date="${date}">${date} — ${l.title}</option>`;
+                    }).join('');
+            } catch (error) {
+                console.error('Error loading lessons for filter', error);
+            }
+        }
+        
         async function loadAttReport(courseEditionId) {
             const type = document.getElementById('att-filter-type').value;
+            const lessonId = document.getElementById('att-filter-lesson').value;
             try {
                 const params = new URLSearchParams();
                 if (type) params.set('type', type);
+                if (lessonId) params.set('lessonId', lessonId);
                 const data = await apiRequest(`/api/attendance/report/${courseEditionId}?${params}`);
                 state.attendanceReport = data.students || [];
-                renderAttReport(data);
+                renderAttReport(data, lessonId);
             } catch (error) {
                 console.error('Error loading attendance report', error);
             }
         }
 
-        function renderAttReport(data) {
+        function renderAttReport(data, lessonId) {
             const tbody = document.getElementById('att-report-body');
+            const lessonInfo = document.getElementById('att-lesson-info');
+            const tableHeader = document.getElementById('att-table-header');
+            
+            // Mostra info lezione se selezionata
+            if (lessonId) {
+                const selectedOption = document.querySelector(`#att-filter-lesson option[value="${lessonId}"]`);
+                if (selectedOption) {
+                    document.getElementById('att-lesson-title').textContent = selectedOption.dataset.title;
+                    document.getElementById('att-lesson-date').textContent = selectedOption.dataset.date;
+                    lessonInfo.style.display = 'block';
+                }
+                // Header per singola lezione
+                tableHeader.innerHTML = `
+                    <th>Cognome</th>
+                    <th>Nome</th>
+                    <th>Email</th>
+                    <th>Presente</th>
+                    <th>Tipo</th>
+                    <th>Metodo</th>
+                    <th>Ora check-in</th>
+                `;
+            } else {
+                lessonInfo.style.display = 'none';
+                // Header per report totale
+                tableHeader.innerHTML = `
+                    <th>Cognome</th>
+                    <th>Nome</th>
+                    <th>Email</th>
+                    <th>🏫 In presenza</th>
+                    <th>💻 Da remoto</th>
+                    <th>📹 Asincrona</th>
+                    <th>Totale</th>
+                    <th>%</th>
+                `;
+            }
+            
             if (!data.students || !data.students.length) {
-                tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nessun dato di presenze.</td></tr>';
+                const cols = lessonId ? 7 : 8;
+                tbody.innerHTML = `<tr><td colspan="${cols}" class="empty-state">Nessun dato di presenze.</td></tr>`;
                 return;
             }
-            tbody.innerHTML = data.students.map(s => `
-                <tr>
-                    <td>${s.lastName || ''}</td>
-                    <td>${s.firstName || ''}</td>
-                    <td>${s.email}</td>
-                    <td>${s.inPerson}</td>
-                    <td>${s.remoteLive}</td>
-                    <td>${s.async}</td>
-                    <td><strong>${s.total}</strong>/${s.totalLessons}</td>
-                    <td>${s.percentage}%</td>
-                </tr>
-            `).join('');
+            
+            if (lessonId) {
+                // Vista singola lezione
+                tbody.innerHTML = data.students.map(s => {
+                    const present = s.total > 0;
+                    const typeIcon = s.attendanceType === 'in_person' ? '🏫' : s.attendanceType === 'remote_live' ? '💻' : '📹';
+                    const checkTime = s.checkInAt ? new Date(s.checkInAt).toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}) : '—';
+                    return `
+                    <tr style="${present ? '' : 'opacity: 0.5;'}">
+                        <td>${s.lastName || ''}</td>
+                        <td>${s.firstName || ''}</td>
+                        <td>${s.email}</td>
+                        <td>${present ? '✅' : '❌'}</td>
+                        <td>${present ? typeIcon + ' ' + (s.attendanceType || '').replace('_', ' ') : '—'}</td>
+                        <td>${s.method || '—'}</td>
+                        <td>${checkTime}</td>
+                    </tr>
+                `}).join('');
+            } else {
+                // Vista totale
+                tbody.innerHTML = data.students.map(s => `
+                    <tr>
+                        <td>${s.lastName || ''}</td>
+                        <td>${s.firstName || ''}</td>
+                        <td>${s.email}</td>
+                        <td>${s.inPerson}</td>
+                        <td>${s.remoteLive}</td>
+                        <td>${s.async}</td>
+                        <td><strong>${s.total}</strong>/${s.totalLessons}</td>
+                        <td>${s.percentage}%</td>
+                    </tr>
+                `).join('');
+            }
         }
 
+        document.getElementById('att-filter-lesson').addEventListener('change', () => {
+            const editionId = document.getElementById('att-edition-select').value;
+            if (editionId) loadAttReport(editionId);
+        });
+        
         document.getElementById('att-filter-type').addEventListener('change', () => {
             const editionId = document.getElementById('att-edition-select').value;
             if (editionId) loadAttReport(editionId);

@@ -1060,6 +1060,15 @@ Buono studio!</textarea>
                             <p style="font-size: 0.75rem; color: #0369a1; margin: 6px 0 0;">Email reale con nome/cognome dello studente</p>
                         </div>
                         
+                        <!-- BCC per verifica -->
+                        <div style="background: #f3f4f6; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="notify-bcc-enabled">
+                                <span>📋 Ricevi copia di tutte le email (BCC)</span>
+                            </label>
+                            <input type="email" id="notify-bcc-email" placeholder="tua@email.com" value="vmaretto@gmail.com" style="width: 100%; margin-top: 8px; display: none;">
+                        </div>
+                        
                         <div style="display: flex; gap: 12px; justify-content: flex-end;">
                             <button type="button" class="secondary" onclick="closeNotifyModal()">Annulla</button>
                             <button type="submit" style="background: var(--green-500); color: white;">📤 Invia a tutti gli studenti</button>
@@ -2009,6 +2018,11 @@ Buono studio!</textarea>
             }
         });
         
+        // Toggle BCC email input visibility
+        document.getElementById('notify-bcc-enabled').addEventListener('change', (e) => {
+            document.getElementById('notify-bcc-email').style.display = e.target.checked ? 'block' : 'none';
+        });
+        
         document.getElementById('notify-form').addEventListener('submit', async (event) => {
             event.preventDefault();
             const btn = event.target.querySelector('button[type="submit"]');
@@ -2017,12 +2031,19 @@ Buono studio!</textarea>
             btn.textContent = 'Invio in corso...';
 
             try {
+                const payload = {
+                    subject: document.getElementById('notify-subject').value,
+                    message: document.getElementById('notify-message').value
+                };
+                
+                // Aggiungi BCC se abilitato
+                if (document.getElementById('notify-bcc-enabled').checked) {
+                    payload.bccEmail = document.getElementById('notify-bcc-email').value;
+                }
+                
                 const result = await apiRequest('/api/resources/notify', {
                     method: 'POST',
-                    body: JSON.stringify({
-                        subject: document.getElementById('notify-subject').value,
-                        message: document.getElementById('notify-message').value
-                    })
+                    body: JSON.stringify(payload)
                 });
                 showToast(`✅ ${result.message}`, 'success');
                 closeNotifyModal();

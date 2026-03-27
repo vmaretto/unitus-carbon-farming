@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-27-v4'; // Per debug deploy
+const BUILD_VERSION = '2026-03-27-v5'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -1395,7 +1395,7 @@ app.post('/api/resources/notify-single', requireAdmin, async (req, res) => {
 app.post('/api/resources/notify', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   
-  const { subject, message, courseEditionId } = req.body;
+  const { subject, message, courseEditionId, bccEmail } = req.body;
   
   if (!subject || !message) {
     return res.status(400).json({ error: 'Oggetto e messaggio sono obbligatori' });
@@ -1429,7 +1429,7 @@ app.post('/api/resources/notify', requireAdmin, async (req, res) => {
           .replace('{nome}', student.first_name || 'Studente')
           .replace('{cognome}', student.last_name || '');
 
-        await resend.emails.send({
+        const emailData = {
           from: process.env.RESEND_FROM || 'Master Carbon Farming <noreply@carbonfarmingmaster.it>',
           to: student.email,
           subject: subject,
@@ -1447,7 +1447,14 @@ app.post('/api/resources/notify', requireAdmin, async (req, res) => {
               </div>
             </div>
           `
-        });
+        };
+        
+        // Aggiungi BCC se specificato
+        if (bccEmail) {
+          emailData.bcc = bccEmail;
+        }
+        
+        await resend.emails.send(emailData);
         sent++;
       } catch (emailError) {
         console.error(`Error sending to ${student.email}:`, emailError);

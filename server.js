@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-27-v1'; // Per debug deploy
+const BUILD_VERSION = '2026-03-27-v2'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -4266,18 +4266,6 @@ app.get('*', (req, res) => {
   });
 });
 
-async function handler(req, res) {
-  try {
-    await ensureDatabaseInitialized();
-  } catch (error) {
-    console.error('Failed to initialise database', error);
-    res.status(500).json({ error: 'Failed to initialise database connection' });
-    return;
-  }
-
-  return app(req, res);
-}
-
 // ============================================
 // QUIZ ATTEMPTS API
 // ============================================
@@ -4637,6 +4625,19 @@ app.get('/api/documents/:id/export', requireAdmin, async (req, res) => {
     res.status(500).json({ error: 'Errore nell\'export' });
   }
 });
+
+// Handler per Vercel serverless
+async function handler(req, res) {
+  try {
+    await ensureDatabaseInitialized();
+  } catch (error) {
+    console.error('Failed to initialise database', error);
+    res.status(500).json({ error: 'Failed to initialise database connection' });
+    return;
+  }
+
+  return app(req, res);
+}
 
 if (require.main === module) {
   ensureDatabaseInitialized()

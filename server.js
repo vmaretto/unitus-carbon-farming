@@ -1284,6 +1284,54 @@ app.post('/api/resources/upload', requireAdmin, upload.single('file'), async (re
   }
 });
 
+// Invio email di TEST (solo a un indirizzo specifico per anteprima)
+app.post('/api/resources/notify-test', requireAdmin, async (req, res) => {
+  const { subject, message, testEmail } = req.body;
+  
+  if (!subject || !message || !testEmail) {
+    return res.status(400).json({ error: 'Oggetto, messaggio e email di test sono obbligatori' });
+  }
+
+  try {
+    const { Resend } = require('resend');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    
+    // Usa valori di esempio per i placeholder
+    const personalizedMessage = message
+      .replace('{nome}', 'Mario')
+      .replace('{cognome}', 'Rossi');
+
+    await resend.emails.send({
+      from: process.env.RESEND_FROM || 'Master Carbon Farming <noreply@carbonfarmingmaster.it>',
+      to: testEmail,
+      subject: `[TEST] ${subject}`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: #fef3c7; padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #f59e0b;">
+            <strong>⚠️ QUESTA È UN'EMAIL DI TEST</strong><br>
+            I placeholder {nome} e {cognome} sono stati sostituiti con "Mario Rossi"
+          </div>
+          <div style="background: linear-gradient(135deg, #166534 0%, #22c55e 100%); padding: 20px; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 1.5rem;">🌱 Master Carbon Farming</h1>
+          </div>
+          <div style="background: #f9fafb; padding: 24px; border-radius: 0 0 12px 12px;">
+            <p style="white-space: pre-line; line-height: 1.6;">${personalizedMessage}</p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+            <p style="color: #6b7280; font-size: 0.875rem;">
+              Università della Tuscia - Master di II livello in Carbon Farming
+            </p>
+          </div>
+        </div>
+      `
+    });
+
+    res.json({ success: true, message: `Email di test inviata a ${testEmail}` });
+  } catch (error) {
+    console.error('Error sending test email:', error);
+    res.status(500).json({ error: 'Errore durante l\'invio dell\'email di test' });
+  }
+});
+
 // Notifica studenti via email
 app.post('/api/resources/notify', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;

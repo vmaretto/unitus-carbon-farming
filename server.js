@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-27-v14'; // Per debug deploy
+const BUILD_VERSION = '2026-03-27-v15'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -4735,6 +4735,103 @@ app.post('/api/documents/:id/sign', requireStudent, async (req, res) => {
   } catch (error) {
     console.error('Error signing document:', error);
     res.status(500).json({ error: 'Errore nella firma del documento' });
+  }
+});
+
+// Admin: PDF singola firma
+app.get('/api/signatures/:id/pdf', (req, res, next) => {
+  if (req.query.token && !req.headers.authorization) {
+    req.headers.authorization = 'Bearer ' + req.query.token;
+  }
+  requireAdmin(req, res, next);
+}, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT ds.*, u.email, u.first_name, u.last_name, d.title, d.content
+      FROM document_signatures ds
+      JOIN users u ON u.id = ds.user_id
+      JOIN documents d ON d.id = ds.document_id
+      WHERE ds.id = $1
+    `, [req.params.id]);
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Firma non trovata' });
+    }
+    
+    const data = rows[0];
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    
+    const surname = data.signer_surname || data.last_name || 'studente';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="liberatoria_${surname}.pdf"`);
+    doc.pipe(res);
+    
+    // Header
+    doc.fillColor('#166534').fontSize(20).text('Master Carbon Farming', { align: 'center' });
+    doc.fillColor('#666').fontSize(10).text('Università degli Studi della Tuscia', { align: 'center' });
+    doc.moveDown(2);
+    
+    // Titolo documento
+    doc.fillColor('#000').fontSize(16).text(data.title, { align: 'center' });
+    doc.moveDown();
+    
+    // Contenuto
+    const plainContent = (data.content || '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    doc.fontSize(11).fillColor('#333').text(plainContent, { align: 'justify', lineGap: 4 });
+    doc.moveDown(2);
+    
+    // Linea separatrice
+    doc.strokeColor('#ccc').lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+    doc.moveDown();
+    
+    // Dichiarazione
+    doc.fillColor('#166534').fontSize(14).text('DICHIARAZIONE', { align: 'center' });
+    doc.moveDown();
+    
+    // Nome e cognome
+    doc.fillColor('#000').fontSize(11);
+    doc.text(`Nome: ${data.signer_name || data.first_name || 'N/D'}`, 50);
+    doc.text(`Cognome: ${data.signer_surname || data.last_name || 'N/D'}`, 300, doc.y - 14);
+    doc.text(`Email: ${data.email}`, 50);
+    doc.moveDown();
+    
+    // Scelta consenso
+    const consensoText = data.consent_given 
+      ? '✓ PRESTO IL CONSENSO - Autorizzo l\'utilizzo di immagini e video'
+      : '✗ NEGO IL CONSENSO - Non desidero essere ripreso/a';
+    doc.fillColor(data.consent_given ? '#166534' : '#dc2626').fontSize(12).text(consensoText);
+    doc.moveDown(2);
+    
+    // Firma
+    doc.fillColor('#000').fontSize(11).text('Firma:');
+    if (data.signature_image && data.signature_image.startsWith('data:image')) {
+      try {
+        const base64Data = data.signature_image.split(',')[1];
+        const imgBuffer = Buffer.from(base64Data, 'base64');
+        doc.image(imgBuffer, { width: 200, height: 80 });
+      } catch (e) {
+        doc.text('[Firma non disponibile]');
+      }
+    }
+    doc.moveDown(2);
+    
+    // Footer
+    doc.fontSize(9).fillColor('#666');
+    doc.text(`Data firma: ${new Date(data.signed_at).toLocaleString('it-IT')}`, 50);
+    doc.text(`IP: ${data.ip_address || 'N/D'}`);
+    doc.moveDown();
+    doc.text('Documento generato automaticamente dalla piattaforma Master Carbon Farming', { align: 'center' });
+    
+    doc.end();
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    res.status(500).json({ error: 'Errore nella generazione del PDF' });
   }
 });
 

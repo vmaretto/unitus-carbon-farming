@@ -2253,6 +2253,10 @@ Buono studio!</textarea>
             }
         });
         
+        function downloadSignaturePDF(signatureId) {
+            window.open('/api/signatures/' + signatureId + '/pdf?token=' + adminToken, '_blank');
+        }
+        
         async function viewStudentSignature(signatureId) {
             try {
                 const sig = await apiRequest(`/api/signatures/${signatureId}`);
@@ -2319,7 +2323,8 @@ Buono studio!</textarea>
                         </div>
                         
                         <!-- Footer -->
-                        <div style="padding: 16px 24px; border-top: 1px solid #e5e7eb; text-align: right; background: #f9fafb; border-radius: 0 0 16px 16px;">
+                        <div style="padding: 16px 24px; border-top: 1px solid #e5e7eb; background: #f9fafb; border-radius: 0 0 16px 16px; display: flex; justify-content: space-between;">
+                            <button class="secondary" onclick="downloadSignaturePDF('${signatureId}')" style="background: var(--green-500); color: white;">📥 Scarica PDF</button>
                             <button class="secondary" onclick="document.getElementById('signature-view-modal').remove()">Chiudi</button>
                         </div>
                     </div>

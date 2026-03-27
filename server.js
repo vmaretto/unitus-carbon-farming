@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-27-v19'; // Per debug deploy
+const BUILD_VERSION = '2026-03-27-v20'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -3717,8 +3717,8 @@ app.post('/api/attendance/manual-checkin', requireAdmin, async (req, res) => {
     }
     
     await pool.query(`
-      INSERT INTO attendance (id, lesson_id, user_id, check_in_time, attendance_type, verified)
-      VALUES ($1, $2, $3, NOW(), $4, true)
+      INSERT INTO attendance (id, lesson_id, user_id, check_in_at, attendance_type, method)
+      VALUES ($1, $2, $3, NOW(), $4, 'manual')
     `, [attendanceId, lessonId, userId, attendanceType]);
     
     res.status(201).json({ success: true, id: attendanceId });

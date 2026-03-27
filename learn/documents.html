@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documenti - Master Carbon Farming</title>
+    <link rel="icon" type="image/png" href="/assets/img/favicon.png">
+    <style>
+        :root {
+            --green-50: #f0fdf4; --green-100: #dcfce7; --green-500: #22c55e; 
+            --green-600: #16a34a; --green-700: #15803d; --green-900: #14532d;
+            --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
+            --gray-500: #6b7280; --gray-700: #374151; --gray-900: #111827;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--gray-50); min-height: 100vh; }
+        
+        .header { background: linear-gradient(135deg, var(--green-700) 0%, var(--green-600) 100%); color: white; padding: 16px 24px; }
+        .header-inner { max-width: 900px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 1.25rem; font-weight: 600; }
+        .header a { color: white; text-decoration: none; opacity: 0.9; }
+        .header a:hover { opacity: 1; }
+        
+        .container { max-width: 900px; margin: 0 auto; padding: 24px; }
+        
+        .card { background: white; border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card h2 { color: var(--green-900); margin-bottom: 16px; font-size: 1.3rem; }
+        
+        .document-content { border: 1px solid var(--gray-200); border-radius: 12px; padding: 24px; margin-bottom: 24px; max-height: 400px; overflow-y: auto; background: white; }
+        
+        .consent-choice { display: flex; gap: 16px; margin: 24px 0; flex-wrap: wrap; }
+        .consent-option { flex: 1; min-width: 200px; padding: 16px; border: 2px solid var(--gray-200); border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+        .consent-option:hover { border-color: var(--green-500); }
+        .consent-option.selected { border-color: var(--green-600); background: var(--green-50); }
+        .consent-option.deny.selected { border-color: #dc2626; background: #fef2f2; }
+        .consent-option input { display: none; }
+        .consent-option h3 { font-size: 1rem; margin-bottom: 4px; }
+        .consent-option p { font-size: 0.85rem; color: var(--gray-500); }
+        
+        .signature-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--gray-200); }
+        .signature-section h3 { margin-bottom: 16px; }
+        
+        .signature-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .signature-tab { padding: 10px 20px; border: none; background: var(--gray-100); border-radius: 8px; cursor: pointer; font-weight: 500; }
+        .signature-tab.active { background: var(--green-600); color: white; }
+        
+        .signature-panel { display: none; }
+        .signature-panel.active { display: block; }
+        
+        #signature-canvas { border: 2px dashed var(--gray-300); border-radius: 12px; cursor: crosshair; touch-action: none; background: white; }
+        .canvas-controls { margin-top: 12px; display: flex; gap: 12px; }
+        
+        .upload-zone { border: 2px dashed var(--gray-300); border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .upload-zone:hover { border-color: var(--green-500); background: var(--green-50); }
+        .upload-zone.has-file { border-style: solid; border-color: var(--green-500); }
+        #signature-preview { max-width: 300px; max-height: 100px; margin-top: 12px; }
+        
+        .btn { padding: 12px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; font-size: 1rem; }
+        .btn-primary { background: var(--green-600); color: white; }
+        .btn-primary:hover { background: var(--green-700); }
+        .btn-primary:disabled { background: var(--gray-300); cursor: not-allowed; }
+        .btn-secondary { background: var(--gray-100); color: var(--gray-700); }
+        .btn-secondary:hover { background: var(--gray-200); }
+        
+        .submit-section { margin-top: 24px; display: flex; justify-content: flex-end; }
+        
+        .success-message { text-align: center; padding: 48px; }
+        .success-message h2 { color: var(--green-600); margin-bottom: 12px; }
+        
+        .loading { text-align: center; padding: 48px; color: var(--gray-500); }
+        
+        .already-signed { background: var(--green-50); border: 1px solid var(--green-200); border-radius: 12px; padding: 20px; text-align: center; }
+        .already-signed h3 { color: var(--green-700); margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-inner">
+            <h1>📄 Documenti</h1>
+            <a href="/learn/">← Torna alla dashboard</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="content">
+            <div class="loading">Caricamento documenti...</div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('learnToken');
+        if (!token) {
+            window.location.href = '/learn/login.html?redirect=' + encodeURIComponent(window.location.href);
+        }
+
+        let currentDocument = null;
+        let signatureData = null;
+        let signatureMethod = 'draw';
+        let consentChoice = null;
+
+        async function loadDocuments() {
+            try {
+                const res = await fetch('/api/documents/pending', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) throw new Error('Errore nel caricamento');
+                const docs = await res.json();
+                
+                if (docs.length === 0) {
+                    document.getElementById('content').innerHTML = `
+                        <div class="card">
+                            <div class="already-signed">
+                                <h3>✅ Nessun documento da firmare</h3>
+                                <p>Hai già firmato tutti i documenti richiesti.</p>
+                                <br>
+                                <a href="/learn/" class="btn btn-secondary">Torna alla dashboard</a>
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                currentDocument = docs[0];
+                renderDocument(currentDocument);
+            } catch (error) {
+                document.getElementById('content').innerHTML = `
+                    <div class="card">
+                        <h2>❌ Errore</h2>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function renderDocument(doc) {
+            document.getElementById('content').innerHTML = `
+                <div class="card">
+                    <h2>📋 ${doc.title}</h2>
+                    <p style="color: var(--gray-500); margin-bottom: 16px;">Leggi attentamente il documento e indica la tua scelta.</p>
+                    
+                    <div class="document-content">
+                        ${doc.content}
+                    </div>
+                    
+                    <h3>La tua scelta:</h3>
+                    <div class="consent-choice">
+                        <label class="consent-option" data-consent="true">
+                            <input type="radio" name="consent" value="true">
+                            <h3>✅ Presto il consenso</h3>
+                            <p>Autorizzo l'utilizzo di immagini e video</p>
+                        </label>
+                        <label class="consent-option deny" data-consent="false">
+                            <input type="radio" name="consent" value="false">
+                            <h3>❌ Nego il consenso</h3>
+                            <p>Parteciperò ma non desidero essere ripreso/a</p>
+                        </label>
+                    </div>
+                    
+                    <div class="signature-section" id="signature-section" style="display: none;">
+                        <h3>✍️ La tua firma</h3>
+                        
+                        <div class="signature-tabs">
+                            <button class="signature-tab active" data-tab="draw">Disegna firma</button>
+                            <button class="signature-tab" data-tab="upload">Carica immagine</button>
+                        </div>
+                        
+                        <div class="signature-panel active" id="panel-draw">
+                            <canvas id="signature-canvas" width="400" height="150"></canvas>
+                            <div class="canvas-controls">
+                                <button class="btn btn-secondary" id="clear-canvas">🗑️ Cancella</button>
+                            </div>
+                        </div>
+                        
+                        <div class="signature-panel" id="panel-upload">
+                            <div class="upload-zone" id="upload-zone">
+                                <p>📎 Clicca o trascina un'immagine della tua firma</p>
+                                <p style="font-size: 0.85rem; color: var(--gray-500);">PNG, JPG (max 2MB)</p>
+                                <img id="signature-preview" style="display: none;">
+                            </div>
+                            <input type="file" id="signature-file" accept="image/*" style="display: none;">
+                        </div>
+                    </div>
+                    
+                    <div class="submit-section">
+                        <button class="btn btn-primary" id="submit-btn" disabled>Conferma e firma</button>
+                    </div>
+                </div>
+            `;
+            
+            setupEventListeners();
+        }
+
+        function setupEventListeners() {
+            // Consent choice
+            document.querySelectorAll('.consent-option').forEach(opt => {
+                opt.addEventListener('click', () => {
+                    document.querySelectorAll('.consent-option').forEach(o => o.classList.remove('selected'));
+                    opt.classList.add('selected');
+                    consentChoice = opt.dataset.consent === 'true';
+                    document.getElementById('signature-section').style.display = 'block';
+                    updateSubmitButton();
+                });
+            });
+            
+            // Signature tabs
+            document.querySelectorAll('.signature-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.signature-tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.signature-panel').forEach(p => p.classList.remove('active'));
+                    tab.classList.add('active');
+                    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+                    signatureMethod = tab.dataset.tab;
+                    signatureData = null;
+                    updateSubmitButton();
+                });
+            });
+            
+            // Canvas drawing
+            const canvas = document.getElementById('signature-canvas');
+            const ctx = canvas.getContext('2d');
+            let isDrawing = false;
+            
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            
+            function getPos(e) {
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+                const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+                return { x, y };
+            }
+            
+            canvas.addEventListener('mousedown', (e) => { isDrawing = true; ctx.beginPath(); ctx.moveTo(getPos(e).x, getPos(e).y); });
+            canvas.addEventListener('mousemove', (e) => { if (isDrawing) { ctx.lineTo(getPos(e).x, getPos(e).y); ctx.stroke(); } });
+            canvas.addEventListener('mouseup', () => { isDrawing = false; signatureData = canvas.toDataURL('image/png'); updateSubmitButton(); });
+            canvas.addEventListener('mouseleave', () => { isDrawing = false; });
+            
+            canvas.addEventListener('touchstart', (e) => { e.preventDefault(); isDrawing = true; ctx.beginPath(); ctx.moveTo(getPos(e).x, getPos(e).y); });
+            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); if (isDrawing) { ctx.lineTo(getPos(e).x, getPos(e).y); ctx.stroke(); } });
+            canvas.addEventListener('touchend', () => { isDrawing = false; signatureData = canvas.toDataURL('image/png'); updateSubmitButton(); });
+            
+            document.getElementById('clear-canvas').addEventListener('click', () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                signatureData = null;
+                updateSubmitButton();
+            });
+            
+            // File upload
+            const uploadZone = document.getElementById('upload-zone');
+            const fileInput = document.getElementById('signature-file');
+            const preview = document.getElementById('signature-preview');
+            
+            uploadZone.addEventListener('click', () => fileInput.click());
+            uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.style.borderColor = 'var(--green-500)'; });
+            uploadZone.addEventListener('dragleave', () => { uploadZone.style.borderColor = ''; });
+            uploadZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadZone.style.borderColor = '';
+                if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+            });
+            
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files[0]) handleFile(fileInput.files[0]);
+            });
+            
+            function handleFile(file) {
+                if (file.size > 2 * 1024 * 1024) {
+                    alert('File troppo grande (max 2MB)');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    signatureData = e.target.result;
+                    preview.src = signatureData;
+                    preview.style.display = 'block';
+                    uploadZone.classList.add('has-file');
+                    signatureMethod = 'upload';
+                    updateSubmitButton();
+                };
+                reader.readAsDataURL(file);
+            }
+            
+            // Submit
+            document.getElementById('submit-btn').addEventListener('click', submitSignature);
+        }
+
+        function updateSubmitButton() {
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = consentChoice === null || !signatureData;
+        }
+
+        async function submitSignature() {
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Invio in corso...';
+            
+            try {
+                const res = await fetch('/api/documents/' + currentDocument.id + '/sign', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({
+                        consentGiven: consentChoice,
+                        signatureImage: signatureData,
+                        signatureMethod: signatureMethod
+                    })
+                });
+                
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Errore nella firma');
+                }
+                
+                document.getElementById('content').innerHTML = `
+                    <div class="card">
+                        <div class="success-message">
+                            <h2>✅ Documento firmato!</h2>
+                            <p>La tua scelta è stata registrata.</p>
+                            <p style="color: var(--gray-500); margin-top: 8px;">
+                                ${consentChoice ? 'Hai prestato il consenso' : 'Hai negato il consenso'} all'utilizzo di immagini e video.
+                            </p>
+                            <br>
+                            <a href="/learn/" class="btn btn-primary">Torna alla dashboard</a>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                alert('Errore: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = 'Conferma e firma';
+            }
+        }
+
+        loadDocuments();
+    </script>
+</body>
+</html>

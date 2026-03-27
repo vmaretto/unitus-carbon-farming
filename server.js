@@ -4495,6 +4495,149 @@ app.get('/api/quiz-attempts/my', async (req, res) => {
   }
 });
 
+// ============================================
+// API DOCUMENTI E FIRME
+// ============================================
+
+// Documenti da firmare per lo studente (pending)
+app.get('/api/documents/pending', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const userId = req.user.userId;
+    
+    // Trova documenti attivi per il corso dello studente, non ancora firmati
+    const { rows } = await pool.query(`
+      SELECT d.id, d.title, d.content, d.document_type
+      FROM documents d
+      JOIN enrollments e ON e.course_edition_id = d.course_edition_id
+      WHERE e.user_id = $1 
+        AND e.status = 'active'
+        AND d.is_active = true
+        AND NOT EXISTS (
+          SELECT 1 FROM document_signatures ds 
+          WHERE ds.document_id = d.id AND ds.user_id = $1
+        )
+      ORDER BY d.created_at
+    `, [userId]);
+    
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching pending documents:', error);
+    res.status(500).json({ error: 'Errore nel caricamento documenti' });
+  }
+});
+
+// Firma un documento
+app.post('/api/documents/:id/sign', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const userId = req.user.userId;
+    const documentId = req.params.id;
+    const { consentGiven, signatureImage, signatureMethod } = req.body;
+    
+    if (consentGiven === undefined || !signatureImage) {
+      return res.status(400).json({ error: 'Consenso e firma sono obbligatori' });
+    }
+    
+    // Verifica che il documento esista e sia per questo studente
+    const { rows: docs } = await pool.query(`
+      SELECT d.id FROM documents d
+      JOIN enrollments e ON e.course_edition_id = d.course_edition_id
+      WHERE d.id = $1 AND e.user_id = $2 AND e.status = 'active' AND d.is_active = true
+    `, [documentId, userId]);
+    
+    if (docs.length === 0) {
+      return res.status(404).json({ error: 'Documento non trovato' });
+    }
+    
+    // Salva la firma
+    const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    
+    await pool.query(`
+      INSERT INTO document_signatures (document_id, user_id, consent_given, signature_image, signature_method, ip_address, user_agent)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (document_id, user_id) DO UPDATE SET
+        consent_given = $3,
+        signature_image = $4,
+        signature_method = $5,
+        ip_address = $6,
+        user_agent = $7,
+        signed_at = NOW()
+    `, [documentId, userId, consentGiven, signatureImage, signatureMethod || 'draw', ipAddress, userAgent]);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error signing document:', error);
+    res.status(500).json({ error: 'Errore nella firma del documento' });
+  }
+});
+
+// Admin: lista firme per un documento
+app.get('/api/documents/:id/signatures', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT ds.*, u.email, u.first_name, u.last_name
+      FROM document_signatures ds
+      JOIN users u ON u.id = ds.user_id
+      WHERE ds.document_id = $1
+      ORDER BY ds.signed_at DESC
+    `, [req.params.id]);
+    
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching signatures:', error);
+    res.status(500).json({ error: 'Errore nel caricamento firme' });
+  }
+});
+
+// Admin: lista documenti
+app.get('/api/documents', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT d.*, 
+        (SELECT COUNT(*) FROM document_signatures ds WHERE ds.document_id = d.id) as signature_count,
+        (SELECT COUNT(*) FROM document_signatures ds WHERE ds.document_id = d.id AND ds.consent_given = true) as consent_count
+      FROM documents d
+      ORDER BY d.created_at DESC
+    `);
+    
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching documents:', error);
+    res.status(500).json({ error: 'Errore nel caricamento documenti' });
+  }
+});
+
+// Admin: export firme CSV
+app.get('/api/documents/:id/export', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT u.email, u.first_name, u.last_name, 
+             ds.consent_given, ds.signature_method, ds.signed_at, ds.ip_address
+      FROM document_signatures ds
+      JOIN users u ON u.id = ds.user_id
+      WHERE ds.document_id = $1
+      ORDER BY u.last_name, u.first_name
+    `, [req.params.id]);
+    
+    let csv = 'Email,Nome,Cognome,Consenso,Metodo Firma,Data Firma,IP\n';
+    rows.forEach(r => {
+      csv += `"${r.email}","${r.first_name || ''}","${r.last_name || ''}","${r.consent_given ? 'SI' : 'NO'}","${r.signature_method}","${r.signed_at}","${r.ip_address}"\n`;
+    });
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="firme_${req.params.id}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting signatures:', error);
+    res.status(500).json({ error: 'Errore nell\'export' });
+  }
+});
+
 if (require.main === module) {
   ensureDatabaseInitialized()
     .catch((error) => {

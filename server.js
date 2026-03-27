@@ -25,7 +25,7 @@ const upload = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-27-v15'; // Per debug deploy
+const BUILD_VERSION = '2026-03-27-v16'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -2580,6 +2580,7 @@ app.get('/api/lms/enrollments', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT e.id, e.user_id AS "userId", e.course_edition_id AS "courseEditionId",
              e.status, e.enrolled_at AS "enrolledAt", e.completed_at AS "completedAt",
+             e.enrollment_type AS "enrollmentType", e.partner_company AS "partnerCompany", e.notes,
              u.email, u.first_name AS "firstName", u.last_name AS "lastName", u.role,
              u.last_login_at AS "lastLoginAt"
       FROM enrollments e
@@ -2598,7 +2599,7 @@ app.get('/api/lms/enrollments', requireAdmin, async (req, res) => {
 app.put('/api/lms/enrollments/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   const { id } = req.params;
-  const { email, firstName, lastName, role, status } = req.body;
+  const { email, firstName, lastName, role, status, enrollmentType, partnerCompany, notes } = req.body;
   
   try {
     // Get enrollment to find user_id
@@ -2619,10 +2620,15 @@ app.put('/api/lms/enrollments/:id', requireAdmin, async (req, res) => {
       WHERE id = $5
     `, [email, firstName, lastName, role, userId]);
     
-    // Update enrollment status if provided
-    if (status) {
-      await pool.query('UPDATE enrollments SET status = $1 WHERE id = $2', [status, id]);
-    }
+    // Update enrollment fields
+    await pool.query(`
+      UPDATE enrollments SET 
+        status = COALESCE($1, status),
+        enrollment_type = COALESCE($2, enrollment_type),
+        partner_company = COALESCE($3, partner_company),
+        notes = COALESCE($4, notes)
+      WHERE id = $5
+    `, [status, enrollmentType, partnerCompany, notes, id]);
     
     res.json({ success: true });
   } catch (error) {

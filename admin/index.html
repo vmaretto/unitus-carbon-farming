@@ -1389,6 +1389,26 @@ Buono studio!</textarea>
                                 <option value="admin">Admin</option>
                             </select>
                         </label>
+                        <label>
+                            Modalità iscrizione
+                            <select id="lms-enroll-type" name="enrollmentType">
+                                <option value="">— Seleziona —</option>
+                                <option value="Classica">Classica</option>
+                                <option value="Classica Ex Studente Unitus">Classica Ex Studente Unitus</option>
+                                <option value="Partner">Partner</option>
+                                <option value="Partner Uditore">Partner Uditore</option>
+                                <option value="Uditore">Uditore</option>
+                                <option value="PA">PA</option>
+                            </select>
+                        </label>
+                        <label>
+                            Azienda/Partner
+                            <input type="text" id="lms-enroll-company" name="partnerCompany" placeholder="Es: EY, Confagricoltura...">
+                        </label>
+                        <label style="grid-column: 1 / -1;">
+                            Note
+                            <textarea id="lms-enroll-notes" name="notes" rows="2" placeholder="Note interne..."></textarea>
+                        </label>
                     </div>
                     <div class="actions">
                         <button class="primary" type="submit">Iscrivi</button>
@@ -1413,16 +1433,17 @@ Buono studio!</textarea>
                             <tr>
                                 <th>Email</th>
                                 <th>Nome</th>
-                                <th>Ruolo</th>
+                                <th>Modalità</th>
+                                <th>Azienda/Partner</th>
                                 <th>Stato</th>
-                                <th>Data iscrizione</th>
                                 <th>Ultimo accesso</th>
-                                <th style="width: 140px;">Azioni</th>
+                                <th>Note</th>
+                                <th style="width: 100px;">Azioni</th>
                             </tr>
                         </thead>
                         <tbody id="lms-enroll-table-body">
                             <tr data-empty-lms-enroll>
-                                <td colspan="7" class="empty-state">Nessun iscritto per questa edizione.</td>
+                                <td colspan="8" class="empty-state">Nessun iscritto per questa edizione.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -4374,17 +4395,22 @@ Buono studio!</textarea>
                 const lastLogin = en.lastLoginAt 
                     ? new Date(en.lastLoginAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                     : '<span style="color: #b91c1c;">Mai</span>';
+                const enrollTypeStyle = en.enrollmentType ? 
+                    (en.enrollmentType.includes('Partner') ? 'background: #dbeafe; color: #1e40af;' : 
+                     en.enrollmentType.includes('Uditore') ? 'background: #fef3c7; color: #92400e;' : 
+                     'background: #f3f4f6; color: #374151;') : '';
                 tr.innerHTML = `
                     <td>${en.email}</td>
                     <td>${[en.firstName, en.lastName].filter(Boolean).join(' ') || '—'}</td>
-                    <td>${en.role || '—'}</td>
+                    <td><span style="padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; ${enrollTypeStyle}">${en.enrollmentType || '—'}</span></td>
+                    <td>${en.partnerCompany || '—'}</td>
                     <td><span class="status-pill" data-status="${statusClass}">${statusMap[en.status] || en.status}</span></td>
-                    <td>${en.enrolledAt ? new Date(en.enrolledAt).toLocaleDateString('it-IT') : '—'}</td>
                     <td>${lastLogin}</td>
+                    <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${en.notes || ''}">${en.notes || '—'}</td>
                     <td>
                         <div class="actions">
-                            <button type="button" class="secondary" data-edit-enroll>Modifica</button>
-                            <button type="button" class="danger" data-delete-enroll>Elimina</button>
+                            <button type="button" class="secondary" data-edit-enroll>✏️</button>
+                            <button type="button" class="danger" data-delete-enroll>🗑️</button>
                         </div>
                     </td>
                 `;
@@ -4406,6 +4432,9 @@ Buono studio!</textarea>
                 document.getElementById('lms-enroll-firstname').value = en.firstName || '';
                 document.getElementById('lms-enroll-lastname').value = en.lastName || '';
                 document.getElementById('lms-enroll-role').value = en.role || 'student';
+                document.getElementById('lms-enroll-type').value = en.enrollmentType || '';
+                document.getElementById('lms-enroll-company').value = en.partnerCompany || '';
+                document.getElementById('lms-enroll-notes').value = en.notes || '';
                 document.getElementById('lms-enroll-reset').hidden = false;
                 document.getElementById('lms-enroll-form').querySelector('button.primary').textContent = 'Aggiorna';
                 state.editingEnrollmentId = id;
@@ -4431,6 +4460,9 @@ Buono studio!</textarea>
             const firstName = document.getElementById('lms-enroll-firstname').value.trim();
             const lastName = document.getElementById('lms-enroll-lastname').value.trim();
             const role = document.getElementById('lms-enroll-role').value;
+            const enrollmentType = document.getElementById('lms-enroll-type').value;
+            const partnerCompany = document.getElementById('lms-enroll-company').value.trim();
+            const notes = document.getElementById('lms-enroll-notes').value.trim();
             if (!email) { showToast('Inserisci l\'email', 'error'); return; }
             
             try {
@@ -4438,7 +4470,15 @@ Buono studio!</textarea>
                     // Update existing enrollment
                     await apiRequest(`/api/lms/enrollments/${state.editingEnrollmentId}`, {
                         method: 'PUT',
-                        body: JSON.stringify({ email, firstName: firstName || null, lastName: lastName || null, role })
+                        body: JSON.stringify({ 
+                            email, 
+                            firstName: firstName || null, 
+                            lastName: lastName || null, 
+                            role,
+                            enrollmentType: enrollmentType || null,
+                            partnerCompany: partnerCompany || null,
+                            notes: notes || null
+                        })
                     });
                     showToast('Iscrizione aggiornata');
                     resetEnrollmentForm();

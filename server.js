@@ -582,6 +582,12 @@ async function initDatabase() {
     ADD COLUMN IF NOT EXISTS external_teacher_name TEXT;
   `);
 
+  // Aggiunge colonna materials per file allegati alla lezione
+  await pool.query(`
+    ALTER TABLE lessons
+    ADD COLUMN IF NOT EXISTS materials JSONB DEFAULT '[]'::jsonb;
+  `);
+
   // Indici per performance
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_lessons_start ON lessons(start_datetime);
@@ -669,7 +675,7 @@ const ALLOWED_UPDATE_FIELDS = {
   blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'is_published', 'published_at'],
   partners: ['name', 'logo_url', 'website_url', 'category', 'sort_order', 'is_visible'],
   modules: ['name', 'ssd', 'cfu', 'hours', 'description', 'sort_order'],
-  lessons: ['title', 'module_id', 'teacher_id', 'external_teacher_name', 'start_datetime', 'duration_hours', 'location_physical', 'location_remote', 'status', 'notes'],
+  lessons: ['title', 'module_id', 'teacher_id', 'external_teacher_name', 'start_datetime', 'duration_hours', 'location_physical', 'location_remote', 'status', 'notes', 'materials'],
   courses: ['title', 'slug', 'description', 'cover_image_url', 'is_published'],
   course_editions: ['name', 'start_date', 'end_date', 'max_students', 'is_active'],
   lms_modules: ['title', 'description', 'sort_order', 'is_published'],
@@ -1824,7 +1830,7 @@ app.post('/api/lessons', requireAdmin, async (req, res) => {
 
   const {
     title, description, startDatetime, endDatetime, durationMinutes,
-    locationPhysical, locationRemote, status, notes, moduleId, teacherId, externalTeacherName
+    locationPhysical, locationRemote, status, notes, moduleId, teacherId, externalTeacherName, materials
   } = req.body;
 
   if (!title) {
@@ -1839,13 +1845,13 @@ app.post('/api/lessons', requireAdmin, async (req, res) => {
     const id = uuidv4();
     const insert = `
       INSERT INTO lessons (id, title, description, start_datetime, end_datetime, duration_minutes,
-                          location_physical, location_remote, status, notes, module_id, teacher_id, external_teacher_name)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                          location_physical, location_remote, status, notes, module_id, teacher_id, external_teacher_name, materials)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING id, title, description, start_datetime AS "startDatetime",
                 end_datetime AS "endDatetime", duration_minutes AS "durationMinutes",
                 location_physical AS "locationPhysical", location_remote AS "locationRemote",
                 status, notes, module_id AS "moduleId", teacher_id AS "teacherId",
-                external_teacher_name AS "externalTeacherName",
+                external_teacher_name AS "externalTeacherName", materials,
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `;
 
@@ -1879,7 +1885,7 @@ app.put('/api/lessons/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const {
     title, description, startDatetime, endDatetime, durationMinutes,
-    locationPhysical, locationRemote, status, notes, moduleId, teacherId, externalTeacherName
+    locationPhysical, locationRemote, status, notes, moduleId, teacherId, externalTeacherName, materials
   } = req.body;
 
   try {
@@ -1895,7 +1901,8 @@ app.put('/api/lessons/:id', requireAdmin, async (req, res) => {
       notes,
       module_id: moduleId,
       teacher_id: teacherId,
-      external_teacher_name: externalTeacherName
+      external_teacher_name: externalTeacherName,
+      materials: materials !== undefined ? JSON.stringify(materials) : undefined
     };
 
     const { query, values } = buildUpdateQuery('lessons', updateFields, id);

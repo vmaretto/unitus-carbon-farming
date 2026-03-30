@@ -1320,7 +1320,8 @@ app.post('/api/resources/upload', requireAdmin, upload.single('file'), async (re
     // Upload su Vercel Blob
     const blob = await put(safeName, req.file.buffer, {
       access: 'public',
-      contentType: req.file.mimetype
+      contentType: req.file.mimetype,
+      allowOverwrite: true  // Fix per evitare errore "blob already exists"
     });
 
     res.json({ 

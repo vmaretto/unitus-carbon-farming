@@ -3858,8 +3858,10 @@ Buono studio!</textarea>
                 const file = event.target.files[0];
                 if (!file) return;
                 const statusEl = form.querySelector('[data-material-upload-status]');
+                const addBtn = form.querySelector('[data-add-material]');
                 statusEl.textContent = 'Caricamento in corso...';
                 statusEl.style.color = 'var(--orange-500)';
+                addBtn.disabled = true;
                 const formData = new FormData();
                 formData.append('file', file);
                 try {
@@ -3880,9 +3882,11 @@ Buono studio!</textarea>
                     if (extTypeMap[ext]) form.querySelector('[data-material-type]').value = extTypeMap[ext];
                     statusEl.textContent = '✅ ' + data.filename;
                     statusEl.style.color = 'var(--green-500)';
+                    addBtn.disabled = false;
                 } catch (error) {
                     statusEl.textContent = '❌ ' + error.message;
                     statusEl.style.color = '#dc3545';
+                    addBtn.disabled = false;
                 }
                 event.target.value = '';
             });
@@ -3895,7 +3899,8 @@ Buono studio!</textarea>
                 const type = typeInput.value;
                 const name = nameInput.value.trim();
                 const url = urlInput.value.trim();
-                if (!name || !url) { showToast('Inserisci nome e URL', 'error'); return; }
+                if (!name) { showToast('Inserisci il nome del materiale', 'error'); return; }
+                if (!url) { showToast('Inserisci URL o carica un file', 'error'); return; }
                 currentMaterials.push({ type, name, url });
                 renderMaterialsList();
                 nameInput.value = '';

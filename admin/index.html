@@ -3925,6 +3925,7 @@ Buono studio!</textarea>
 
             form.addEventListener('submit', async (ev) => {
                 ev.preventDefault();
+                console.log('🐛 DEBUG: currentMaterials =', currentMaterials);
                 const payload = {
                     moduleId: moduleId,
                     title: form.querySelector('[data-field="title"]').value.trim(),
@@ -3937,6 +3938,7 @@ Buono studio!</textarea>
                     isPublished: form.querySelector('[data-field="isPublished"]').checked,
                     materials: currentMaterials
                 };
+                console.log('🐛 DEBUG: payload =', payload);
                 if (!payload.title) { showToast('Inserisci il titolo', 'error'); return; }
                 try {
                     const method = editingId ? 'PUT' : 'POST';

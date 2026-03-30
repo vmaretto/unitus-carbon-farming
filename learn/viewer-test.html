@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TEST - Visualizzatore PDF</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <style>
+        :root {
+            --green-700: #245a3d;
+            --green-600: #2c7a4b;
+            --green-500: #3d9a5e;
+            --green-100: #ecf6f0;
+            --gray-700: #3d3d3d;
+            --gray-500: #6b6b6b;
+            --gray-400: #9ca3af;
+            --gray-300: #d1d5db;
+            --gray-200: #e5e7eb;
+            --gray-100: #f3f4f6;
+            --moodle-toolbar: #f8f9fa;
+            --moodle-border: #dee2e6;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; overflow: hidden; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #525659;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--green-700) 0%, var(--green-600) 100%);
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .header h1 { font-size: 1.1rem; }
+        .header-info { font-size: 0.85rem; opacity: 0.9; }
+        
+        .toolbar {
+            background: var(--moodle-toolbar);
+            border-bottom: 1px solid var(--moodle-border);
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .toolbar-group { display: flex; align-items: center; gap: 8px; }
+        
+        .toolbar-btn {
+            width: 36px; height: 36px;
+            border: 1px solid var(--gray-300);
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .toolbar-btn:hover { background: var(--gray-100); }
+        .toolbar-btn:disabled { opacity: 0.5; }
+        .toolbar-btn.active { background: var(--green-100); border-color: var(--green-600); }
+        
+        .toolbar-separator { width: 1px; height: 24px; background: var(--gray-300); margin: 0 8px; }
+        
+        .page-indicator { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+        .page-input { width: 50px; padding: 6px 8px; border: 1px solid var(--gray-300); border-radius: 4px; text-align: center; }
+        
+        .zoom-select { padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: 4px; }
+        
+        .sidebar {
+            position: fixed; left: 0; top: 0; bottom: 0; width: 180px;
+            background: #404040; display: none; flex-direction: column;
+            z-index: 80; padding-top: 100px;
+        }
+        .sidebar.open { display: flex; }
+        .sidebar-header { padding: 12px; border-bottom: 1px solid #333; color: #ccc; font-size: 0.85rem; font-weight: 600; }
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 12px; }
+        
+        .thumbnail { cursor: pointer; margin-bottom: 12px; border: 2px solid transparent; border-radius: 4px; overflow: hidden; }
+        .thumbnail:hover { border-color: var(--green-500); }
+        .thumbnail.active { border-color: var(--green-600); }
+        .thumbnail canvas { width: 100%; display: block; }
+        .thumbnail-label { text-align: center; font-size: 0.75rem; color: #aaa; padding: 4px; background: #333; }
+        
+        .viewer-container {
+            flex: 1; overflow: auto; background: #525659;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 20px; position: relative;
+            -webkit-user-select: none; user-select: none;
+        }
+        
+        .pdf-page-wrapper {
+            margin-bottom: 16px; position: relative;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3); background: white;
+        }
+        .pdf-page-wrapper canvas { display: block; }
+        
+        .watermark-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none; z-index: 10; overflow: hidden;
+        }
+        .watermark-text {
+            position: absolute; font-size: 16px; font-weight: 500;
+            color: rgba(128, 128, 128, 0.12);
+            white-space: nowrap; transform: rotate(-35deg);
+            user-select: none; letter-spacing: 2px;
+        }
+        
+        .loading { text-align: center; padding: 60px; color: white; }
+        .loading-spinner {
+            width: 48px; height: 48px; margin: 0 auto 16px;
+            border: 4px solid rgba(255,255,255,0.2);
+            border-top-color: var(--green-500);
+            border-radius: 50%; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        @media print {
+            body * { display: none !important; }
+            body::after { content: "Stampa non consentita"; display: block; padding: 100px; text-align: center; font-size: 24px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 id="doc-title">Test PDF Viewer</h1>
+        <div class="header-info" id="user-info">Mario Rossi • 30/03/2026</div>
+    </div>
+    
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <button class="toolbar-btn" id="sidebar-toggle" title="Miniature">☰</button>
+            <div class="toolbar-separator"></div>
+            <button class="toolbar-btn" id="prev-page">‹</button>
+            <div class="page-indicator">
+                <input type="number" class="page-input" id="page-input" value="1" min="1">
+                <span>di</span>
+                <span id="total-pages">-</span>
+            </div>
+            <button class="toolbar-btn" id="next-page">›</button>
+        </div>
+        <div class="toolbar-group">
+            <button class="toolbar-btn" id="zoom-out">−</button>
+            <select class="zoom-select" id="zoom-select">
+                <option value="auto">Adatta larghezza</option>
+                <option value="page-fit">Adatta pagina</option>
+                <option value="0.5">50%</option>
+                <option value="0.75">75%</option>
+                <option value="1" selected>100%</option>
+                <option value="1.5">150%</option>
+                <option value="2">200%</option>
+            </select>
+            <button class="toolbar-btn" id="zoom-in">+</button>
+            <div class="toolbar-separator"></div>
+            <button class="toolbar-btn" id="fullscreen-btn">⛶</button>
+        </div>
+    </div>
+    
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">Pagine</div>
+        <div class="sidebar-content" id="thumbnails"></div>
+    </div>
+    
+    <div class="viewer-container" id="viewer-container">
+        <div class="loading" id="loading">
+            <div class="loading-spinner"></div>
+            <div>Caricamento PDF...</div>
+        </div>
+        <div id="pdf-container"></div>
+    </div>
+
+    <script>
+    (function() {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        
+        // Test user
+        const currentUser = { firstName: 'Mario', lastName: 'Rossi' };
+        
+        // Test PDF URL
+        const params = new URLSearchParams(window.location.search);
+        const fileUrl = params.get('url') || 'https://www.w3.org/WAI/WCAG21/Techniques/pdf/img/table-word.pdf';
+        const fileTitle = params.get('title') || 'Test PDF';
+        
+        document.getElementById('doc-title').textContent = fileTitle;
+        
+        let pdfDoc = null, currentPage = 1, totalPages = 0;
+        
+        const els = {
+            sidebarToggle: document.getElementById('sidebar-toggle'),
+            sidebar: document.getElementById('sidebar'),
+            thumbnails: document.getElementById('thumbnails'),
+            prevPage: document.getElementById('prev-page'),
+            nextPage: document.getElementById('next-page'),
+            pageInput: document.getElementById('page-input'),
+            totalPages: document.getElementById('total-pages'),
+            zoomOut: document.getElementById('zoom-out'),
+            zoomIn: document.getElementById('zoom-in'),
+            zoomSelect: document.getElementById('zoom-select'),
+            fullscreenBtn: document.getElementById('fullscreen-btn'),
+            viewerContainer: document.getElementById('viewer-container'),
+            pdfContainer: document.getElementById('pdf-container'),
+            loading: document.getElementById('loading')
+        };
+        
+        // Protection
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'p')) e.preventDefault();
+        });
+        
+        async function loadPdf() {
+            try {
+                pdfDoc = await pdfjsLib.getDocument(fileUrl).promise;
+                totalPages = pdfDoc.numPages;
+                els.totalPages.textContent = totalPages;
+                els.pageInput.max = totalPages;
+                els.loading.style.display = 'none';
+                await renderAllPages();
+                generateThumbnails();
+            } catch (err) {
+                els.loading.innerHTML = '<div style="color:#f66">Errore: ' + err.message + '</div>';
+            }
+        }
+        
+        async function renderAllPages() {
+            els.pdfContainer.innerHTML = '';
+            for (let i = 1; i <= totalPages; i++) await renderPage(i);
+            scrollToPage(currentPage);
+        }
+        
+        async function renderPage(pageNum) {
+            const page = await pdfDoc.getPage(pageNum);
+            const scale = calculateScale(page);
+            const viewport = page.getViewport({ scale });
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'pdf-page-wrapper';
+            wrapper.dataset.page = pageNum;
+            wrapper.style.width = viewport.width + 'px';
+            wrapper.style.height = viewport.height + 'px';
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            wrapper.appendChild(canvas);
+            
+            addWatermark(wrapper);
+            els.pdfContainer.appendChild(wrapper);
+        }
+        
+        function calculateScale(page) {
+            const zoomValue = els.zoomSelect.value;
+            const containerWidth = els.viewerContainer.clientWidth - 60;
+            const containerHeight = els.viewerContainer.clientHeight - 40;
+            const defaultViewport = page.getViewport({ scale: 1 });
+            
+            if (zoomValue === 'auto') return containerWidth / defaultViewport.width;
+            if (zoomValue === 'page-fit') return Math.min(containerWidth / defaultViewport.width, containerHeight / defaultViewport.height);
+            return parseFloat(zoomValue);
+        }
+        
+        function addWatermark(wrapper) {
+            const overlay = document.createElement('div');
+            overlay.className = 'watermark-overlay';
+            const text = `${currentUser.firstName} ${currentUser.lastName} • ${new Date().toLocaleDateString('it-IT')} • Master Carbon Farming`;
+            
+            [{ x: '15%', y: '20%' }, { x: '55%', y: '20%' }, { x: '35%', y: '50%' }, { x: '15%', y: '80%' }, { x: '55%', y: '80%' }].forEach(pos => {
+                const wm = document.createElement('div');
+                wm.className = 'watermark-text';
+                wm.textContent = text;
+                wm.style.left = pos.x;
+                wm.style.top = pos.y;
+                overlay.appendChild(wm);
+            });
+            wrapper.appendChild(overlay);
+        }
+        
+        async function generateThumbnails() {
+            els.thumbnails.innerHTML = '';
+            for (let i = 1; i <= totalPages; i++) {
+                const page = await pdfDoc.getPage(i);
+                const viewport = page.getViewport({ scale: 0.2 });
+                
+                const thumb = document.createElement('div');
+                thumb.className = 'thumbnail' + (i === currentPage ? ' active' : '');
+                thumb.dataset.page = i;
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                thumb.appendChild(canvas);
+                
+                const label = document.createElement('div');
+                label.className = 'thumbnail-label';
+                label.textContent = i;
+                thumb.appendChild(label);
+                
+                thumb.onclick = () => goToPage(i);
+                els.thumbnails.appendChild(thumb);
+            }
+        }
+        
+        function goToPage(n) {
+            if (n < 1 || n > totalPages) return;
+            currentPage = n;
+            scrollToPage(n);
+            els.pageInput.value = n;
+            els.prevPage.disabled = n <= 1;
+            els.nextPage.disabled = n >= totalPages;
+            els.thumbnails.querySelectorAll('.thumbnail').forEach(t => t.classList.toggle('active', +t.dataset.page === n));
+        }
+        
+        function scrollToPage(n) {
+            const wrapper = els.pdfContainer.querySelector(`[data-page="${n}"]`);
+            if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        // Events
+        els.sidebarToggle.onclick = () => {
+            els.sidebar.classList.toggle('open');
+            els.sidebarToggle.classList.toggle('active');
+            els.viewerContainer.style.marginLeft = els.sidebar.classList.contains('open') ? '180px' : '0';
+        };
+        
+        els.prevPage.onclick = () => goToPage(currentPage - 1);
+        els.nextPage.onclick = () => goToPage(currentPage + 1);
+        els.pageInput.onchange = () => goToPage(+els.pageInput.value);
+        
+        els.zoomSelect.onchange = renderAllPages;
+        els.zoomOut.onclick = () => { if (els.zoomSelect.selectedIndex > 2) { els.zoomSelect.selectedIndex--; renderAllPages(); } };
+        els.zoomIn.onclick = () => { if (els.zoomSelect.selectedIndex < els.zoomSelect.options.length - 1) { els.zoomSelect.selectedIndex++; renderAllPages(); } };
+        
+        els.fullscreenBtn.onclick = () => {
+            if (document.fullscreenElement) document.exitFullscreen();
+            else document.body.requestFullscreen();
+        };
+        
+        document.addEventListener('keydown', e => {
+            if (e.target.tagName === 'INPUT') return;
+            if (e.key === 'ArrowLeft' || e.key === 'PageUp') goToPage(currentPage - 1);
+            if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); goToPage(currentPage + 1); }
+        });
+        
+        loadPdf();
+    })();
+    </script>
+</body>
+</html>

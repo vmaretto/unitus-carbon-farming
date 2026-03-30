@@ -535,15 +535,24 @@
                 other: 'DOC'
             };
 
-            container.innerHTML = assets.map(a => `
-                <a class="asset-item" href="${escapeHtml(a.url)}" target="_blank" rel="noopener">
-                    <div class="asset-icon">${iconMap[a.assetType] || 'DOC'}</div>
-                    <div class="asset-info">
-                        <div class="asset-title">${escapeHtml(a.title)}</div>
-                        <div class="asset-type">${escapeHtml(a.assetType)}</div>
-                    </div>
-                </a>
-            `).join('');
+            container.innerHTML = assets.map(a => {
+                // Check if it's a PDF - open in protected viewer
+                const isPdf = a.assetType === 'pdf' || (a.url && a.url.toLowerCase().endsWith('.pdf'));
+                const href = isPdf 
+                    ? `/learn/viewer.html?url=${encodeURIComponent(a.url)}&title=${encodeURIComponent(a.title)}&return=${encodeURIComponent(window.location.href)}`
+                    : escapeHtml(a.url);
+                const target = isPdf ? '' : 'target="_blank" rel="noopener"';
+                
+                return `
+                    <a class="asset-item" href="${href}" ${target}>
+                        <div class="asset-icon">${iconMap[a.assetType] || 'DOC'}</div>
+                        <div class="asset-info">
+                            <div class="asset-title">${escapeHtml(a.title)}</div>
+                            <div class="asset-type">${escapeHtml(a.assetType)}${isPdf ? ' • Protetto' : ''}</div>
+                        </div>
+                    </a>
+                `;
+            }).join('');
         }
 
         function escapeHtml(text) {

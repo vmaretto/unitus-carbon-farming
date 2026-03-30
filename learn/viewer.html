@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizzatore Documenti - Carbon Farming Master</title>
+    <link rel="icon" type="image/png" href="/assets/img/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- PDF.js from Mozilla CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <style>
+        :root {
+            --green-900: #1b3a2d;
+            --green-700: #245a3d;
+            --green-600: #2c7a4b;
+            --green-500: #3d9a5e;
+            --green-100: #ecf6f0;
+            --gray-900: #1c1c1c;
+            --gray-700: #3d3d3d;
+            --gray-600: #4b5563;
+            --gray-500: #6b6b6b;
+            --gray-400: #9ca3af;
+            --gray-300: #d1d5db;
+            --gray-200: #e5e7eb;
+            --gray-100: #f3f4f6;
+            --gray-50: #f9fafb;
+            /* Moodle-like colors */
+            --moodle-primary: #1177d1;
+            --moodle-toolbar: #f8f9fa;
+            --moodle-border: #dee2e6;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #525659;
+            color: var(--gray-900);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* === HEADER (Moodle style) === */
+        .header {
+            background: linear-gradient(135deg, var(--green-700) 0%, var(--green-600) 100%);
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            z-index: 100;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: white;
+            text-decoration: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.1);
+            font-weight: 500;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        
+        .back-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        
+        .doc-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+        
+        /* === TOOLBAR (Moodle PDF viewer style) === */
+        .toolbar {
+            background: var(--moodle-toolbar);
+            border-bottom: 1px solid var(--moodle-border);
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            z-index: 90;
+        }
+        
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .toolbar-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border: 1px solid var(--gray-300);
+            border-radius: 6px;
+            background: white;
+            color: var(--gray-700);
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.15s;
+        }
+        
+        .toolbar-btn:hover {
+            background: var(--gray-100);
+            border-color: var(--gray-400);
+        }
+        
+        .toolbar-btn:active {
+            background: var(--gray-200);
+        }
+        
+        .toolbar-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .toolbar-btn.active {
+            background: var(--green-100);
+            border-color: var(--green-600);
+            color: var(--green-700);
+        }
+        
+        .toolbar-separator {
+            width: 1px;
+            height: 24px;
+            background: var(--gray-300);
+            margin: 0 8px;
+        }
+        
+        .page-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: var(--gray-700);
+        }
+        
+        .page-input {
+            width: 50px;
+            padding: 6px 8px;
+            border: 1px solid var(--gray-300);
+            border-radius: 4px;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+        
+        .page-input:focus {
+            outline: none;
+            border-color: var(--green-600);
+            box-shadow: 0 0 0 2px rgba(44,122,75,0.2);
+        }
+        
+        .zoom-select {
+            padding: 6px 10px;
+            border: 1px solid var(--gray-300);
+            border-radius: 4px;
+            font-size: 0.9rem;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .zoom-select:focus {
+            outline: none;
+            border-color: var(--green-600);
+        }
+        
+        /* === VIEWER CONTAINER === */
+        .viewer-container {
+            flex: 1;
+            overflow: auto;
+            background: #525659;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+        }
+        
+        /* Scrollbar styling (Moodle-like) */
+        .viewer-container::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        
+        .viewer-container::-webkit-scrollbar-track {
+            background: #404040;
+        }
+        
+        .viewer-container::-webkit-scrollbar-thumb {
+            background: #666;
+            border-radius: 6px;
+            border: 2px solid #404040;
+        }
+        
+        .viewer-container::-webkit-scrollbar-thumb:hover {
+            background: #888;
+        }
+        
+        /* === PDF PAGE === */
+        .pdf-page-wrapper {
+            margin-bottom: 16px;
+            position: relative;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            background: white;
+        }
+        
+        .pdf-page-wrapper canvas {
+            display: block;
+        }
+        
+        /* === WATERMARK OVERLAY === */
+        .watermark-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .watermark-text {
+            position: absolute;
+            font-size: 18px;
+            font-weight: 500;
+            color: rgba(128, 128, 128, 0.15);
+            white-space: nowrap;
+            transform: rotate(-35deg);
+            user-select: none;
+            letter-spacing: 2px;
+        }
+        
+        /* === SIDEBAR (Moodle-style thumbnails) === */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 200px;
+            background: #404040;
+            border-right: 1px solid #333;
+            display: none;
+            flex-direction: column;
+            z-index: 80;
+            padding-top: 120px; /* Below header + toolbar */
+        }
+        
+        .sidebar.open {
+            display: flex;
+        }
+        
+        .sidebar-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #333;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #ccc;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+        
+        .thumbnail {
+            cursor: pointer;
+            margin-bottom: 12px;
+            border: 2px solid transparent;
+            border-radius: 4px;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+        
+        .thumbnail:hover {
+            border-color: var(--green-500);
+        }
+        
+        .thumbnail.active {
+            border-color: var(--green-600);
+        }
+        
+        .thumbnail canvas {
+            width: 100%;
+            display: block;
+        }
+        
+        .thumbnail-label {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #aaa;
+            padding: 4px;
+            background: #333;
+        }
+        
+        /* === LOADING === */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(82, 86, 89, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+        
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255,255,255,0.2);
+            border-top-color: var(--green-500);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            margin-top: 16px;
+            color: white;
+            font-size: 0.95rem;
+        }
+        
+        .loading-progress {
+            margin-top: 12px;
+            width: 200px;
+            height: 6px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .loading-progress-bar {
+            height: 100%;
+            background: var(--green-500);
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+        
+        /* === ERROR === */
+        .error-message {
+            text-align: center;
+            padding: 60px 20px;
+            color: white;
+        }
+        
+        .error-message h2 {
+            margin-bottom: 12px;
+        }
+        
+        .error-message p {
+            color: #aaa;
+            margin-bottom: 20px;
+        }
+        
+        .error-message .btn {
+            background: var(--green-600);
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        
+        /* === PRESENTATION MODE === */
+        .presentation-mode .header,
+        .presentation-mode .toolbar,
+        .presentation-mode .sidebar {
+            display: none !important;
+        }
+        
+        .presentation-mode .viewer-container {
+            padding: 0;
+        }
+        
+        .presentation-mode .pdf-page-wrapper {
+            margin: 0;
+            box-shadow: none;
+        }
+        
+        /* === RESPONSIVE === */
+        @media (max-width: 768px) {
+            .doc-title {
+                max-width: 200px;
+                font-size: 0.95rem;
+            }
+            
+            .header-right {
+                display: none;
+            }
+            
+            .toolbar {
+                padding: 8px;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            
+            .toolbar-group {
+                gap: 4px;
+            }
+            
+            .sidebar {
+                width: 150px;
+            }
+        }
+        
+        /* === PROTECTION === */
+        .viewer-container {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        
+        /* Print protection */
+        @media print {
+            body * {
+                display: none !important;
+            }
+            body::after {
+                content: "La stampa di questo documento non è consentita.";
+                display: block;
+                padding: 100px;
+                text-align: center;
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <a href="#" class="back-btn" id="back-btn">
+                <span>←</span>
+                <span>Indietro</span>
+            </a>
+            <div class="doc-title" id="doc-title">Caricamento...</div>
+        </div>
+        <div class="header-right">
+            <span id="user-info"></span>
+        </div>
+    </div>
+    
+    <!-- Toolbar (Moodle-style) -->
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <!-- Sidebar toggle -->
+            <button class="toolbar-btn" id="sidebar-toggle" title="Miniature">
+                ☰
+            </button>
+            
+            <div class="toolbar-separator"></div>
+            
+            <!-- Navigation -->
+            <button class="toolbar-btn" id="prev-page" title="Pagina precedente">
+                ‹
+            </button>
+            
+            <div class="page-indicator">
+                <input type="number" class="page-input" id="page-input" value="1" min="1">
+                <span>di</span>
+                <span id="total-pages">-</span>
+            </div>
+            
+            <button class="toolbar-btn" id="next-page" title="Pagina successiva">
+                ›
+            </button>
+        </div>
+        
+        <div class="toolbar-group">
+            <!-- Zoom -->
+            <button class="toolbar-btn" id="zoom-out" title="Rimpicciolisci">
+                −
+            </button>
+            
+            <select class="zoom-select" id="zoom-select">
+                <option value="auto">Adatta larghezza</option>
+                <option value="page-fit">Adatta pagina</option>
+                <option value="0.5">50%</option>
+                <option value="0.75">75%</option>
+                <option value="1" selected>100%</option>
+                <option value="1.25">125%</option>
+                <option value="1.5">150%</option>
+                <option value="2">200%</option>
+            </select>
+            
+            <button class="toolbar-btn" id="zoom-in" title="Ingrandisci">
+                +
+            </button>
+            
+            <div class="toolbar-separator"></div>
+            
+            <!-- Presentation mode -->
+            <button class="toolbar-btn" id="presentation-btn" title="Modalità presentazione">
+                ⛶
+            </button>
+        </div>
+    </div>
+    
+    <!-- Sidebar (thumbnails) -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">Pagine</div>
+        <div class="sidebar-content" id="thumbnails"></div>
+    </div>
+    
+    <!-- Viewer -->
+    <div class="viewer-container" id="viewer-container">
+        <div class="loading-overlay" id="loading">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Caricamento documento...</div>
+            <div class="loading-progress">
+                <div class="loading-progress-bar" id="loading-progress" style="width: 0%"></div>
+            </div>
+        </div>
+        
+        <div id="pdf-container"></div>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+        
+        // === CONFIG ===
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        
+        // === AUTH ===
+        const token = localStorage.getItem('learnToken');
+        if (!token) {
+            window.location.href = '/learn/login.html?redirect=' + encodeURIComponent(window.location.href);
+        }
+        
+        let currentUser = {};
+        try {
+            const stored = localStorage.getItem('learnUser');
+            if (stored) currentUser = JSON.parse(stored);
+        } catch(e) {}
+        
+        // === STATE ===
+        let pdfDoc = null;
+        let currentPage = 1;
+        let totalPages = 0;
+        let currentScale = 1;
+        let renderingPage = false;
+        let pendingPage = null;
+        
+        // === URL PARAMS ===
+        const params = new URLSearchParams(window.location.search);
+        const fileUrl = params.get('url');
+        const fileTitle = params.get('title') || 'Documento';
+        const returnUrl = params.get('return') || '/learn/';
+        
+        // === ELEMENTS ===
+        const els = {
+            docTitle: document.getElementById('doc-title'),
+            userInfo: document.getElementById('user-info'),
+            backBtn: document.getElementById('back-btn'),
+            sidebarToggle: document.getElementById('sidebar-toggle'),
+            sidebar: document.getElementById('sidebar'),
+            thumbnails: document.getElementById('thumbnails'),
+            prevPage: document.getElementById('prev-page'),
+            nextPage: document.getElementById('next-page'),
+            pageInput: document.getElementById('page-input'),
+            totalPages: document.getElementById('total-pages'),
+            zoomOut: document.getElementById('zoom-out'),
+            zoomIn: document.getElementById('zoom-in'),
+            zoomSelect: document.getElementById('zoom-select'),
+            presentationBtn: document.getElementById('presentation-btn'),
+            viewerContainer: document.getElementById('viewer-container'),
+            pdfContainer: document.getElementById('pdf-container'),
+            loading: document.getElementById('loading'),
+            loadingProgress: document.getElementById('loading-progress')
+        };
+        
+        // === PROTECTION ===
+        // Disable right-click
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        
+        // Disable keyboard shortcuts
+        document.addEventListener('keydown', e => {
+            // Ctrl+S, Ctrl+P, Ctrl+Shift+S
+            if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'p' || e.key === 'S')) {
+                e.preventDefault();
+                return false;
+            }
+            // Print Screen
+            if (e.key === 'PrintScreen') {
+                e.preventDefault();
+                return false;
+            }
+        });
+        
+        // === INIT ===
+        function init() {
+            // Set title and user info
+            els.docTitle.textContent = fileTitle;
+            document.title = `${fileTitle} - Carbon Farming Master`;
+            
+            const userName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ') || currentUser.email || '';
+            els.userInfo.textContent = userName;
+            
+            // Back button
+            els.backBtn.href = returnUrl;
+            els.backBtn.addEventListener('click', e => {
+                if (document.referrer && document.referrer.includes(window.location.origin)) {
+                    e.preventDefault();
+                    window.history.back();
+                }
+            });
+            
+            // Validate URL
+            if (!fileUrl) {
+                showError('Nessun documento specificato');
+                return;
+            }
+            
+            // Load PDF
+            loadPdf();
+            
+            // Setup event listeners
+            setupEventListeners();
+        }
+        
+        // === LOAD PDF ===
+        async function loadPdf() {
+            try {
+                const loadingTask = pdfjsLib.getDocument({
+                    url: fileUrl,
+                    // For protected PDFs served via API, add auth header
+                    httpHeaders: token ? { 'Authorization': 'Bearer ' + token } : {}
+                });
+                
+                loadingTask.onProgress = (progress) => {
+                    if (progress.total > 0) {
+                        const percent = Math.round((progress.loaded / progress.total) * 100);
+                        els.loadingProgress.style.width = percent + '%';
+                    }
+                };
+                
+                pdfDoc = await loadingTask.promise;
+                totalPages = pdfDoc.numPages;
+                
+                els.totalPages.textContent = totalPages;
+                els.pageInput.max = totalPages;
+                
+                // Hide loading
+                els.loading.style.display = 'none';
+                
+                // Render first page
+                await renderAllPages();
+                
+                // Generate thumbnails
+                generateThumbnails();
+                
+            } catch (error) {
+                console.error('Error loading PDF:', error);
+                showError('Impossibile caricare il documento');
+            }
+        }
+        
+        // === RENDER PAGES ===
+        async function renderAllPages() {
+            els.pdfContainer.innerHTML = '';
+            
+            for (let i = 1; i <= totalPages; i++) {
+                await renderPage(i);
+            }
+            
+            // Scroll to current page
+            scrollToPage(currentPage);
+            updatePageIndicator();
+        }
+        
+        async function renderPage(pageNum) {
+            const page = await pdfDoc.getPage(pageNum);
+            
+            // Calculate scale based on zoom setting
+            const scale = calculateScale(page);
+            const viewport = page.getViewport({ scale });
+            
+            // Create wrapper
+            const wrapper = document.createElement('div');
+            wrapper.className = 'pdf-page-wrapper';
+            wrapper.dataset.page = pageNum;
+            wrapper.style.width = viewport.width + 'px';
+            wrapper.style.height = viewport.height + 'px';
+            
+            // Create canvas
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            
+            // Render
+            await page.render({
+                canvasContext: context,
+                viewport: viewport
+            }).promise;
+            
+            wrapper.appendChild(canvas);
+            
+            // Add watermark
+            addWatermark(wrapper, viewport);
+            
+            els.pdfContainer.appendChild(wrapper);
+        }
+        
+        function calculateScale(page) {
+            const zoomValue = els.zoomSelect.value;
+            const containerWidth = els.viewerContainer.clientWidth - 60;
+            const containerHeight = els.viewerContainer.clientHeight - 40;
+            const defaultViewport = page.getViewport({ scale: 1 });
+            
+            if (zoomValue === 'auto') {
+                return containerWidth / defaultViewport.width;
+            } else if (zoomValue === 'page-fit') {
+                const scaleX = containerWidth / defaultViewport.width;
+                const scaleY = containerHeight / defaultViewport.height;
+                return Math.min(scaleX, scaleY);
+            } else {
+                return parseFloat(zoomValue);
+            }
+        }
+        
+        // === WATERMARK ===
+        function addWatermark(wrapper, viewport) {
+            const overlay = document.createElement('div');
+            overlay.className = 'watermark-overlay';
+            
+            const userName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ') || currentUser.email || 'Studente';
+            const date = new Date().toLocaleDateString('it-IT');
+            const text = `${userName} • ${date} • Master Carbon Farming`;
+            
+            // Create multiple watermark instances for coverage
+            const positions = [
+                { x: '20%', y: '25%' },
+                { x: '60%', y: '25%' },
+                { x: '40%', y: '50%' },
+                { x: '20%', y: '75%' },
+                { x: '60%', y: '75%' }
+            ];
+            
+            positions.forEach(pos => {
+                const wm = document.createElement('div');
+                wm.className = 'watermark-text';
+                wm.textContent = text;
+                wm.style.left = pos.x;
+                wm.style.top = pos.y;
+                overlay.appendChild(wm);
+            });
+            
+            wrapper.appendChild(overlay);
+        }
+        
+        // === THUMBNAILS ===
+        async function generateThumbnails() {
+            els.thumbnails.innerHTML = '';
+            
+            for (let i = 1; i <= totalPages; i++) {
+                const page = await pdfDoc.getPage(i);
+                const viewport = page.getViewport({ scale: 0.2 });
+                
+                const thumb = document.createElement('div');
+                thumb.className = 'thumbnail' + (i === currentPage ? ' active' : '');
+                thumb.dataset.page = i;
+                
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+                
+                thumb.appendChild(canvas);
+                
+                const label = document.createElement('div');
+                label.className = 'thumbnail-label';
+                label.textContent = i;
+                thumb.appendChild(label);
+                
+                thumb.addEventListener('click', () => goToPage(i));
+                
+                els.thumbnails.appendChild(thumb);
+            }
+        }
+        
+        // === NAVIGATION ===
+        function goToPage(pageNum) {
+            if (pageNum < 1 || pageNum > totalPages) return;
+            currentPage = pageNum;
+            scrollToPage(pageNum);
+            updatePageIndicator();
+            updateThumbnailSelection();
+        }
+        
+        function scrollToPage(pageNum) {
+            const wrapper = els.pdfContainer.querySelector(`[data-page="${pageNum}"]`);
+            if (wrapper) {
+                wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+        
+        function updatePageIndicator() {
+            els.pageInput.value = currentPage;
+            els.prevPage.disabled = currentPage <= 1;
+            els.nextPage.disabled = currentPage >= totalPages;
+        }
+        
+        function updateThumbnailSelection() {
+            els.thumbnails.querySelectorAll('.thumbnail').forEach(t => {
+                t.classList.toggle('active', parseInt(t.dataset.page) === currentPage);
+            });
+        }
+        
+        // Detect current page on scroll
+        function onScroll() {
+            const wrappers = els.pdfContainer.querySelectorAll('.pdf-page-wrapper');
+            const containerTop = els.viewerContainer.scrollTop;
+            const containerHeight = els.viewerContainer.clientHeight;
+            
+            for (const wrapper of wrappers) {
+                const rect = wrapper.getBoundingClientRect();
+                const viewerRect = els.viewerContainer.getBoundingClientRect();
+                const relativeTop = rect.top - viewerRect.top;
+                
+                if (relativeTop >= -containerHeight / 2 && relativeTop <= containerHeight / 2) {
+                    const pageNum = parseInt(wrapper.dataset.page);
+                    if (pageNum !== currentPage) {
+                        currentPage = pageNum;
+                        updatePageIndicator();
+                        updateThumbnailSelection();
+                    }
+                    break;
+                }
+            }
+        }
+        
+        // === ZOOM ===
+        async function setZoom(value) {
+            els.zoomSelect.value = value;
+            currentScale = value;
+            await renderAllPages();
+        }
+        
+        // === EVENT LISTENERS ===
+        function setupEventListeners() {
+            // Sidebar toggle
+            els.sidebarToggle.addEventListener('click', () => {
+                els.sidebar.classList.toggle('open');
+                els.sidebarToggle.classList.toggle('active');
+                // Adjust viewer margin
+                if (els.sidebar.classList.contains('open')) {
+                    els.viewerContainer.style.marginLeft = '200px';
+                } else {
+                    els.viewerContainer.style.marginLeft = '0';
+                }
+            });
+            
+            // Navigation
+            els.prevPage.addEventListener('click', () => goToPage(currentPage - 1));
+            els.nextPage.addEventListener('click', () => goToPage(currentPage + 1));
+            
+            els.pageInput.addEventListener('change', () => {
+                const page = parseInt(els.pageInput.value);
+                if (!isNaN(page)) goToPage(page);
+            });
+            
+            els.pageInput.addEventListener('keydown', e => {
+                if (e.key === 'Enter') {
+                    const page = parseInt(els.pageInput.value);
+                    if (!isNaN(page)) goToPage(page);
+                }
+            });
+            
+            // Zoom
+            els.zoomOut.addEventListener('click', () => {
+                const options = els.zoomSelect.options;
+                const current = els.zoomSelect.selectedIndex;
+                if (current > 2) { // Skip 'auto' and 'page-fit'
+                    els.zoomSelect.selectedIndex = current - 1;
+                    els.zoomSelect.dispatchEvent(new Event('change'));
+                }
+            });
+            
+            els.zoomIn.addEventListener('click', () => {
+                const options = els.zoomSelect.options;
+                const current = els.zoomSelect.selectedIndex;
+                if (current < options.length - 1) {
+                    els.zoomSelect.selectedIndex = current + 1;
+                    els.zoomSelect.dispatchEvent(new Event('change'));
+                }
+            });
+            
+            els.zoomSelect.addEventListener('change', async () => {
+                await renderAllPages();
+            });
+            
+            // Presentation mode
+            els.presentationBtn.addEventListener('click', () => {
+                if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                    document.body.classList.remove('presentation-mode');
+                } else {
+                    document.body.requestFullscreen();
+                    document.body.classList.add('presentation-mode');
+                }
+            });
+            
+            document.addEventListener('fullscreenchange', () => {
+                if (!document.fullscreenElement) {
+                    document.body.classList.remove('presentation-mode');
+                }
+            });
+            
+            // Scroll detection
+            els.viewerContainer.addEventListener('scroll', debounce(onScroll, 100));
+            
+            // Keyboard navigation
+            document.addEventListener('keydown', e => {
+                if (e.target.tagName === 'INPUT') return;
+                
+                switch (e.key) {
+                    case 'ArrowLeft':
+                    case 'PageUp':
+                        goToPage(currentPage - 1);
+                        break;
+                    case 'ArrowRight':
+                    case 'PageDown':
+                    case ' ':
+                        e.preventDefault();
+                        goToPage(currentPage + 1);
+                        break;
+                    case 'Home':
+                        goToPage(1);
+                        break;
+                    case 'End':
+                        goToPage(totalPages);
+                        break;
+                    case 'Escape':
+                        if (document.fullscreenElement) {
+                            document.exitFullscreen();
+                        }
+                        break;
+                }
+            });
+            
+            // Window resize
+            window.addEventListener('resize', debounce(async () => {
+                const zoomValue = els.zoomSelect.value;
+                if (zoomValue === 'auto' || zoomValue === 'page-fit') {
+                    await renderAllPages();
+                }
+            }, 250));
+        }
+        
+        // === UTILS ===
+        function debounce(fn, delay) {
+            let timer;
+            return function(...args) {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), delay);
+            };
+        }
+        
+        function showError(message) {
+            els.loading.style.display = 'none';
+            els.pdfContainer.innerHTML = `
+                <div class="error-message">
+                    <h2>⚠️ Errore</h2>
+                    <p>${message}</p>
+                    <a href="${returnUrl}" class="btn">Torna indietro</a>
+                </div>
+            `;
+        }
+        
+        // === START ===
+        init();
+    })();
+    </script>
+</body>
+</html>

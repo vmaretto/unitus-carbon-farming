@@ -3900,7 +3900,10 @@ Buono studio!</textarea>
                 const name = nameInput.value.trim();
                 const url = urlInput.value.trim();
                 if (!name) { showToast('Inserisci il nome del materiale', 'error'); return; }
-                if (!url) { showToast('Inserisci URL o carica un file', 'error'); return; }
+                // Permetti URL vuoto se è stato caricato un file
+                if (!url && !form.querySelector('[data-material-file]').files[0]) { 
+                    showToast('Inserisci URL o carica un file', 'error'); return; 
+                }
                 currentMaterials.push({ type, name, url });
                 renderMaterialsList();
                 nameInput.value = '';

@@ -1762,7 +1762,7 @@ Buono studio!</textarea>
         // ============================================
         // AUTH MANAGEMENT
         // ============================================
-        let adminToken = sessionStorage.getItem('adminToken') || null;
+        let adminToken = localStorage.getItem('adminToken') || null;
 
         async function checkAuth() {
             const loginGate = document.getElementById('login-gate');
@@ -1819,7 +1819,7 @@ Buono studio!</textarea>
                 } catch (e) {}
                 // Token non valido, pulisci
                 adminToken = null;
-                sessionStorage.removeItem('adminToken');
+                localStorage.removeItem('adminToken');
             }
 
             // Mostra login
@@ -1851,7 +1851,7 @@ Buono studio!</textarea>
 
                 const data = await res.json();
                 adminToken = data.token;
-                sessionStorage.setItem('adminToken', adminToken);
+                localStorage.setItem('adminToken', adminToken);
                 await checkAuth(); // checkAuth già carica tutti i dati
             } catch (err) {
                 errorEl.textContent = 'Errore di connessione';
@@ -1861,7 +1861,7 @@ Buono studio!</textarea>
 
         function adminLogout() {
             adminToken = null;
-            sessionStorage.removeItem('adminToken');
+            localStorage.removeItem('adminToken');
             checkAuth();
         }
 
@@ -1933,7 +1933,7 @@ Buono studio!</textarea>
                 if (!response.ok) {
                     if (response.status === 401) {
                         adminToken = null;
-                        sessionStorage.removeItem('adminToken');
+                        localStorage.removeItem('adminToken');
                         checkAuth();
                         throw new Error('Sessione scaduta. Effettua nuovamente il login.');
                     }

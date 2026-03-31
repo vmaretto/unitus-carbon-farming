@@ -1236,6 +1236,7 @@ app.get('/api/lesson-materials', async (req, res) => {
   if (!ensurePool(res)) return;
   
   try {
+    // Simple query first - just get lessons with any materials
     const { rows } = await pool.query(`
       SELECT 
         l.id as lesson_id,
@@ -1243,15 +1244,17 @@ app.get('/api/lesson-materials', async (req, res) => {
         l.materials
       FROM lessons l 
       WHERE l.is_published = true 
-        AND l.materials IS NOT NULL 
-        AND l.materials != '[]'::jsonb
       ORDER BY l.start_datetime
+      LIMIT 50
     `);
+    
+    console.log('Found lessons:', rows.length);
     
     // Flatten materials from all lessons
     const allMaterials = [];
     rows.forEach(lesson => {
-      if (lesson.materials && Array.isArray(lesson.materials)) {
+      if (lesson.materials && Array.isArray(lesson.materials) && lesson.materials.length > 0) {
+        console.log('Lesson materials:', lesson.lesson_id, lesson.materials.length);
         lesson.materials.forEach(material => {
           allMaterials.push({
             ...material,
@@ -1263,11 +1266,15 @@ app.get('/api/lesson-materials', async (req, res) => {
       }
     });
     
+    console.log('Total materials found:', allMaterials.length);
     res.json(allMaterials);
     
   } catch (error) {
     console.error('Error fetching lesson materials:', error);
-    res.status(500).json({ error: 'Database error' });
+    res.status(500).json({ 
+      error: 'Database error',
+      details: error.message 
+    });
   }
 });
 

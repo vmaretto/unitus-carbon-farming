@@ -3911,16 +3911,38 @@ Buono studio!</textarea>
                     }
                     const data = await res.json();
                     form.querySelector('[data-material-url]').value = data.url;
+                    
+                    const materialName = data.filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
                     if (!form.querySelector('[data-material-name]').value) {
-                        form.querySelector('[data-material-name]').value = data.filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+                        form.querySelector('[data-material-name]').value = materialName;
                     }
+                    
                     // Auto-detect tipo
                     const ext = data.filename.split('.').pop().toLowerCase();
                     const extTypeMap = { pdf: 'pdf', ppt: 'pdf', pptx: 'pdf', doc: 'document', docx: 'document', mp4: 'video', mp3: 'audio', m4a: 'audio' };
-                    if (extTypeMap[ext]) form.querySelector('[data-material-type]').value = extTypeMap[ext];
+                    const detectedType = extTypeMap[ext] || 'document';
+                    form.querySelector('[data-material-type]').value = detectedType;
+                    
                     statusEl.textContent = '✅ ' + data.filename;
                     statusEl.style.color = 'var(--green-500)';
                     addBtn.disabled = false;
+                    
+                    // AUTO-AGGIUNGI il materiale caricato alla lista
+                    const finalName = form.querySelector('[data-material-name]').value.trim() || materialName;
+                    currentMaterials.push({ 
+                        type: detectedType, 
+                        name: finalName, 
+                        url: data.url 
+                    });
+                    renderMaterialsList();
+                    
+                    // Reset form
+                    form.querySelector('[data-material-name]').value = '';
+                    form.querySelector('[data-material-url]').value = '';
+                    form.querySelector('[data-material-type]').value = 'pdf';
+                    statusEl.textContent = '';
+                    
+                    showToast('Materiale aggiunto alla lezione!', 'success');
                 } catch (error) {
                     statusEl.textContent = '❌ ' + error.message;
                     statusEl.style.color = '#dc3545';

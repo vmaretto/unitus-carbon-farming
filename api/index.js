@@ -1231,6 +1231,46 @@ app.delete('/api/partners/:id', requireAdmin, async (req, res) => {
 // API RISORSE
 // ============================================
 
+// Get lesson materials (flattened from lessons.materials)
+app.get('/api/lesson-materials', async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  try {
+    const { rows } = await pool.query(`
+      SELECT 
+        l.id as lesson_id,
+        l.title as lesson_title,
+        l.materials
+      FROM lessons l 
+      WHERE l.is_published = true 
+        AND l.materials IS NOT NULL 
+        AND jsonb_array_length(l.materials) > 0
+      ORDER BY l.start_datetime
+    `);
+    
+    // Flatten materials from all lessons
+    const allMaterials = [];
+    rows.forEach(lesson => {
+      if (lesson.materials && Array.isArray(lesson.materials)) {
+        lesson.materials.forEach(material => {
+          allMaterials.push({
+            ...material,
+            lesson_id: lesson.lesson_id,
+            lesson_title: lesson.lesson_title,
+            resourceType: material.type // Map to expected format
+          });
+        });
+      }
+    });
+    
+    res.json(allMaterials);
+    
+  } catch (error) {
+    console.error('Error fetching lesson materials:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 app.get('/api/resources', async (req, res) => {
   if (!ensurePool(res)) return;
 

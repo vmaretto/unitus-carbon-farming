@@ -128,12 +128,21 @@
 
         async function loadResources() {
             try {
-                const res = await fetch('/api/resources?published=true');
-                const resources = await res.json();
+                // Load both regular resources and lesson materials
+                const [resourcesRes, materialsRes] = await Promise.all([
+                    fetch('/api/resources?published=true'),
+                    fetch('/api/lesson-materials')
+                ]);
+                
+                const resources = await resourcesRes.json();
+                const lessonMaterials = await materialsRes.json();
+                
+                // Combine both lists
+                const allResources = [...resources, ...lessonMaterials];
 
-                const videos = resources.filter(r => r.resourceType === 'video');
-                const docs = resources.filter(r => ['pdf', 'document', 'audio', 'link'].includes(r.resourceType));
-                const quizzes = resources.filter(r => r.resourceType === 'quiz');
+                const videos = allResources.filter(r => r.resourceType === 'video');
+                const docs = allResources.filter(r => ['pdf', 'document', 'audio', 'link'].includes(r.resourceType));
+                const quizzes = allResources.filter(r => r.resourceType === 'quiz');
 
                 const videoList = document.getElementById('video-list');
                 const docList = document.getElementById('doc-list');

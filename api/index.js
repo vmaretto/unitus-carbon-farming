@@ -1433,9 +1433,9 @@ app.post('/api/materials/upload', requireAdmin, uploadMaterials.single('file'), 
         if (['.mp3', '.wav', '.m4a'].includes(ext)) resourceType = 'audio';
         
         await pool.query(`
-          INSERT INTO resources (id, name, type, url, created_at, updated_at, is_published)
+          INSERT INTO resources (id, title, resource_type, url, is_published, created_at, updated_at)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
-        `, [resourceId, req.file.originalname.replace(/\.[^/.]+$/, ''), resourceType, blob.url, now, now, true]);
+        `, [resourceId, req.file.originalname.replace(/\.[^/.]+$/, ''), resourceType, blob.url, true, now, now]);
         
         console.log(`✅ Material saved to resources table: ${resourceId}`);
       } catch (dbError) {

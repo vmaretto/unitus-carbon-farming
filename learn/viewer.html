@@ -600,6 +600,20 @@
         const fileTitle = params.get('title') || 'Documento';
         const returnUrl = params.get('return') || '/learn/';
         
+        // Validate URL
+        if (!fileUrl) {
+            document.body.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; height: 100vh; text-align: center;">
+                    <div>
+                        <h2>⚠️ Errore</h2>
+                        <p>URL del documento mancante</p>
+                        <a href="${returnUrl}" class="btn">Torna indietro</a>
+                    </div>
+                </div>
+            `;
+            throw new Error('URL del documento mancante');
+        }
+        
         // === ELEMENTS ===
         const els = {
             docTitle: document.getElementById('doc-title'),
@@ -673,6 +687,10 @@
         
         // === LOAD PDF ===
         async function loadPdf() {
+            console.log('🐛 Loading PDF:', fileUrl);
+            console.log('🐛 Return URL:', returnUrl);
+            console.log('🐛 Document title:', documentTitle);
+            
             try {
                 const loadingTask = pdfjsLib.getDocument({
                     url: fileUrl,
@@ -704,7 +722,25 @@
                 
             } catch (error) {
                 console.error('Error loading PDF:', error);
-                showError('Impossibile caricare il documento');
+                console.error('PDF URL:', fileUrl);
+                console.error('Error details:', {
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack
+                });
+                
+                let errorMessage = 'Impossibile caricare il documento';
+                if (error.message && error.message.includes('NetworkError')) {
+                    errorMessage = 'Errore di rete: impossibile scaricare il PDF';
+                } else if (error.message && error.message.includes('InvalidPDFException')) {
+                    errorMessage = 'Il file non è un PDF valido';
+                } else if (error.message && error.message.includes('MissingPDFException')) {
+                    errorMessage = 'File PDF non trovato';
+                } else if (error.message && error.message.includes('UnexpectedResponseException')) {
+                    errorMessage = 'Risposta del server non valida';
+                }
+                
+                showError(`${errorMessage}<br><small>Dettagli tecnici: ${error.message}</small>`);
             }
         }
         

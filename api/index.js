@@ -1231,52 +1231,6 @@ app.delete('/api/partners/:id', requireAdmin, async (req, res) => {
 // API RISORSE
 // ============================================
 
-// Get lesson materials (flattened from lessons.materials)
-app.get('/api/lesson-materials', async (req, res) => {
-  if (!ensurePool(res)) return;
-  
-  try {
-    // Simple query first - just get lessons with any materials
-    const { rows } = await pool.query(`
-      SELECT 
-        l.id as lesson_id,
-        l.title as lesson_title,
-        l.materials
-      FROM lessons l 
-      WHERE l.is_published = true 
-      ORDER BY l.start_datetime
-      LIMIT 50
-    `);
-    
-    console.log('Found lessons:', rows.length);
-    
-    // Flatten materials from all lessons
-    const allMaterials = [];
-    rows.forEach(lesson => {
-      if (lesson.materials && Array.isArray(lesson.materials) && lesson.materials.length > 0) {
-        console.log('Lesson materials:', lesson.lesson_id, lesson.materials.length);
-        lesson.materials.forEach(material => {
-          allMaterials.push({
-            ...material,
-            lesson_id: lesson.lesson_id,
-            lesson_title: lesson.lesson_title,
-            resourceType: material.type // Map to expected format
-          });
-        });
-      }
-    });
-    
-    console.log('Total materials found:', allMaterials.length);
-    res.json(allMaterials);
-    
-  } catch (error) {
-    console.error('Error fetching lesson materials:', error);
-    res.status(500).json({ 
-      error: 'Database error',
-      details: error.message 
-    });
-  }
-});
 
 app.get('/api/resources', async (req, res) => {
   if (!ensurePool(res)) return;
@@ -1465,15 +1419,25 @@ app.post('/api/materials/upload', requireAdmin, uploadMaterials.single('file'), 
       contentType: req.file.mimetype
     });
     
-    // Salva nel database resources per tracciamento
+    // Salva nel database resources (UGUALE alle risorse normali)
     if (hasDatabaseUrl) {
       try {
         const resourceId = uuidv4();
         const now = new Date().toISOString();
+        
+        // Determina il tipo dal file
+        const ext = path.extname(req.file.originalname).toLowerCase();
+        let resourceType = 'document';
+        if (['.pdf'].includes(ext)) resourceType = 'pdf';
+        if (['.mp4', '.mov', '.avi'].includes(ext)) resourceType = 'video';
+        if (['.mp3', '.wav', '.m4a'].includes(ext)) resourceType = 'audio';
+        
         await pool.query(`
-          INSERT INTO resources (id, name, type, url, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6)
-        `, [resourceId, req.file.originalname.replace(/\.[^/.]+$/, ''), 'material', blob.url, now, now]);
+          INSERT INTO resources (id, name, type, url, created_at, updated_at, is_published)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `, [resourceId, req.file.originalname.replace(/\.[^/.]+$/, ''), resourceType, blob.url, now, now, true]);
+        
+        console.log(`✅ Material saved to resources table: ${resourceId}`);
       } catch (dbError) {
         console.error('Errore salvataggio DB materiale:', dbError);
         // Non fallisce se DB non disponibile

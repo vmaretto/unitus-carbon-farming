@@ -1381,6 +1381,16 @@ app.post('/api/resources/upload', requireAdmin, upload.single('file'), async (re
     return res.status(400).json({ error: 'Nessun file caricato' });
   }
 
+  console.log('Upload file:', {
+    originalname: req.file.originalname,
+    size: req.file.size,
+    mimetype: req.file.mimetype
+  });
+
+  if (req.file.size > 50 * 1024 * 1024) {
+    return res.status(413).json({ error: 'File troppo grande (max 50MB)' });
+  }
+
   try {
     // Sanitizza il nome file
     const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');

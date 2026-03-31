@@ -2495,8 +2495,16 @@ Buono studio!</textarea>
                     body: formData
                 });
                 if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.error || 'Upload fallito');
+                    let errorMsg = 'Upload fallito';
+                    try {
+                        const errorData = await res.json();
+                        errorMsg = errorData.error || errorMsg;
+                    } catch (e) {
+                        // Response is not JSON, use status text
+                        errorMsg = `HTTP ${res.status}: ${res.statusText}`;
+                        if (res.status === 413) errorMsg = 'File troppo grande (max 50MB)';
+                    }
+                    throw new Error(errorMsg);
                 }
                 const data = await res.json();
                 document.getElementById('resource-url').value = data.url;
@@ -3886,7 +3894,18 @@ Buono studio!</textarea>
                         headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem('adminToken') },
                         body: formData
                     });
-                    if (!res.ok) throw new Error((await res.json()).error || 'Upload fallito');
+                    if (!res.ok) {
+                        let errorMsg = 'Upload fallito';
+                        try {
+                            const errorData = await res.json();
+                            errorMsg = errorData.error || errorMsg;
+                        } catch (e) {
+                            // Response is not JSON, use status text
+                            errorMsg = `HTTP ${res.status}: ${res.statusText}`;
+                            if (res.status === 413) errorMsg = 'File troppo grande (max 50MB)';
+                        }
+                        throw new Error(errorMsg);
+                    }
                     const data = await res.json();
                     form.querySelector('[data-material-url]').value = data.url;
                     if (!form.querySelector('[data-material-name]').value) {

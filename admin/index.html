@@ -3936,6 +3936,15 @@ Buono studio!</textarea>
                     });
                     renderMaterialsList();
                     
+                    // SALVA LA LEZIONE con i nuovi materiali
+                    const lessonForm = document.getElementById('lesson-form');
+                    if (lessonForm) {
+                        const saveButton = lessonForm.querySelector('button[data-action="save-lesson"]');
+                        if (saveButton) {
+                            saveButton.click();
+                        }
+                    }
+                    
                     // RICARICA LA LISTA RESOURCES (gestione unificata)
                     if (typeof loadResources === 'function') {
                         loadResources();
@@ -3946,7 +3955,7 @@ Buono studio!</textarea>
                     form.querySelector('[data-material-url]').value = '';
                     statusEl.textContent = '';
                     
-                    showToast('File caricato! Visibile in viewer lezione E in sezione Risorse.', 'success');
+                    showToast('File caricato! Salvo lezione...', 'success');
                 } catch (error) {
                     statusEl.textContent = '❌ ' + error.message;
                     statusEl.style.color = '#dc3545';

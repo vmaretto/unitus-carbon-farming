@@ -1244,7 +1244,7 @@ app.get('/api/lesson-materials', async (req, res) => {
       FROM lessons l 
       WHERE l.is_published = true 
         AND l.materials IS NOT NULL 
-        AND jsonb_array_length(l.materials) > 0
+        AND l.materials != '[]'::jsonb
       ORDER BY l.start_datetime
     `);
     

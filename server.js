@@ -12,9 +12,25 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Configurazione multer per upload in memoria (per Vercel Blob)
-const upload = multer({ 
+// Upload per risorse generali (limite 4MB)
+const uploadSmall = multer({ 
   storage: multer.memoryStorage(),
   limits: { fileSize: 4 * 1024 * 1024 }, // 4MB max per Vercel Functions
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Tipo file non supportato'));
+    }
+  }
+});
+
+// Upload per materiali lezioni (limite 10MB)
+const uploadMaterials = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max per materiali lezioni
   fileFilter: (req, file, cb) => {
     const allowed = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
     const ext = path.extname(file.originalname).toLowerCase();
@@ -1375,8 +1391,56 @@ app.delete('/api/resources/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// Upload file per materiali lezioni (limite 10MB)
+app.post('/api/materials/upload', requireAdmin, uploadMaterials.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Nessun file caricato' });
+  }
+
+  console.log('Upload materiale lezione:', {
+    originalname: req.file.originalname,
+    size: req.file.size,
+    mimetype: req.file.mimetype
+  });
+
+  if (req.file.size > 10 * 1024 * 1024) {
+    return res.status(413).json({ error: 'File troppo grande (max 10MB per materiali lezioni)' });
+  }
+
+  try {
+    // Sanitizza il nome file
+    const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    
+    // Upload su Vercel Blob  
+    const blob = await put(safeName, req.file.buffer, {
+      access: 'public'
+    });
+    
+    // Salva nel database resources per tracciamento
+    if (hasDatabaseUrl) {
+      try {
+        const resourceId = uuidv4();
+        const now = new Date().toISOString();
+        await pool.query(`
+          INSERT INTO resources (id, name, type, url, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [resourceId, req.file.originalname.replace(/\.[^/.]+$/, ''), 'material', blob.url, now, now]);
+      } catch (dbError) {
+        console.error('Errore salvataggio DB materiale:', dbError);
+        // Non fallisce se DB non disponibile
+      }
+    }
+    
+    res.json({ url: blob.url, filename: safeName });
+    
+  } catch (error) {
+    console.error('Errore upload materiale:', error);
+    res.status(500).json({ error: 'Upload fallito: ' + error.message });
+  }
+});
+
 // Upload file per risorse con compressione automatica
-app.post('/api/resources/upload', requireAdmin, upload.single('file'), async (req, res) => {
+app.post('/api/resources/upload', requireAdmin, uploadSmall.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nessun file caricato' });
   }

@@ -3934,8 +3934,8 @@ Buono studio!</textarea>
                     videoProvider: form.querySelector('[data-field="videoProvider"]').value || null,
                     durationSeconds: form.querySelector('[data-field="durationSeconds"]').value === '' ? null : Number(form.querySelector('[data-field="durationSeconds"]').value),
                     sortOrder: Number(form.querySelector('[data-field="sortOrder"]').value) || 0,
-                    isFree: form.querySelector('[data-field="isFree"]').checked,
-                    isPublished: form.querySelector('[data-field="isPublished"]').checked,
+                    isFree: form.querySelector('[data-field="isFree"]')?.checked || false,
+                    isPublished: form.querySelector('[data-field="isPublished"]')?.checked || false,
                     materials: currentMaterials
                 };
                 console.log('🐛 DEBUG: payload =', payload);
@@ -3955,7 +3955,8 @@ Buono studio!</textarea>
             cancelBtn.addEventListener('click', () => {
                 editingId = null;
                 form.reset();
-                form.querySelector('[data-field="isPublished"]').checked = true;
+                const publishedEl = form.querySelector('[data-field="isPublished"]');
+                if (publishedEl) publishedEl.checked = true;
                 cancelBtn.style.display = 'none';
                 form.querySelector('button.primary').textContent = 'Salva lezione';
                 currentMaterials = [];
@@ -3982,7 +3983,8 @@ Buono studio!</textarea>
                     form.querySelector('[data-field="videoProvider"]').value = lesson.videoProvider || '';
                     form.querySelector('[data-field="durationSeconds"]').value = lesson.durationSeconds ?? '';
                     form.querySelector('[data-field="sortOrder"]').value = lesson.sortOrder ?? 0;
-                    form.querySelector('[data-field="isPublished"]').checked = Boolean(lesson.isPublished);
+                    const isPublishedEl = form.querySelector('[data-field="isPublished"]');
+                    if (isPublishedEl) isPublishedEl.checked = Boolean(lesson.isPublished);
                     // Carica materiali esistenti
                     currentMaterials = Array.isArray(lesson.materials) ? [...lesson.materials] : [];
                     renderMaterialsList();
@@ -4225,7 +4227,7 @@ Buono studio!</textarea>
                             passingScore: Number(createForm.querySelector('[data-field="passingScore"]').value) || 70,
                             timeLimitMinutes: createForm.querySelector('[data-field="timeLimitMinutes"]').value ? Number(createForm.querySelector('[data-field="timeLimitMinutes"]').value) : null,
                             maxAttempts: Number(createForm.querySelector('[data-field="maxAttempts"]').value) || 0,
-                            isPublished: createForm.querySelector('[data-field="isPublished"]').checked
+                            isPublished: createForm.querySelector('[data-field="isPublished"]')?.checked || false
                         };
                         if (!payload.title) { showToast('Inserisci il titolo del quiz', 'error'); return; }
                         try {

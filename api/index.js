@@ -1419,30 +1419,8 @@ app.post('/api/materials/upload', requireAdmin, uploadMaterials.single('file'), 
       contentType: req.file.mimetype
     });
     
-    // Salva nel database resources (UGUALE alle risorse normali)
-    if (hasDatabaseUrl) {
-      try {
-        const resourceId = uuidv4();
-        const now = new Date().toISOString();
-        
-        // Determina il tipo dal file
-        const ext = path.extname(req.file.originalname).toLowerCase();
-        let resourceType = 'document';
-        if (['.pdf'].includes(ext)) resourceType = 'pdf';
-        if (['.mp4', '.mov', '.avi'].includes(ext)) resourceType = 'video';
-        if (['.mp3', '.wav', '.m4a'].includes(ext)) resourceType = 'audio';
-        
-        await pool.query(`
-          INSERT INTO resources (id, title, resource_type, url, is_published, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
-        `, [resourceId, req.file.originalname.replace(/\.[^/.]+$/, ''), resourceType, blob.url, true, now, now]);
-        
-        console.log(`✅ Material saved to resources table: ${resourceId}`);
-      } catch (dbError) {
-        console.error('Errore salvataggio DB materiale:', dbError);
-        // Non fallisce se DB non disponibile
-      }
-    }
+    // I materiali lezioni NON vanno in tabella resources
+    // Vanno solo nel JSON lessons.materials per viewer protetto
     
     res.json({ url: blob.url, filename: safeName });
     

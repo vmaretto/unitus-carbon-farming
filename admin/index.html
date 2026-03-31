@@ -3945,10 +3945,7 @@ Buono studio!</textarea>
                         }
                     }
                     
-                    // RICARICA LA LISTA RESOURCES (gestione unificata)
-                    if (typeof loadResources === 'function') {
-                        loadResources();
-                    }
+                    // NON ricarica Resources - materiali lezioni sono separati
                     
                     // Reset form
                     form.querySelector('[data-material-name]').value = '';

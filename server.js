@@ -5045,6 +5045,68 @@ async function handler(req, res) {
   return app(req, res);
 }
 
+// PDF Proxy endpoint to handle CORS issues
+app.get('/api/pdf-proxy', async (req, res) => {
+    try {
+        const { url } = req.query;
+        if (!url) {
+            return res.status(400).json({ error: 'URL parameter required' });
+        }
+        
+        // Validate URL
+        let pdfUrl;
+        try {
+            pdfUrl = new URL(url);
+        } catch (e) {
+            return res.status(400).json({ error: 'Invalid URL' });
+        }
+        
+        // Only allow specific domains for security
+        const allowedDomains = [
+            'public.blob.vercel-storage.com',
+            'tc0ghxf0np2o2zbw.public.blob.vercel-storage.com'
+        ];
+        
+        if (!allowedDomains.includes(pdfUrl.hostname)) {
+            return res.status(403).json({ error: 'Domain not allowed' });
+        }
+        
+        const https = require('https');
+        const http = require('http');
+        const client = pdfUrl.protocol === 'https:' ? https : http;
+        
+        const request = client.get(url, (pdfRes) => {
+            if (pdfRes.statusCode !== 200) {
+                return res.status(pdfRes.statusCode).json({ error: 'Failed to fetch PDF' });
+            }
+            
+            // Set CORS headers
+            res.set({
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type',
+                'Content-Type': pdfRes.headers['content-type'] || 'application/pdf',
+                'Content-Length': pdfRes.headers['content-length']
+            });
+            
+            pdfRes.pipe(res);
+        });
+        
+        request.on('error', (error) => {
+            console.error('PDF proxy error:', error);
+            res.status(500).json({ error: 'Failed to fetch PDF' });
+        });
+        
+        request.setTimeout(30000, () => {
+            request.destroy();
+            res.status(408).json({ error: 'Timeout fetching PDF' });
+        });
+        
+    } catch (error) {
+        console.error('PDF proxy error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 if (require.main === module) {
   ensureDatabaseInitialized()
     .catch((error) => {

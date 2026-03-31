@@ -704,8 +704,11 @@
             }
             
             try {
+                // Use proxy to handle CORS issues
+                const proxyUrl = `/api/pdf-proxy?url=${encodeURIComponent(fileUrl)}`;
+                
                 const loadingTask = pdfjsLib.getDocument({
-                    url: fileUrl,
+                    url: proxyUrl,
                     // For protected PDFs served via API, add auth header
                     httpHeaders: token ? { 'Authorization': 'Bearer ' + token } : {}
                 });

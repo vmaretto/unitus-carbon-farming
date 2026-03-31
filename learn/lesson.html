@@ -621,26 +621,42 @@
             }
 
             container.innerHTML = questions.map((q, i) => {
+                if (!q || !q.id) return '';
+                
                 const inputType = q.questionType === 'multiple_choice' ? 'checkbox' : 'radio';
-                const options = (q.options || []).map((opt, j) => `
-                    <label class="option-label" data-question="${q.id}" data-option="${j}">
-                        <input type="${inputType}" name="q_${q.id}" value="${escapeHtml(JSON.stringify(opt))}" />
-                        <span>${escapeHtml(String(opt))}</span>
-                    </label>
-                `).join('');
+                const options = (q.options || []).map((opt, j) => {
+                    if (opt === null || opt === undefined) return '';
+                    
+                    let safeValue;
+                    try {
+                        safeValue = escapeHtml(JSON.stringify(opt));
+                    } catch (e) {
+                        safeValue = escapeHtml(String(opt));
+                    }
+                    
+                    return `
+                        <label class="option-label" data-question="${q.id}" data-option="${j}">
+                            <input type="${inputType}" name="q_${q.id}" value="${safeValue}" />
+                            <span>${escapeHtml(String(opt))}</span>
+                        </label>
+                    `;
+                }).filter(Boolean).join('');
 
+                const points = q.points || 1;
                 return `
                     <div class="question" data-question-id="${q.id}">
-                        <div class="question-number">Domanda ${i + 1} di ${questions.length} (${q.points} ${q.points === 1 ? 'punto' : 'punti'})</div>
-                        <div class="question-text">${escapeHtml(q.questionText)}</div>
+                        <div class="question-number">Domanda ${i + 1} di ${questions.length} (${points} ${points === 1 ? 'punto' : 'punti'})</div>
+                        <div class="question-text">${escapeHtml(q.questionText || 'Domanda senza testo')}</div>
                         ${options}
                     </div>
                 `;
-            }).join('');
+            }).filter(Boolean).join('');
 
             // Show submit button
-            document.getElementById('quiz-actions').style.display = '';
-            document.getElementById('quiz-submit-btn').onclick = submitQuiz;
+            const actionsEl = document.getElementById('quiz-actions');
+            const submitBtn = document.getElementById('quiz-submit-btn');
+            if (actionsEl) actionsEl.style.display = '';
+            if (submitBtn) submitBtn.onclick = submitQuiz;
         }
 
         async function submitQuiz() {
@@ -648,12 +664,32 @@
             const answers = {};
 
             currentQuiz.questions.forEach(q => {
-                if (q.questionType === 'multiple_choice') {
-                    const checked = document.querySelectorAll(`input[name="q_${q.id}"]:checked`);
-                    answers[q.id] = Array.from(checked).map(el => JSON.parse(el.value));
-                } else {
-                    const checked = document.querySelector(`input[name="q_${q.id}"]:checked`);
-                    answers[q.id] = checked ? JSON.parse(checked.value) : null;
+                try {
+                    if (q.questionType === 'multiple_choice') {
+                        const checked = document.querySelectorAll(`input[name="q_${q.id}"]:checked`);
+                        answers[q.id] = Array.from(checked).map(el => {
+                            if (!el || !el.value) return null;
+                            try {
+                                return JSON.parse(el.value);
+                            } catch (e) {
+                                return el.value;
+                            }
+                        }).filter(v => v !== null);
+                    } else {
+                        const checked = document.querySelector(`input[name="q_${q.id}"]:checked`);
+                        if (checked && checked.value) {
+                            try {
+                                answers[q.id] = JSON.parse(checked.value);
+                            } catch (e) {
+                                answers[q.id] = checked.value;
+                            }
+                        } else {
+                            answers[q.id] = null;
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`Error processing question ${q.id}:`, error);
+                    answers[q.id] = null;
                 }
             });
 
@@ -678,24 +714,40 @@
                 // Highlight correct/incorrect answers
                 if (result.results) {
                     Object.entries(result.results).forEach(([qId, r]) => {
-                        const questionDiv = document.querySelector(`[data-question-id="${qId}"]`);
-                        if (!questionDiv) return;
-                        const labels = questionDiv.querySelectorAll('.option-label');
-                        labels.forEach(label => {
-                            const input = label.querySelector('input');
-                            const val = JSON.parse(input.value);
-                            const correctAnswer = r.correctAnswer;
-                            const isCorrectOption = Array.isArray(correctAnswer)
-                                ? correctAnswer.includes(val)
-                                : val === correctAnswer;
+                        try {
+                            const questionDiv = document.querySelector(`[data-question-id="${qId}"]`);
+                            if (!questionDiv) return;
+                            const labels = questionDiv.querySelectorAll('.option-label');
+                            labels.forEach(label => {
+                                try {
+                                    const input = label.querySelector('input');
+                                    if (!input || !input.value) return;
+                                    
+                                    let val;
+                                    try {
+                                        val = JSON.parse(input.value);
+                                    } catch (e) {
+                                        val = input.value;
+                                    }
+                                    
+                                    const correctAnswer = r.correctAnswer;
+                                    const isCorrectOption = Array.isArray(correctAnswer)
+                                        ? correctAnswer.includes(val)
+                                        : val === correctAnswer;
 
-                            if (isCorrectOption) {
-                                label.classList.add('correct');
-                            } else if (input.checked && !isCorrectOption) {
-                                label.classList.add('incorrect');
-                            }
-                            input.disabled = true;
-                        });
+                                    if (isCorrectOption) {
+                                        label.classList.add('correct');
+                                    } else if (input.checked && !isCorrectOption) {
+                                        label.classList.add('incorrect');
+                                    }
+                                    input.disabled = true;
+                                } catch (error) {
+                                    console.warn(`Error processing label for question ${qId}:`, error);
+                                }
+                            });
+                        } catch (error) {
+                            console.warn(`Error highlighting answers for question ${qId}:`, error);
+                        }
                     });
                 }
 

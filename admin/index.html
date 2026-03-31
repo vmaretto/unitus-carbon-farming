@@ -1764,6 +1764,22 @@ Buono studio!</textarea>
         // ============================================
         let adminToken = localStorage.getItem('adminToken') || null;
 
+        // Helper functions per safe DOM access
+        function safeValue(selector, form = document) {
+            const el = form.querySelector(selector);
+            return el ? el.value : '';
+        }
+
+        function safeChecked(selector, form = document) {
+            const el = form.querySelector(selector);
+            return el ? el.checked : false;
+        }
+
+        function safeSetChecked(selector, value, form = document) {
+            const el = form.querySelector(selector);
+            if (el) el.checked = Boolean(value);
+        }
+
         async function checkAuth() {
             const loginGate = document.getElementById('login-gate');
             const mainContent = document.querySelector('main');
@@ -3795,6 +3811,7 @@ Buono studio!</textarea>
                     </div>
                     <input type="hidden" data-field="materials" value="[]">
                     <div class="actions">
+                        <label class="switch"><input type="checkbox" data-field="isFree"><span class="slider"></span> Gratuita</label>
                         <label class="switch"><input type="checkbox" data-field="isPublished" checked><span class="slider"></span> Pubblicata</label>
                         <button class="primary" type="submit">Salva lezione</button>
                         <button class="secondary" type="button" data-cancel-lesson style="display:none;">Annulla</button>
@@ -3810,11 +3827,14 @@ Buono studio!</textarea>
                     const pub = l.isPublished
                         ? '<span class="status-pill" data-status="published">Pubblicata</span>'
                         : '<span class="status-pill" data-status="draft">Bozza</span>';
+                    const free = l.isFree
+                        ? '<span class="status-pill" style="background: var(--orange-500); color: white;">Gratuita</span>'
+                        : '';
                     const dur = l.durationSeconds ? `${Math.floor(l.durationSeconds / 60)} min` : '';
                     html += `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--gray-200);" data-lesson-id="${l.id}">
                             <div>
-                                <strong>${l.title}</strong> ${pub}
+                                <strong>${l.title}</strong> ${pub} ${free}
                                 <span style="color: var(--gray-500); font-size: 0.85rem; margin-left: 8px;">${dur}</span>
                             </div>
                             <div class="actions" style="margin: 0;">
@@ -3928,17 +3948,24 @@ Buono studio!</textarea>
                 console.log('🐛 DEBUG: currentMaterials =', currentMaterials);
                 const payload = {
                     moduleId: moduleId,
-                    title: form.querySelector('[data-field="title"]').value.trim(),
-                    description: form.querySelector('[data-field="description"]').value.trim() || null,
-                    videoUrl: form.querySelector('[data-field="videoUrl"]').value.trim() || null,
-                    videoProvider: form.querySelector('[data-field="videoProvider"]').value || null,
-                    durationSeconds: form.querySelector('[data-field="durationSeconds"]').value === '' ? null : Number(form.querySelector('[data-field="durationSeconds"]').value),
-                    sortOrder: Number(form.querySelector('[data-field="sortOrder"]').value) || 0,
-                    isFree: form.querySelector('[data-field="isFree"]')?.checked || false,
-                    isPublished: form.querySelector('[data-field="isPublished"]')?.checked || false,
+                    title: form.querySelector('[data-field="title"]')?.value?.trim() || '',
+                    description: form.querySelector('[data-field="description"]')?.value?.trim() || null,
+                    videoUrl: form.querySelector('[data-field="videoUrl"]')?.value?.trim() || null,
+                    videoProvider: form.querySelector('[data-field="videoProvider"]')?.value || null,
+                    durationSeconds: form.querySelector('[data-field="durationSeconds"]')?.value === '' ? null : Number(form.querySelector('[data-field="durationSeconds"]')?.value || 0),
+                    sortOrder: Number(form.querySelector('[data-field="sortOrder"]')?.value) || 0,
+                    isFree: safeChecked('[data-field="isFree"]', form),
+                    isPublished: safeChecked('[data-field="isPublished"]', form),
                     materials: currentMaterials
                 };
                 console.log('🐛 DEBUG: payload =', payload);
+                console.log('🐛 DEBUG: form elements check:', {
+                    titleEl: !!form.querySelector('[data-field="title"]'),
+                    descEl: !!form.querySelector('[data-field="description"]'), 
+                    videoEl: !!form.querySelector('[data-field="videoUrl"]'),
+                    isFreeEl: !!form.querySelector('[data-field="isFree"]'),
+                    isPublishedEl: !!form.querySelector('[data-field="isPublished"]')
+                });
                 if (!payload.title) { showToast('Inserisci il titolo', 'error'); return; }
                 try {
                     const method = editingId ? 'PUT' : 'POST';
@@ -3983,8 +4010,8 @@ Buono studio!</textarea>
                     form.querySelector('[data-field="videoProvider"]').value = lesson.videoProvider || '';
                     form.querySelector('[data-field="durationSeconds"]').value = lesson.durationSeconds ?? '';
                     form.querySelector('[data-field="sortOrder"]').value = lesson.sortOrder ?? 0;
-                    const isPublishedEl = form.querySelector('[data-field="isPublished"]');
-                    if (isPublishedEl) isPublishedEl.checked = Boolean(lesson.isPublished);
+                    safeSetChecked('[data-field="isFree"]', lesson.isFree, form);
+                    safeSetChecked('[data-field="isPublished"]', lesson.isPublished, form);
                     // Carica materiali esistenti
                     currentMaterials = Array.isArray(lesson.materials) ? [...lesson.materials] : [];
                     renderMaterialsList();

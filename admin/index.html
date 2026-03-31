@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pannello Amministrazione - Master in Carbon Farming</title>
+    <!-- Cache buster per nuovo deploy materiali -->
+    <meta name="cache-version" content="2026-03-31-v22-MATERIALS">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3889,6 +3891,7 @@ Buono studio!</textarea>
                 const formData = new FormData();
                 formData.append('file', file);
                 try {
+                    console.log('🔥 CHIAMANDO: /api/materials/upload per materiale lezione');
                     const res = await fetch('/api/materials/upload', {
                         method: 'POST',
                         headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem('adminToken') },

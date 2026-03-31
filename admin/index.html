@@ -3870,9 +3870,9 @@ Buono studio!</textarea>
                     listDiv.innerHTML = '<span style="color: var(--gray-500); font-size: 0.85rem;">Nessun materiale aggiunto</span>';
                 } else {
                     listDiv.innerHTML = currentMaterials.map((m, i) => `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: white; border-radius: 4px; margin-bottom: 4px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: white; border-radius: 4px; margin-bottom: 4px; border: 1px solid #e5e7eb;">
                             <span>${typeIcons[m.type] || '📄'} <a href="${m.url}" target="_blank" rel="noopener">${m.name}</a></span>
-                            <button type="button" class="danger" data-remove-material="${i}" style="padding: 2px 8px; font-size: 0.75rem;">✕</button>
+                            <button type="button" class="danger" data-remove-material="${i}" style="padding: 4px 8px; font-size: 0.8rem; background: #dc2626; color: white; border-radius: 3px;" title="Elimina materiale">🗑️</button>
                         </div>
                     `).join('');
                 }
@@ -3949,13 +3949,18 @@ Buono studio!</textarea>
                 form.querySelector('[data-material-upload-status]').textContent = '';
             });
             
-            // Rimuovi materiale
+            // Rimuovi materiale con conferma
             form.querySelector('[data-materials-list]').addEventListener('click', (e) => {
                 const btn = e.target.closest('[data-remove-material]');
                 if (btn) {
                     const idx = parseInt(btn.dataset.removeMaterial, 10);
-                    currentMaterials.splice(idx, 1);
-                    renderMaterialsList();
+                    const material = currentMaterials[idx];
+                    
+                    if (confirm(`Vuoi eliminare il materiale "${material.name}"?`)) {
+                        currentMaterials.splice(idx, 1);
+                        renderMaterialsList();
+                        showToast('Materiale rimosso', 'success');
+                    }
                 }
             });
             

@@ -3811,7 +3811,6 @@ Buono studio!</textarea>
                     </div>
                     <input type="hidden" data-field="materials" value="[]">
                     <div class="actions">
-                        <label class="switch"><input type="checkbox" data-field="isFree"><span class="slider"></span> Gratuita</label>
                         <label class="switch"><input type="checkbox" data-field="isPublished" checked><span class="slider"></span> Pubblicata</label>
                         <button class="primary" type="submit">Salva lezione</button>
                         <button class="secondary" type="button" data-cancel-lesson style="display:none;">Annulla</button>
@@ -3827,14 +3826,11 @@ Buono studio!</textarea>
                     const pub = l.isPublished
                         ? '<span class="status-pill" data-status="published">Pubblicata</span>'
                         : '<span class="status-pill" data-status="draft">Bozza</span>';
-                    const free = l.isFree
-                        ? '<span class="status-pill" style="background: var(--orange-500); color: white;">Gratuita</span>'
-                        : '';
                     const dur = l.durationSeconds ? `${Math.floor(l.durationSeconds / 60)} min` : '';
                     html += `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--gray-200);" data-lesson-id="${l.id}">
                             <div>
-                                <strong>${l.title}</strong> ${pub} ${free}
+                                <strong>${l.title}</strong> ${pub}
                                 <span style="color: var(--gray-500); font-size: 0.85rem; margin-left: 8px;">${dur}</span>
                             </div>
                             <div class="actions" style="margin: 0;">
@@ -3954,7 +3950,7 @@ Buono studio!</textarea>
                     videoProvider: form.querySelector('[data-field="videoProvider"]')?.value || null,
                     durationSeconds: form.querySelector('[data-field="durationSeconds"]')?.value === '' ? null : Number(form.querySelector('[data-field="durationSeconds"]')?.value || 0),
                     sortOrder: Number(form.querySelector('[data-field="sortOrder"]')?.value) || 0,
-                    isFree: safeChecked('[data-field="isFree"]', form),
+                    isFree: false,
                     isPublished: safeChecked('[data-field="isPublished"]', form),
                     materials: currentMaterials
                 };
@@ -4010,7 +4006,7 @@ Buono studio!</textarea>
                     form.querySelector('[data-field="videoProvider"]').value = lesson.videoProvider || '';
                     form.querySelector('[data-field="durationSeconds"]').value = lesson.durationSeconds ?? '';
                     form.querySelector('[data-field="sortOrder"]').value = lesson.sortOrder ?? 0;
-                    safeSetChecked('[data-field="isFree"]', lesson.isFree, form);
+                    // isFree rimosso dall'interfaccia
                     safeSetChecked('[data-field="isPublished"]', lesson.isPublished, form);
                     // Carica materiali esistenti
                     currentMaterials = Array.isArray(lesson.materials) ? [...lesson.materials] : [];
@@ -4254,7 +4250,8 @@ Buono studio!</textarea>
                             passingScore: Number(createForm.querySelector('[data-field="passingScore"]').value) || 70,
                             timeLimitMinutes: createForm.querySelector('[data-field="timeLimitMinutes"]').value ? Number(createForm.querySelector('[data-field="timeLimitMinutes"]').value) : null,
                             maxAttempts: Number(createForm.querySelector('[data-field="maxAttempts"]').value) || 0,
-                            isPublished: createForm.querySelector('[data-field="isPublished"]')?.checked || false
+                            isPublished: createForm.querySelector('[data-field="isPublished"]')?.checked || false,
+                            isFree: false
                         };
                         if (!payload.title) { showToast('Inserisci il titolo del quiz', 'error'); return; }
                         try {

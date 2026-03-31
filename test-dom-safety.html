@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DOM Safety Test</title>
+</head>
+<body>
+    <h1>Test sicurezza accesso DOM</h1>
+    <div id="results"></div>
+
+    <script>
+        function runTests() {
+            const results = [];
+            
+            // Test 1: querySelector su elemento inesistente
+            try {
+                const el = document.querySelector('[data-missing="test"]');
+                const checked = el?.checked || false; // Safe access
+                results.push('✅ Test 1 PASSED: Safe access con ?. operator');
+            } catch (e) {
+                results.push('❌ Test 1 FAILED: ' + e.message);
+            }
+            
+            // Test 2: querySelector + checked diretto (pericoloso)
+            try {
+                const el = document.querySelector('[data-missing="test"]');
+                if (el) {
+                    const checked = el.checked; // Safe perché dentro if
+                }
+                results.push('✅ Test 2 PASSED: Safe access con if check');
+            } catch (e) {
+                results.push('❌ Test 2 FAILED: ' + e.message);
+            }
+            
+            // Test 3: Simula bug originale
+            try {
+                const el = null; // Simula querySelector che ritorna null
+                const checked = el.checked; // Questo dovrebbe fallire
+                results.push('❌ Test 3 FAILED: Bug non rilevato');
+            } catch (e) {
+                results.push('✅ Test 3 PASSED: Bug rilevato correttamente - ' + e.message);
+            }
+            
+            // Test 4: Helper function
+            function safeChecked(selector, form = document) {
+                const el = form.querySelector(selector);
+                return el ? el.checked : false;
+            }
+            
+            try {
+                const result = safeChecked('[data-missing="test"]');
+                results.push('✅ Test 4 PASSED: Helper function safe - result: ' + result);
+            } catch (e) {
+                results.push('❌ Test 4 FAILED: ' + e.message);
+            }
+            
+            document.getElementById('results').innerHTML = results.map(r => '<p>' + r + '</p>').join('');
+        }
+        
+        runTests();
+    </script>
+</body>
+</html>

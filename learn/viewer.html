@@ -11,6 +11,12 @@
     
     <!-- PDF.js from Mozilla CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // Set worker path for PDF.js
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+    </script>
     
     <style>
         :root {
@@ -689,7 +695,13 @@
         async function loadPdf() {
             console.log('🐛 Loading PDF:', fileUrl);
             console.log('🐛 Return URL:', returnUrl);
-            console.log('🐛 Document title:', documentTitle);
+            console.log('🐛 Document title:', fileTitle);
+            console.log('🐛 PDF.js available:', typeof pdfjsLib !== 'undefined');
+            
+            if (typeof pdfjsLib === 'undefined') {
+                showError('PDF.js non caricato correttamente. Ricarica la pagina.');
+                return;
+            }
             
             try {
                 const loadingTask = pdfjsLib.getDocument({

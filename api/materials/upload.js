@@ -1,7 +1,5 @@
 // Edge Function per upload materiali grandi (limite ~50MB)
 import { put } from '@vercel/blob';
-import { v4 as uuidv4 } from 'uuid';
-import { createPool } from '@vercel/postgres';
 
 export const config = {
   runtime: 'edge',
@@ -57,22 +55,8 @@ export default async function handler(request) {
       access: 'public'
     });
     
-    // Save to database if available
-    if (process.env.DATABASE_URL) {
-      try {
-        const pool = createPool({ connectionString: process.env.DATABASE_URL });
-        const resourceId = uuidv4();
-        const now = new Date().toISOString();
-        
-        await pool.sql`
-          INSERT INTO resources (id, name, type, url, created_at, updated_at)
-          VALUES (${resourceId}, ${file.name.replace(/\.[^/.]+$/, '')}, 'material', ${blob.url}, ${now}, ${now})
-        `;
-      } catch (dbError) {
-        console.error('DB error:', dbError);
-        // Don't fail upload for DB issues
-      }
-    }
+    // Note: Database insert skipped in Edge Function for simplicity
+    // The file will be accessible via the blob URL
     
     return new Response(JSON.stringify({ 
       url: blob.url, 

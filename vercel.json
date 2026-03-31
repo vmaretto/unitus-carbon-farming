@@ -3,8 +3,13 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 60
+    },
+    "server.js": {
+      "maxDuration": 60,
+      "memory": 1024
     }
   },
+  "maxRequestBodySize": "50mb",
   "rewrites": [
     {
       "source": "/api/(.*)",

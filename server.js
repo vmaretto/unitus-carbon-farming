@@ -27,10 +27,10 @@ const uploadSmall = multer({
   }
 });
 
-// Upload per materiali lezioni (limite 10MB)
+// Upload per materiali lezioni (limite 20MB)
 const uploadMaterials = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max per materiali lezioni
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB max per materiali lezioni
   fileFilter: (req, file, cb) => {
     const allowed = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
     const ext = path.extname(file.originalname).toLowerCase();
@@ -1403,8 +1403,8 @@ app.post('/api/materials/upload', requireAdmin, uploadMaterials.single('file'), 
     mimetype: req.file.mimetype
   });
 
-  if (req.file.size > 10 * 1024 * 1024) {
-    return res.status(413).json({ error: 'File troppo grande (max 10MB per materiali lezioni)' });
+  if (req.file.size > 20 * 1024 * 1024) {
+    return res.status(413).json({ error: 'File troppo grande (max 20MB per materiali lezioni)' });
   }
 
   try {

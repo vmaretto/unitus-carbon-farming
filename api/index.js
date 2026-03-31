@@ -298,7 +298,30 @@ app.get('/api/pdf-proxy', async (req, res) => {
             return res.status(400).json({ error: 'Invalid URL' });
         }
         
-        // Only allow specific domains for security
+        // Handle local files (starting with /upload/)
+        if (url.startsWith('/upload/')) {
+            const fs = require('fs');
+            const path = require('path');
+            const filePath = path.join(__dirname, '..', url);
+            
+            try {
+                if (!fs.existsSync(filePath)) {
+                    return res.status(404).json({ error: 'File not found' });
+                }
+                
+                res.set({
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type',
+                    'Content-Type': 'application/pdf'
+                });
+                
+                return fs.createReadStream(filePath).pipe(res);
+            } catch (error) {
+                return res.status(500).json({ error: 'Failed to read file' });
+            }
+        }
+        
+        // Only allow specific domains for external URLs
         const allowedDomains = [
             'public.blob.vercel-storage.com',
             'tc0ghxf0np2o2zbw.public.blob.vercel-storage.com'

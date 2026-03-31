@@ -114,14 +114,21 @@
                     </a>
                 `;
             }
+            // Check if it's a PDF - open in protected viewer
+            const isPdf = item.resourceType === 'pdf' || (item.url && item.url.toLowerCase().endsWith('.pdf'));
+            const href = isPdf 
+                ? `/learn/viewer.html?url=${encodeURIComponent(item.url)}&title=${encodeURIComponent(item.title)}&return=${encodeURIComponent(window.location.href)}`
+                : item.url;
+            const target = isPdf ? '' : 'target="_blank" rel="noopener"';
+            
             return `
-                <a href="${item.url}" target="_blank" rel="noopener" class="resource-item">
+                <a href="${href}" ${target} class="resource-item">
                     <div class="resource-icon ${item.resourceType}">${typeIcons[item.resourceType] || '📎'}</div>
                     <div class="resource-info">
                         <p class="resource-title">${item.title}</p>
                         ${item.description ? `<p class="resource-desc">${item.description}</p>` : ''}
                     </div>
-                    <span class="resource-arrow">→</span>
+                    <span class="resource-arrow">${isPdf ? '🔒' : '→'}</span>
                 </a>
             `;
         }

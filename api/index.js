@@ -1413,7 +1413,9 @@ app.post('/api/materials/upload', requireAdmin, uploadMaterials.single('file'), 
     
     // Upload su Vercel Blob  
     const blob = await put(safeName, req.file.buffer, {
-      access: 'public'
+      access: 'public',
+      addRandomSuffix: true,
+      contentType: req.file.mimetype
     });
     
     // Salva nel database resources per tracciamento
@@ -1470,8 +1472,8 @@ app.post('/api/resources/upload', requireAdmin, uploadSmall.single('file'), asyn
     // Upload su Vercel Blob  
     const blob = await put(safeName, fileBuffer, {
       access: 'public',
-      contentType: req.file.mimetype,
-      allowOverwrite: true  // Fix per evitare errore "blob already exists"
+      addRandomSuffix: true,
+      contentType: req.file.mimetype
     });
 
     res.json({ 

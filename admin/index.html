@@ -3927,12 +3927,26 @@ Buono studio!</textarea>
                     statusEl.style.color = 'var(--green-500)';
                     addBtn.disabled = false;
                     
-                    // RICARICA LA LISTA RESOURCES (come fa la sezione Risorse)
+                    // AGGIUNGI ANCHE alla lezione (per viewer protetto)
+                    const finalName = form.querySelector('[data-material-name]').value.trim() || materialName;
+                    currentMaterials.push({ 
+                        type: detectedType, 
+                        name: finalName, 
+                        url: data.url 
+                    });
+                    renderMaterialsList();
+                    
+                    // RICARICA LA LISTA RESOURCES (gestione unificata)
                     if (typeof loadResources === 'function') {
                         loadResources();
                     }
                     
-                    showToast('File caricato! Vai in sezione Risorse per gestirlo.', 'success');
+                    // Reset form
+                    form.querySelector('[data-material-name]').value = '';
+                    form.querySelector('[data-material-url]').value = '';
+                    statusEl.textContent = '';
+                    
+                    showToast('File caricato! Visibile in viewer lezione E in sezione Risorse.', 'success');
                 } catch (error) {
                     statusEl.textContent = '❌ ' + error.message;
                     statusEl.style.color = '#dc3545';

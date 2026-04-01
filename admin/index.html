@@ -2097,12 +2097,18 @@ Buono studio!</textarea>
             
             for (const email of emails) {
                 try {
+                    // Per bulk email, aggiungi BCC se abilitato
+                    const bccEmail = document.getElementById('notify-bcc-enabled').checked 
+                        ? document.getElementById('notify-bcc-email').value 
+                        : null;
+                    
                     const result = await apiRequest('/api/resources/notify-single', {
                         method: 'POST',
                         body: JSON.stringify({
                             subject: document.getElementById('notify-subject').value,
                             message: document.getElementById('notify-message').value,
-                            studentEmail: email
+                            studentEmail: email,
+                            bccEmail: bccEmail
                         })
                     });
                     sent++;

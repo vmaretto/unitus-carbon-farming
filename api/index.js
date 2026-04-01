@@ -1552,7 +1552,7 @@ app.post('/api/resources/notify-test', requireAdmin, async (req, res) => {
 app.post('/api/resources/notify-single', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   
-  const { subject, message, studentEmail } = req.body;
+  const { subject, message, studentEmail, bccEmail } = req.body;
   
   if (!subject || !message || !studentEmail) {
     return res.status(400).json({ error: 'Oggetto, messaggio e email studente sono obbligatori' });
@@ -1580,6 +1580,7 @@ app.post('/api/resources/notify-single', requireAdmin, async (req, res) => {
     await resend.emails.send({
       from: process.env.RESEND_FROM || 'Master Carbon Farming <noreply@carbonfarmingmaster.it>',
       to: student.email,
+      bcc: bccEmail || undefined,
       subject: subject,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">

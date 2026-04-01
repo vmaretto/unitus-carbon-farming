@@ -2518,7 +2518,7 @@ Buono studio!</textarea>
             try {
                 const res = await fetch('/api/resources/upload', {
                     method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem('adminToken') },
+                    headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken')) },
                     body: formData
                 });
                 if (!res.ok) {
@@ -3919,7 +3919,7 @@ Buono studio!</textarea>
                     console.log('🔥 CHIAMANDO: /api/materials/upload per materiale lezione');
                     const res = await fetch('/api/materials/upload', {
                         method: 'POST',
-                        headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem('adminToken') },
+                        headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken')) },
                         body: formData
                     });
                     if (!res.ok) {
@@ -5008,7 +5008,7 @@ Buono studio!</textarea>
             if (!editionId) { showToast('Seleziona un\'edizione', 'error'); return; }
             try {
                 const response = await fetch(`/api/attendance/export/${editionId}`, {
-                    headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem('adminToken') }
+                    headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken')) }
                 });
                 if (!response.ok) throw new Error('Export failed');
                 const blob = await response.blob();

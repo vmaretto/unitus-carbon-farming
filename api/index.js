@@ -4576,7 +4576,7 @@ app.post('/api/quiz-attempts/start', async (req, res) => {
 
   try {
     const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
     const userId = decoded.userId;
 
     const { quizId, resourceId } = req.body;
@@ -4620,7 +4620,7 @@ app.post('/api/quiz-attempts/:id/submit', async (req, res) => {
 
   try {
     const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
     const userId = decoded.userId;
     const attemptId = req.params.id;
     const { answers } = req.body; // [{questionIndex, selectedAnswer}]
@@ -4729,7 +4729,7 @@ app.get('/api/quiz-attempts/my', async (req, res) => {
 
   try {
     const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
     const userId = decoded.userId;
 
     const { rows } = await pool.query(`

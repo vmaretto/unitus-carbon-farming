@@ -1623,7 +1623,7 @@ app.post('/api/resources/notify', requireAdmin, async (req, res) => {
       SELECT DISTINCT u.email, u.first_name, u.last_name
       FROM enrollments e
       JOIN users u ON u.id = e.user_id
-      WHERE e.course_edition_id = $1 AND e.status = 'active'
+      WHERE e.course_edition_id = $1
     `, [editionId]);
 
     if (students.length === 0) {

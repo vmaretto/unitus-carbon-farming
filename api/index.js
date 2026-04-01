@@ -1570,17 +1570,14 @@ app.post('/api/resources/notify-single', requireAdmin, async (req, res) => {
     }
     
     const student = students[0];
-    const { Resend } = require('resend');
-    const resend = new Resend(process.env.RESEND_API_KEY);
     
     const personalizedMessage = message
       .replace('{nome}', student.first_name || 'Studente')
       .replace('{cognome}', student.last_name || '');
 
-    await resend.emails.send({
-      from: process.env.RESEND_FROM || 'Master Carbon Farming <noreply@carbonfarmingmaster.it>',
+    await sendEmail({
       to: student.email,
-      bcc: bccEmail || undefined,
+      bcc: bccEmail,
       subject: subject,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">

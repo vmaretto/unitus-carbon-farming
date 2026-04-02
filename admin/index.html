@@ -2685,18 +2685,6 @@ Buono studio!</textarea>
                     `;
                     
                     tableBody.appendChild(row);
-                    clone.dataset.id = item.id;
-                    clone.querySelector('[data-name]').textContent = item.name;
-                    clone.querySelector('[data-role]').textContent = item.role || '—';
-                    const status = clone.querySelector('[data-status]');
-                    const pill = document.createElement('span');
-                    pill.className = 'status-pill';
-                    pill.dataset.status = item.isPublished ? 'published' : 'draft';
-                    pill.textContent = item.isPublished ? 'Visibile' : 'Bozza';
-                    status.innerHTML = '';
-                    status.appendChild(pill);
-                    clone.querySelector('[data-order]').textContent = item.sortOrder ?? '—';
-                    tableBody.appendChild(clone);
                 });
 
                 toggleEmptyState(tableBody, items.length > 0, '[data-empty-faculty]');

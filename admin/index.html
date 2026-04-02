@@ -1837,6 +1837,7 @@ Buono studio!</textarea>
                 if (typeof loadModules === 'function') loadModules();
                 if (typeof loadLessons === 'function') loadLessons();
                 if (typeof loadLmsCourses === 'function') loadLmsCourses();
+                if (typeof loadStudentsList === 'function') loadStudentsList();
             }
 
             function showLogin() {
@@ -2121,7 +2122,6 @@ Buono studio!</textarea>
                 console.error('Error loading students:', e);
             }
         }
-        loadStudentsList();
         
         // Pulsante invio a singolo studente (o multipli)
         document.getElementById('notify-single-btn').addEventListener('click', async () => {

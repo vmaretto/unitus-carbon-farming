@@ -515,10 +515,10 @@
         <div style="background: white; border-radius: 12px; padding: 40px; max-width: 400px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.1);">
             <h2 style="margin: 0 0 8px; color: var(--green-900); font-size: 1.5rem;">Accesso Amministrazione</h2>
             <p style="margin: 0 0 24px; color: var(--gray-500); font-size: 0.95rem;">Inserisci la password per accedere al pannello.</p>
-            <form id="login-form">
-                <input type="password" id="login-password" placeholder="Password" required
+            <form id="admin-login-form">
+                <input type="password" id="admin-login-password" placeholder="Password" required
                     style="width: 100%; padding: 12px 16px; border: 1px solid var(--gray-200); border-radius: 8px; font-size: 1rem; margin-bottom: 16px; box-sizing: border-box;">
-                <p id="login-error" style="display:none; color: #dc3545; font-size: 0.9rem; margin: 0 0 12px;"></p>
+                <p id="admin-login-error" style="display:none; color: #dc3545; font-size: 0.9rem; margin: 0 0 12px;"></p>
                 <button type="submit"
                     style="width: 100%; padding: 12px; background: var(--green-700); color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer;">
                     Accedi
@@ -1884,10 +1884,10 @@ Buono studio!</textarea>
             return false;
         }
 
-        document.getElementById('login-form').addEventListener('submit', async (e) => {
+        document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const pwd = document.getElementById('login-password').value;
-            const errorEl = document.getElementById('login-error');
+            const pwd = document.getElementById('admin-login-password').value;
+            const errorEl = document.getElementById('admin-login-error');
             errorEl.style.display = 'none';
 
             try {

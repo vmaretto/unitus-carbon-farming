@@ -368,6 +368,223 @@ app.get('/api/pdf-proxy', async (req, res) => {
 });
 
 // ============================================
+// TEACHERS AUTH & MANAGEMENT
+// ============================================
+
+// Teachers JWT auth middleware
+function requireTeacher(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const token = authHeader.slice(7);
+  const payload = verifyToken(token);
+  if (!payload || payload.role !== 'teacher') {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  req.teacher = payload;
+  next();
+}
+
+// Teachers login
+app.post('/api/teachers/login', async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const { email, password } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({ error: 'Email richiesta' });
+  }
+
+  try {
+    // Find teacher by email
+    const { rows: teachers } = await pool.query(
+      'SELECT * FROM teachers WHERE LOWER(email) = LOWER($1) AND is_active = true',
+      [email]
+    );
+    
+    if (teachers.length === 0) {
+      return res.status(401).json({ error: 'Docente non trovato o non attivo' });
+    }
+    
+    const teacher = teachers[0];
+    
+    // For now, allow login with any password (magic link style)
+    // TODO: Implement proper password or magic link system
+    
+    // Update last login
+    await pool.query(
+      'UPDATE teachers SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [teacher.id]
+    );
+    
+    // Generate JWT token
+    const token = generateToken({ 
+      id: teacher.id, 
+      email: teacher.email, 
+      role: 'teacher',
+      name: `${teacher.first_name} ${teacher.last_name}`
+    });
+    
+    res.json({ 
+      token,
+      teacher: {
+        id: teacher.id,
+        email: teacher.email,
+        first_name: teacher.first_name,
+        last_name: teacher.last_name,
+        role: teacher.role
+      }
+    });
+    
+  } catch (error) {
+    console.error('Teacher login error:', error);
+    res.status(500).json({ error: 'Errore durante il login' });
+  }
+});
+
+// Get teacher profile
+app.get('/api/teachers/me', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  try {
+    const { rows: teachers } = await pool.query(
+      'SELECT id, email, first_name, last_name, role, bio, phone, department FROM teachers WHERE id = $1',
+      [req.teacher.id]
+    );
+    
+    if (teachers.length === 0) {
+      return res.status(404).json({ error: 'Docente non trovato' });
+    }
+    
+    res.json(teachers[0]);
+  } catch (error) {
+    console.error('Get teacher profile error:', error);
+    res.status(500).json({ error: 'Errore nel recupero profilo' });
+  }
+});
+
+// Get teacher statistics
+app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  try {
+    // Count teacher's lessons
+    const { rows: lessonsCount } = await pool.query(
+      'SELECT COUNT(*) as total FROM lessons_teachers WHERE teacher_id = $1',
+      [req.teacher.id]
+    );
+    
+    // Count published materials
+    const { rows: materialsCount } = await pool.query(
+      `SELECT COUNT(*) as total FROM materials_pending mp
+       INNER JOIN lessons_teachers lt ON mp.lesson_id = lt.lesson_id
+       WHERE lt.teacher_id = $1 AND mp.status = 'approved'`,
+      [req.teacher.id]
+    );
+    
+    // Count pending materials
+    const { rows: pendingCount } = await pool.query(
+      `SELECT COUNT(*) as total FROM materials_pending mp
+       INNER JOIN lessons_teachers lt ON mp.lesson_id = lt.lesson_id
+       WHERE lt.teacher_id = $1 AND mp.status = 'pending'`,
+      [req.teacher.id]
+    );
+    
+    res.json({
+      total_lessons: parseInt(lessonsCount[0].total),
+      materials_published: parseInt(materialsCount[0].total),
+      materials_pending: parseInt(pendingCount[0].total)
+    });
+  } catch (error) {
+    console.error('Get teacher stats error:', error);
+    res.status(500).json({ error: 'Errore nel recupero statistiche' });
+  }
+});
+
+// Get teacher's lessons
+app.get('/api/teachers/lessons', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  try {
+    const { rows: lessons } = await pool.query(
+      `SELECT l.*, lt.role as teacher_role, lt.hours
+       FROM lessons l
+       INNER JOIN lessons_teachers lt ON l.id = lt.lesson_id
+       WHERE lt.teacher_id = $1
+       ORDER BY l.date ASC, l.start_time ASC`,
+      [req.teacher.id]
+    );
+    
+    res.json(lessons);
+  } catch (error) {
+    console.error('Get teacher lessons error:', error);
+    res.status(500).json({ error: 'Errore nel recupero lezioni' });
+  }
+});
+
+// Upload materials for approval
+app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'), async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const { lesson_id, title, description } = req.body;
+  const file = req.file;
+  
+  if (!file || !lesson_id || !title) {
+    return res.status(400).json({ error: 'File, lesson_id e title sono obbligatori' });
+  }
+  
+  try {
+    // Verify teacher has access to this lesson
+    const { rows: teacherLessons } = await pool.query(
+      'SELECT id FROM lessons_teachers WHERE teacher_id = $1 AND lesson_id = $2',
+      [req.teacher.id, lesson_id]
+    );
+    
+    if (teacherLessons.length === 0) {
+      return res.status(403).json({ error: 'Non hai accesso a questa lezione' });
+    }
+    
+    // Upload to Vercel Blob
+    const { url, pathname } = await put(file.originalname, file.buffer, {
+      access: 'public',
+      token: process.env.BLOB_READ_WRITE_TOKEN
+    });
+    
+    // Save to materials_pending
+    const { rows: materials } = await pool.query(
+      `INSERT INTO materials_pending 
+       (teacher_id, lesson_id, title, description, file_url, file_name, file_size, file_type, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+       RETURNING id`,
+      [
+        req.teacher.id,
+        lesson_id, 
+        title,
+        description || null,
+        url,
+        file.originalname,
+        file.size,
+        file.mimetype
+      ]
+    );
+    
+    res.json({
+      id: materials[0].id,
+      message: 'Materiale caricato con successo. In attesa di approvazione.',
+      file_url: url,
+      filename: file.originalname
+    });
+    
+  } catch (error) {
+    console.error('Teacher upload error:', error);
+    res.status(500).json({ error: 'Errore durante il caricamento' });
+  }
+});
+
+// ============================================
 // AUTH ENDPOINTS
 // ============================================
 

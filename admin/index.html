@@ -2090,12 +2090,6 @@ Buono studio!</textarea>
                     `;
                     tableBody.appendChild(row);
                 });
-                
-            } catch (error) {
-                console.error('Error loading faculty:', error);
-                showToast('Errore nel caricamento docenti', 'error');
-            }
-        }
 
                 toggleEmptyState(tableBody, items.length > 0, '[data-empty-resource]');
             } catch (error) {

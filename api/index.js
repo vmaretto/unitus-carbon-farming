@@ -644,6 +644,129 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
   }
 });
 
+// Sync faculty member to teachers table (for login)
+app.post('/api/faculty/sync-teacher', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const { email } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({ error: 'Email richiesta' });
+  }
+  
+  try {
+    // Get faculty member
+    const { rows: faculty } = await pool.query(
+      'SELECT * FROM faculty WHERE LOWER(email) = LOWER($1) OR LOWER(bio) LIKE LOWER($2)',
+      [email, `%${email}%`]
+    );
+    
+    if (faculty.length === 0) {
+      return res.status(404).json({ error: 'Docente non trovato nella faculty' });
+    }
+    
+    const facultyMember = faculty[0];
+    
+    // Extract name parts
+    const nameParts = facultyMember.name.split(' ');
+    const firstName = nameParts[0] || 'Nome';
+    const lastName = nameParts.slice(1).join(' ') || 'Cognome';
+    
+    // Insert or update in teachers table
+    const { rows: teachers } = await pool.query(
+      `INSERT INTO teachers (email, first_name, last_name, role, bio)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (email) DO UPDATE SET
+         first_name = EXCLUDED.first_name,
+         last_name = EXCLUDED.last_name,
+         role = EXCLUDED.role,
+         bio = EXCLUDED.bio,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [email.toLowerCase(), firstName, lastName, facultyMember.role || 'Docente', facultyMember.bio]
+    );
+    
+    res.json({ teacher: teachers[0], message: 'Teacher synchronized successfully' });
+    
+  } catch (error) {
+    console.error('Sync teacher error:', error);
+    res.status(500).json({ error: 'Errore nella sincronizzazione docente' });
+  }
+});
+
+// Send magic link to faculty member
+app.post('/api/faculty/send-magic-link', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const { email } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({ error: 'Email richiesta' });
+  }
+  
+  try {
+    // Get teacher from teachers table
+    const { rows: teachers } = await pool.query(
+      'SELECT * FROM teachers WHERE LOWER(email) = LOWER($1)',
+      [email]
+    );
+    
+    if (teachers.length === 0) {
+      return res.status(404).json({ error: 'Teacher not found. Sync first.' });
+    }
+    
+    const teacher = teachers[0];
+    
+    // Generate magic link
+    const magicToken = generateToken({
+      id: teacher.id,
+      email: teacher.email,
+      role: 'teacher',
+      purpose: 'magic_login'
+    });
+    
+    const magicLink = `https://unitus.carbonfarmingmaster.it/teachers/?token=${magicToken}`;
+    
+    await sendEmail({
+      to: teacher.email,
+      subject: 'Accesso Pannello Docenti - Master Carbon Farming',
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #166534 0%, #22c55e 100%); padding: 20px; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 1.5rem;">🌱 Master Carbon Farming</h1>
+            <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 14px;">Università della Tuscia</p>
+          </div>
+          <div style="background: #f9fafb; padding: 24px; border-radius: 0 0 12px 12px;">
+            <h2 style="color: #166534; margin: 0 0 16px;">Accesso Pannello Docenti</h2>
+            <p style="margin: 16px 0; line-height: 1.6;">
+              Ciao <strong>${teacher.first_name}</strong>,<br><br>
+              Clicca il pulsante qui sotto per accedere al pannello docenti e caricare i materiali didattici:
+            </p>
+            <div style="text-align: center; margin: 24px 0;">
+              <a href="${magicLink}" style="display: inline-block; background: #16a34a; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                🚀 Accedi al Pannello Docenti
+              </a>
+            </div>
+            <p style="font-size: 14px; color: #6b7280; margin-top: 24px;">
+              Questo link è valido per 7 giorni. In futuro potrai richiedere un nuovo link quando necessario.
+            </p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+            <p style="color: #6b7280; font-size: 0.875rem;">
+              Università della Tuscia - Master di II livello in Carbon Farming
+            </p>
+          </div>
+        </div>
+      `
+    });
+    
+    res.json({ message: 'Magic link inviato con successo' });
+    
+  } catch (error) {
+    console.error('Send magic link error:', error);
+    res.status(500).json({ error: 'Errore nell\'invio del magic link' });
+  }
+});
+
 // ============================================
 // ADMIN - TEACHERS MANAGEMENT
 // ============================================
@@ -926,6 +1049,7 @@ async function initDatabase() {
       id UUID PRIMARY KEY,
       name TEXT NOT NULL,
       role TEXT,
+      email VARCHAR(255),
       bio TEXT,
       photo_url TEXT,
       sort_order INTEGER,
@@ -939,6 +1063,12 @@ async function initDatabase() {
   await pool.query(`
     ALTER TABLE faculty
     ADD COLUMN IF NOT EXISTS profile_link TEXT;
+  `);
+  
+  // Add email column if it doesn't exist  
+  await pool.query(`
+    ALTER TABLE faculty
+    ADD COLUMN IF NOT EXISTS email VARCHAR(255);
   `);
 
   const { rows: facultyCountRows } = await pool.query('SELECT COUNT(*)::INT AS count FROM faculty;');
@@ -1325,7 +1455,7 @@ app.get('/api/faculty', async (req, res) => {
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const sql = `
-      SELECT id, name, role, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished"
+      SELECT id, name, role, email, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished"
       FROM faculty
       ${where}
       ORDER BY sort_order NULLS LAST, created_at ASC
@@ -1344,7 +1474,7 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
     return;
   }
 
-  const { name, role, bio, photoUrl, profileLink, sortOrder, isPublished } = req.body;
+  const { name, role, email, bio, photoUrl, profileLink, sortOrder, isPublished } = req.body;
 
   if (!name) {
     return res.status(400).json({ error: 'Name is required' });
@@ -1356,14 +1486,15 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
   try {
     const id = uuidv4();
     const insert = `
-      INSERT INTO faculty (id, name, role, bio, photo_url, profile_link, sort_order, is_published)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id, name, role, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished"
+      INSERT INTO faculty (id, name, role, email, bio, photo_url, profile_link, sort_order, is_published)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, name, role, email, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished"
     `;
     const values = [
       id,
       name,
       role || null,
+      email || null,
       bio || null,
       normalizedPhotoUrl || null,
       profileLink || null,
@@ -1385,7 +1516,7 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
   }
 
   const { id } = req.params;
-  const { name, role, bio, photoUrl, profileLink, sortOrder, isPublished } = req.body;
+  const { name, role, email, bio, photoUrl, profileLink, sortOrder, isPublished } = req.body;
 
   // Normalizza URL della foto (converte GitHub blob in raw)
   const normalizedPhotoUrl = photoUrl !== undefined ? normalizeImageUrl(photoUrl) : undefined;
@@ -1394,6 +1525,7 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
     const updateFields = {
       name,
       role,
+      email,
       bio,
       photo_url: normalizedPhotoUrl,
       profile_link: profileLink,

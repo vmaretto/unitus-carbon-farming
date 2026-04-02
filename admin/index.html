@@ -490,7 +490,7 @@
                 <a href="/index.html">&larr; Torna al sito</a>
                 <a href="#calendar">Calendario</a>
                 <a href="#faculty">Gestione docenti</a>
-                <a href="#teachers-management">👥 Docenti Login</a>
+
                 <a href="#blog">Gestione blog</a>
                 <a href="#partners">Gestione partner</a>
                 <a href="#resources">Risorse</a>
@@ -747,8 +747,8 @@
 
         <section id="faculty">
             <header>
-                <h2>Gestione docenti</h2>
-                <p class="section-description">Configura i docenti che compariranno nella sezione faculty del sito pubblico e decidi quando renderli visibili.</p>
+                <h2>👥 Gestione Docenti</h2>
+                <p class="section-description">Configura i docenti del Master Carbon Farming. I docenti qui presenti possono anche accedere al pannello di caricamento materiali didattici.</p>
             </header>
 
             <form id="faculty-form">
@@ -760,6 +760,11 @@
                     <label>
                         Ruolo o area di competenza
                         <input type="text" id="faculty-role" name="role" placeholder="Es. Direttore scientifico">
+                    </label>
+                    <label>
+                        Email per accesso pannello
+                        <input type="email" id="faculty-email" name="email" placeholder="nome.cognome@unitus.it">
+                        <small style="color: var(--gray-600); font-size: 0.875rem;">Se inserita, il docente potrà accedere al pannello materiali</small>
                     </label>
                     <label>
                         URL foto (opzionale)
@@ -796,108 +801,22 @@
                         <tr>
                             <th>Nome</th>
                             <th>Ruolo</th>
+                            <th>Email / Login</th>
                             <th>Visibilità</th>
                             <th>Ordine</th>
-                            <th style="width: 180px;">Azioni</th>
+                            <th style="width: 250px;">Azioni</th>
                         </tr>
                     </thead>
                     <tbody id="faculty-table-body">
                         <tr class="empty-state" data-empty-faculty>
-                            <td colspan="5">Non ci sono docenti configurati. Aggiungi il primo docente con il modulo qui sopra.</td>
+                            <td colspan="6">Non ci sono docenti configurati. Aggiungi il primo docente con il modulo qui sopra.</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </section>
 
-        <!-- ============================================ -->
-        <!-- GESTIONE DOCENTI LOGIN -->
-        <!-- ============================================ -->
-        <section id="teachers-management">
-            <header>
-                <h2>👥 Gestione Docenti - Login e Accesso</h2>
-                <p class="section-description">Gestisci l'accesso dei docenti al pannello di caricamento materiali. I docenti potranno accedere tramite magic link.</p>
-            </header>
 
-            <!-- Form Aggiungi Docente -->
-            <form id="teacher-form" style="background: var(--green-50); padding: 24px; border-radius: 12px; margin-bottom: 24px;">
-                <h3 style="margin: 0 0 16px; color: var(--green-800);">➕ Aggiungi Nuovo Docente</h3>
-                
-                <div class="form-grid">
-                    <label>
-                        Email *
-                        <input type="email" id="teacher-email" required placeholder="nome.cognome@unitus.it">
-                    </label>
-                    <label>
-                        Nome *
-                        <input type="text" id="teacher-first-name" required placeholder="Mario">
-                    </label>
-                    <label>
-                        Cognome *
-                        <input type="text" id="teacher-last-name" required placeholder="Rossi">
-                    </label>
-                    <label>
-                        Ruolo
-                        <select id="teacher-role">
-                            <option value="Docente">Docente</option>
-                            <option value="Coordinatore">Coordinatore</option>
-                            <option value="Direttore Scientifico">Direttore Scientifico</option>
-                            <option value="Assistente">Assistente</option>
-                        </select>
-                    </label>
-                </div>
-
-                <label style="grid-column: 1 / -1;">
-                    Bio / Descrizione
-                    <textarea id="teacher-bio" placeholder="Breve descrizione del docente e delle sue competenze..." rows="3"></textarea>
-                </label>
-
-                <div style="display: flex; gap: 12px; align-items: center; margin-top: 16px;">
-                    <button type="submit" id="teacher-submit-btn" class="primary">Aggiungi Docente</button>
-                    <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
-                        <input type="checkbox" id="teacher-send-email" checked>
-                        <span>📧 Invia magic link automaticamente</span>
-                    </label>
-                </div>
-            </form>
-
-            <!-- Lista Docenti -->
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Nome</th>
-                            <th>Email</th>
-                            <th>Ruolo</th>
-                            <th>Ultimo Login</th>
-                            <th>Status</th>
-                            <th style="width: 250px;">Azioni</th>
-                        </tr>
-                    </thead>
-                    <tbody id="teachers-table-body">
-                        <tr data-empty-teachers>
-                            <td colspan="6" class="empty-state">Caricamento docenti...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Stats Docenti -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 24px;">
-                <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--gray-200);">
-                    <div style="font-size: 24px; font-weight: bold; color: var(--green-600);" id="teachers-total">0</div>
-                    <div style="color: var(--gray-600); margin-top: 4px;">Docenti Totali</div>
-                </div>
-                <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--gray-200);">
-                    <div style="font-size: 24px; font-weight: bold; color: var(--blue-600);" id="teachers-active">0</div>
-                    <div style="color: var(--gray-600); margin-top: 4px;">Attivi Ultimo Mese</div>
-                </div>
-                <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--gray-200);">
-                    <div style="font-size: 24px; font-weight: bold; color: var(--orange-500);" id="materials-pending">0</div>
-                    <div style="color: var(--gray-600); margin-top: 4px;">Materiali Pending</div>
-                </div>
-            </div>
-        </section>
 
         <section id="blog">
             <header>
@@ -2713,10 +2632,53 @@ Buono studio!</textarea>
             try {
                 const items = await apiRequest('/api/faculty');
                 state.faculty = items;
-                const template = document.getElementById('faculty-row-template');
+
+                if (items.length === 0) {
+                    document.querySelector('[data-empty-faculty]').style.display = '';
+                    return;
+                } else {
+                    document.querySelector('[data-empty-faculty]').style.display = 'none';
+                }
 
                 items.forEach((item) => {
-                    const clone = template.content.firstElementChild.cloneNode(true);
+                    const row = document.createElement('tr');
+                    row.dataset.id = item.id;
+                    
+                    const emailDisplay = item.email ? 
+                        `<div style="color: var(--blue-600); font-size: 0.875rem;">${item.email}</div>
+                         <div style="font-size: 0.75rem; color: var(--green-600);">✅ Accesso attivo</div>` : 
+                        `<div style="font-size: 0.875rem; color: var(--gray-500);">Nessun login</div>`;
+                    
+                    const loginActions = item.email ? 
+                        `<button class="action" onclick="sendTeacherMagicLink('${item.email}')" style="font-size: 0.75rem; background: var(--blue-500);">🔗 Magic Link</button>
+                         <button class="action" onclick="window.open('/teachers/', '_blank')" style="font-size: 0.75rem; background: var(--green-500);">👁️ Pannello</button>` : 
+                        `<button class="action" onclick="enableTeacherLogin('${item.id}')" style="font-size: 0.75rem; background: var(--orange-500);">🔓 Abilita Login</button>`;
+                    
+                    row.innerHTML = `
+                        <td>
+                            <div style="font-weight: 600;">${item.name}</div>
+                            ${item.bio ? `<div style="font-size: 0.875rem; color: var(--gray-600); margin-top: 2px;">${item.bio.substring(0, 80)}...</div>` : ''}
+                        </td>
+                        <td>
+                            <span style="background: var(--green-100); color: var(--green-700); padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
+                                ${item.role || 'Docente'}
+                            </span>
+                        </td>
+                        <td>${emailDisplay}</td>
+                        <td>
+                            <span style="background: ${item.isVisible ? 'var(--green-100)' : 'var(--gray-100)'}; color: ${item.isVisible ? 'var(--green-700)' : 'var(--gray-600)'}; padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
+                                ${item.isVisible ? '👁️ Visibile' : '🔒 Nascosto'}
+                            </span>
+                        </td>
+                        <td>${item.sortOrder || 0}</td>
+                        <td>
+                            ${loginActions}
+                            <button class="action" data-edit="${item.id}">✏️ Modifica</button>
+                            <button class="action" data-delete="${item.id}" style="background: var(--red-500);">🗑️ Elimina</button>
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(row);
                     clone.dataset.id = item.id;
                     clone.querySelector('[data-name]').textContent = item.name;
                     clone.querySelector('[data-role]').textContent = item.role || '—';
@@ -2807,6 +2769,7 @@ Buono studio!</textarea>
             const payload = {
                 name: document.getElementById('faculty-name').value.trim(),
                 role: document.getElementById('faculty-role').value.trim() || null,
+                email: document.getElementById('faculty-email').value.trim() || null,
                 photoUrl: document.getElementById('faculty-photo').value.trim() || null,
                 profileLink: document.getElementById('faculty-profile-link').value.trim() || null,
                 bio: document.getElementById('faculty-bio').value.trim() || null,
@@ -2850,6 +2813,7 @@ Buono studio!</textarea>
 
                 document.getElementById('faculty-name').value = current.name || '';
                 document.getElementById('faculty-role').value = current.role || '';
+                document.getElementById('faculty-email').value = current.email || '';
                 document.getElementById('faculty-photo').value = current.photoUrl || '';
                 document.getElementById('faculty-profile-link').value = current.profileLink || '';
                 document.getElementById('faculty-bio').value = current.bio || '';
@@ -5378,137 +5342,49 @@ Buono studio!</textarea>
         lessonForm.querySelector('button.primary').dataset.defaultText = 'Salva lezione';
 
         // ============================================
-        // TEACHERS MANAGEMENT
+        // TEACHERS LOGIN FUNCTIONS
         // ============================================
         
-        // Load teachers
-        async function loadTeachers() {
+        // Send magic link to teacher
+        async function sendTeacherMagicLink(email) {
             try {
-                const teachers = await apiRequest('/api/admin/teachers');
-                const tbody = document.getElementById('teachers-table-body');
-                
-                if (teachers.length === 0) {
-                    tbody.innerHTML = '<tr data-empty-teachers><td colspan="6" class="empty-state">Nessun docente trovato.</td></tr>';
-                } else {
-                    tbody.innerHTML = teachers.map(teacher => `
-                        <tr>
-                            <td>
-                                <div style="font-weight: 600;">${teacher.first_name} ${teacher.last_name}</div>
-                                ${teacher.bio ? `<div style="font-size: 0.875rem; color: var(--gray-600); margin-top: 2px;">${teacher.bio}</div>` : ''}
-                            </td>
-                            <td>
-                                <a href="mailto:${teacher.email}" style="color: var(--blue-600);">${teacher.email}</a>
-                            </td>
-                            <td>
-                                <span style="background: var(--green-100); color: var(--green-700); padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
-                                    ${teacher.role}
-                                </span>
-                            </td>
-                            <td>${teacher.last_login_at ? formatDate(teacher.last_login_at) : 'Mai'}</td>
-                            <td>
-                                <span style="background: ${teacher.is_active ? 'var(--green-100)' : 'var(--gray-100)'}; color: ${teacher.is_active ? 'var(--green-700)' : 'var(--gray-600)'}; padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
-                                    ${teacher.is_active ? '✅ Attivo' : '⏸️ Disabilitato'}
-                                </span>
-                            </td>
-                            <td>
-                                <button class="action" onclick="sendMagicLink('${teacher.id}')" style="font-size: 0.75rem;">🔗 Magic Link</button>
-                                <button class="action" onclick="editTeacher('${teacher.id}')" style="font-size: 0.75rem;">✏️ Modifica</button>
-                                <button class="action" onclick="deleteTeacher('${teacher.id}', '${teacher.first_name} ${teacher.last_name}')" style="font-size: 0.75rem; background: var(--red-500);">🗑️ Elimina</button>
-                            </td>
-                        </tr>
-                    `).join('');
-                }
-                
-                // Update stats
-                document.getElementById('teachers-total').textContent = teachers.length;
-                
-                const activeTeachers = teachers.filter(t => {
-                    if (!t.last_login_at) return false;
-                    const lastLogin = new Date(t.last_login_at);
-                    const monthAgo = new Date();
-                    monthAgo.setMonth(monthAgo.getMonth() - 1);
-                    return lastLogin > monthAgo;
-                }).length;
-                document.getElementById('teachers-active').textContent = activeTeachers;
-                
-                const pendingMaterials = teachers.reduce((sum, t) => sum + (parseInt(t.pending_materials_count) || 0), 0);
-                document.getElementById('materials-pending').textContent = pendingMaterials;
-                
-            } catch (error) {
-                console.error('Error loading teachers:', error);
-                showToast('Errore nel caricamento docenti', 'error');
-            }
-        }
-        
-        // Teacher form handler
-        document.getElementById('teacher-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const submitBtn = document.getElementById('teacher-submit-btn');
-            const originalText = submitBtn.textContent;
-            
-            try {
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Aggiungendo...';
-                
-                const formData = {
-                    email: document.getElementById('teacher-email').value,
-                    first_name: document.getElementById('teacher-first-name').value,
-                    last_name: document.getElementById('teacher-last-name').value,
-                    role: document.getElementById('teacher-role').value,
-                    bio: document.getElementById('teacher-bio').value,
-                    send_email: document.getElementById('teacher-send-email').checked
-                };
-                
-                const result = await apiRequest('/api/admin/teachers', {
+                // First ensure teacher exists in teachers table
+                await apiRequest('/api/faculty/sync-teacher', {
                     method: 'POST',
-                    body: JSON.stringify(formData)
+                    body: JSON.stringify({ email })
                 });
                 
-                showToast(result.message || 'Docente aggiunto con successo');
-                document.getElementById('teacher-form').reset();
-                loadTeachers();
-                
-            } catch (error) {
-                showToast(error.message || 'Errore nell\'aggiunta del docente', 'error');
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = originalText;
-            }
-        });
-        
-        // Send magic link
-        async function sendMagicLink(teacherId) {
-            try {
-                const result = await apiRequest(`/api/admin/teachers/${teacherId}/send-link`, {
-                    method: 'POST'
+                // Then send magic link
+                const result = await apiRequest('/api/faculty/send-magic-link', {
+                    method: 'POST', 
+                    body: JSON.stringify({ email })
                 });
-                showToast(result.message || 'Magic link inviato');
+                showToast('Magic link inviato con successo!');
             } catch (error) {
-                showToast(error.message || 'Errore nell\'invio del link', 'error');
+                showToast(error.message || 'Errore nell\'invio magic link', 'error');
             }
         }
         
-        // Edit teacher (simple version)
-        async function editTeacher(teacherId) {
-            // For now, just show a simple prompt
-            // TODO: Create proper modal for editing
-            showToast('Funzione modifica in sviluppo - per ora usa eliminazione/ri-aggiunta', 'info');
-        }
-        
-        // Delete teacher
-        async function deleteTeacher(teacherId, teacherName) {
-            if (!confirm(`Eliminare il docente ${teacherName}? Questa azione non può essere annullata.`)) {
+        // Enable login for faculty member
+        async function enableTeacherLogin(facultyId) {
+            const email = prompt('Inserisci email per abilitare login:');
+            if (!email || !email.includes('@')) {
+                showToast('Email non valida', 'error');
                 return;
             }
             
             try {
-                await apiRequest(`/api/admin/teachers/${teacherId}`, {
-                    method: 'DELETE'
+                await apiRequest(`/api/faculty/${facultyId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ email })
                 });
-                showToast('Docente eliminato con successo');
-                loadTeachers();
+                showToast('Login abilitato! Magic link inviato.');
+                loadFaculty();
+                
+                // Also send magic link
+                await sendTeacherMagicLink(email);
             } catch (error) {
-                showToast(error.message || 'Errore nell\'eliminazione del docente', 'error');
+                showToast(error.message || 'Errore nell\'abilitazione login', 'error');
             }
         }
 
@@ -5521,7 +5397,7 @@ Buono studio!</textarea>
         loadModules();
         loadLessons();
         loadLmsCourses();
-        loadTeachers();
+
     </script>
 </body>
 </html>

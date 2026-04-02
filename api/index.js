@@ -106,7 +106,7 @@ async function sendEmail({ to, subject, html, bcc, from }) {
   
   throw new Error('Nessun provider email configurato');
 }
-const JWT_SECRET = process.env.JWT_SECRET || (ADMIN_PASSWORD ? crypto.randomBytes(32).toString('hex') : null);
+const JWT_SECRET = process.env.JWT_SECRET || (ADMIN_PASSWORD ? crypto.createHash('sha256').update('jwt-secret-' + ADMIN_PASSWORD).digest('hex') : null);
 
 function generateToken(payload) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -1411,7 +1411,7 @@ function ensurePool(res) {
 
 // Whitelist colonne aggiornabili per tabella (sicurezza)
 const ALLOWED_UPDATE_FIELDS = {
-  faculty: ['name', 'role', 'bio', 'photo_url', 'sort_order', 'is_published'],
+  faculty: ['name', 'role', 'email', 'bio', 'photo_url', 'profile_link', 'sort_order', 'is_published'],
   blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'is_published', 'published_at'],
   partners: ['name', 'logo_url', 'website_url', 'category', 'sort_order', 'is_visible'],
   modules: ['name', 'ssd', 'cfu', 'hours', 'description', 'sort_order'],

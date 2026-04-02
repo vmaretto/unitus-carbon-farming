@@ -2723,6 +2723,7 @@ Buono studio!</textarea>
                 });
 
                 toggleEmptyState(tableBody, items.length > 0, '[data-empty-faculty]');
+                if (typeof updateTeacherSelect === 'function') updateTeacherSelect();
             } catch (error) {
                 state.faculty = [];
                 toggleEmptyState(tableBody, false, '[data-empty-faculty]');
@@ -5416,16 +5417,6 @@ Buono studio!</textarea>
                 showToast(error.message || 'Errore nell\'abilitazione login', 'error');
             }
         }
-
-        // Load data
-        loadFaculty().then(() => {
-            updateTeacherSelect();
-        });
-        loadBlogPosts();
-        loadPartners();
-        loadModules();
-        loadLessons();
-        loadLmsCourses();
 
     </script>
 </body>

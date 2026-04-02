@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Admin - Master Carbon Farming</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #166534, #22c55e);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            width: 100%;
+            max-width: 400px;
+        }
+        h1 {
+            color: #166534;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        p {
+            color: #6b7280;
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        input {
+            width: 100%;
+            padding: 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+        input:focus {
+            outline: none;
+            border-color: #22c55e;
+        }
+        button {
+            width: 100%;
+            background: #16a34a;
+            color: white;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:hover { background: #15803d; }
+        .error {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .success {
+            background: #dcfce7;
+            color: #16a34a;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h1>🌱 Login Admin</h1>
+        <p>Master Carbon Farming</p>
+        
+        <div id="error-message" class="error"></div>
+        <div id="success-message" class="success"></div>
+        
+        <form id="simple-login">
+            <input type="password" id="pwd" placeholder="Password Admin" required autocomplete="current-password">
+            <button type="submit" id="login-btn">ACCEDI</button>
+        </form>
+        
+        <div style="margin-top: 20px; text-align: center; color: #6b7280; font-size: 14px;">
+            Password: PostiBlockchain$01
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('simple-login').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const pwd = document.getElementById('pwd').value;
+            const btn = document.getElementById('login-btn');
+            const errorEl = document.getElementById('error-message');
+            const successEl = document.getElementById('success-message');
+            
+            // Hide previous messages
+            errorEl.style.display = 'none';
+            successEl.style.display = 'none';
+            
+            // Loading state
+            btn.disabled = true;
+            btn.textContent = 'ACCEDENDO...';
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: pwd })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Success - save token and redirect
+                    localStorage.setItem('adminToken', data.token);
+                    successEl.textContent = '✅ Login riuscito! Reindirizzamento...';
+                    successEl.style.display = 'block';
+                    
+                    setTimeout(() => {
+                        window.location.href = '/admin/';
+                    }, 1000);
+                    
+                } else {
+                    // Error
+                    errorEl.textContent = data.error || 'Errore di login';
+                    errorEl.style.display = 'block';
+                }
+                
+            } catch (error) {
+                errorEl.textContent = 'Errore di connessione: ' + error.message;
+                errorEl.style.display = 'block';
+            }
+            
+            // Reset button
+            btn.disabled = false;
+            btn.textContent = 'ACCEDI';
+        });
+        
+        // Test if already logged in
+        const existingToken = localStorage.getItem('adminToken');
+        if (existingToken) {
+            document.getElementById('success-message').textContent = '🔄 Hai già un token salvato. Reindirizzamento...';
+            document.getElementById('success-message').style.display = 'block';
+            setTimeout(() => {
+                window.location.href = '/admin/';
+            }, 1500);
+        }
+    </script>
+</body>
+</html>

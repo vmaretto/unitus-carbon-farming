@@ -445,6 +445,66 @@ app.post('/api/teachers/login', async (req, res) => {
   }
 });
 
+// Magic link login for teachers
+app.post('/api/teachers/magic-login', async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const { token } = req.body;
+  
+  if (!token) {
+    return res.status(400).json({ error: 'Token richiesto' });
+  }
+  
+  try {
+    // Verify magic token
+    const payload = verifyToken(token);
+    if (!payload || payload.role !== 'teacher' || payload.purpose !== 'magic_login') {
+      return res.status(401).json({ error: 'Token non valido o scaduto' });
+    }
+    
+    // Get teacher info
+    const { rows: teachers } = await pool.query(
+      'SELECT * FROM teachers WHERE id = $1 AND is_active = true',
+      [payload.id]
+    );
+    
+    if (teachers.length === 0) {
+      return res.status(401).json({ error: 'Docente non trovato o non attivo' });
+    }
+    
+    const teacher = teachers[0];
+    
+    // Update last login
+    await pool.query(
+      'UPDATE teachers SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [teacher.id]
+    );
+    
+    // Generate new session token
+    const sessionToken = generateToken({ 
+      id: teacher.id, 
+      email: teacher.email, 
+      role: 'teacher',
+      name: `${teacher.first_name} ${teacher.last_name}`
+    });
+    
+    res.json({ 
+      token: sessionToken,
+      teacher: {
+        id: teacher.id,
+        email: teacher.email,
+        first_name: teacher.first_name,
+        last_name: teacher.last_name,
+        role: teacher.role
+      }
+    });
+    
+  } catch (error) {
+    console.error('Magic login error:', error);
+    res.status(500).json({ error: 'Errore durante il magic login' });
+  }
+});
+
 // Get teacher profile
 app.get('/api/teachers/me', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
@@ -581,6 +641,238 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
   } catch (error) {
     console.error('Teacher upload error:', error);
     res.status(500).json({ error: 'Errore durante il caricamento' });
+  }
+});
+
+// ============================================
+// ADMIN - TEACHERS MANAGEMENT
+// ============================================
+
+// Get all teachers for admin
+app.get('/api/admin/teachers', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  try {
+    const { rows: teachers } = await pool.query(`
+      SELECT 
+        t.*,
+        COUNT(mp.id) as pending_materials_count
+      FROM teachers t
+      LEFT JOIN materials_pending mp ON t.id = mp.teacher_id AND mp.status = 'pending'
+      GROUP BY t.id, t.email, t.first_name, t.last_name, t.role, t.bio, t.is_active, t.last_login_at, t.created_at
+      ORDER BY t.created_at DESC
+    `);
+    
+    res.json(teachers);
+  } catch (error) {
+    console.error('Get teachers error:', error);
+    res.status(500).json({ error: 'Errore nel recupero docenti' });
+  }
+});
+
+// Add new teacher
+app.post('/api/admin/teachers', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const { email, first_name, last_name, role, bio, send_email } = req.body;
+  
+  if (!email || !first_name || !last_name) {
+    return res.status(400).json({ error: 'Email, nome e cognome sono obbligatori' });
+  }
+  
+  try {
+    // Check if teacher already exists
+    const { rows: existing } = await pool.query(
+      'SELECT id FROM teachers WHERE LOWER(email) = LOWER($1)',
+      [email]
+    );
+    
+    if (existing.length > 0) {
+      return res.status(409).json({ error: 'Docente con questa email già esistente' });
+    }
+    
+    // Insert new teacher
+    const { rows: teachers } = await pool.query(
+      `INSERT INTO teachers (email, first_name, last_name, role, bio)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [email.toLowerCase(), first_name, last_name, role || 'Docente', bio || null]
+    );
+    
+    const newTeacher = teachers[0];
+    
+    // Send magic link if requested
+    if (send_email) {
+      try {
+        // Generate magic link token
+        const magicToken = generateToken({
+          id: newTeacher.id,
+          email: newTeacher.email,
+          role: 'teacher',
+          purpose: 'magic_login'
+        });
+        
+        const magicLink = `https://unitus.carbonfarmingmaster.it/teachers/?token=${magicToken}`;
+        
+        await sendEmail({
+          to: email,
+          subject: 'Accesso Pannello Docenti - Master Carbon Farming',
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: linear-gradient(135deg, #166534 0%, #22c55e 100%); padding: 20px; border-radius: 12px 12px 0 0;">
+                <h1 style="color: white; margin: 0; font-size: 1.5rem;">🌱 Master Carbon Farming</h1>
+                <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 14px;">Università della Tuscia</p>
+              </div>
+              <div style="background: #f9fafb; padding: 24px; border-radius: 0 0 12px 12px;">
+                <h2 style="color: #166534; margin: 0 0 16px;">Benvenuto nel Pannello Docenti!</h2>
+                <p style="margin: 16px 0; line-height: 1.6;">
+                  Ciao <strong>${first_name}</strong>,<br><br>
+                  Sei stato aggiunto come <strong>${role || 'Docente'}</strong> al sistema del Master Carbon Farming.
+                  Potrai caricare materiali didattici e gestire le tue lezioni.
+                </p>
+                <div style="text-align: center; margin: 24px 0;">
+                  <a href="${magicLink}" style="display: inline-block; background: #16a34a; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                    🚀 Accedi al Pannello Docenti
+                  </a>
+                </div>
+                <p style="font-size: 14px; color: #6b7280; margin-top: 24px;">
+                  In futuro potrai accedere direttamente con la tua email: <strong>${email}</strong>
+                </p>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+                <p style="color: #6b7280; font-size: 0.875rem;">
+                  Università della Tuscia - Master di II livello in Carbon Farming
+                </p>
+              </div>
+            </div>
+          `
+        });
+      } catch (emailError) {
+        console.error('Failed to send welcome email:', emailError);
+        // Don't fail the request if email fails
+      }
+    }
+    
+    res.json({
+      ...newTeacher,
+      message: `Docente aggiunto con successo${send_email ? '. Email di benvenuto inviata.' : '.'}`
+    });
+    
+  } catch (error) {
+    console.error('Add teacher error:', error);
+    res.status(500).json({ error: 'Errore nell\'aggiunta del docente' });
+  }
+});
+
+// Update teacher
+app.put('/api/admin/teachers/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const teacherId = req.params.id;
+  const { first_name, last_name, role, bio, is_active } = req.body;
+  
+  try {
+    const { rows: teachers } = await pool.query(
+      `UPDATE teachers 
+       SET first_name = $1, last_name = $2, role = $3, bio = $4, is_active = $5, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $6
+       RETURNING *`,
+      [first_name, last_name, role, bio, is_active !== false, teacherId]
+    );
+    
+    if (teachers.length === 0) {
+      return res.status(404).json({ error: 'Docente non trovato' });
+    }
+    
+    res.json(teachers[0]);
+  } catch (error) {
+    console.error('Update teacher error:', error);
+    res.status(500).json({ error: 'Errore nell\'aggiornamento del docente' });
+  }
+});
+
+// Send magic link to teacher
+app.post('/api/admin/teachers/:id/send-link', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const teacherId = req.params.id;
+  
+  try {
+    const { rows: teachers } = await pool.query(
+      'SELECT * FROM teachers WHERE id = $1',
+      [teacherId]
+    );
+    
+    if (teachers.length === 0) {
+      return res.status(404).json({ error: 'Docente non trovato' });
+    }
+    
+    const teacher = teachers[0];
+    
+    // Generate magic link
+    const magicToken = generateToken({
+      id: teacher.id,
+      email: teacher.email,
+      role: 'teacher',
+      purpose: 'magic_login'
+    });
+    
+    const magicLink = `https://unitus.carbonfarmingmaster.it/teachers/?token=${magicToken}`;
+    
+    await sendEmail({
+      to: teacher.email,
+      subject: 'Link di Accesso - Pannello Docenti Master Carbon Farming',
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #166534 0%, #22c55e 100%); padding: 20px; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 1.5rem;">🌱 Master Carbon Farming</h1>
+          </div>
+          <div style="background: #f9fafb; padding: 24px; border-radius: 0 0 12px 12px;">
+            <h2 style="color: #166534; margin: 0 0 16px;">Accesso Pannello Docenti</h2>
+            <p style="margin: 16px 0; line-height: 1.6;">
+              Ciao <strong>${teacher.first_name}</strong>,<br><br>
+              Clicca il pulsante qui sotto per accedere al pannello docenti:
+            </p>
+            <div style="text-align: center; margin: 24px 0;">
+              <a href="${magicLink}" style="display: inline-block; background: #16a34a; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                🔑 Accedi Ora
+              </a>
+            </div>
+            <p style="font-size: 14px; color: #6b7280; margin-top: 24px;">
+              Questo link è valido per 7 giorni e ti darà accesso immediato al sistema.
+            </p>
+          </div>
+        </div>
+      `
+    });
+    
+    res.json({ message: 'Magic link inviato con successo' });
+    
+  } catch (error) {
+    console.error('Send magic link error:', error);
+    res.status(500).json({ error: 'Errore nell\'invio del magic link' });
+  }
+});
+
+// Delete teacher
+app.delete('/api/admin/teachers/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  
+  const teacherId = req.params.id;
+  
+  try {
+    const { rows } = await pool.query(
+      'DELETE FROM teachers WHERE id = $1 RETURNING email',
+      [teacherId]
+    );
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Docente non trovato' });
+    }
+    
+    res.json({ message: 'Docente eliminato con successo' });
+  } catch (error) {
+    console.error('Delete teacher error:', error);
+    res.status(500).json({ error: 'Errore nell\'eliminazione del docente' });
   }
 });
 

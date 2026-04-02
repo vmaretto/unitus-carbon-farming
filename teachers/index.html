@@ -484,6 +484,41 @@
 
         // Check existing session on load
         window.addEventListener('load', async () => {
+            // Check for magic link token in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const magicToken = urlParams.get('token');
+            
+            if (magicToken) {
+                // Magic link login
+                try {
+                    // Verify magic token directly
+                    const response = await fetch('/api/teachers/magic-login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: magicToken })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        teacherToken = data.token;
+                        localStorage.setItem('teacherToken', teacherToken);
+                        
+                        // Clean URL
+                        window.history.replaceState({}, '', '/teachers/');
+                        
+                        await loadDashboard();
+                        showToast('Accesso effettuato con successo!', 'success');
+                        return;
+                    } else {
+                        showToast(data.error || 'Token non valido o scaduto', 'error');
+                    }
+                } catch (error) {
+                    showToast('Errore nel magic link', 'error');
+                }
+            }
+            
+            // Check regular session
             teacherToken = localStorage.getItem('teacherToken');
             if (teacherToken) {
                 try {

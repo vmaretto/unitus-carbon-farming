@@ -4,8 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pannello Amministrazione - Master in Carbon Farming</title>
-    <!-- Cache buster per nuovo deploy materiali -->
-    <meta name="cache-version" content="2026-03-31-v22-MATERIALS">
+    <!-- Cache buster per fix teachers system -->
+    <meta name="cache-version" content="2026-04-02-v23-TEACHERS-FIX">
+    <!-- Prevent extension conflicts -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; object-src 'none';">
+    <!-- Force cache refresh -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1770,6 +1776,28 @@ Buono studio!</textarea>
     </template>
 
     <script>
+        // ============================================
+        // ERROR SUPPRESSION (browser extensions)
+        // ============================================
+        window.addEventListener('error', (e) => {
+            if (e.filename && (
+                e.filename.includes('chrome-extension://') ||
+                e.filename.includes('extension') ||
+                e.message.includes('net::ERR_FILE_NOT_FOUND')
+            )) {
+                return; // Ignore external errors
+            }
+        }, true);
+        
+        window.addEventListener('unhandledrejection', (e) => {
+            if (e.reason && e.reason.message && (
+                e.reason.message.includes('chrome-extension') ||
+                e.reason.message.includes('Failed to fetch')
+            )) {
+                e.preventDefault();
+            }
+        });
+
         // ============================================
         // AUTH MANAGEMENT
         // ============================================

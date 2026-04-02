@@ -488,7 +488,7 @@
     </style>
 </head>
 <body>
-    <header>
+    <header style="display:none;">
         <div class="header-content">
             <h1>Pannello di amministrazione</h1>
             <p>Gestisci la faculty del Master, programma la pubblicazione degli articoli del blog e controlla la visibilità dei contenuti online.</p>
@@ -511,7 +511,7 @@
     </header>
 
     <!-- LOGIN GATE -->
-    <div id="login-gate" style="display:none; min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 24px;">
+    <div id="login-gate" style="min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 24px;">
         <div style="background: white; border-radius: 12px; padding: 40px; max-width: 400px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.1);">
             <h2 style="margin: 0 0 8px; color: var(--green-900); font-size: 1.5rem;">Accesso Amministrazione</h2>
             <p style="margin: 0 0 24px; color: var(--gray-500); font-size: 0.95rem;">Inserisci la password per accedere al pannello.</p>
@@ -1824,84 +1824,67 @@ Buono studio!</textarea>
             const mainContent = document.querySelector('main');
             const headerEl = document.querySelector('header');
 
-            // FORCE TOKEN CHECK FIRST
+            function showAdmin() {
+                loginGate.style.display = 'none';
+                mainContent.style.display = 'block';
+                headerEl.style.display = 'block';
+                document.getElementById('logout-btn').style.display = 'inline-block';
+                if (typeof loadDocuments === 'function') loadDocuments();
+                if (typeof loadResources === 'function') loadResources();
+                if (typeof loadFaculty === 'function') loadFaculty();
+                if (typeof loadBlogPosts === 'function') loadBlogPosts();
+                if (typeof loadPartners === 'function') loadPartners();
+                if (typeof loadModules === 'function') loadModules();
+                if (typeof loadLessons === 'function') loadLessons();
+                if (typeof loadLmsCourses === 'function') loadLmsCourses();
+            }
+
+            function showLogin() {
+                loginGate.style.display = 'flex';
+                mainContent.style.display = 'none';
+                headerEl.style.display = 'none';
+            }
+
+            // Controlla se il server richiede autenticazione
+            let authRequired = true;
+            try {
+                const statusRes = await fetch('/api/auth/status');
+                const statusData = await statusRes.json();
+                authRequired = statusData.authRequired !== false;
+            } catch (e) {
+                // Se fallisce, assume che serve auth
+            }
+
+            if (!authRequired) {
+                // Auth non configurata: mostra tutto (backwards compatible)
+                loginGate.style.display = 'none';
+                mainContent.style.display = 'block';
+                headerEl.style.display = 'block';
+                document.getElementById('logout-btn').style.display = 'none';
+                if (typeof loadDocuments === 'function') loadDocuments();
+                if (typeof loadResources === 'function') loadResources();
+                if (typeof loadFaculty === 'function') loadFaculty();
+                if (typeof loadBlogPosts === 'function') loadBlogPosts();
+                if (typeof loadPartners === 'function') loadPartners();
+                if (typeof loadModules === 'function') loadModules();
+                if (typeof loadLessons === 'function') loadLessons();
+                if (typeof loadLmsCourses === 'function') loadLmsCourses();
+                return true;
+            }
+
+            // Se abbiamo un token, verificalo lato server
             adminToken = localStorage.getItem('adminToken') || adminToken;
             if (adminToken) {
                 try {
                     const verifyRes = await fetch('/api/auth/verify', {
                         headers: { 'Authorization': 'Bearer ' + adminToken }
                     });
-                    const verifyData = await verifyRes.json();
-                    
-                    if (verifyData.valid) {
-                        // TOKEN VALID - GO DIRECTLY TO MAIN CONTENT
-                        loginGate.style.display = 'none !important';
-                        loginGate.remove(); // FORCE REMOVE LOGIN GATE
-                        mainContent.style.display = 'block';
-                        headerEl.style.display = 'block';
-                        document.getElementById('logout-btn').style.display = 'inline-block';
-                        // Load all data immediately
-                        if (typeof loadDocuments === 'function') loadDocuments();
-                        if (typeof loadResources === 'function') loadResources();
-                        if (typeof loadFaculty === 'function') loadFaculty();
-                        if (typeof loadBlogPosts === 'function') loadBlogPosts();
-                        if (typeof loadPartners === 'function') loadPartners();
-                        if (typeof loadModules === 'function') loadModules();
-                        if (typeof loadLessons === 'function') loadLessons();
-                        if (typeof loadLmsCourses === 'function') loadLmsCourses();
-                        return true;
-                    }
-                } catch (e) {
-                    // Token invalid, continue with normal flow
-                }
-            }
-
-            // Controlla se il server richiede autenticazione
-            try {
-                const statusRes = await fetch('/api/auth/status');
-                const statusData = await statusRes.json();
-
-                if (!statusData.authRequired) {
-                    // Auth non configurata: mostra tutto (backwards compatible)
-                    loginGate.style.display = 'none';
-                    mainContent.style.display = '';
-                    headerEl.style.display = '';
-                    document.getElementById('logout-btn').style.display = 'none';
-                    // Carica dati
-                    if (typeof loadDocuments === 'function') loadDocuments();
-                    if (typeof loadResources === 'function') loadResources();
-                    if (typeof loadFaculty === 'function') loadFaculty();
-                    if (typeof loadBlogPosts === 'function') loadBlogPosts();
-                    if (typeof loadPartners === 'function') loadPartners();
-                    if (typeof loadModules === 'function') loadModules();
-                    if (typeof loadLessons === 'function') loadLessons();
-                    if (typeof loadLmsCourses === 'function') loadLmsCourses();
-                    return true;
-                }
-            } catch (e) {
-                // Se fallisce, assume che serve auth
-            }
-
-            // Se abbiamo un token, verificalo
-            if (adminToken) {
-                try {
-                    const verifyRes = await fetch('/api/auth/verify', {
-                        headers: { 'Authorization': 'Bearer ' + adminToken }
-                    });
                     if (verifyRes.ok) {
-                        loginGate.style.display = 'none';
-                        mainContent.style.display = '';
-                        headerEl.style.display = '';
-                        // Carica dati dopo autenticazione
-                        if (typeof loadDocuments === 'function') loadDocuments();
-                        if (typeof loadResources === 'function') loadResources();
-                        if (typeof loadFaculty === 'function') loadFaculty();
-                        if (typeof loadBlogPosts === 'function') loadBlogPosts();
-                        if (typeof loadPartners === 'function') loadPartners();
-                        if (typeof loadModules === 'function') loadModules();
-                        if (typeof loadLessons === 'function') loadLessons();
-                        if (typeof loadLmsCourses === 'function') loadLmsCourses();
-                        return true;
+                        const verifyData = await verifyRes.json();
+                        if (verifyData.valid) {
+                            showAdmin();
+                            return true;
+                        }
                     }
                 } catch (e) {}
                 // Token non valido, pulisci
@@ -1909,10 +1892,8 @@ Buono studio!</textarea>
                 localStorage.removeItem('adminToken');
             }
 
-            // Mostra login
-            loginGate.style.display = 'flex';
-            mainContent.style.display = 'none';
-            headerEl.style.display = 'none';
+            // Nessun token valido: mostra login
+            showLogin();
             return false;
         }
 

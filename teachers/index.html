@@ -128,11 +128,8 @@
                     <label for="email">Email</label>
                     <input type="email" id="email" required placeholder="nome.cognome@email.it">
                 </div>
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" placeholder="Inserisci password">
-                </div>
-                <button type="submit" id="login-btn" class="btn-primary">Accedi</button>
+                <button type="submit" id="login-btn" class="btn-primary">Invia link di accesso</button>
+                <p id="login-msg" style="display:none; margin-top: 16px; padding: 12px; background: var(--green-50); border: 1px solid var(--green-500); border-radius: 8px; color: var(--green-800); font-size: 14px; text-align: center;"></p>
             </form>
         </div>
     </div>
@@ -325,25 +322,21 @@
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
             const btn = document.getElementById('login-btn');
-            btn.disabled = true; btn.textContent = 'Accesso in corso...';
+            const msg = document.getElementById('login-msg');
+            btn.disabled = true; btn.textContent = 'Invio in corso...';
+            msg.style.display = 'none';
             try {
-                const res = await fetch('/api/teachers/login', {
+                const res = await fetch('/api/teachers/request-magic-link', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify({ email })
                 });
                 const data = await res.json();
-                if (res.ok) {
-                    teacherToken = data.token;
-                    localStorage.setItem('teacherToken', teacherToken);
-                    await loadDashboard();
-                } else {
-                    showToast(data.error || 'Errore di accesso', 'error');
-                }
+                msg.textContent = 'Se il tuo indirizzo è registrato, riceverai un\'email con il link di accesso. Controlla anche la cartella spam.';
+                msg.style.display = 'block';
             } catch (e) { showToast('Errore di connessione', 'error'); }
-            finally { btn.disabled = false; btn.textContent = 'Accedi'; }
+            finally { btn.disabled = false; btn.textContent = 'Invia link di accesso'; }
         });
 
         document.getElementById('logout-btn').addEventListener('click', () => {

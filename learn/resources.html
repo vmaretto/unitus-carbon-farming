@@ -69,10 +69,18 @@
             </div>
         </div>
 
-        <!-- Documenti -->
+        <!-- Documenti generali -->
         <div class="card">
             <h2><span class="icon">📄</span> Documenti</h2>
             <div class="resource-list" id="doc-list">
+                <div class="loading">Caricamento...</div>
+            </div>
+        </div>
+
+        <!-- Materiali delle Lezioni -->
+        <div class="card" id="lesson-doc-section" style="display: none;">
+            <h2><span class="icon">🎓</span> Materiali delle Lezioni</h2>
+            <div class="resource-list" id="lesson-doc-list">
                 <div class="loading">Caricamento...</div>
             </div>
         </div>
@@ -121,12 +129,16 @@
                 : item.url;
             const target = isPdf ? '' : 'target="_blank" rel="noopener"';
             
+            const meta = (item.teacherName || item.lessonTitle)
+                ? `<p class="resource-meta" style="color:#6b7280;font-size:12px;margin-top:4px;">${item.teacherName ? `👨‍🏫 ${item.teacherName}` : ''}${item.lessonTitle ? ` · 📅 ${item.lessonTitle}` : ''}</p>`
+                : '';
             return `
                 <a href="${href}" ${target} class="resource-item">
                     <div class="resource-icon ${item.resourceType}">${typeIcons[item.resourceType] || '📎'}</div>
                     <div class="resource-info">
                         <p class="resource-title">${item.title}</p>
                         ${item.description ? `<p class="resource-desc">${item.description}</p>` : ''}
+                        ${meta}
                     </div>
                     <span class="resource-arrow">${isPdf ? '🔒' : '→'}</span>
                 </a>
@@ -139,7 +151,9 @@
                 const allResources = await res.json();
 
                 const videos = allResources.filter(r => r.resourceType === 'video');
-                const docs = allResources.filter(r => ['pdf', 'document', 'audio', 'link'].includes(r.resourceType));
+                const allDocs = allResources.filter(r => ['pdf', 'document', 'audio', 'link'].includes(r.resourceType));
+                const generalDocs = allDocs.filter(r => !r.teacherId && !r.lessonId);
+                const lessonDocs = allDocs.filter(r => r.teacherId || r.lessonId);
                 const quizzes = allResources.filter(r => r.resourceType === 'quiz');
 
                 const videoList = document.getElementById('video-list');
@@ -151,10 +165,18 @@
                     videoList.innerHTML = '<div class="empty">Nessun video disponibile</div>';
                 }
 
-                if (docs.length > 0) {
-                    docList.innerHTML = docs.map(renderResource).join('');
+                if (generalDocs.length > 0) {
+                    docList.innerHTML = generalDocs.map(renderResource).join('');
                 } else {
                     docList.innerHTML = '<div class="empty">Nessun documento disponibile</div>';
+                }
+
+                // Lesson materials section
+                const lessonSection = document.getElementById('lesson-doc-section');
+                const lessonList = document.getElementById('lesson-doc-list');
+                if (lessonDocs.length > 0) {
+                    lessonSection.style.display = 'block';
+                    lessonList.innerHTML = lessonDocs.map(renderResource).join('');
                 }
 
                 // Quiz section

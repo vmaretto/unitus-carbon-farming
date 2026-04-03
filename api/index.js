@@ -452,6 +452,72 @@ app.post('/api/teachers/login', async (req, res) => {
   }
 });
 
+// Self-service magic link request (public, no auth required)
+app.post('/api/teachers/request-magic-link', async (req, res) => {
+  if (!ensurePool(res)) return;
+  const safeMsg = 'Se la tua email è registrata, riceverai un link di accesso.';
+
+  const { email } = req.body;
+  if (!email) return res.json({ message: safeMsg });
+
+  try {
+    const { rows: teachers } = await pool.query(
+      'SELECT * FROM teachers WHERE LOWER(email) = LOWER($1) AND is_active = true',
+      [email]
+    );
+
+    if (teachers.length > 0) {
+      const teacher = teachers[0];
+      const magicToken = generateToken({
+        id: teacher.id,
+        email: teacher.email,
+        role: 'teacher',
+        purpose: 'magic_login'
+      });
+      const magicLink = `https://unitus.carbonfarmingmaster.it/teachers/?token=${magicToken}`;
+
+      try {
+        await sendEmail({
+          to: teacher.email,
+          subject: 'Accesso Pannello Docenti - Master Carbon Farming',
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: linear-gradient(135deg, #166534 0%, #22c55e 100%); padding: 20px; border-radius: 12px 12px 0 0;">
+                <h1 style="color: white; margin: 0; font-size: 1.5rem;">Master Carbon Farming</h1>
+                <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 14px;">Universita della Tuscia</p>
+              </div>
+              <div style="background: #f9fafb; padding: 24px; border-radius: 0 0 12px 12px;">
+                <h2 style="color: #166534; margin: 0 0 16px;">Accesso Pannello Docenti</h2>
+                <p style="margin: 16px 0; line-height: 1.6;">
+                  Ciao <strong>${teacher.first_name}</strong>,<br><br>
+                  Clicca il pulsante qui sotto per accedere al pannello docenti:
+                </p>
+                <div style="text-align: center; margin: 24px 0;">
+                  <a href="${magicLink}" style="display: inline-block; background: #16a34a; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                    Accedi al Pannello Docenti
+                  </a>
+                </div>
+                <p style="font-size: 14px; color: #6b7280; margin-top: 24px;">
+                  Questo link è valido per 7 giorni.
+                </p>
+              </div>
+            </div>
+          `
+        });
+        console.log('Magic link sent to', teacher.email);
+      } catch (emailError) {
+        // Email not configured — log the link for manual delivery
+        console.log('EMAIL NOT CONFIGURED — Magic link for', teacher.email, ':', magicLink);
+      }
+    }
+    // Always respond with same message (don't reveal if email exists)
+    res.json({ message: safeMsg });
+  } catch (error) {
+    console.error('Request magic link error:', error);
+    res.json({ message: safeMsg });
+  }
+});
+
 // Magic link login for teachers
 app.post('/api/teachers/magic-login', async (req, res) => {
   if (!ensurePool(res)) return;

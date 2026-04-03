@@ -511,7 +511,7 @@ app.get('/api/teachers/me', requireTeacher, async (req, res) => {
   
   try {
     const { rows: teachers } = await pool.query(
-      'SELECT id, email, first_name, last_name, role, bio, phone, department FROM teachers WHERE id = $1',
+      'SELECT id, email, first_name, last_name, role, bio, is_active, last_login_at, created_at FROM teachers WHERE id = $1',
       [req.teacher.id]
     );
     

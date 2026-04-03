@@ -500,6 +500,7 @@
                 <a href="#blog">Gestione blog</a>
                 <a href="#partners">Gestione partner</a>
                 <a href="#resources">Risorse</a>
+                <a href="#teacher-docs">Liberatorie Docenti</a>
                 <a href="#lms-courses">Percorsi Formativi</a>
                 <a href="#lms-modules">Moduli e Lezioni</a>
                 <a href="#lms-enrollments">Iscrizioni</a>
@@ -1006,6 +1007,18 @@
                         <input type="text" id="resource-description" name="description" placeholder="Breve descrizione della risorsa">
                     </label>
                     <label>
+                        Docente
+                        <select id="resource-teacher" name="teacherId">
+                            <option value="">-- Nessun docente --</option>
+                        </select>
+                    </label>
+                    <label>
+                        Lezione
+                        <select id="resource-lesson" name="lessonId">
+                            <option value="">-- Nessuna lezione --</option>
+                        </select>
+                    </label>
+                    <label>
                         Ordine
                         <input type="number" id="resource-sort-order" name="sortOrder" placeholder="0">
                     </label>
@@ -1186,16 +1199,82 @@ Buono studio!</textarea>
                         <tr>
                             <th>Titolo</th>
                             <th>Tipo</th>
+                            <th>Docente</th>
                             <th>Pubblicato</th>
                             <th>Azioni</th>
                         </tr>
                     </thead>
                     <tbody id="resource-table-body">
                         <tr class="empty-state" data-empty-resource>
-                            <td colspan="4">Non ci sono risorse caricate. Aggiungi la prima risorsa con il modulo qui sopra.</td>
+                            <td colspan="5">Non ci sono risorse caricate. Aggiungi la prima risorsa con il modulo qui sopra.</td>
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </section>
+
+        <!-- ============================================ -->
+        <!-- LIBERATORIE DOCENTI -->
+        <!-- ============================================ -->
+        <section id="teacher-docs">
+            <header>
+                <h2>Liberatorie Docenti</h2>
+                <p class="section-description">Crea documenti e liberatorie che i docenti devono firmare dal proprio pannello.</p>
+            </header>
+
+            <form id="teacher-doc-form">
+                <div class="form-grid">
+                    <label>
+                        Titolo documento *
+                        <input type="text" id="tdoc-title" required placeholder="Es. Liberatoria registrazione lezioni">
+                    </label>
+                    <label>
+                        Tipo
+                        <select id="tdoc-type">
+                            <option value="liberatoria">Liberatoria</option>
+                            <option value="consenso">Consenso</option>
+                            <option value="informativa">Informativa</option>
+                        </select>
+                    </label>
+                    <label style="grid-column: 1 / -1;">
+                        Contenuto (HTML) *
+                        <textarea id="tdoc-content" rows="6" required placeholder="Testo della liberatoria... Supporta HTML."></textarea>
+                    </label>
+                </div>
+                <div class="form-buttons">
+                    <button type="submit">Crea documento</button>
+                </div>
+            </form>
+
+            <div class="table-wrapper" style="margin-top: 16px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Titolo</th>
+                            <th>Tipo</th>
+                            <th>Firme</th>
+                            <th>Consensi</th>
+                            <th>Creato</th>
+                            <th>Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="teacher-docs-tbody">
+                        <tr class="empty-state" data-empty-tdoc>
+                            <td colspan="6">Nessun documento creato.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Modal firme docenti -->
+            <div id="tdoc-sigs-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+                <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border-radius:12px; padding:32px; width:90%; max-width:700px; max-height:80vh; overflow-y:auto;">
+                    <h3 id="tdoc-sigs-title" style="margin-bottom: 16px;"></h3>
+                    <div id="tdoc-sigs-content"></div>
+                    <div style="text-align: right; margin-top: 16px;">
+                        <button class="secondary" onclick="document.getElementById('tdoc-sigs-modal').style.display='none'">Chiudi</button>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -1838,6 +1917,7 @@ Buono studio!</textarea>
                 if (typeof loadLessons === 'function') loadLessons();
                 if (typeof loadLmsCourses === 'function') loadLmsCourses();
                 if (typeof loadStudentsList === 'function') loadStudentsList();
+                if (typeof loadTeacherDocs === 'function') loadTeacherDocs();
             }
 
             function showLogin() {
@@ -2067,6 +2147,91 @@ Buono studio!</textarea>
             document.getElementById('resource-submit-btn').textContent = 'Aggiungi risorsa';
         }
 
+        // Populate resource teacher/lesson dropdowns
+        function updateResourceTeacherSelect() {
+            const sel = document.getElementById('resource-teacher');
+            const cur = sel.value;
+            sel.innerHTML = '<option value="">-- Nessun docente --</option>';
+            (state.faculty || []).forEach(f => {
+                sel.innerHTML += '<option value="' + f.id + '">' + f.name + '</option>';
+            });
+            if (cur) sel.value = cur;
+        }
+
+        function updateResourceLessonSelect() {
+            const sel = document.getElementById('resource-lesson');
+            const cur = sel.value;
+            const teacherId = document.getElementById('resource-teacher').value;
+            sel.innerHTML = '<option value="">-- Nessuna lezione --</option>';
+            (state.lessons || []).forEach(l => {
+                if (!teacherId || l.teacherId === teacherId) {
+                    const dateStr = l.startDatetime ? new Date(l.startDatetime).toLocaleDateString('it-IT') : '';
+                    sel.innerHTML += '<option value="' + l.id + '">' + (l.title || 'Lezione') + (dateStr ? ' (' + dateStr + ')' : '') + '</option>';
+                }
+            });
+            if (cur) sel.value = cur;
+        }
+
+        document.getElementById('resource-teacher').addEventListener('change', updateResourceLessonSelect);
+
+        // ============================================
+        // TEACHER DOCUMENTS (LIBERATORIE DOCENTI)
+        // ============================================
+        async function loadTeacherDocs() {
+            try {
+                const docs = await apiRequest('/api/teacher-documents');
+                const tbody = document.getElementById('teacher-docs-tbody');
+                tbody.querySelectorAll('tr:not([data-empty-tdoc])').forEach(r => r.remove());
+                docs.forEach(d => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = '<td>' + d.title + '</td>' +
+                        '<td>' + (d.document_type || 'liberatoria') + '</td>' +
+                        '<td>' + (d.signature_count || 0) + '</td>' +
+                        '<td>' + (d.consent_count || 0) + '</td>' +
+                        '<td>' + (d.created_at ? new Date(d.created_at).toLocaleDateString('it-IT') : '') + '</td>' +
+                        '<td><button class="action" onclick="viewTeacherDocSigs(\'' + d.id + '\',\'' + d.title.replace(/'/g, "\\'") + '\')">Vedi firme</button></td>';
+                    tbody.appendChild(tr);
+                });
+                toggleEmptyState(tbody, docs.length > 0, '[data-empty-tdoc]');
+            } catch (e) { console.error('Load teacher docs error:', e); }
+        }
+
+        document.getElementById('teacher-doc-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('tdoc-title').value.trim();
+            const content = document.getElementById('tdoc-content').value.trim();
+            const documentType = document.getElementById('tdoc-type').value;
+            if (!title || !content) { showToast('Compila titolo e contenuto', 'error'); return; }
+            try {
+                await apiRequest('/api/teacher-documents', {
+                    method: 'POST',
+                    body: JSON.stringify({ title, content, documentType })
+                });
+                showToast('Documento creato');
+                document.getElementById('teacher-doc-form').reset();
+                loadTeacherDocs();
+            } catch (e) { /* handled */ }
+        });
+
+        async function viewTeacherDocSigs(docId, docTitle) {
+            try {
+                const sigs = await apiRequest('/api/teacher-documents/' + docId + '/signatures');
+                document.getElementById('tdoc-sigs-title').textContent = 'Firme: ' + docTitle;
+                const content = document.getElementById('tdoc-sigs-content');
+                if (!sigs.length) {
+                    content.innerHTML = '<p style="color: var(--gray-500);">Nessuna firma ricevuta.</p>';
+                } else {
+                    content.innerHTML = '<table style="width:100%;"><thead><tr><th>Docente</th><th>Email</th><th>Consenso</th><th>Data</th></tr></thead><tbody>' +
+                        sigs.map(s => '<tr><td>' + (s.signer_name || s.first_name || '') + ' ' + (s.signer_surname || s.last_name || '') + '</td>' +
+                            '<td>' + (s.email || '') + '</td>' +
+                            '<td>' + (s.consent_given ? '<span style="color:green;">Si</span>' : '<span style="color:red;">No</span>') + '</td>' +
+                            '<td>' + (s.signed_at ? new Date(s.signed_at).toLocaleDateString('it-IT') : '') + '</td></tr>'
+                        ).join('') + '</tbody></table>';
+                }
+                document.getElementById('tdoc-sigs-modal').style.display = 'block';
+            } catch (e) { showToast('Errore nel caricamento firme', 'error'); }
+        }
+
         async function loadResources() {
             const tableBody = document.getElementById('resource-table-body');
             tableBody.querySelectorAll('tr:not([data-empty-resource])').forEach((row) => row.remove());
@@ -2083,6 +2248,7 @@ Buono studio!</textarea>
                     row.innerHTML = `
                         <td data-title><a href="${item.url}" target="_blank">${item.title}</a></td>
                         <td data-type>${typeIcons[item.resourceType] || ''} ${item.resourceType}</td>
+                        <td>${item.teacherName || '—'}</td>
                         <td data-status><span class="status-pill" data-status="${item.isPublished ? 'published' : 'draft'}">${item.isPublished ? 'Visibile' : 'Bozza'}</span></td>
                         <td>
                             <button data-edit class="icon-btn" title="Modifica">✏️</button>
@@ -2609,7 +2775,9 @@ Buono studio!</textarea>
                 url: document.getElementById('resource-url').value.trim(),
                 description: document.getElementById('resource-description').value.trim() || null,
                 sortOrder: document.getElementById('resource-sort-order').value === '' ? null : Number(document.getElementById('resource-sort-order').value),
-                isPublished: document.getElementById('resource-published').checked
+                isPublished: document.getElementById('resource-published').checked,
+                teacherId: document.getElementById('resource-teacher').value || null,
+                lessonId: document.getElementById('resource-lesson').value || null
             };
 
             if (!payload.title || !payload.resourceType || !payload.url) {
@@ -2648,6 +2816,9 @@ Buono studio!</textarea>
                 document.getElementById('resource-description').value = current.description || '';
                 document.getElementById('resource-sort-order').value = current.sortOrder ?? '';
                 document.getElementById('resource-published').checked = current.isPublished;
+                document.getElementById('resource-teacher').value = current.teacherId || '';
+                document.getElementById('resource-lesson').value = current.lessonId || '';
+                updateResourceLessonSelect();
                 state.editingResourceId = id;
                 document.getElementById('resource-submit-btn').textContent = 'Salva modifiche';
                 document.getElementById('resource-cancel-btn').style.display = 'inline-block';
@@ -2724,6 +2895,7 @@ Buono studio!</textarea>
 
                 toggleEmptyState(tableBody, items.length > 0, '[data-empty-faculty]');
                 if (typeof updateTeacherSelect === 'function') updateTeacherSelect();
+                if (typeof updateResourceTeacherSelect === 'function') updateResourceTeacherSelect();
             } catch (error) {
                 state.faculty = [];
                 toggleEmptyState(tableBody, false, '[data-empty-faculty]');
@@ -3144,6 +3316,7 @@ Buono studio!</textarea>
                 state.lessons = lessons;
                 renderCalendar();
                 renderLessonsList();
+                if (typeof updateResourceLessonSelect === 'function') updateResourceLessonSelect();
             } catch (error) {
                 state.lessons = [];
             }

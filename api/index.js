@@ -678,16 +678,40 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
   }
 });
 
-// Get teacher's uploaded materials
+// Get teacher's uploaded materials (from materials_pending + resources)
 app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
-    const { rows } = await pool.query(
-      `SELECT id, title, description, file_url, file_name, file_size, file_type, status, created_at
+    // Find the matching faculty id for this teacher (linked by email)
+    const { rows: fRows } = await pool.query(
+      'SELECT f.id FROM faculty f INNER JOIN teachers t ON LOWER(f.email) = LOWER(t.email) WHERE t.id = $1',
+      [req.teacher.id]
+    );
+    const facultyId = fRows.length ? fRows[0].id : null;
+
+    // Materials uploaded by teacher (pending approval)
+    const { rows: pending } = await pool.query(
+      `SELECT id, title, description, file_url, file_name, file_size, file_type, status, created_at, 'upload' AS source
        FROM materials_pending WHERE teacher_id = $1 ORDER BY created_at DESC`,
       [req.teacher.id]
     );
-    res.json(rows);
+
+    // Resources assigned to this teacher by admin
+    let resources = [];
+    if (facultyId) {
+      const { rows: res2 } = await pool.query(
+        `SELECT id, title, description, url AS file_url, NULL AS file_name, file_size_bytes AS file_size,
+                resource_type AS file_type, CASE WHEN is_published THEN 'approved' ELSE 'pending' END AS status,
+                created_at, 'admin' AS source
+         FROM resources WHERE teacher_id = $1 ORDER BY created_at DESC`,
+        [facultyId]
+      );
+      resources = res2;
+    }
+
+    // Merge and sort by date
+    const all = [...pending, ...resources].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    res.json(all);
   } catch (error) {
     console.error('Get teacher materials error:', error);
     res.status(500).json({ error: 'Errore nel recupero materiali' });
@@ -2099,13 +2123,17 @@ app.get('/api/resources', async (req, res) => {
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const sql = `
-      SELECT id, title, description, resource_type AS "resourceType",
-             url, thumbnail_url AS "thumbnailUrl", file_size_bytes AS "fileSizeBytes",
-             sort_order AS "sortOrder", is_published AS "isPublished",
-             created_at AS "createdAt", updated_at AS "updatedAt"
-      FROM resources
+      SELECT r.id, r.title, r.description, r.resource_type AS "resourceType",
+             r.url, r.thumbnail_url AS "thumbnailUrl", r.file_size_bytes AS "fileSizeBytes",
+             r.sort_order AS "sortOrder", r.is_published AS "isPublished",
+             r.teacher_id AS "teacherId", r.lesson_id AS "lessonId",
+             f.name AS "teacherName", l.title AS "lessonTitle",
+             r.created_at AS "createdAt", r.updated_at AS "updatedAt"
+      FROM resources r
+      LEFT JOIN faculty f ON f.id = r.teacher_id
+      LEFT JOIN lessons l ON l.id = r.lesson_id
       ${where}
-      ORDER BY sort_order NULLS LAST, created_at DESC
+      ORDER BY r.sort_order NULLS LAST, r.created_at DESC
     `;
 
     const { rows } = await pool.query(sql, values);
@@ -2136,7 +2164,7 @@ app.get('/api/resources/:id', async (req, res) => {
 app.post('/api/resources', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
 
-  const { title, description, resourceType, url, thumbnailUrl, fileSizeBytes, sortOrder, isPublished } = req.body;
+  const { title, description, resourceType, url, thumbnailUrl, fileSizeBytes, sortOrder, isPublished, teacherId, lessonId } = req.body;
 
   if (!title || !resourceType || !url) {
     return res.status(400).json({ error: 'Title, resourceType, and url are required' });
@@ -2149,11 +2177,12 @@ app.post('/api/resources', requireAdmin, async (req, res) => {
   try {
     const id = uuidv4();
     const insert = `
-      INSERT INTO resources (id, title, description, resource_type, url, thumbnail_url, file_size_bytes, sort_order, is_published)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO resources (id, title, description, resource_type, url, thumbnail_url, file_size_bytes, sort_order, is_published, teacher_id, lesson_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING id, title, description, resource_type AS "resourceType",
                 url, thumbnail_url AS "thumbnailUrl", file_size_bytes AS "fileSizeBytes",
                 sort_order AS "sortOrder", is_published AS "isPublished",
+                teacher_id AS "teacherId", lesson_id AS "lessonId",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `;
     const values = [
@@ -2165,7 +2194,9 @@ app.post('/api/resources', requireAdmin, async (req, res) => {
       thumbnailUrl || null,
       fileSizeBytes || null,
       typeof sortOrder === 'number' ? sortOrder : null,
-      Boolean(isPublished)
+      Boolean(isPublished),
+      teacherId || null,
+      lessonId || null
     ];
 
     const { rows } = await pool.query(insert, values);
@@ -2180,7 +2211,7 @@ app.put('/api/resources/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
 
   const { id } = req.params;
-  const { title, description, resourceType, url, thumbnailUrl, fileSizeBytes, sortOrder, isPublished } = req.body;
+  const { title, description, resourceType, url, thumbnailUrl, fileSizeBytes, sortOrder, isPublished, teacherId, lessonId } = req.body;
 
   try {
     const update = `
@@ -2193,11 +2224,14 @@ app.put('/api/resources/:id', requireAdmin, async (req, res) => {
           file_size_bytes = COALESCE($7, file_size_bytes),
           sort_order = COALESCE($8, sort_order),
           is_published = COALESCE($9, is_published),
+          teacher_id = $10,
+          lesson_id = $11,
           updated_at = NOW()
       WHERE id = $1
       RETURNING id, title, description, resource_type AS "resourceType",
                 url, thumbnail_url AS "thumbnailUrl", file_size_bytes AS "fileSizeBytes",
                 sort_order AS "sortOrder", is_published AS "isPublished",
+                teacher_id AS "teacherId", lesson_id AS "lessonId",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `;
     const values = [
@@ -2209,7 +2243,9 @@ app.put('/api/resources/:id', requireAdmin, async (req, res) => {
       thumbnailUrl,
       fileSizeBytes,
       typeof sortOrder === 'number' ? sortOrder : null,
-      typeof isPublished === 'boolean' ? isPublished : null
+      typeof isPublished === 'boolean' ? isPublished : null,
+      teacherId || null,
+      lessonId || null
     ];
 
     const { rows } = await pool.query(update, values);

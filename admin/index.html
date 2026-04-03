@@ -2158,12 +2158,20 @@ Buono studio!</textarea>
             if (cur) sel.value = cur;
         }
 
-        function updateResourceLessonSelect() {
+        let allLessonsCache = null;
+
+        async function updateResourceLessonSelect() {
             const sel = document.getElementById('resource-lesson');
             const cur = sel.value;
             const teacherId = document.getElementById('resource-teacher').value;
+
+            if (!allLessonsCache) {
+                try { allLessonsCache = await apiRequest('/api/lessons'); }
+                catch(e) { allLessonsCache = []; }
+            }
+
             sel.innerHTML = '<option value="">-- Nessuna lezione --</option>';
-            (state.lessons || []).forEach(l => {
+            allLessonsCache.forEach(l => {
                 if (!teacherId || l.teacherId === teacherId) {
                     const dateStr = l.startDatetime ? new Date(l.startDatetime).toLocaleDateString('it-IT') : '';
                     sel.innerHTML += '<option value="' + l.id + '">' + (l.title || 'Lezione') + (dateStr ? ' (' + dateStr + ')' : '') + '</option>';
@@ -3596,6 +3604,7 @@ Buono studio!</textarea>
                 await apiRequest(url, { method, body: JSON.stringify(payload) });
                 showToast('Lezione salvata con successo');
                 resetLessonForm();
+                allLessonsCache = null;
                 loadLessons();
             } catch (error) {
                 // handled
@@ -3621,6 +3630,7 @@ Buono studio!</textarea>
                 try {
                     await apiRequest(`/api/lessons/${id}`, { method: 'DELETE' });
                     showToast('Lezione eliminata');
+                    allLessonsCache = null;
                     loadLessons();
                 } catch (error) {
                     // handled
@@ -4102,6 +4112,13 @@ Buono studio!</textarea>
                         <small data-material-upload-status style="color: var(--gray-500); margin-top: 4px; display: block;"></small>
                     </div>
                     <input type="hidden" data-field="materials" value="[]">
+                    <label style="margin-top: 8px;">
+                        Collega a lezione calendario
+                        <select data-field="calendarLessonId" style="width:100%; padding:8px; border:1px solid var(--gray-200); border-radius:8px;">
+                            <option value="">-- Nessun collegamento --</option>
+                            ${(allLessonsCache || []).map(l => '<option value="' + l.id + '">' + (l.title || 'Lezione') + (l.startDatetime ? ' (' + new Date(l.startDatetime).toLocaleDateString('it-IT') + ')' : '') + '</option>').join('')}
+                        </select>
+                    </label>
                     <div class="actions">
                         <label class="switch"><input type="checkbox" data-field="isPublished" checked><span class="slider"></span> Pubblicata</label>
                         <button class="primary" type="submit">Salva lezione</button>
@@ -4293,7 +4310,8 @@ Buono studio!</textarea>
                     sortOrder: Number(form.querySelector('[data-field="sortOrder"]')?.value) || 0,
                     isFree: false,
                     isPublished: safeChecked('[data-field="isPublished"]', form),
-                    materials: currentMaterials
+                    materials: currentMaterials,
+                    calendarLessonId: form.querySelector('[data-field="calendarLessonId"]')?.value || null
                 };
                 console.log('🐛 DEBUG: payload =', payload);
                 console.log('🐛 DEBUG: form elements check:', {
@@ -4349,6 +4367,8 @@ Buono studio!</textarea>
                     form.querySelector('[data-field="sortOrder"]').value = lesson.sortOrder ?? 0;
                     // isFree rimosso dall'interfaccia
                     safeSetChecked('[data-field="isPublished"]', lesson.isPublished, form);
+                    const calSelEl = form.querySelector('[data-field="calendarLessonId"]');
+                    if (calSelEl) calSelEl.value = lesson.calendarLessonId || '';
                     // Carica materiali esistenti
                     currentMaterials = Array.isArray(lesson.materials) ? [...lesson.materials] : [];
                     renderMaterialsList();

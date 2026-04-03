@@ -1692,7 +1692,7 @@ const ALLOWED_UPDATE_FIELDS = {
   courses: ['title', 'slug', 'description', 'cover_image_url', 'is_published'],
   course_editions: ['name', 'start_date', 'end_date', 'max_students', 'is_active'],
   lms_modules: ['title', 'description', 'sort_order', 'is_published'],
-  lms_lessons: ['title', 'description', 'video_url', 'duration_minutes', 'sort_order', 'is_published'],
+  lms_lessons: ['title', 'description', 'video_url', 'duration_minutes', 'sort_order', 'is_published', 'calendar_lesson_id'],
   quizzes: ['title', 'description', 'passing_score', 'max_attempts', 'time_limit_minutes', 'is_active'],
 };
 
@@ -3352,6 +3352,7 @@ app.get('/api/lms/lessons', async (req, res) => {
              ll.video_url AS "videoUrl", ll.video_provider AS "videoProvider",
              ll.duration_seconds AS "durationSeconds", ll.sort_order AS "sortOrder",
              ll.is_free AS "isFree", ll.is_published AS "isPublished",
+             ll.calendar_lesson_id AS "calendarLessonId",
              ll.created_at AS "createdAt", ll.updated_at AS "updatedAt"
       FROM lms_lessons ll
       ${needsJoin ? 'JOIN lms_modules m ON m.id = ll.lms_module_id' : ''}
@@ -3402,13 +3403,28 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
              video_url AS "videoUrl", video_provider AS "videoProvider",
              duration_seconds AS "durationSeconds", sort_order AS "sortOrder",
              is_free AS "isFree", is_published AS "isPublished",
-             materials,
+             materials, calendar_lesson_id AS "calendarLessonId",
              created_at AS "createdAt", updated_at AS "updatedAt"
       FROM lms_lessons WHERE id = $1
     `, [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Lesson not found' });
 
     const lesson = rows[0];
+
+    // Load linked resources from calendar lesson
+    if (lesson.calendarLessonId) {
+      const { rows: resRows } = await pool.query(`
+        SELECT r.id, r.title, r.url, r.resource_type AS "resourceType",
+               r.description, f.name AS "teacherName"
+        FROM resources r
+        LEFT JOIN faculty f ON f.id = r.teacher_id
+        WHERE r.lesson_id = $1 AND r.is_published = true
+        ORDER BY r.sort_order NULLS LAST, r.created_at
+      `, [lesson.calendarLessonId]);
+      lesson.linkedResources = resRows;
+    } else {
+      lesson.linkedResources = [];
+    }
 
     // If student is authenticated, include their progress
     const authHeader = req.headers.authorization;
@@ -3437,22 +3453,22 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
 
 app.post('/api/lms/lessons', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
-  const { moduleId, title, description, videoUrl, videoProvider, durationSeconds, sortOrder, isFree, isPublished, materials } = req.body;
+  const { moduleId, title, description, videoUrl, videoProvider, durationSeconds, sortOrder, isFree, isPublished, materials, calendarLessonId } = req.body;
   if (!moduleId || !title) return res.status(400).json({ error: 'moduleId and title are required' });
   try {
     const id = uuidv4();
     const { rows } = await pool.query(`
-      INSERT INTO lms_lessons (id, lms_module_id, title, description, video_url, video_provider, duration_seconds, sort_order, is_free, is_published, materials)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO lms_lessons (id, lms_module_id, title, description, video_url, video_provider, duration_seconds, sort_order, is_free, is_published, materials, calendar_lesson_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING id, lms_module_id AS "moduleId", title, description,
                 video_url AS "videoUrl", video_provider AS "videoProvider",
                 duration_seconds AS "durationSeconds", sort_order AS "sortOrder",
                 is_free AS "isFree", is_published AS "isPublished",
-                materials,
+                materials, calendar_lesson_id AS "calendarLessonId",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `, [id, moduleId, title, description || null, videoUrl || null, videoProvider || null,
         durationSeconds || null, typeof sortOrder === 'number' ? sortOrder : 0, Boolean(isFree), isPublished !== false,
-        JSON.stringify(materials || [])]);
+        JSON.stringify(materials || []), calendarLessonId || null]);
     res.status(201).json(rows[0]);
   } catch (error) {
     console.error('Error creating LMS lesson', error);
@@ -3462,14 +3478,15 @@ app.post('/api/lms/lessons', requireAdmin, async (req, res) => {
 
 app.put('/api/lms/lessons/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
-  const { moduleId, title, description, videoUrl, videoProvider, durationSeconds, sortOrder, isFree, isPublished, materials } = req.body;
+  const { moduleId, title, description, videoUrl, videoProvider, durationSeconds, sortOrder, isFree, isPublished, materials, calendarLessonId } = req.body;
   try {
     const updateFields = {
       lms_module_id: moduleId, title, description,
       video_url: videoUrl, video_provider: videoProvider,
       duration_seconds: durationSeconds, sort_order: sortOrder,
       is_free: typeof isFree === 'boolean' ? isFree : undefined,
-      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined,
+      calendar_lesson_id: calendarLessonId !== undefined ? (calendarLessonId || null) : undefined
     };
     if (materials !== undefined) {
       updateFields.materials = JSON.stringify(materials);

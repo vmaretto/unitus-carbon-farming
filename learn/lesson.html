@@ -382,14 +382,19 @@
                     document.getElementById('no-video').innerHTML = '<p>Video non ancora disponibile per questa lezione.</p>';
                 }
 
-                // Setup materials - combina assets e materials dalla lezione
+                // Setup materials - combina assets, materials JSON e risorse collegate
                 const assetMaterials = assets ? assets.filter(a => a.assetType !== 'recording_final') : [];
                 const lessonMaterials = (lesson.materials || []).map(m => ({
                     title: m.name,
                     url: m.url,
                     assetType: m.url.includes('.pdf') ? 'pdf' : (m.url.includes('.ppt') ? 'slide' : 'link')
                 }));
-                renderMaterials([...lessonMaterials, ...assetMaterials]);
+                const linkedResources = (lesson.linkedResources || []).map(r => ({
+                    title: r.title,
+                    url: r.url,
+                    assetType: r.resourceType === 'pdf' ? 'pdf' : (r.resourceType === 'document' ? 'slide' : r.resourceType || 'file')
+                }));
+                renderMaterials([...lessonMaterials, ...assetMaterials, ...linkedResources]);
 
                 // Setup watermark
                 setupWatermark();

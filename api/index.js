@@ -565,10 +565,20 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
       [req.teacher.id]
     );
 
+    // Count pending documents to sign
+    const { rows: docsCount } = await pool.query(
+      `SELECT COUNT(*) as total FROM teacher_documents td
+       WHERE td.is_active = true AND NOT EXISTS (
+         SELECT 1 FROM teacher_document_signatures tds WHERE tds.document_id = td.id AND tds.teacher_id = $1
+       )`,
+      [req.teacher.id]
+    );
+
     res.json({
       total_lessons: parseInt(lessonsCount[0].total),
       materials_published: parseInt(materialsCount[0].total),
-      materials_pending: parseInt(pendingCount[0].total)
+      materials_pending: parseInt(pendingCount[0].total),
+      documents_pending: parseInt(docsCount[0].total)
     });
   } catch (error) {
     console.error('Get teacher stats error:', error);
@@ -665,6 +675,155 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
   } catch (error) {
     console.error('Teacher upload error:', error);
     res.status(500).json({ error: 'Errore durante il caricamento' });
+  }
+});
+
+// Get teacher's uploaded materials
+app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, title, description, file_url, file_name, file_size, file_type, status, created_at
+       FROM materials_pending WHERE teacher_id = $1 ORDER BY created_at DESC`,
+      [req.teacher.id]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Get teacher materials error:', error);
+    res.status(500).json({ error: 'Errore nel recupero materiali' });
+  }
+});
+
+// Get pending documents for teacher to sign
+app.get('/api/teachers/documents/pending', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT td.id, td.title, td.content, td.document_type
+      FROM teacher_documents td
+      WHERE td.is_active = true
+        AND NOT EXISTS (
+          SELECT 1 FROM teacher_document_signatures tds
+          WHERE tds.document_id = td.id AND tds.teacher_id = $1
+        )
+      ORDER BY td.created_at
+    `, [req.teacher.id]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Get pending teacher docs error:', error);
+    res.status(500).json({ error: 'Errore nel caricamento documenti' });
+  }
+});
+
+// Get teacher's signed documents
+app.get('/api/teachers/documents/signed', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT tds.id, tds.consent_given, tds.signed_at, tds.signer_name, tds.signer_surname,
+             td.title, td.document_type
+      FROM teacher_document_signatures tds
+      JOIN teacher_documents td ON td.id = tds.document_id
+      WHERE tds.teacher_id = $1
+      ORDER BY tds.signed_at DESC
+    `, [req.teacher.id]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Get signed teacher docs error:', error);
+    res.status(500).json({ error: 'Errore nel caricamento firme' });
+  }
+});
+
+// Teacher signs a document
+app.post('/api/teachers/documents/:id/sign', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const documentId = req.params.id;
+    const { consentGiven, signatureImage, signatureMethod, signerName, signerSurname } = req.body;
+
+    if (consentGiven === undefined || !signatureImage || !signerName || !signerSurname) {
+      return res.status(400).json({ error: 'Nome, cognome, consenso e firma sono obbligatori' });
+    }
+
+    // Verify document exists and is active
+    const { rows: docs } = await pool.query(
+      'SELECT id FROM teacher_documents WHERE id = $1 AND is_active = true',
+      [documentId]
+    );
+    if (docs.length === 0) {
+      return res.status(404).json({ error: 'Documento non trovato' });
+    }
+
+    const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+
+    await pool.query(`
+      INSERT INTO teacher_document_signatures
+        (document_id, teacher_id, consent_given, signature_image, signature_method, ip_address, user_agent, signer_name, signer_surname)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT (document_id, teacher_id) DO UPDATE SET
+        consent_given = $3, signature_image = $4, signature_method = $5,
+        ip_address = $6, user_agent = $7, signer_name = $8, signer_surname = $9, signed_at = NOW()
+    `, [documentId, req.teacher.id, consentGiven, signatureImage, signatureMethod || 'draw', ipAddress, userAgent, signerName, signerSurname]);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Teacher sign doc error:', error);
+    res.status(500).json({ error: 'Errore nella firma del documento' });
+  }
+});
+
+// Admin: create teacher document
+app.post('/api/teacher-documents', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { title, content, documentType } = req.body;
+    if (!title || !content) {
+      return res.status(400).json({ error: 'Titolo e contenuto sono obbligatori' });
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO teacher_documents (title, content, document_type) VALUES ($1, $2, $3) RETURNING *`,
+      [title, content, documentType || 'liberatoria']
+    );
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Create teacher doc error:', error);
+    res.status(500).json({ error: 'Errore nella creazione documento' });
+  }
+});
+
+// Admin: list teacher documents with signature counts
+app.get('/api/teacher-documents', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT td.*,
+        (SELECT COUNT(*) FROM teacher_document_signatures tds WHERE tds.document_id = td.id) as signature_count,
+        (SELECT COUNT(*) FROM teacher_document_signatures tds WHERE tds.document_id = td.id AND tds.consent_given = true) as consent_count
+      FROM teacher_documents td ORDER BY td.created_at DESC
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error('List teacher docs error:', error);
+    res.status(500).json({ error: 'Errore nel caricamento documenti' });
+  }
+});
+
+// Admin: get signatures for a teacher document
+app.get('/api/teacher-documents/:id/signatures', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT tds.*, t.email, t.first_name, t.last_name
+      FROM teacher_document_signatures tds
+      JOIN teachers t ON t.id = tds.teacher_id
+      WHERE tds.document_id = $1
+      ORDER BY tds.signed_at DESC
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Get teacher doc signatures error:', error);
+    res.status(500).json({ error: 'Errore nel caricamento firme' });
   }
 });
 

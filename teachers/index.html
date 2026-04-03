@@ -6,361 +6,112 @@
     <title>Pannello Docenti - Master Carbon Farming</title>
     <style>
         :root {
-            --green-50: #f0fdf4;
-            --green-100: #dcfce7;
-            --green-500: #22c55e;
-            --green-600: #16a34a;
-            --green-700: #15803d;
-            --green-800: #166534;
-            --green-900: #14532d;
-            --gray-50: #f9fafb;
-            --gray-100: #f3f4f6;
-            --gray-200: #e5e7eb;
-            --gray-300: #d1d5db;
-            --gray-400: #9ca3af;
-            --gray-500: #6b7280;
-            --gray-600: #4b5563;
-            --gray-700: #374151;
-            --gray-800: #1f2937;
-            --gray-900: #111827;
-            --blue-500: #3b82f6;
-            --blue-600: #2563eb;
-            --red-500: #ef4444;
-            --orange-500: #f97316;
+            --green-50: #f0fdf4; --green-100: #dcfce7; --green-500: #22c55e;
+            --green-600: #16a34a; --green-700: #15803d; --green-800: #166534; --green-900: #14532d;
+            --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb; --gray-300: #d1d5db;
+            --gray-400: #9ca3af; --gray-500: #6b7280; --gray-600: #4b5563; --gray-700: #374151;
+            --gray-800: #1f2937; --gray-900: #111827;
+            --blue-50: #eff6ff; --blue-100: #dbeafe; --blue-500: #3b82f6; --blue-600: #2563eb; --blue-700: #1d4ed8;
+            --red-500: #ef4444; --red-600: #dc2626;
+            --orange-50: #fff7ed; --orange-100: #ffedd5; --orange-500: #f97316; --orange-600: #ea580c; --orange-700: #c2410c;
+            --yellow-50: #fefce8; --yellow-600: #ca8a04;
         }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--gray-50); line-height: 1.6; color: var(--gray-900); }
+        .login-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; background: linear-gradient(135deg, var(--green-600) 0%, var(--green-800) 100%); }
+        .login-card { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        .login-header { text-align: center; margin-bottom: 30px; }
+        .login-header h1 { color: var(--green-800); margin-bottom: 8px; font-size: 24px; }
+        .login-header p { color: var(--gray-600); }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: var(--gray-700); }
+        .form-group input, .form-group textarea { width: 100%; padding: 12px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 16px; font-family: inherit; }
+        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px rgba(34,197,94,0.1); }
+        .btn-primary { width: 100%; background: var(--green-600); color: white; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+        .btn-primary:hover { background: var(--green-700); }
+        .btn-primary:disabled { background: var(--gray-400); cursor: not-allowed; }
+        .dashboard { display: none; min-height: 100vh; }
+        .header { background: white; border-bottom: 1px solid var(--gray-200); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .header h1 { color: var(--green-800); display: flex; align-items: center; gap: 12px; font-size: 1.3rem; }
+        .user-info { display: flex; align-items: center; gap: 16px; color: var(--gray-700); }
+        .logout-btn { background: var(--red-500); color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        .main-content { padding: 24px; max-width: 1200px; margin: 0 auto; }
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid var(--gray-200); }
+        .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .card-header h3 { color: var(--gray-800); font-size: 0.95rem; }
+        .stat-number { font-size: 28px; font-weight: bold; color: var(--green-600); }
+        .stat-label { color: var(--gray-600); margin-top: 2px; font-size: 0.85rem; }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 24px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid var(--gray-200); }
+        .tab { flex: 1; padding: 14px 16px; text-align: center; cursor: pointer; font-weight: 600; font-size: 0.95rem; color: var(--gray-600); border-bottom: 3px solid transparent; transition: all 0.2s; }
+        .tab:hover { background: var(--gray-50); color: var(--gray-800); }
+        .tab.active { color: var(--green-700); border-bottom-color: var(--green-600); background: var(--green-50); }
+        .tab-badge { display: inline-block; background: var(--orange-500); color: white; font-size: 11px; padding: 1px 7px; border-radius: 10px; margin-left: 6px; font-weight: 700; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--gray-50);
-            line-height: 1.6;
-            color: var(--gray-900);
-        }
+        /* Section cards */
+        .section-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid var(--gray-200); }
+        .section-header { background: var(--green-50); padding: 18px 24px; border-bottom: 1px solid var(--gray-200); }
+        .section-header h2 { color: var(--green-800); display: flex; align-items: center; gap: 10px; font-size: 1.15rem; }
+        .section-body { padding: 0; }
 
-        .login-container {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            background: linear-gradient(135deg, var(--green-600) 0%, var(--green-800) 100%);
-        }
+        /* Items */
+        .list-item { padding: 16px 24px; border-bottom: 1px solid var(--gray-100); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .list-item:last-child { border-bottom: none; }
+        .item-info { flex: 1; min-width: 0; }
+        .item-title { font-weight: 600; color: var(--gray-900); margin-bottom: 2px; }
+        .item-meta { color: var(--gray-500); font-size: 13px; }
+        .item-actions { display: flex; gap: 8px; flex-shrink: 0; }
+        .empty-state { padding: 40px 24px; text-align: center; color: var(--gray-500); }
 
-        .login-card {
-            background: white;
-            padding: 40px;
-            border-radius: 16px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 400px;
-        }
+        /* Badges */
+        .badge { padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+        .badge-green { background: var(--green-100); color: var(--green-700); }
+        .badge-orange { background: var(--orange-100); color: var(--orange-700); }
+        .badge-blue { background: var(--blue-100); color: var(--blue-700); }
+        .badge-red { background: #fee2e2; color: var(--red-600); }
+        .badge-gray { background: var(--gray-100); color: var(--gray-600); }
 
-        .login-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
+        /* Buttons */
+        .btn-sm { padding: 6px 14px; border-radius: 6px; border: none; font-size: 13px; cursor: pointer; font-weight: 600; }
+        .btn-green { background: var(--green-600); color: white; }
+        .btn-green:hover { background: var(--green-700); }
+        .btn-blue { background: var(--blue-500); color: white; }
+        .btn-gray { background: var(--gray-200); color: var(--gray-700); }
 
-        .login-header h1 {
-            color: var(--green-800);
-            margin-bottom: 8px;
-            font-size: 24px;
-        }
+        /* Upload modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal-content { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 32px; border-radius: 12px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+        .upload-zone { border: 2px dashed var(--gray-300); border-radius: 8px; padding: 32px; text-align: center; margin: 16px 0; cursor: pointer; }
+        .upload-zone:hover, .upload-zone.dragover { border-color: var(--green-500); background: var(--green-50); }
+        .hidden { display: none; }
 
-        .login-header p {
-            color: var(--gray-600);
-        }
+        /* Signature */
+        .doc-content { max-height: 300px; overflow-y: auto; padding: 16px; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 8px; font-size: 14px; line-height: 1.7; margin: 12px 0; }
+        .consent-choices { display: flex; gap: 16px; margin: 16px 0; }
+        .consent-choice { flex: 1; padding: 16px; border: 2px solid var(--gray-200); border-radius: 8px; cursor: pointer; text-align: center; font-weight: 600; transition: all 0.2s; }
+        .consent-choice:hover { border-color: var(--gray-400); }
+        .consent-choice.selected-yes { border-color: var(--green-600); background: var(--green-50); color: var(--green-700); }
+        .consent-choice.selected-no { border-color: var(--red-600); background: #fef2f2; color: var(--red-600); }
+        .sig-canvas-wrap { border: 1px solid var(--gray-300); border-radius: 8px; overflow: hidden; margin: 8px 0; background: white; }
+        .sig-canvas-wrap canvas { display: block; width: 100%; cursor: crosshair; }
+        .sig-name-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
 
-        .form-group {
-            margin-bottom: 20px;
-        }
+        /* Toast */
+        .toast { position: fixed; top: 20px; right: 20px; padding: 14px 24px; border-radius: 8px; color: white; font-weight: 600; z-index: 1001; transform: translateX(400px); transition: transform 0.3s; }
+        .toast.show { transform: translateX(0); }
+        .toast.success { background: var(--green-600); }
+        .toast.error { background: var(--red-500); }
 
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: var(--gray-700);
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid var(--gray-300);
-            border-radius: 8px;
-            font-size: 16px;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: var(--green-500);
-            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
-        }
-
-        .btn-primary {
-            width: 100%;
-            background: var(--green-600);
-            color: white;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        .btn-primary:hover {
-            background: var(--green-700);
-        }
-
-        .btn-primary:disabled {
-            background: var(--gray-400);
-            cursor: not-allowed;
-        }
-
-        .dashboard {
-            display: none;
-            min-height: 100vh;
-        }
-
-        .header {
-            background: white;
-            border-bottom: 1px solid var(--gray-200);
-            padding: 16px 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .header h1 {
-            color: var(--green-800);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            color: var(--gray-700);
-        }
-
-        .logout-btn {
-            background: var(--red-500);
-            color: white;
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-
-        .main-content {
-            padding: 24px;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 24px;
-            margin-bottom: 32px;
-        }
-
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            border: 1px solid var(--gray-200);
-        }
-
-        .card-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-
-        .card-header h3 {
-            color: var(--gray-800);
-        }
-
-        .stat-number {
-            font-size: 32px;
-            font-weight: bold;
-            color: var(--green-600);
-        }
-
-        .stat-label {
-            color: var(--gray-600);
-            margin-top: 4px;
-        }
-
-        .lessons-list {
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .lessons-header {
-            background: var(--green-50);
-            padding: 20px 24px;
-            border-bottom: 1px solid var(--gray-200);
-        }
-
-        .lessons-header h2 {
-            color: var(--green-800);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .lesson-item {
-            padding: 20px 24px;
-            border-bottom: 1px solid var(--gray-100);
-            display: flex;
-            justify-content: between;
-            align-items: center;
-        }
-
-        .lesson-info {
-            flex: 1;
-        }
-
-        .lesson-title {
-            font-weight: 600;
-            color: var(--gray-900);
-            margin-bottom: 4px;
-        }
-
-        .lesson-meta {
-            color: var(--gray-600);
-            font-size: 14px;
-        }
-
-        .lesson-actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        .btn-small {
-            padding: 6px 12px;
-            border-radius: 6px;
-            border: none;
-            font-size: 14px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .btn-upload {
-            background: var(--blue-500);
-            color: white;
-        }
-
-        .btn-view {
-            background: var(--gray-200);
-            color: var(--gray-700);
-        }
-
-        .status-badge {
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .status-completed {
-            background: var(--green-100);
-            color: var(--green-700);
-        }
-
-        .status-pending {
-            background: var(--orange-100);
-            color: var(--orange-700);
-        }
-
-        .status-scheduled {
-            background: var(--blue-100);
-            color: var(--blue-700);
-        }
-
-        .upload-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-        }
-
-        .upload-content {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 32px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 500px;
-        }
-
-        .upload-zone {
-            border: 2px dashed var(--gray-300);
-            border-radius: 8px;
-            padding: 40px;
-            text-align: center;
-            margin: 16px 0;
-            cursor: pointer;
-            transition: border-color 0.2s;
-        }
-
-        .upload-zone:hover {
-            border-color: var(--green-500);
-        }
-
-        .upload-zone.dragover {
-            border-color: var(--green-500);
-            background: var(--green-50);
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        .toast {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 16px 24px;
-            border-radius: 8px;
-            color: white;
-            font-weight: 600;
-            z-index: 1001;
-            transform: translateX(400px);
-            transition: transform 0.3s;
-        }
-
-        .toast.show {
-            transform: translateX(0);
-        }
-
-        .toast.success {
-            background: var(--green-600);
-        }
-
-        .toast.error {
-            background: var(--red-500);
+        @media (max-width: 640px) {
+            .tabs { flex-direction: column; }
+            .list-item { flex-direction: column; align-items: flex-start; }
+            .item-actions { width: 100%; justify-content: flex-end; }
+            .consent-choices { flex-direction: column; }
+            .sig-name-row { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -369,21 +120,19 @@
     <div id="login-screen" class="login-container">
         <div class="login-card">
             <div class="login-header">
-                <h1>🌱 Pannello Docenti</h1>
-                <p>Master Carbon Farming<br>Università della Tuscia</p>
+                <h1>Pannello Docenti</h1>
+                <p>Master Carbon Farming<br>Universita della Tuscia</p>
             </div>
             <form id="login-form">
                 <div class="form-group">
                     <label for="email">Email</label>
-                    <input type="email" id="email" required placeholder="nome.cognome@unitus.it">
+                    <input type="email" id="email" required placeholder="nome.cognome@email.it">
                 </div>
                 <div class="form-group">
-                    <label for="password">Password / Magic Link</label>
-                    <input type="password" id="password" placeholder="Inserisci password o richiedi magic link">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="Inserisci password">
                 </div>
-                <button type="submit" id="login-btn" class="btn-primary">
-                    Accedi
-                </button>
+                <button type="submit" id="login-btn" class="btn-primary">Accedi</button>
             </form>
         </div>
     </div>
@@ -391,419 +140,518 @@
     <!-- Dashboard -->
     <div id="dashboard" class="dashboard">
         <header class="header">
-            <h1>🌱 Pannello Docenti</h1>
+            <h1>Pannello Docenti</h1>
             <div class="user-info">
-                <span id="user-name">Prof. Nome Cognome</span>
+                <span id="user-name"></span>
                 <button id="logout-btn" class="logout-btn">Logout</button>
             </div>
         </header>
 
         <main class="main-content">
-            <!-- Dashboard Stats -->
+            <!-- Stats -->
             <div class="dashboard-grid">
                 <div class="card">
-                    <div class="card-header">
-                        <span>📚</span>
-                        <h3>Le Tue Lezioni</h3>
-                    </div>
+                    <div class="card-header"><span>📚</span><h3>Lezioni</h3></div>
                     <div class="stat-number" id="total-lessons">0</div>
                     <div class="stat-label">Lezioni programmate</div>
                 </div>
-
                 <div class="card">
-                    <div class="card-header">
-                        <span>✅</span>
-                        <h3>Materiali Caricati</h3>
-                    </div>
+                    <div class="card-header"><span>✅</span><h3>Materiali</h3></div>
                     <div class="stat-number" id="materials-count">0</div>
-                    <div class="stat-label">Documenti pubblicati</div>
+                    <div class="stat-label">Materiali pubblicati</div>
                 </div>
-
                 <div class="card">
-                    <div class="card-header">
-                        <span>⏳</span>
-                        <h3>In Attesa Approvazione</h3>
-                    </div>
+                    <div class="card-header"><span>⏳</span><h3>In Attesa</h3></div>
                     <div class="stat-number" id="pending-count">0</div>
                     <div class="stat-label">Materiali da approvare</div>
                 </div>
+                <div class="card">
+                    <div class="card-header"><span>📝</span><h3>Liberatorie</h3></div>
+                    <div class="stat-number" id="docs-pending-count">0</div>
+                    <div class="stat-label">Da firmare</div>
+                </div>
             </div>
 
-            <!-- Lessons List -->
-            <div class="lessons-list">
-                <div class="lessons-header">
-                    <h2>📅 Le Tue Lezioni</h2>
+            <!-- Tabs -->
+            <div class="tabs">
+                <div class="tab active" data-tab="lessons">📅 Lezioni</div>
+                <div class="tab" data-tab="materials">📁 Materiali</div>
+                <div class="tab" data-tab="documents">📝 Liberatorie <span id="docs-tab-badge" class="tab-badge" style="display:none;">0</span></div>
+            </div>
+
+            <!-- TAB: Lezioni -->
+            <div class="tab-panel active" id="panel-lessons">
+                <div class="section-card">
+                    <div class="section-header"><h2>📅 Le Tue Lezioni</h2></div>
+                    <div class="section-body" id="lessons-container">
+                        <div class="empty-state">Caricamento...</div>
+                    </div>
                 </div>
-                <div id="lessons-container">
-                    <!-- Lessons will be populated here -->
+            </div>
+
+            <!-- TAB: Materiali -->
+            <div class="tab-panel" id="panel-materials">
+                <div class="section-card">
+                    <div class="section-header"><h2>📁 I Tuoi Materiali</h2></div>
+                    <div class="section-body" id="materials-container">
+                        <div class="empty-state">Caricamento...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: Documenti / Liberatorie -->
+            <div class="tab-panel" id="panel-documents">
+                <!-- Pending documents -->
+                <div class="section-card" id="docs-pending-section" style="margin-bottom: 24px;">
+                    <div class="section-header"><h2>📝 Documenti da Firmare</h2></div>
+                    <div class="section-body" id="docs-pending-container">
+                        <div class="empty-state">Caricamento...</div>
+                    </div>
+                </div>
+                <!-- Signed documents -->
+                <div class="section-card">
+                    <div class="section-header"><h2>✅ Documenti Firmati</h2></div>
+                    <div class="section-body" id="docs-signed-container">
+                        <div class="empty-state">Caricamento...</div>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
     <!-- Upload Modal -->
-    <div id="upload-modal" class="upload-modal">
-        <div class="upload-content">
+    <div id="upload-modal" class="modal-overlay">
+        <div class="modal-content">
             <h3>📤 Carica Materiali Didattici</h3>
-            <p>Per la lezione: <strong id="upload-lesson-title"></strong></p>
-            
+            <p style="margin: 8px 0 16px; color: var(--gray-600);">Per la lezione: <strong id="upload-lesson-title"></strong></p>
             <form id="upload-form">
                 <input type="hidden" id="upload-lesson-id">
-                
                 <div class="form-group">
                     <label>Titolo Materiale</label>
                     <input type="text" id="upload-title" required placeholder="Es: Slides Introduzione Carbon Farming">
                 </div>
-
                 <div class="form-group">
                     <label>Descrizione (opzionale)</label>
-                    <textarea id="upload-description" placeholder="Breve descrizione del contenuto"></textarea>
+                    <textarea id="upload-description" rows="2" placeholder="Breve descrizione del contenuto"></textarea>
                 </div>
-
                 <div class="upload-zone" id="upload-zone">
                     <p>📁 Trascina qui i file o clicca per selezionare</p>
-                    <p style="font-size: 14px; color: var(--gray-500);">PDF, DOC, DOCX, PPT, PPTX (max 20MB)</p>
+                    <p style="font-size: 13px; color: var(--gray-500);">PDF, DOC, DOCX, PPT, PPTX (max 4MB)</p>
                 </div>
-
                 <input type="file" id="file-input" class="hidden" accept=".pdf,.doc,.docx,.ppt,.pptx" multiple>
-
                 <div id="files-preview"></div>
-
-                <div style="display: flex; gap: 12px; margin-top: 20px;">
-                    <button type="button" id="upload-cancel" class="btn-small btn-view" style="flex: 1;">Annulla</button>
-                    <button type="submit" id="upload-submit" class="btn-small btn-upload" style="flex: 2;">Carica e Invia per Approvazione</button>
+                <div style="display: flex; gap: 12px; margin-top: 16px;">
+                    <button type="button" id="upload-cancel" class="btn-sm btn-gray" style="flex: 1;">Annulla</button>
+                    <button type="submit" id="upload-submit" class="btn-sm btn-green" style="flex: 2;">Carica</button>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- Sign Document Modal -->
+    <div id="sign-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 600px;">
+            <h3 id="sign-doc-title"></h3>
+            <div id="sign-doc-content" class="doc-content"></div>
+
+            <h4 style="margin: 16px 0 8px;">Scelta del consenso</h4>
+            <div class="consent-choices">
+                <div class="consent-choice" id="consent-yes" onclick="selectConsent(true)">✅ Presto il Consenso</div>
+                <div class="consent-choice" id="consent-no" onclick="selectConsent(false)">❌ Nego il Consenso</div>
+            </div>
+
+            <h4 style="margin: 16px 0 8px;">Nome e Cognome</h4>
+            <div class="sig-name-row">
+                <input type="text" id="signer-name" placeholder="Nome" style="padding: 10px; border: 1px solid var(--gray-300); border-radius: 8px;">
+                <input type="text" id="signer-surname" placeholder="Cognome" style="padding: 10px; border: 1px solid var(--gray-300); border-radius: 8px;">
+            </div>
+
+            <h4 style="margin: 16px 0 8px;">Firma</h4>
+            <div class="sig-canvas-wrap">
+                <canvas id="sig-canvas" width="540" height="160"></canvas>
+            </div>
+            <div style="display: flex; gap: 8px; margin: 8px 0 16px;">
+                <button type="button" class="btn-sm btn-gray" onclick="clearSignature()">Cancella firma</button>
+            </div>
+
+            <div style="display: flex; gap: 12px;">
+                <button type="button" class="btn-sm btn-gray" style="flex: 1;" onclick="closeSignModal()">Annulla</button>
+                <button type="button" id="sign-submit" class="btn-sm btn-green" style="flex: 2;" onclick="submitSignature()">Firma Documento</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Global state
         let teacherToken = null;
         let currentTeacher = null;
+        let signingDocId = null;
+        let consentValue = null;
 
-        // Check existing session on load
+        // === AUTH ===
         window.addEventListener('load', async () => {
-            // Check for magic link token in URL
             const urlParams = new URLSearchParams(window.location.search);
             const magicToken = urlParams.get('token');
-            
+
             if (magicToken) {
-                // Magic link login
                 try {
-                    // Verify magic token directly
                     const response = await fetch('/api/teachers/magic-login', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ token: magicToken })
                     });
-                    
                     const data = await response.json();
-                    
                     if (response.ok) {
                         teacherToken = data.token;
                         localStorage.setItem('teacherToken', teacherToken);
-                        
-                        // Clean URL
                         window.history.replaceState({}, '', '/teachers/');
-                        
                         await loadDashboard();
-                        showToast('Accesso effettuato con successo!', 'success');
+                        showToast('Accesso effettuato!', 'success');
                         return;
                     } else {
                         showToast(data.error || 'Token non valido o scaduto', 'error');
                     }
-                } catch (error) {
+                } catch (e) {
                     showToast('Errore nel magic link', 'error');
                 }
             }
-            
-            // Check regular session
+
             teacherToken = localStorage.getItem('teacherToken');
             if (teacherToken) {
-                try {
-                    await loadDashboard();
-                } catch (error) {
-                    console.error('Session invalid:', error);
-                    localStorage.removeItem('teacherToken');
-                    teacherToken = null;
-                }
+                try { await loadDashboard(); }
+                catch (e) { localStorage.removeItem('teacherToken'); teacherToken = null; }
             }
         });
 
-        // Login form handler
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            const loginBtn = document.getElementById('login-btn');
-            
-            loginBtn.disabled = true;
-            loginBtn.textContent = 'Accesso in corso...';
-            
+            const btn = document.getElementById('login-btn');
+            btn.disabled = true; btn.textContent = 'Accesso in corso...';
             try {
-                const response = await fetch('/api/teachers/login', {
+                const res = await fetch('/api/teachers/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password })
                 });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
+                const data = await res.json();
+                if (res.ok) {
                     teacherToken = data.token;
                     localStorage.setItem('teacherToken', teacherToken);
                     await loadDashboard();
                 } else {
                     showToast(data.error || 'Errore di accesso', 'error');
                 }
-            } catch (error) {
-                showToast('Errore di connessione', 'error');
-            } finally {
-                loginBtn.disabled = false;
-                loginBtn.textContent = 'Accedi';
-            }
+            } catch (e) { showToast('Errore di connessione', 'error'); }
+            finally { btn.disabled = false; btn.textContent = 'Accedi'; }
         });
 
-        // Load dashboard
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            localStorage.removeItem('teacherToken');
+            teacherToken = null; currentTeacher = null;
+            document.getElementById('dashboard').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'flex';
+        });
+
+        // === DASHBOARD ===
         async function loadDashboard() {
-            try {
-                // Get teacher info
-                const teacherResponse = await apiCall('/api/teachers/me');
-                currentTeacher = teacherResponse;
-                
-                // Update UI
-                document.getElementById('user-name').textContent = 
-                    `${currentTeacher.first_name} ${currentTeacher.last_name}`;
-                
-                // Load dashboard data
-                await Promise.all([
-                    loadTeacherStats(),
-                    loadTeacherLessons()
-                ]);
-                
-                // Show dashboard
-                document.getElementById('login-screen').style.display = 'none';
-                document.getElementById('dashboard').style.display = 'block';
-                
-            } catch (error) {
-                console.error('Failed to load dashboard:', error);
-                throw error;
-            }
+            const teacher = await apiCall('/api/teachers/me');
+            currentTeacher = teacher;
+            document.getElementById('user-name').textContent = `${teacher.first_name} ${teacher.last_name}`;
+
+            await Promise.all([
+                loadTeacherStats(),
+                loadTeacherLessons(),
+                loadTeacherMaterials(),
+                loadPendingDocs(),
+                loadSignedDocs()
+            ]);
+
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
         }
 
-        // Load teacher stats
+        // === STATS ===
         async function loadTeacherStats() {
             try {
-                const stats = await apiCall('/api/teachers/stats');
-                document.getElementById('total-lessons').textContent = stats.total_lessons || 0;
-                document.getElementById('materials-count').textContent = stats.materials_published || 0;
-                document.getElementById('pending-count').textContent = stats.materials_pending || 0;
-            } catch (error) {
-                console.error('Failed to load stats:', error);
-            }
+                const s = await apiCall('/api/teachers/stats');
+                document.getElementById('total-lessons').textContent = s.total_lessons || 0;
+                document.getElementById('materials-count').textContent = s.materials_published || 0;
+                document.getElementById('pending-count').textContent = s.materials_pending || 0;
+                const dp = s.documents_pending || 0;
+                document.getElementById('docs-pending-count').textContent = dp;
+                const badge = document.getElementById('docs-tab-badge');
+                if (dp > 0) { badge.textContent = dp; badge.style.display = 'inline-block'; }
+                else { badge.style.display = 'none'; }
+            } catch (e) { console.error('Stats error:', e); }
         }
 
-        // Load teacher lessons
+        // === TABS ===
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // === LESSONS ===
         async function loadTeacherLessons() {
             try {
                 const lessons = await apiCall('/api/teachers/lessons');
-                const container = document.getElementById('lessons-container');
-                
-                if (lessons.length === 0) {
-                    container.innerHTML = '<div class="lesson-item">Nessuna lezione programmata al momento.</div>';
-                    return;
-                }
-                
-                container.innerHTML = lessons.map(lesson => `
-                    <div class="lesson-item">
-                        <div class="lesson-info">
-                            <div class="lesson-title">${lesson.title || 'Lezione senza titolo'}</div>
-                            <div class="lesson-meta">
-                                📅 ${formatDate(lesson.start_datetime)} •
-                                ⏰ ${lesson.start_datetime ? new Date(lesson.start_datetime).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}) : 'Orario da definire'} •
-                                📍 ${lesson.location_physical || lesson.location_remote || 'Location da definire'}
+                const c = document.getElementById('lessons-container');
+                if (!lessons.length) { c.innerHTML = '<div class="empty-state">Nessuna lezione programmata.</div>'; return; }
+                c.innerHTML = lessons.map(l => `
+                    <div class="list-item">
+                        <div class="item-info">
+                            <div class="item-title">${l.title || 'Lezione senza titolo'}</div>
+                            <div class="item-meta">
+                                ${l.module_name ? '<strong>' + l.module_name + '</strong> — ' : ''}
+                                📅 ${fmtDate(l.start_datetime)}
+                                ${l.start_datetime ? ' ⏰ ' + new Date(l.start_datetime).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) : ''}
+                                — 📍 ${l.location_physical || l.location_remote || 'Da definire'}
                             </div>
                         </div>
-                        <div class="lesson-actions">
-                            <span class="status-badge status-${lesson.status}">${getStatusLabel(lesson.status)}</span>
-                            <button class="btn-small btn-upload" onclick="openUploadModal('${lesson.id}', '${lesson.title}')">
-                                📤 Carica Materiali
-                            </button>
+                        <div class="item-actions">
+                            <span class="badge ${statusBadgeClass(l.status)}">${statusLabel(l.status)}</span>
+                            <button class="btn-sm btn-blue" onclick="openUploadModal('${l.id}','${(l.title||'').replace(/'/g,"\\'")}')">📤 Carica</button>
                         </div>
                     </div>
                 `).join('');
-            } catch (error) {
-                console.error('Failed to load lessons:', error);
-            }
+            } catch (e) { console.error('Lessons error:', e); }
         }
 
-        // Upload modal functions
+        // === MATERIALS ===
+        async function loadTeacherMaterials() {
+            try {
+                const items = await apiCall('/api/teachers/materials');
+                const c = document.getElementById('materials-container');
+                if (!items.length) { c.innerHTML = '<div class="empty-state">Nessun materiale caricato.</div>'; return; }
+                c.innerHTML = items.map(m => {
+                    const statusMap = { pending: ['In attesa','badge-orange'], approved: ['Approvato','badge-green'], rejected: ['Rifiutato','badge-red'] };
+                    const [label, cls] = statusMap[m.status] || [m.status, 'badge-gray'];
+                    return `
+                    <div class="list-item">
+                        <div class="item-info">
+                            <div class="item-title">${m.title}</div>
+                            <div class="item-meta">
+                                📄 ${m.file_name || 'File'} ${m.file_size ? '(' + (m.file_size/1024/1024).toFixed(1) + 'MB)' : ''}
+                                — ${fmtDate(m.created_at)}
+                            </div>
+                        </div>
+                        <div class="item-actions">
+                            <span class="badge ${cls}">${label}</span>
+                            ${m.file_url ? '<a href="'+m.file_url+'" target="_blank" class="btn-sm btn-gray">Scarica</a>' : ''}
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch (e) { console.error('Materials error:', e); }
+        }
+
+        // === DOCUMENTS ===
+        async function loadPendingDocs() {
+            try {
+                const docs = await apiCall('/api/teachers/documents/pending');
+                const c = document.getElementById('docs-pending-container');
+                if (!docs.length) { c.innerHTML = '<div class="empty-state">Nessun documento da firmare.</div>'; return; }
+                c.innerHTML = docs.map(d => `
+                    <div class="list-item">
+                        <div class="item-info">
+                            <div class="item-title">${d.title}</div>
+                            <div class="item-meta">${d.document_type || 'Liberatoria'}</div>
+                        </div>
+                        <div class="item-actions">
+                            <button class="btn-sm btn-green" onclick="openSignModal('${d.id}', ${JSON.stringify(d.title).replace(/'/g,"&#39;")}, ${JSON.stringify(d.content||'').replace(/'/g,"&#39;")})">📝 Firma</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error('Pending docs error:', e); }
+        }
+
+        async function loadSignedDocs() {
+            try {
+                const docs = await apiCall('/api/teachers/documents/signed');
+                const c = document.getElementById('docs-signed-container');
+                if (!docs.length) { c.innerHTML = '<div class="empty-state">Nessun documento firmato.</div>'; return; }
+                c.innerHTML = docs.map(d => `
+                    <div class="list-item">
+                        <div class="item-info">
+                            <div class="item-title">${d.title}</div>
+                            <div class="item-meta">
+                                Firmato il ${fmtDate(d.signed_at)} da ${d.signer_name} ${d.signer_surname}
+                            </div>
+                        </div>
+                        <div class="item-actions">
+                            <span class="badge ${d.consent_given ? 'badge-green' : 'badge-red'}">
+                                ${d.consent_given ? '✅ Consenso prestato' : '❌ Consenso negato'}
+                            </span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error('Signed docs error:', e); }
+        }
+
+        // === SIGN MODAL ===
+        function openSignModal(docId, title, content) {
+            signingDocId = docId;
+            consentValue = null;
+            document.getElementById('sign-doc-title').textContent = title;
+            document.getElementById('sign-doc-content').innerHTML = content;
+            document.getElementById('consent-yes').className = 'consent-choice';
+            document.getElementById('consent-no').className = 'consent-choice';
+            document.getElementById('signer-name').value = currentTeacher ? currentTeacher.first_name : '';
+            document.getElementById('signer-surname').value = currentTeacher ? currentTeacher.last_name : '';
+            clearSignature();
+            document.getElementById('sign-modal').style.display = 'block';
+        }
+
+        function closeSignModal() {
+            document.getElementById('sign-modal').style.display = 'none';
+            signingDocId = null;
+        }
+
+        function selectConsent(val) {
+            consentValue = val;
+            document.getElementById('consent-yes').className = 'consent-choice' + (val === true ? ' selected-yes' : '');
+            document.getElementById('consent-no').className = 'consent-choice' + (val === false ? ' selected-no' : '');
+        }
+
+        // Signature canvas
+        const sigCanvas = document.getElementById('sig-canvas');
+        const sigCtx = sigCanvas.getContext('2d');
+        let sigDrawing = false, sigHasData = false;
+
+        function initSigCanvas() {
+            const rect = sigCanvas.parentElement.getBoundingClientRect();
+            sigCanvas.width = rect.width;
+            sigCanvas.height = 160;
+            sigCtx.strokeStyle = '#000';
+            sigCtx.lineWidth = 2;
+            sigCtx.lineCap = 'round';
+        }
+
+        function getPos(e) {
+            const r = sigCanvas.getBoundingClientRect();
+            const t = e.touches ? e.touches[0] : e;
+            return { x: t.clientX - r.left, y: t.clientY - r.top };
+        }
+
+        sigCanvas.addEventListener('mousedown', e => { sigDrawing = true; const p = getPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); });
+        sigCanvas.addEventListener('mousemove', e => { if (!sigDrawing) return; const p = getPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); sigHasData = true; });
+        sigCanvas.addEventListener('mouseup', () => sigDrawing = false);
+        sigCanvas.addEventListener('mouseleave', () => sigDrawing = false);
+        sigCanvas.addEventListener('touchstart', e => { e.preventDefault(); sigDrawing = true; const p = getPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); }, { passive: false });
+        sigCanvas.addEventListener('touchmove', e => { e.preventDefault(); if (!sigDrawing) return; const p = getPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); sigHasData = true; }, { passive: false });
+        sigCanvas.addEventListener('touchend', () => sigDrawing = false);
+
+        function clearSignature() { initSigCanvas(); sigHasData = false; }
+
+        async function submitSignature() {
+            if (consentValue === null) { showToast('Seleziona se presti o neghi il consenso', 'error'); return; }
+            const name = document.getElementById('signer-name').value.trim();
+            const surname = document.getElementById('signer-surname').value.trim();
+            if (!name || !surname) { showToast('Inserisci nome e cognome', 'error'); return; }
+            if (!sigHasData) { showToast('Disegna la tua firma', 'error'); return; }
+
+            const btn = document.getElementById('sign-submit');
+            btn.disabled = true; btn.textContent = 'Invio in corso...';
+            try {
+                await apiCall('/api/teachers/documents/' + signingDocId + '/sign', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        consentGiven: consentValue,
+                        signatureImage: sigCanvas.toDataURL('image/png'),
+                        signatureMethod: 'draw',
+                        signerName: name,
+                        signerSurname: surname
+                    })
+                });
+                showToast('Documento firmato!', 'success');
+                closeSignModal();
+                await Promise.all([loadPendingDocs(), loadSignedDocs(), loadTeacherStats()]);
+            } catch (e) { showToast(e.message || 'Errore nella firma', 'error'); }
+            finally { btn.disabled = false; btn.textContent = 'Firma Documento'; }
+        }
+
+        document.getElementById('sign-modal').addEventListener('click', e => { if (e.target.id === 'sign-modal') closeSignModal(); });
+
+        // === UPLOAD MODAL ===
         function openUploadModal(lessonId, lessonTitle) {
             document.getElementById('upload-lesson-id').value = lessonId;
             document.getElementById('upload-lesson-title').textContent = lessonTitle;
             document.getElementById('upload-modal').style.display = 'block';
         }
-
         function closeUploadModal() {
             document.getElementById('upload-modal').style.display = 'none';
             document.getElementById('upload-form').reset();
             document.getElementById('files-preview').innerHTML = '';
         }
 
-        // Upload zone setup
         const uploadZone = document.getElementById('upload-zone');
         const fileInput = document.getElementById('file-input');
-
         uploadZone.addEventListener('click', () => fileInput.click());
-        uploadZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadZone.classList.add('dragover');
-        });
+        uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
         uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
-        uploadZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadZone.classList.remove('dragover');
-            fileInput.files = e.dataTransfer.files;
-            showFilePreview();
-        });
+        uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); fileInput.files = e.dataTransfer.files; showFilePreview(); });
         fileInput.addEventListener('change', showFilePreview);
 
         function showFilePreview() {
-            const files = fileInput.files;
             const preview = document.getElementById('files-preview');
-            
-            if (files.length === 0) {
-                preview.innerHTML = '';
-                return;
-            }
-            
-            preview.innerHTML = Array.from(files).map(file => `
-                <div style="padding: 8px; background: var(--gray-100); border-radius: 6px; margin: 4px 0;">
-                    📄 ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)
-                </div>
-            `).join('');
+            preview.innerHTML = Array.from(fileInput.files).map(f =>
+                `<div style="padding:6px 10px;background:var(--gray-100);border-radius:6px;margin:4px 0;font-size:14px;">📄 ${f.name} (${(f.size/1024/1024).toFixed(1)}MB)</div>`
+            ).join('');
         }
 
-        // Upload form handler
         document.getElementById('upload-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            const files = fileInput.files;
-            if (files.length === 0) {
-                showToast('Seleziona almeno un file', 'error');
-                return;
-            }
-            
-            const submitBtn = document.getElementById('upload-submit');
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Caricamento...';
-            
+            if (!fileInput.files.length) { showToast('Seleziona un file', 'error'); return; }
+            const btn = document.getElementById('upload-submit');
+            btn.disabled = true; btn.textContent = 'Caricamento...';
             try {
-                for (const file of files) {
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    formData.append('lesson_id', document.getElementById('upload-lesson-id').value);
-                    formData.append('title', document.getElementById('upload-title').value);
-                    formData.append('description', document.getElementById('upload-description').value);
-                    
-                    await apiCall('/api/teachers/upload', {
-                        method: 'POST',
-                        body: formData,
-                        headers: {} // Let fetch set Content-Type for FormData
-                    });
+                for (const file of fileInput.files) {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    fd.append('lesson_id', document.getElementById('upload-lesson-id').value);
+                    fd.append('title', document.getElementById('upload-title').value);
+                    fd.append('description', document.getElementById('upload-description').value);
+                    await apiCall('/api/teachers/upload', { method: 'POST', body: fd, headers: {} });
                 }
-                
-                showToast('Materiali caricati con successo! In attesa di approvazione.', 'success');
+                showToast('Materiali caricati! In attesa di approvazione.', 'success');
                 closeUploadModal();
-                await loadTeacherStats(); // Refresh stats
-                
-            } catch (error) {
-                showToast(error.message || 'Errore durante il caricamento', 'error');
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Carica e Invia per Approvazione';
-            }
+                await Promise.all([loadTeacherStats(), loadTeacherMaterials()]);
+            } catch (e) { showToast(e.message || 'Errore nel caricamento', 'error'); }
+            finally { btn.disabled = false; btn.textContent = 'Carica'; }
         });
 
-        // Modal close handlers
         document.getElementById('upload-cancel').addEventListener('click', closeUploadModal);
-        document.getElementById('upload-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'upload-modal') closeUploadModal();
-        });
+        document.getElementById('upload-modal').addEventListener('click', e => { if (e.target.id === 'upload-modal') closeUploadModal(); });
 
-        // Logout handler
-        document.getElementById('logout-btn').addEventListener('click', () => {
-            localStorage.removeItem('teacherToken');
-            teacherToken = null;
-            currentTeacher = null;
-            document.getElementById('dashboard').style.display = 'none';
-            document.getElementById('login-screen').style.display = 'flex';
-        });
-
-        // Utility functions
+        // === UTILITIES ===
         async function apiCall(url, options = {}) {
-            const defaultHeaders = {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${teacherToken}`
-            };
-            
-            // Don't override Content-Type for FormData
-            if (options.body instanceof FormData) {
-                delete defaultHeaders['Content-Type'];
-            }
-            
-            const response = await fetch(url, {
-                ...options,
-                headers: { ...defaultHeaders, ...options.headers }
-            });
-            
-            if (response.status === 401) {
-                localStorage.removeItem('teacherToken');
-                window.location.reload();
-                return;
-            }
-            
-            const data = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(data.error || 'Errore API');
-            }
-            
+            const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + teacherToken };
+            if (options.body instanceof FormData) delete headers['Content-Type'];
+            const res = await fetch(url, { ...options, headers: { ...headers, ...options.headers } });
+            if (res.status === 401) { localStorage.removeItem('teacherToken'); window.location.reload(); return; }
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Errore API');
             return data;
         }
 
-        function formatDate(dateString) {
-            if (!dateString) return 'Data da definire';
-            return new Date(dateString).toLocaleDateString('it-IT', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-            });
+        function fmtDate(d) {
+            if (!d) return 'Data da definire';
+            return new Date(d).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
         }
+        function statusLabel(s) { return { scheduled: 'Programmata', completed: 'Completata', pending: 'In corso', cancelled: 'Annullata' }[s] || s || 'N/D'; }
+        function statusBadgeClass(s) { return { scheduled: 'badge-blue', completed: 'badge-green', pending: 'badge-orange', cancelled: 'badge-red' }[s] || 'badge-gray'; }
 
-        function getStatusLabel(status) {
-            const labels = {
-                'scheduled': 'Programmata',
-                'completed': 'Completata',
-                'pending': 'In Corso',
-                'cancelled': 'Annullata'
-            };
-            return labels[status] || status;
-        }
-
-        function showToast(message, type = 'success') {
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.textContent = message;
-            document.body.appendChild(toast);
-            
-            setTimeout(() => toast.classList.add('show'), 100);
-            setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => document.body.removeChild(toast), 300);
-            }, 3000);
+        function showToast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = 'toast ' + type;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.classList.add('show'), 100);
+            setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3000);
         }
     </script>
 </body>

@@ -621,9 +621,9 @@
                         <div class="lesson-info">
                             <div class="lesson-title">${lesson.title || 'Lezione senza titolo'}</div>
                             <div class="lesson-meta">
-                                📅 ${formatDate(lesson.date)} • 
-                                ⏰ ${lesson.start_time || 'Orario da definire'} • 
-                                📍 ${lesson.location || 'Location da definire'}
+                                📅 ${formatDate(lesson.start_datetime)} •
+                                ⏰ ${lesson.start_datetime ? new Date(lesson.start_datetime).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}) : 'Orario da definire'} •
+                                📍 ${lesson.location_physical || lesson.location_remote || 'Location da definire'}
                             </div>
                         </div>
                         <div class="lesson-actions">

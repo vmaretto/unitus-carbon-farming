@@ -529,30 +529,35 @@ app.get('/api/teachers/me', requireTeacher, async (req, res) => {
 // Get teacher statistics
 app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
-  
+
   try {
-    // Count teacher's lessons
-    const { rows: lessonsCount } = await pool.query(
-      'SELECT COUNT(*) as total FROM lessons_teachers WHERE teacher_id = $1',
+    // Find the matching faculty id for this teacher (linked by email)
+    const { rows: fRows } = await pool.query(
+      'SELECT f.id FROM faculty f INNER JOIN teachers t ON LOWER(f.email) = LOWER(t.email) WHERE t.id = $1',
       [req.teacher.id]
     );
-    
+    const facultyId = fRows.length ? fRows[0].id : null;
+
+    // Count teacher's lessons (lessons.teacher_id references faculty.id)
+    const { rows: lessonsCount } = await pool.query(
+      'SELECT COUNT(*) as total FROM lessons WHERE teacher_id = $1',
+      [facultyId]
+    );
+
     // Count published materials
     const { rows: materialsCount } = await pool.query(
-      `SELECT COUNT(*) as total FROM materials_pending mp
-       INNER JOIN lessons_teachers lt ON mp.lesson_id = lt.lesson_id
-       WHERE lt.teacher_id = $1 AND mp.status = 'approved'`,
+      `SELECT COUNT(*) as total FROM materials_pending
+       WHERE teacher_id = $1 AND status = 'approved'`,
       [req.teacher.id]
     );
-    
+
     // Count pending materials
     const { rows: pendingCount } = await pool.query(
-      `SELECT COUNT(*) as total FROM materials_pending mp
-       INNER JOIN lessons_teachers lt ON mp.lesson_id = lt.lesson_id
-       WHERE lt.teacher_id = $1 AND mp.status = 'pending'`,
+      `SELECT COUNT(*) as total FROM materials_pending
+       WHERE teacher_id = $1 AND status = 'pending'`,
       [req.teacher.id]
     );
-    
+
     res.json({
       total_lessons: parseInt(lessonsCount[0].total),
       materials_published: parseInt(materialsCount[0].total),
@@ -567,17 +572,26 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
 // Get teacher's lessons
 app.get('/api/teachers/lessons', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
-  
+
   try {
-    const { rows: lessons } = await pool.query(
-      `SELECT l.*, lt.role as teacher_role, lt.hours
-       FROM lessons l
-       INNER JOIN lessons_teachers lt ON l.id = lt.lesson_id
-       WHERE lt.teacher_id = $1
-       ORDER BY l.date ASC, l.start_time ASC`,
+    // Find the matching faculty id for this teacher (linked by email)
+    const { rows: fRows } = await pool.query(
+      'SELECT f.id FROM faculty f INNER JOIN teachers t ON LOWER(f.email) = LOWER(t.email) WHERE t.id = $1',
       [req.teacher.id]
     );
-    
+    const facultyId = fRows.length ? fRows[0].id : null;
+
+    const { rows: lessons } = await pool.query(
+      `SELECT l.id, l.title, l.start_datetime, l.duration_minutes,
+              l.location_physical, l.location_remote, l.status, l.notes,
+              m.name AS module_name
+       FROM lessons l
+       LEFT JOIN modules m ON l.module_id = m.id
+       WHERE l.teacher_id = $1
+       ORDER BY l.start_datetime ASC`,
+      [facultyId]
+    );
+
     res.json(lessons);
   } catch (error) {
     console.error('Get teacher lessons error:', error);
@@ -597,12 +611,15 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
   }
   
   try {
-    // Verify teacher has access to this lesson
+    // Verify teacher has access to this lesson (lessons.teacher_id = faculty.id, linked by email)
     const { rows: teacherLessons } = await pool.query(
-      'SELECT id FROM lessons_teachers WHERE teacher_id = $1 AND lesson_id = $2',
+      `SELECT l.id FROM lessons l
+       INNER JOIN faculty f ON l.teacher_id = f.id
+       INNER JOIN teachers t ON LOWER(f.email) = LOWER(t.email)
+       WHERE t.id = $1 AND l.id = $2`,
       [req.teacher.id, lesson_id]
     );
-    
+
     if (teacherLessons.length === 0) {
       return res.status(403).json({ error: 'Non hai accesso a questa lezione' });
     }

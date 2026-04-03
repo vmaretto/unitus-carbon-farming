@@ -2112,12 +2112,12 @@ app.get('/api/resources', async (req, res) => {
     const values = [];
 
     if (published !== undefined) {
-      filters.push(`is_published = $${filters.length + 1}`);
+      filters.push(`r.is_published = $${filters.length + 1}`);
       values.push(published === 'true');
     }
 
     if (type !== undefined) {
-      filters.push(`resource_type = $${filters.length + 1}`);
+      filters.push(`r.resource_type = $${filters.length + 1}`);
       values.push(type);
     }
 

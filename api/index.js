@@ -269,7 +269,14 @@ if (hasDatabaseUrl) {
   const sslOption = process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false };
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: sslOption
+    ssl: sslOption,
+    max: 5,
+    idleTimeoutMillis: 20000,
+    connectionTimeoutMillis: 10000
+  });
+
+  pool.on('error', (err) => {
+    console.error('Unexpected pool error', err.message);
   });
 }
 
@@ -1396,7 +1403,7 @@ async function ensureDatabaseInitialized() {
 
   if (!initPromise) {
     initPromise = (async () => {
-      const maxRetries = 3;
+      const maxRetries = 4;
       let lastError;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -1406,7 +1413,7 @@ async function ensureDatabaseInitialized() {
           lastError = error;
           console.warn(`Database init attempt ${attempt}/${maxRetries} failed:`, error.message);
           if (attempt < maxRetries) {
-            await new Promise(r => setTimeout(r, 500 * attempt));
+            await new Promise(r => setTimeout(r, 1000 * attempt));
           }
         }
       }

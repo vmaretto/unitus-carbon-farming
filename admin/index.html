@@ -2739,12 +2739,30 @@ Buono studio!</textarea>
             const formData = new FormData();
             formData.append('file', file);
 
+            const uploadToken = adminToken || localStorage.getItem('adminToken');
+            if (!uploadToken) {
+                statusEl.textContent = '❌ Sessione scaduta. Ricarica la pagina.';
+                statusEl.style.color = '#dc3545';
+                return;
+            }
+
             try {
-                const res = await fetch('/api/resources/upload', {
-                    method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken')) },
-                    body: formData
-                });
+                async function doUpload() {
+                    return await fetch('/api/materials/upload', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + uploadToken },
+                        body: formData
+                    });
+                }
+
+                let res = await doUpload();
+
+                // Retry once on 401/403
+                if (res.status === 401 || res.status === 403) {
+                    await new Promise(r => setTimeout(r, 1000));
+                    res = await doUpload();
+                }
+
                 if (!res.ok) {
                     let errorMsg = 'Upload fallito';
                     try {
@@ -2753,8 +2771,8 @@ Buono studio!</textarea>
                     } catch (e) {
                         errorMsg = `HTTP ${res.status}: ${res.statusText}`;
                     }
-                    if (res.status === 413) errorMsg = 'File troppo grande (max 4MB). Comprimi il file.';
-                    if (res.status === 403) errorMsg = 'Token Blob scaduto. Rigenera BLOB_READ_WRITE_TOKEN su Vercel.';
+                    if (res.status === 413) errorMsg = 'File troppo grande (max 20MB).';
+                    if (res.status === 403) errorMsg = 'Ricarica la pagina e riprova.';
                     throw new Error(errorMsg);
                 }
                 const data = await res.json();
@@ -4200,7 +4218,7 @@ Buono studio!</textarea>
                     console.log('🔥 CHIAMANDO: /api/materials/upload per materiale lezione');
                     const res = await fetch('/api/materials/upload', {
                         method: 'POST',
-                        headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken')) },
+                        headers: { 'Authorization': 'Bearer ' + (adminToken || localStorage.getItem('adminToken')) },
                         body: formData
                     });
                     if (!res.ok) {
@@ -5307,7 +5325,7 @@ Buono studio!</textarea>
             if (!editionId) { showToast('Seleziona un\'edizione', 'error'); return; }
             try {
                 const response = await fetch(`/api/attendance/export/${editionId}`, {
-                    headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken')) }
+                    headers: { 'Authorization': 'Bearer ' + (adminToken || localStorage.getItem('adminToken')) }
                 });
                 if (!response.ok) throw new Error('Export failed');
                 const blob = await response.blob();

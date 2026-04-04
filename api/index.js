@@ -41,11 +41,15 @@ const uploadMaterials = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-03-31-v22-MATERIALS'; // Per debug deploy
+const BUILD_VERSION = '2026-04-04-v23-UPLOAD-FIX'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', version: BUILD_VERSION, timestamp: new Date().toISOString() });
+});
+
+app.post('/api/upload-test', (req, res) => {
+  res.json({ ok: true, version: BUILD_VERSION, hasBlob: Boolean(process.env.BLOB_READ_WRITE_TOKEN), hasAuth: Boolean(req.headers.authorization) });
 });
 
 const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
@@ -281,6 +285,14 @@ if (hasDatabaseUrl) {
 }
 
 app.use(express.json());
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  next();
+});
 
 const staticRoot = path.join(__dirname);
 app.use(express.static(staticRoot));
@@ -2384,7 +2396,7 @@ app.post('/api/materials/upload', requireAdmin, uploadMaterials.single('file'), 
 });
 
 // Upload file per risorse con compressione automatica
-app.post('/api/resources/upload', requireAdmin, uploadSmall.single('file'), async (req, res) => {
+app.post('/api/resources/upload', requireAdmin, uploadMaterials.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nessun file caricato' });
   }
@@ -6165,6 +6177,14 @@ async function handler(req, res) {
 }
 
 
+app.use((err, req, res, next) => {
+  if (err && err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File troppo grande.' });
+    return res.status(400).json({ error: 'Errore upload: ' + err.message });
+  }
+  if (err) return res.status(500).json({ error: err.message || 'Errore interno' });
+  next();
+});
 
 if (require.main === module) {
   ensureDatabaseInitialized()

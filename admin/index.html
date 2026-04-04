@@ -4242,13 +4242,9 @@ Buono studio!</textarea>
                     });
                     renderMaterialsList();
                     
-                    // SALVA LA LEZIONE con i nuovi materiali
-                    const lessonForm = document.getElementById('lesson-form');
-                    if (lessonForm) {
-                        const saveButton = lessonForm.querySelector('button[data-action="save-lesson"]');
-                        if (saveButton) {
-                            saveButton.click();
-                        }
+                    // AUTO-SAVE: salva la lezione se stiamo modificando una esistente
+                    if (editingId) {
+                        form.querySelector('button.primary').click();
                     }
                     
                     // NON ricarica Resources - materiali lezioni sono separati

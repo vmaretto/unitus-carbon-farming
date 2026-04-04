@@ -2592,8 +2592,11 @@ app.post('/api/resources/notify', requireAdmin, async (req, res) => {
     let sent = 0;
     let errors = [];
 
-    for (const student of students) {
-      try {
+    // Invio in batch paralleli da 5 per evitare timeout Vercel (60s)
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < students.length; i += BATCH_SIZE) {
+      const batch = students.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(batch.map(async (student) => {
         const personalizedMessage = message
           .replace('{nome}', student.first_name || 'Studente')
           .replace('{cognome}', student.last_name || '');
@@ -2617,10 +2620,11 @@ app.post('/api/resources/notify', requireAdmin, async (req, res) => {
             </div>
           `
         });
-        sent++;
-      } catch (emailError) {
-        console.error(`Error sending to ${student.email}:`, emailError);
-        errors.push(student.email);
+        return student.email;
+      }));
+      for (const r of results) {
+        if (r.status === 'fulfilled') sent++;
+        else errors.push(r.reason?.message || 'unknown');
       }
     }
 

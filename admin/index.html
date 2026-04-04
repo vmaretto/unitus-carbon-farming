@@ -2751,10 +2751,10 @@ Buono studio!</textarea>
                         const errorData = await res.json();
                         errorMsg = errorData.error || errorMsg;
                     } catch (e) {
-                        // Response is not JSON, use status text
                         errorMsg = `HTTP ${res.status}: ${res.statusText}`;
-                        if (res.status === 413) errorMsg = 'File troppo grande (max 50MB)';
                     }
+                    if (res.status === 413) errorMsg = 'File troppo grande (max 4MB). Comprimi il file.';
+                    if (res.status === 403) errorMsg = 'Token Blob scaduto. Rigenera BLOB_READ_WRITE_TOKEN su Vercel.';
                     throw new Error(errorMsg);
                 }
                 const data = await res.json();
@@ -2801,7 +2801,14 @@ Buono studio!</textarea>
                     body: JSON.stringify(payload)
                 });
                 showToast('Risorsa salvata con successo');
+                const prevTeacher = payload.teacherId;
+                const prevLesson = payload.lessonId;
+                const prevPublished = payload.isPublished;
                 resetResourceForm();
+                // Restore selections for batch uploads
+                if (prevTeacher) document.getElementById('resource-teacher').value = prevTeacher;
+                if (prevLesson) { await updateResourceLessonSelect(); document.getElementById('resource-lesson').value = prevLesson; }
+                if (prevPublished) document.getElementById('resource-published').checked = true;
                 loadResources();
             } catch (error) {
                 // already handled in apiRequest

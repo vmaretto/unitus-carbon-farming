@@ -2361,18 +2361,22 @@ app.post('/api/materials/upload', requireAdmin, uploadMaterials.single('file'), 
     // Sanitizza il nome file
     const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
     
-    // Upload su Vercel Blob  
+    // Upload su Vercel Blob
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+    if (!blobToken) {
+      console.error('BLOB_READ_WRITE_TOKEN non configurato!');
+      return res.status(500).json({ error: 'Storage non configurato (BLOB_READ_WRITE_TOKEN mancante).' });
+    }
+
     const blob = await put(safeName, req.file.buffer, {
       access: 'public',
       addRandomSuffix: true,
-      contentType: req.file.mimetype
+      contentType: req.file.mimetype,
+      token: blobToken
     });
-    
-    // I materiali lezioni NON vanno in tabella resources
-    // Vanno solo nel JSON lessons.materials per viewer protetto
-    
+
     res.json({ url: blob.url, filename: safeName });
-    
+
   } catch (error) {
     console.error('Errore upload materiale:', error);
     res.status(500).json({ error: 'Upload fallito: ' + error.message });
@@ -2407,14 +2411,21 @@ app.post('/api/resources/upload', requireAdmin, uploadSmall.single('file'), asyn
       // TODO: implementare compressione PDF reale
     }
     
-    // Upload su Vercel Blob  
+    // Upload su Vercel Blob
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+    if (!blobToken) {
+      console.error('BLOB_READ_WRITE_TOKEN non configurato!');
+      return res.status(500).json({ error: 'Storage non configurato (BLOB_READ_WRITE_TOKEN mancante).' });
+    }
+
     const blob = await put(safeName, fileBuffer, {
       access: 'public',
       addRandomSuffix: true,
-      contentType: req.file.mimetype
+      contentType: req.file.mimetype,
+      token: blobToken
     });
 
-    res.json({ 
+    res.json({
       url: blob.url,
       filename: safeName,
       size: req.file.size,
@@ -2424,6 +2435,15 @@ app.post('/api/resources/upload', requireAdmin, uploadSmall.single('file'), asyn
     console.error('Error uploading to Vercel Blob:', error);
     res.status(500).json({ error: 'Errore durante il caricamento: ' + error.message });
   }
+});
+
+// Storage status check
+app.get('/api/storage/status', requireAdmin, (_req, res) => {
+  res.json({
+    blobConfigured: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+    resendConfigured: Boolean(RESEND_API_KEY),
+    brevoConfigured: Boolean(BREVO_API_KEY)
+  });
 });
 
 // Invio email di TEST (solo a un indirizzo specifico per anteprima)

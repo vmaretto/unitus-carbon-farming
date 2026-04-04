@@ -440,6 +440,28 @@
                     // No Plyr tracking for YouTube iframe - simplified
                     console.log('YouTube video loaded:', youtubeId);
                     return; // Skip Plyr setup for YouTube
+                }
+
+                // Check if it's a Vimeo URL
+                const vimeoMatch = videoUrl.match(/(?:vimeo\.com\/)(\d+)/);
+
+                if (vimeoMatch) {
+                    const vimeoId = vimeoMatch[1];
+                    videoEl.style.display = 'none';
+
+                    const iframe = document.createElement('iframe');
+                    iframe.id = 'player-vimeo';
+                    iframe.width = '100%';
+                    iframe.height = '100%';
+                    iframe.style.aspectRatio = '16/9';
+                    iframe.style.border = 'none';
+                    iframe.src = `https://player.vimeo.com/video/${vimeoId}?badge=0&autopause=0&player_id=0`;
+                    iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+                    iframe.allowFullscreen = true;
+                    videoContainer.insertBefore(iframe, videoContainer.firstChild);
+
+                    console.log('Vimeo video loaded:', vimeoId);
+                    return;
                 } else {
                     // Regular video file
                     videoEl.style.display = '';

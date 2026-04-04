@@ -4232,29 +4232,48 @@ Buono studio!</textarea>
                     statusEl.textContent = '✅ ' + data.filename;
                     statusEl.style.color = 'var(--green-500)';
                     addBtn.disabled = false;
-                    
-                    // AGGIUNGI ANCHE alla lezione (per viewer protetto)
+
+                    // CREA RISORSA nella tabella resources (collegata alla lezione calendario)
                     const finalName = form.querySelector('[data-material-name]').value.trim() || materialName;
-                    currentMaterials.push({ 
-                        type: detectedType, 
-                        name: finalName, 
-                        url: data.url 
-                    });
-                    renderMaterialsList();
-                    
-                    // AUTO-SAVE: salva la lezione se stiamo modificando una esistente
-                    if (editingId) {
-                        form.querySelector('button.primary').click();
+                    const calendarLessonId = form.querySelector('[data-field="calendarLessonId"]')?.value || null;
+
+                    // Trova il teacherId dalla lezione calendario
+                    let teacherId = null;
+                    if (calendarLessonId) {
+                        const calLesson = (allLessonsCache || []).find(l => l.id === calendarLessonId);
+                        if (calLesson) teacherId = calLesson.teacherId || null;
                     }
-                    
-                    // NON ricarica Resources - materiali lezioni sono separati
-                    
-                    // Reset form
+
+                    try {
+                        await apiRequest('/api/resources', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                title: finalName,
+                                resourceType: detectedType,
+                                url: data.url,
+                                description: null,
+                                sortOrder: null,
+                                isPublished: true,
+                                teacherId: teacherId,
+                                lessonId: calendarLessonId
+                            })
+                        });
+                        statusEl.textContent = '✅ ' + finalName + ' — salvato nelle risorse';
+                        statusEl.style.color = 'var(--green-500)';
+                        showToast('Materiale caricato e salvato nelle risorse!', 'success');
+                    } catch (resourceError) {
+                        console.error('Errore creazione risorsa:', resourceError);
+                        statusEl.textContent = '⚠️ File caricato ma non salvato come risorsa. Aggiungilo manualmente in Gestione Risorse.';
+                        statusEl.style.color = '#d97706';
+                    }
+
+                    // Aggiorna anche la lista materiali JSONB locale (per visualizzazione nell'admin)
+                    currentMaterials.push({ type: detectedType, name: finalName, url: data.url });
+                    renderMaterialsList();
+
+                    // Reset campi materiale
                     form.querySelector('[data-material-name]').value = '';
                     form.querySelector('[data-material-url]').value = '';
-                    statusEl.textContent = '';
-                    
-                    showToast('File caricato! Salvo lezione...', 'success');
                 } catch (error) {
                     statusEl.textContent = '❌ ' + error.message;
                     statusEl.style.color = '#dc3545';

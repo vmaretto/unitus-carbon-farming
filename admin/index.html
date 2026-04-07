@@ -1905,6 +1905,12 @@ Buono studio!</textarea>
 
             function showAdmin() {
                 loginGate.style.display = 'none';
+                // Rimuovi campo password dal DOM per evitare prompt Safari "Vuoi salvare la password?"
+                const pwdField = document.getElementById('admin-login-password');
+                if (pwdField) {
+                  pwdField.value = '';
+                  pwdField.remove();
+                }
                 mainContent.style.display = 'block';
                 headerEl.style.display = 'block';
                 document.getElementById('logout-btn').style.display = 'inline-block';
@@ -2084,6 +2090,8 @@ Buono studio!</textarea>
                         adminToken = null;
                         localStorage.removeItem('adminToken');
                         checkAuth();
+                        // Forza reload per mostrare il form di login
+                        setTimeout(() => window.location.reload(), 500);
                         throw new Error('Sessione scaduta. Effettua nuovamente il login.');
                     }
                     const payload = await response.json().catch(() => ({ error: 'Errore sconosciuto' }));
@@ -4985,13 +4993,13 @@ Buono studio!</textarea>
         // CSV Export
         document.getElementById('lms-enroll-export').addEventListener('click', () => {
             if (!state.lmsEnrollments.length) { showToast('Nessun dato da esportare', 'error'); return; }
-            let csv = 'email,nome,cognome,ruolo,stato,data_iscrizione,ultimo_accesso,ha_acceduto\n';
+            let csv = 'email,nome,cognome,tipo_iscrizione,azienda_partner,ruolo,stato,data_iscrizione,ultimo_accesso,ha_acceduto,note\n';
             state.lmsEnrollments.forEach(en => {
                 const lastLogin = en.lastLoginAt 
                     ? new Date(en.lastLoginAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                     : '';
                 const haAcceduto = en.lastLoginAt ? 'Sì' : 'No';
-                csv += `"${en.email}","${en.firstName || ''}","${en.lastName || ''}","${en.role}","${en.status}","${en.enrolledAt || ''}","${lastLogin}","${haAcceduto}"\n`;
+                csv += `"${en.email}","${en.firstName || ''}","${en.lastName || ''}","${en.enrollmentType || ''}","${en.partnerCompany || ''}","${en.role}","${en.status}","${en.enrolledAt || ''}","${lastLogin}","${haAcceduto}","${(en.notes || '').replace(/"/g, '""')}"\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);

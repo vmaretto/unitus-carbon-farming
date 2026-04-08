@@ -1909,12 +1909,6 @@ Buono studio!</textarea>
         function showAdmin() {
             isAuthenticated = true;
             loginGate.style.display = 'none';
-            // Rimuovi campo password dal DOM per evitare prompt Safari "Vuoi salvare la password?"
-            const pwdField = document.getElementById('admin-login-password');
-            if (pwdField) {
-              pwdField.value = '';
-              pwdField.remove();
-            }
             mainContent.style.display = 'block';
             headerEl.style.display = 'block';
             document.getElementById('logout-btn').style.display = 'inline-block';
@@ -1932,6 +1926,8 @@ Buono studio!</textarea>
 
         function showLogin() {
             isAuthenticated = false;
+            const pwdField = document.getElementById('admin-login-password');
+            if (pwdField) pwdField.value = '';
             loginGate.style.display = 'flex';
             mainContent.style.display = 'none';
             headerEl.style.display = 'none';

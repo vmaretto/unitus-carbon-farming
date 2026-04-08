@@ -5282,6 +5282,7 @@ Buono studio!</textarea>
                 });
                 const resultDiv = document.getElementById('att-csv-result');
                 let html = `<span style="color: var(--green-700);">✅ Importati: ${result.imported}</span>`;
+                if (result.partial > 0) html += ` — <span style="color: var(--orange-600);">⏱️ Parziali (&lt;80%): ${result.partial}</span>`;
                 if (result.skipped > 0) html += ` — <span style="color: var(--gray-500);">ℹ️ Duplicati saltati: ${result.skipped}</span>`;
                 if (result.unmatched && result.unmatched.length > 0) {
                     html += `<br><span style="color: var(--orange-600);">⚠️ Non riconosciuti: ${result.unmatched.join(', ')}</span>`;

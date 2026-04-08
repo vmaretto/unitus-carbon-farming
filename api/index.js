@@ -4944,23 +4944,38 @@ app.post('/api/attendance/import-csv', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'lessonId and participants array are required' });
   }
 
+  // Parse Zoom date format DD/MM/YYYY HH:MM:SS AM/PM → ISO
+  function parseZoomDate(dateStr) {
+    if (!dateStr) return null;
+    const match = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)?/i);
+    if (!match) return dateStr; // fallback
+    let [, day, month, year, hours, mins, secs, ampm] = match;
+    hours = parseInt(hours);
+    if (ampm && ampm.toUpperCase() === 'PM' && hours < 12) hours += 12;
+    if (ampm && ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
+    return `${year}-${month}-${day}T${String(hours).padStart(2,'0')}:${mins}:${secs}`;
+  }
+
   try {
-    // Load enrolled students for name matching
+    // Load all active enrolled students (simple and robust)
     const { rows: enrolledStudents } = await pool.query(`
-      SELECT DISTINCT u.id, u.email, LOWER(u.first_name) AS first_name, LOWER(u.last_name) AS last_name,
-             LOWER(u.first_name || ' ' || u.last_name) AS full_name,
-             LOWER(u.last_name || ' ' || u.first_name) AS full_name_rev
+      SELECT DISTINCT u.id, u.email,
+             LOWER(COALESCE(u.first_name, '')) AS first_name,
+             LOWER(COALESCE(u.last_name, '')) AS last_name,
+             LOWER(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS full_name,
+             LOWER(COALESCE(u.last_name, '') || ' ' || COALESCE(u.first_name, '')) AS full_name_rev
       FROM enrollments e
       JOIN users u ON u.id = e.user_id
-      JOIN course_editions ce ON ce.id = e.course_edition_id
-      JOIN courses c ON c.id = ce.course_id
-      JOIN lms_modules m ON m.course_id = c.id
-      JOIN lms_lessons ll ON ll.lms_module_id = m.id
-      WHERE ll.calendar_lesson_id = $1
-    `, [lessonId]);
+      WHERE e.status = 'active'
+    `, []);
+
+    // Get lesson duration for partial attendance calculation
+    const { rows: lessonRows } = await pool.query('SELECT duration_minutes FROM lessons WHERE id = $1', [lessonId]);
+    const lessonDuration = lessonRows[0]?.duration_minutes || 180;
 
     let imported = 0;
     let skipped = 0;
+    let partial = 0;
     const unmatched = [];
     const matched = [];
 
@@ -4982,7 +4997,6 @@ app.post('/api/attendance/import-csv', requireAdmin, async (req, res) => {
         const normName = name.toLowerCase().trim();
         const found = enrolledStudents.find(s => {
           if (s.full_name === normName || s.full_name_rev === normName) return true;
-          // Partial match: name contains both first and last name
           if (s.first_name && s.last_name && normName.includes(s.first_name) && normName.includes(s.last_name)) return true;
           return false;
         });
@@ -4991,18 +5005,28 @@ app.post('/api/attendance/import-csv', requireAdmin, async (req, res) => {
 
       if (!userId) { unmatched.push(name || email || '?'); continue; }
 
+      // Calculate attendance type based on duration
+      const participantMinutes = p.durationMinutes || 0;
+      const attendancePercent = lessonDuration > 0 ? (participantMinutes / lessonDuration) * 100 : 100;
+      const attendanceType = attendancePercent >= 80 ? 'remote_live' : 'remote_partial';
+
+      const joinISO = parseZoomDate(p.joinTime) || new Date().toISOString();
+      const leaveISO = parseZoomDate(p.leaveTime) || null;
+
       const { rowCount } = await pool.query(`
         INSERT INTO attendance (id, user_id, lesson_id, attendance_type, method, check_in_at, check_out_at)
-        VALUES ($1, $2, $3, 'remote_live', 'csv_import', $4, $5)
+        VALUES ($1, $2, $3, $4, 'csv_import', $5, $6)
         ON CONFLICT (user_id, lesson_id) DO NOTHING
-      `, [uuidv4(), userId, lessonId,
-          p.joinTime || new Date().toISOString(),
-          p.leaveTime || null]);
+      `, [uuidv4(), userId, lessonId, attendanceType, joinISO, leaveISO]);
 
-      if (rowCount > 0) { imported++; matched.push(name); } else { skipped++; }
+      if (rowCount > 0) {
+        imported++;
+        if (attendanceType === 'remote_partial') partial++;
+        matched.push(name + (attendanceType === 'remote_partial' ? ' (parziale)' : ''));
+      } else { skipped++; }
     }
 
-    res.json({ imported, skipped, notFound: unmatched.length, matched, unmatched });
+    res.json({ imported, skipped, partial, notFound: unmatched.length, matched, unmatched });
   } catch (error) {
     console.error('Error importing attendance CSV', error);
     res.status(500).json({ error: 'Unable to import attendance' });

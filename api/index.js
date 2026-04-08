@@ -41,7 +41,7 @@ const uploadMaterials = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-04-04-v23-UPLOAD-FIX'; // Per debug deploy
+const BUILD_VERSION = '2026-04-08-v24-PARTIAL-ATTENDANCE'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -1652,6 +1652,21 @@ async function initDatabase() {
       await pool.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
       console.log(`Migration completed: ${file}`);
     }
+  }
+
+  // ============================================
+  // HOTFIX: Ensure attendance_type includes 'remote_partial'
+  // (runs idempotently on every cold start)
+  // ============================================
+  try {
+    await pool.query(`
+      ALTER TABLE attendance DROP CONSTRAINT IF EXISTS attendance_attendance_type_check;
+      ALTER TABLE attendance ADD CONSTRAINT attendance_attendance_type_check
+        CHECK (attendance_type IN ('in_person', 'remote_live', 'remote_partial', 'async'));
+    `);
+    console.log('Attendance type constraint updated (includes remote_partial)');
+  } catch (e) {
+    console.warn('Could not update attendance_type constraint:', e.message);
   }
 }
 

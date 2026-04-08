@@ -5155,6 +5155,7 @@ Buono studio!</textarea>
             if (editionId) {
                 document.getElementById('att-panel').style.display = '';
                 await loadAttLessons(editionId);
+                await loadAttFilterLessons(editionId);
                 loadAttReport(editionId);
             } else {
                 document.getElementById('att-panel').style.display = 'none';
@@ -5261,7 +5262,7 @@ Buono studio!</textarea>
         // Report presenze
         let attLessonsCache = [];
         
-        async function loadAttLessons(courseEditionId) {
+        async function loadAttFilterLessons(courseEditionId) {
             // Carica lista lezioni per il filtro
             try {
                 const data = await apiRequest(`/api/attendance/lessons/${courseEditionId}`);

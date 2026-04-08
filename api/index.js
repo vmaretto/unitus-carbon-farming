@@ -3410,24 +3410,25 @@ app.get('/api/lms/lessons/progress', requireStudent, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { courseId } = req.query;
+    // Get all lms_lessons for this course (or all) with progress + attendance
     let query = `
-      SELECT lp.lms_lesson_id AS "lessonId",
+      SELECT ll.id AS "lessonId",
              lp.progress_percent AS "progressPercent",
-             lp.completed_at AS "completedAt"
-      FROM lesson_progress lp
-      WHERE lp.user_id = $1
+             lp.completed_at AS "completedAt",
+             EXISTS (SELECT 1 FROM attendance a WHERE a.lesson_id = ll.calendar_lesson_id AND a.user_id = $1 AND a.attendance_type IN ('in_person', 'remote_live')) AS "hasAttendance"
+      FROM lms_lessons ll
+      LEFT JOIN lesson_progress lp ON lp.lms_lesson_id = ll.id AND lp.user_id = $1
     `;
     const values = [req.user.userId];
     if (courseId) {
-      query += ` AND lp.lms_lesson_id IN (
-        SELECT ll.id FROM lms_lessons ll
-        JOIN lms_modules m ON m.id = ll.lms_module_id
-        WHERE m.course_id = $2
+      query += ` WHERE ll.lms_module_id IN (
+        SELECT m.id FROM lms_modules m WHERE m.course_id = $2
       )`;
       values.push(courseId);
     }
     const { rows } = await pool.query(query, values);
-    res.json(rows);
+    // Filter to only lessons with some data
+    res.json(rows.filter(r => r.progressPercent !== null || r.completedAt || r.hasAttendance));
   } catch (error) {
     console.error('Error fetching lesson progress', error);
     res.status(500).json({ error: 'Unable to retrieve lesson progress' });
@@ -4037,10 +4038,13 @@ app.get('/api/lms/my-courses', requireStudent, async (req, res) => {
              (SELECT COUNT(*)::int FROM lms_lessons ll
               JOIN lms_modules m2 ON m2.id = ll.lms_module_id
               WHERE m2.course_id = c.id AND ll.is_published = true) AS "totalLessons",
-             (SELECT COUNT(*)::int FROM lesson_progress lp
-              JOIN lms_lessons ll2 ON ll2.id = lp.lms_lesson_id
+             (SELECT COUNT(DISTINCT ll2.id)::int FROM lms_lessons ll2
               JOIN lms_modules m3 ON m3.id = ll2.lms_module_id
-              WHERE m3.course_id = c.id AND lp.user_id = $1 AND lp.completed_at IS NOT NULL) AS "completedLessons"
+              WHERE m3.course_id = c.id AND (
+                EXISTS (SELECT 1 FROM lesson_progress lp WHERE lp.lms_lesson_id = ll2.id AND lp.user_id = $1 AND lp.completed_at IS NOT NULL)
+                OR
+                EXISTS (SELECT 1 FROM attendance a WHERE a.lesson_id = ll2.calendar_lesson_id AND a.user_id = $1 AND a.attendance_type IN ('in_person', 'remote_live'))
+              )) AS "completedLessons"
       FROM enrollments e
       JOIN course_editions ce ON ce.id = e.course_edition_id
       JOIN courses c ON c.id = ce.course_id
@@ -4062,13 +4066,15 @@ app.get('/api/lms/my-progress', requireStudent, async (req, res) => {
     const { rows: courseProgress } = await pool.query(`
       SELECT c.id AS "courseId", c.title AS "courseTitle",
              COUNT(DISTINCT ll.id) FILTER (WHERE ll.is_published = true) AS "totalLessons",
-             COUNT(DISTINCT lp.lms_lesson_id) FILTER (WHERE lp.completed_at IS NOT NULL) AS "completedLessons"
+             COUNT(DISTINCT ll.id) FILTER (WHERE
+               EXISTS (SELECT 1 FROM lesson_progress lp2 WHERE lp2.lms_lesson_id = ll.id AND lp2.user_id = $1 AND lp2.completed_at IS NOT NULL)
+               OR EXISTS (SELECT 1 FROM attendance a2 WHERE a2.lesson_id = ll.calendar_lesson_id AND a2.user_id = $1 AND a2.attendance_type IN ('in_person', 'remote_live'))
+             ) AS "completedLessons"
       FROM enrollments e
       JOIN course_editions ce ON ce.id = e.course_edition_id
       JOIN courses c ON c.id = ce.course_id
       LEFT JOIN lms_modules m ON m.course_id = c.id
       LEFT JOIN lms_lessons ll ON ll.lms_module_id = m.id AND ll.is_published = true
-      LEFT JOIN lesson_progress lp ON lp.lms_lesson_id = ll.id AND lp.user_id = $1
       WHERE e.user_id = $1 AND e.status = 'active'
       GROUP BY c.id, c.title
     `, [req.user.userId]);
@@ -4263,33 +4269,63 @@ app.delete('/api/lms/quizzes/:id', requireAdmin, async (req, res) => {
 app.post('/api/lms/quizzes/generate', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   
-  const { lessonId, numQuestions = 5, difficulty = 'intermediate' } = req.body;
-  
-  if (!lessonId) {
-    return res.status(400).json({ error: 'lessonId è obbligatorio' });
+  const { lessonId, moduleId, numQuestions = 5, difficulty = 'intermediate' } = req.body;
+
+  if (!lessonId && !moduleId) {
+    return res.status(400).json({ error: 'lessonId o moduleId è obbligatorio' });
   }
 
   try {
-    // 1. Recupera i materiali della lezione
-    const { rows: lessons } = await pool.query(`
-      SELECT title, description, materials FROM lessons WHERE id = $1
-    `, [lessonId]);
-    
-    if (!lessons.length) {
-      return res.status(404).json({ error: 'Lezione non trovata' });
-    }
-    
-    const lesson = lessons[0];
-    const materials = lesson.materials || [];
-    
-    // Costruisci il contesto dai materiali
-    let context = `Titolo lezione: ${lesson.title}\n`;
-    if (lesson.description) context += `Descrizione: ${lesson.description}\n`;
-    if (materials.length > 0) {
-      context += `\nMateriali disponibili:\n`;
-      materials.forEach(m => {
-        context += `- ${m.name} (${m.type}): ${m.url}\n`;
+    let context = '';
+    let contextTitle = '';
+
+    if (moduleId) {
+      // Module quiz — gather all lessons in the module
+      const { rows: modRows } = await pool.query('SELECT title FROM lms_modules WHERE id = $1', [moduleId]);
+      if (!modRows.length) return res.status(404).json({ error: 'Modulo non trovato' });
+      contextTitle = modRows[0].title;
+      context = `Modulo: ${contextTitle}\n\n`;
+
+      const { rows: modLessons } = await pool.query(`
+        SELECT ll.title, ll.description, l.title AS cal_title, l.notes
+        FROM lms_lessons ll
+        LEFT JOIN lessons l ON l.id = ll.calendar_lesson_id
+        WHERE ll.lms_module_id = $1
+        ORDER BY ll.sort_order
+      `, [moduleId]);
+
+      modLessons.forEach((ml, i) => {
+        context += `Lezione ${i + 1}: ${ml.title}\n`;
+        if (ml.description) context += `  Descrizione: ${ml.description}\n`;
+        if (ml.notes) context += `  Note: ${ml.notes}\n`;
       });
+
+      // Also get resources linked to these calendar lessons
+      const { rows: modResources } = await pool.query(`
+        SELECT r.title, r.resource_type FROM resources r
+        WHERE r.lesson_id IN (
+          SELECT ll.calendar_lesson_id FROM lms_lessons ll WHERE ll.lms_module_id = $1 AND ll.calendar_lesson_id IS NOT NULL
+        ) AND r.is_published = true
+      `, [moduleId]);
+      if (modResources.length) {
+        context += `\nRisorse del modulo:\n`;
+        modResources.forEach(r => { context += `- ${r.title} (${r.resource_type})\n`; });
+      }
+    } else {
+      // Single lesson quiz (existing logic)
+      const { rows: lessons } = await pool.query(
+        'SELECT title, description, materials FROM lessons WHERE id = $1', [lessonId]
+      );
+      if (!lessons.length) return res.status(404).json({ error: 'Lezione non trovata' });
+      const lesson = lessons[0];
+      const materials = lesson.materials || [];
+      contextTitle = lesson.title;
+      context = `Titolo lezione: ${lesson.title}\n`;
+      if (lesson.description) context += `Descrizione: ${lesson.description}\n`;
+      if (materials.length > 0) {
+        context += `\nMateriali disponibili:\n`;
+        materials.forEach(m => { context += `- ${m.name} (${m.type}): ${m.url}\n`; });
+      }
     }
 
     // 2. Chiama Claude per generare le domande
@@ -4353,7 +4389,9 @@ Rispondi SOLO con il JSON, nessun altro testo.`;
 
     // 4. Restituisci le domande generate (non le salva ancora, l'admin deve confermare)
     res.json({
-      lessonTitle: lesson.title,
+      lessonTitle: contextTitle,
+      moduleId: moduleId || null,
+      lessonId: lessonId || null,
       numQuestions: generated.questions?.length || 0,
       questions: generated.questions || []
     });
@@ -4666,14 +4704,34 @@ app.post('/api/lms/lessons/:id/complete', requireStudent, async (req, res) => {
     if (!lessonRows.length) return res.status(404).json({ error: 'Lesson not found' });
     const lesson = lessonRows[0];
 
-    // 2. Carica progresso studente
+    // 2. Controlla se lo studente ha una presenza (in_person o remote_live)
+    const { rows: attendanceRows } = await pool.query(`
+      SELECT a.id FROM attendance a
+      JOIN lms_lessons ll ON ll.id = $1
+      WHERE a.user_id = $2
+      AND a.lesson_id = ll.calendar_lesson_id
+      AND a.attendance_type IN ('in_person', 'remote_live')
+      LIMIT 1
+    `, [lessonId, userId]);
+
+    if (attendanceRows.length > 0) {
+      // Presenza trovata — completa automaticamente
+      await pool.query(`
+        INSERT INTO lesson_progress (id, user_id, lms_lesson_id, progress_percent, completed_at)
+        VALUES ($1, $2, $3, 100, NOW())
+        ON CONFLICT (user_id, lms_lesson_id) DO UPDATE SET completed_at = NOW(), progress_percent = 100, updated_at = NOW()
+      `, [uuidv4(), userId, lessonId]);
+      return res.json({ completed: true, message: 'Lezione completata (presenza registrata)', criteria: { attendance: true } });
+    }
+
+    // 3. Nessuna presenza — controlla video e tempo
     const { rows: progressRows } = await pool.query(
       'SELECT progress_percent, time_spent_seconds, completed_at FROM lesson_progress WHERE user_id = $1 AND lms_lesson_id = $2',
       [userId, lessonId]
     );
 
     if (!progressRows.length) {
-      return res.status(400).json({ error: 'Nessun progresso registrato', criteria: { video: false, time: false, quiz: false } });
+      return res.status(400).json({ error: 'Nessun progresso registrato', criteria: { video: false, time: false } });
     }
 
     const progress = progressRows[0];
@@ -4684,29 +4742,13 @@ app.post('/api/lms/lessons/:id/complete', requireStudent, async (req, res) => {
     // Criterio 1: video >= 80%
     const videoOk = progress.progress_percent >= 80;
 
-    // Criterio 2: tempo permanenza >= 75% durata video
-    const minTime = lesson.duration_seconds ? Math.floor(lesson.duration_seconds * 0.75) : 0;
+    // Criterio 2: tempo permanenza >= 60% durata video
+    const minTime = lesson.duration_seconds ? Math.floor(lesson.duration_seconds * 0.60) : 0;
     const timeOk = !lesson.duration_seconds || (progress.time_spent_seconds >= minTime);
 
-    // Criterio 3: quiz superato (se esiste)
-    const { rows: quizRows } = await pool.query(
-      'SELECT id, passing_score FROM quizzes WHERE lms_lesson_id = $1 AND is_published = true LIMIT 1',
-      [lessonId]
-    );
+    const criteria = { video: videoOk, time: timeOk };
 
-    let quizOk = true;
-    if (quizRows.length) {
-      const quiz = quizRows[0];
-      const { rows: passedRows } = await pool.query(
-        'SELECT id FROM quiz_attempts WHERE user_id = $1 AND quiz_id = $2 AND passed = true LIMIT 1',
-        [userId, quiz.id]
-      );
-      quizOk = passedRows.length > 0;
-    }
-
-    const criteria = { video: videoOk, time: timeOk, quiz: quizOk };
-
-    if (!videoOk || !timeOk || !quizOk) {
+    if (!videoOk || !timeOk) {
       return res.status(400).json({
         error: 'Criteri di completamento non soddisfatti',
         criteria,
@@ -4714,15 +4756,13 @@ app.post('/api/lms/lessons/:id/complete', requireStudent, async (req, res) => {
           videoPercent: progress.progress_percent,
           videoRequired: 80,
           timeSpent: progress.time_spent_seconds,
-          timeRequired: minTime,
-          quizPassed: quizOk,
-          hasQuiz: quizRows.length > 0
+          timeRequired: minTime
         }
       });
     }
 
-    // Tutti i criteri soddisfatti — segna completata (WHERE completed_at IS NULL evita race condition)
-    const { rowCount } = await pool.query(
+    // Criteri soddisfatti — segna completata
+    await pool.query(
       'UPDATE lesson_progress SET completed_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND lms_lesson_id = $2 AND completed_at IS NULL',
       [userId, lessonId]
     );

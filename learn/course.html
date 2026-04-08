@@ -206,7 +206,7 @@
 
                     modLessons.forEach((lesson, index) => {
                         const lProgress = progressMap[lesson.id];
-                        const isCompleted = lProgress && lProgress.completedAt;
+                        const isCompleted = (lProgress && lProgress.completedAt) || (lProgress && lProgress.hasAttendance);
                         const iconClass = isCompleted ? 'completed' : 'available';
                         const icon = isCompleted ? '&#10003;' : '&#9654;';
                         const durationMin = lesson.durationMinutes ? `${lesson.durationMinutes} min` : '';
@@ -239,7 +239,7 @@
 
                     unassignedLessons.forEach(lesson => {
                         const lProgress = progressMap[lesson.id];
-                        const isCompleted = lProgress && lProgress.completedAt;
+                        const isCompleted = (lProgress && lProgress.completedAt) || (lProgress && lProgress.hasAttendance);
                         const iconClass = isCompleted ? 'completed' : 'available';
                         const icon = isCompleted ? '&#10003;' : '&#9654;';
 

@@ -4187,6 +4187,40 @@ Buono studio!</textarea>
                 html += '</div>';
             }
 
+            // Module quiz section
+            html += `
+                <div style="margin-top: 20px; padding: 16px; background: linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%); border: 1px solid #d946ef; border-radius: 10px;">
+                    <h5 style="margin: 0 0 8px; color: #86198f; display: flex; align-items: center; gap: 8px;">
+                        🤖 Quiz di Modulo
+                    </h5>
+                    <p style="margin: 0 0 12px; font-size: 0.85rem; color: #64748b;">
+                        Genera un quiz che copre tutte le lezioni del modulo. Il quiz di modulo è obbligatorio per il completamento.
+                    </p>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                        <label style="margin: 0;">
+                            Domande
+                            <select data-mod-quiz-num style="margin-left: 6px;">
+                                <option value="5">5</option>
+                                <option value="10" selected>10</option>
+                                <option value="15">15</option>
+                            </select>
+                        </label>
+                        <label style="margin: 0;">
+                            Difficoltà
+                            <select data-mod-quiz-diff style="margin-left: 6px;">
+                                <option value="easy">Facile</option>
+                                <option value="intermediate" selected>Media</option>
+                                <option value="advanced">Difficile</option>
+                            </select>
+                        </label>
+                        <button type="button" class="primary" data-generate-mod-quiz="${moduleId}" style="background: #d946ef;">
+                            🤖 Genera quiz modulo
+                        </button>
+                    </div>
+                    <div data-mod-quiz-result="${moduleId}" style="margin-top: 12px;"></div>
+                </div>
+            `;
+
             panel.innerHTML = html;
 
             // Lesson form handler
@@ -4402,6 +4436,30 @@ Buono studio!</textarea>
                 const toggleQuizBtn = ev.target.closest('[data-toggle-quiz]');
                 const deleteQuestionBtn = ev.target.closest('[data-delete-question]');
                 const deleteQuizBtn = ev.target.closest('[data-delete-quiz]');
+                const genModQuizBtn = ev.target.closest('[data-generate-mod-quiz]');
+
+                if (genModQuizBtn) {
+                    const mid = genModQuizBtn.dataset.generateModQuiz;
+                    const numQ = panel.querySelector('[data-mod-quiz-num]')?.value || 10;
+                    const diff = panel.querySelector('[data-mod-quiz-diff]')?.value || 'intermediate';
+                    const resultDiv = panel.querySelector(`[data-mod-quiz-result="${mid}"]`);
+                    genModQuizBtn.disabled = true;
+                    genModQuizBtn.textContent = '⏳ Generazione in corso...';
+                    try {
+                        const result = await apiRequest('/api/lms/quizzes/generate', {
+                            method: 'POST',
+                            body: JSON.stringify({ moduleId: mid, numQuestions: parseInt(numQ), difficulty: diff })
+                        });
+                        resultDiv.innerHTML = `<p style="color: #86198f; font-weight: 600;">✅ ${result.numQuestions} domande generate per "${result.lessonTitle}"</p>
+                            <pre style="max-height: 200px; overflow: auto; font-size: 0.8rem; background: white; padding: 8px; border-radius: 6px;">${JSON.stringify(result.questions, null, 2)}</pre>`;
+                        showToast('Quiz modulo generato!', 'success');
+                    } catch (e) {
+                        resultDiv.innerHTML = `<p style="color: #b91c1c;">❌ ${e.message}</p>`;
+                    }
+                    genModQuizBtn.disabled = false;
+                    genModQuizBtn.textContent = '🤖 Genera quiz modulo';
+                    return;
+                }
 
                 if (editLessonBtn) {
                     const lid = editLessonBtn.dataset.editLmsLesson;

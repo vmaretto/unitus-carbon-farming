@@ -184,7 +184,7 @@
 
                 const ordinals = ['Prima', 'Seconda', 'Terza', 'Quarta', 'Quinta', 'Sesta', 'Settima', 'Ottava', 'Nona', 'Decima', 'Undicesima', 'Dodicesima'];
 
-                modules.forEach(mod => {
+                for (const mod of modules) {
                     const modLessons = (lessonsByModule[mod.id] || []).sort((a, b) => {
                         if (a.startDatetime && b.startDatetime) return new Date(a.startDatetime) - new Date(b.startDatetime);
                         return (a.sortOrder || 0) - (b.sortOrder || 0);
@@ -203,32 +203,6 @@
                     if (modLessons.length === 0) {
                         modDiv.innerHTML += '<div style="padding: 8px 16px; color: var(--gray-500); font-size: 0.85rem;">Lezioni in arrivo...</div>';
                     }
-
-                    // Check for module quiz
-                    (async () => {
-                        try {
-                            const quizzes = await fetch(`/api/lms/quizzes?moduleId=${mod.id}`, {
-                                headers: { 'Authorization': 'Bearer ' + token }
-                            }).then(r => r.ok ? r.json() : []);
-                            const pubQuiz = quizzes.find(q => q.isPublished);
-                            if (pubQuiz) {
-                                const quizDiv = document.createElement('div');
-                                quizDiv.className = 'lesson-item';
-                                quizDiv.style.background = '#faf5ff';
-                                quizDiv.innerHTML = `
-                                    <div class="lesson-icon" style="background: #d946ef; color: white;">📝</div>
-                                    <div class="lesson-info">
-                                        <div class="lesson-title">${pubQuiz.title || 'Quiz del modulo'}</div>
-                                        <div class="lesson-desc">Soglia: ${pubQuiz.passingScore || 70}%</div>
-                                    </div>
-                                `;
-                                quizDiv.addEventListener('click', () => {
-                                    window.location.href = '/learn/quiz.html?quizId=' + pubQuiz.id;
-                                });
-                                modDiv.appendChild(quizDiv);
-                            }
-                        } catch (e) { /* quiz not available */ }
-                    })();
 
                     modLessons.forEach((lesson, index) => {
                         const lProgress = progressMap[lesson.id];
@@ -254,8 +228,32 @@
                         modDiv.appendChild(lessonDiv);
                     });
 
+                    // Quiz del modulo (dopo le lezioni)
+                    try {
+                        const quizRes = await fetch(`/api/lms/quizzes?moduleId=${mod.id}`, {
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        }).then(r => r.ok ? r.json() : []);
+                        if (quizRes && quizRes.length > 0) {
+                            const pubQuiz = quizRes[0];
+                            const quizDiv = document.createElement('div');
+                            quizDiv.className = 'lesson-item';
+                            quizDiv.style.cssText = 'background: linear-gradient(135deg, #f5f3ff, #ede9fe); border: 1px solid #c4b5fd; cursor: pointer;';
+                            quizDiv.innerHTML = `
+                                <div class="lesson-icon" style="background: #7c3aed; color: white;">?</div>
+                                <div class="lesson-info">
+                                    <div class="lesson-title" style="color: #5b21b6;">Quiz di verifica del modulo</div>
+                                    <div class="lesson-desc">${pubQuiz.title} — Soglia: ${pubQuiz.passingScore || 70}%</div>
+                                </div>
+                            `;
+                            quizDiv.addEventListener('click', () => {
+                                window.location.href = `/learn/quiz.html?quizId=${pubQuiz.id}`;
+                            });
+                            modDiv.appendChild(quizDiv);
+                        }
+                    } catch (e) { /* quiz not available */ }
+
                     modulesList.appendChild(modDiv);
-                });
+                }
 
                 // Unassigned lessons
                 if (unassignedLessons.length > 0) {

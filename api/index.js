@@ -4945,33 +4945,64 @@ app.post('/api/attendance/import-csv', requireAdmin, async (req, res) => {
   }
 
   try {
+    // Load enrolled students for name matching
+    const { rows: enrolledStudents } = await pool.query(`
+      SELECT DISTINCT u.id, u.email, LOWER(u.first_name) AS first_name, LOWER(u.last_name) AS last_name,
+             LOWER(u.first_name || ' ' || u.last_name) AS full_name,
+             LOWER(u.last_name || ' ' || u.first_name) AS full_name_rev
+      FROM enrollments e
+      JOIN users u ON u.id = e.user_id
+      JOIN course_editions ce ON ce.id = e.course_edition_id
+      JOIN courses c ON c.id = ce.course_id
+      JOIN lms_modules m ON m.course_id = c.id
+      JOIN lms_lessons ll ON ll.lms_module_id = m.id
+      WHERE ll.calendar_lesson_id = $1
+    `, [lessonId]);
+
     let imported = 0;
     let skipped = 0;
-    let notFound = 0;
+    const unmatched = [];
+    const matched = [];
 
     for (const p of participants) {
       const email = (p.email || '').trim().toLowerCase();
-      if (!email) { skipped++; continue; }
+      const name = (p.name || '').trim();
+      let userId = null;
 
-      // Cerca utente per email
-      const { rows: userRows } = await pool.query(
-        'SELECT id FROM users WHERE LOWER(email) = $1', [email]
-      );
+      // 1. Match by email if available
+      if (email) {
+        const { rows: userRows } = await pool.query(
+          'SELECT id FROM users WHERE LOWER(email) = $1', [email]
+        );
+        if (userRows.length) userId = userRows[0].id;
+      }
 
-      if (!userRows.length) { notFound++; continue; }
+      // 2. Match by name if no email match
+      if (!userId && name) {
+        const normName = name.toLowerCase().trim();
+        const found = enrolledStudents.find(s => {
+          if (s.full_name === normName || s.full_name_rev === normName) return true;
+          // Partial match: name contains both first and last name
+          if (s.first_name && s.last_name && normName.includes(s.first_name) && normName.includes(s.last_name)) return true;
+          return false;
+        });
+        if (found) userId = found.id;
+      }
+
+      if (!userId) { unmatched.push(name || email || '?'); continue; }
 
       const { rowCount } = await pool.query(`
         INSERT INTO attendance (id, user_id, lesson_id, attendance_type, method, check_in_at, check_out_at)
         VALUES ($1, $2, $3, 'remote_live', 'csv_import', $4, $5)
         ON CONFLICT (user_id, lesson_id) DO NOTHING
-      `, [uuidv4(), userRows[0].id, lessonId,
+      `, [uuidv4(), userId, lessonId,
           p.joinTime || new Date().toISOString(),
           p.leaveTime || null]);
 
-      if (rowCount > 0) imported++; else skipped++;
+      if (rowCount > 0) { imported++; matched.push(name); } else { skipped++; }
     }
 
-    res.json({ imported, skipped, notFound });
+    res.json({ imported, skipped, notFound: unmatched.length, matched, unmatched });
   } catch (error) {
     console.error('Error importing attendance CSV', error);
     res.status(500).json({ error: 'Unable to import attendance' });

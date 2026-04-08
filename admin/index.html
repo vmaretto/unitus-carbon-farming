@@ -5212,6 +5212,19 @@ Buono studio!</textarea>
         });
 
         // Import CSV Teams/Zoom
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                if (line[i] === '"') { inQuotes = !inQuotes; }
+                else if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+                else { current += line[i]; }
+            }
+            result.push(current.trim());
+            return result;
+        }
+
         document.getElementById('att-csv-file').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             const lessonId = document.getElementById('att-csv-lesson-select').value;
@@ -5220,25 +5233,46 @@ Buono studio!</textarea>
 
             const text = await file.text();
             const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-            // Skip header
-            const start = (lines[0].toLowerCase().includes('nome') || lines[0].toLowerCase().includes('email') || lines[0].toLowerCase().includes('name')) ? 1 : 0;
-            const participants = [];
+            if (lines.length < 2) { showToast('CSV vuoto', 'error'); e.target.value = ''; return; }
 
-            for (let i = start; i < lines.length; i++) {
-                // Handle both comma and tab separated
-                const sep = lines[i].includes('\t') ? '\t' : ',';
-                const parts = lines[i].split(sep).map(s => s.trim().replace(/^"|"$/g, ''));
-                // Expected columns: nome, email, orario_ingresso, orario_uscita
-                if (parts.length >= 2) {
-                    participants.push({
-                        name: parts[0],
-                        email: parts[1],
-                        joinTime: parts[2] || null,
-                        leaveTime: parts[3] || null
-                    });
+            // Detect columns from header
+            const headerCols = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+            const colName = headerCols.findIndex(h => h.includes('nome') || h.includes('name'));
+            const colEmail = headerCols.findIndex(h => h.includes('mail'));
+            const colJoin = headerCols.findIndex(h => h.includes('ingresso') || h.includes('join'));
+            const colLeave = headerCols.findIndex(h => h.includes('uscita') || h.includes('leave'));
+            const colDuration = headerCols.findIndex(h => h.includes('durata') || h.includes('duration'));
+
+            if (colName < 0) { showToast('Colonna "Nome" non trovata nell\'header CSV', 'error'); e.target.value = ''; return; }
+
+            // Parse rows and aggregate by name
+            const byName = {};
+            for (let i = 1; i < lines.length; i++) {
+                const cols = parseCSVLine(lines[i]);
+                if (cols.length <= colName) continue;
+                let rawName = cols[colName] || '';
+                // Remove company suffixes like " | Company" or " - Company"
+                rawName = rawName.replace(/\s*[\|–—-]\s*[A-Z].*$/i, '').trim();
+                if (!rawName) continue;
+
+                const email = colEmail >= 0 ? (cols[colEmail] || '').trim() : '';
+                const joinTime = colJoin >= 0 ? (cols[colJoin] || '').trim() : '';
+                const leaveTime = colLeave >= 0 ? (cols[colLeave] || '').trim() : '';
+                const duration = colDuration >= 0 ? parseInt(cols[colDuration]) || 0 : 0;
+
+                const key = rawName.toLowerCase();
+                if (!byName[key]) {
+                    byName[key] = { name: rawName, email: email, joinTime: joinTime, leaveTime: leaveTime, durationMinutes: duration };
+                } else {
+                    // Aggregate: sum duration, earliest join, latest leave
+                    byName[key].durationMinutes += duration;
+                    if (email && !byName[key].email) byName[key].email = email;
+                    if (joinTime && (!byName[key].joinTime || joinTime < byName[key].joinTime)) byName[key].joinTime = joinTime;
+                    if (leaveTime && leaveTime > byName[key].leaveTime) byName[key].leaveTime = leaveTime;
                 }
             }
 
+            const participants = Object.values(byName);
             if (!participants.length) { showToast('Nessun partecipante trovato nel CSV', 'error'); e.target.value = ''; return; }
 
             try {
@@ -5247,7 +5281,12 @@ Buono studio!</textarea>
                     body: JSON.stringify({ lessonId, participants })
                 });
                 const resultDiv = document.getElementById('att-csv-result');
-                resultDiv.innerHTML = `<span style="color: var(--green-700);">Importati: ${result.imported}</span> — Duplicati: ${result.skipped} — Non trovati: ${result.notFound}`;
+                let html = `<span style="color: var(--green-700);">✅ Importati: ${result.imported}</span>`;
+                if (result.skipped > 0) html += ` — <span style="color: var(--gray-500);">ℹ️ Duplicati saltati: ${result.skipped}</span>`;
+                if (result.unmatched && result.unmatched.length > 0) {
+                    html += `<br><span style="color: var(--orange-600);">⚠️ Non riconosciuti: ${result.unmatched.join(', ')}</span>`;
+                }
+                resultDiv.innerHTML = html;
                 showToast(`Importati ${result.imported} partecipanti`);
 
                 // Refresh report

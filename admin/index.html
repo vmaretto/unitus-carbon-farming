@@ -1902,42 +1902,42 @@ Buono studio!</textarea>
             if (el) el.checked = Boolean(value);
         }
 
+        const loginGate = document.getElementById('login-gate');
+        const mainContent = document.querySelector('main');
+        const headerEl = document.querySelector('header');
+
+        function showAdmin() {
+            isAuthenticated = true;
+            loginGate.style.display = 'none';
+            // Rimuovi campo password dal DOM per evitare prompt Safari "Vuoi salvare la password?"
+            const pwdField = document.getElementById('admin-login-password');
+            if (pwdField) {
+              pwdField.value = '';
+              pwdField.remove();
+            }
+            mainContent.style.display = 'block';
+            headerEl.style.display = 'block';
+            document.getElementById('logout-btn').style.display = 'inline-block';
+            if (typeof loadDocuments === 'function') loadDocuments();
+            if (typeof loadResources === 'function') loadResources();
+            if (typeof loadFaculty === 'function') loadFaculty();
+            if (typeof loadBlogPosts === 'function') loadBlogPosts();
+            if (typeof loadPartners === 'function') loadPartners();
+            if (typeof loadModules === 'function') loadModules();
+            if (typeof loadLessons === 'function') loadLessons();
+            if (typeof loadLmsCourses === 'function') loadLmsCourses();
+            if (typeof loadStudentsList === 'function') loadStudentsList();
+            if (typeof loadTeacherDocs === 'function') loadTeacherDocs();
+        }
+
+        function showLogin() {
+            isAuthenticated = false;
+            loginGate.style.display = 'flex';
+            mainContent.style.display = 'none';
+            headerEl.style.display = 'none';
+        }
+
         async function checkAuth() {
-            const loginGate = document.getElementById('login-gate');
-            const mainContent = document.querySelector('main');
-            const headerEl = document.querySelector('header');
-
-            function showAdmin() {
-                isAuthenticated = true;
-                loginGate.style.display = 'none';
-                // Rimuovi campo password dal DOM per evitare prompt Safari "Vuoi salvare la password?"
-                const pwdField = document.getElementById('admin-login-password');
-                if (pwdField) {
-                  pwdField.value = '';
-                  pwdField.remove();
-                }
-                mainContent.style.display = 'block';
-                headerEl.style.display = 'block';
-                document.getElementById('logout-btn').style.display = 'inline-block';
-                if (typeof loadDocuments === 'function') loadDocuments();
-                if (typeof loadResources === 'function') loadResources();
-                if (typeof loadFaculty === 'function') loadFaculty();
-                if (typeof loadBlogPosts === 'function') loadBlogPosts();
-                if (typeof loadPartners === 'function') loadPartners();
-                if (typeof loadModules === 'function') loadModules();
-                if (typeof loadLessons === 'function') loadLessons();
-                if (typeof loadLmsCourses === 'function') loadLmsCourses();
-                if (typeof loadStudentsList === 'function') loadStudentsList();
-                if (typeof loadTeacherDocs === 'function') loadTeacherDocs();
-            }
-
-            function showLogin() {
-                isAuthenticated = false;
-                loginGate.style.display = 'flex';
-                mainContent.style.display = 'none';
-                headerEl.style.display = 'none';
-            }
-
             // Controlla se il server richiede autenticazione
             let authRequired = true;
             try {
@@ -1949,19 +1949,9 @@ Buono studio!</textarea>
             }
 
             if (!authRequired) {
-                // Auth non configurata: mostra tutto (backwards compatible)
-                loginGate.style.display = 'none';
-                mainContent.style.display = 'block';
-                headerEl.style.display = 'block';
+                // Auth non configurata: mostra tutto senza logout
+                showAdmin();
                 document.getElementById('logout-btn').style.display = 'none';
-                if (typeof loadDocuments === 'function') loadDocuments();
-                if (typeof loadResources === 'function') loadResources();
-                if (typeof loadFaculty === 'function') loadFaculty();
-                if (typeof loadBlogPosts === 'function') loadBlogPosts();
-                if (typeof loadPartners === 'function') loadPartners();
-                if (typeof loadModules === 'function') loadModules();
-                if (typeof loadLessons === 'function') loadLessons();
-                if (typeof loadLmsCourses === 'function') loadLmsCourses();
                 return true;
             }
 

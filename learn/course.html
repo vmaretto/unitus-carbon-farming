@@ -204,6 +204,32 @@
                         modDiv.innerHTML += '<div style="padding: 8px 16px; color: var(--gray-500); font-size: 0.85rem;">Lezioni in arrivo...</div>';
                     }
 
+                    // Check for module quiz
+                    (async () => {
+                        try {
+                            const quizzes = await fetch(`/api/lms/quizzes?moduleId=${mod.id}`, {
+                                headers: { 'Authorization': 'Bearer ' + token }
+                            }).then(r => r.ok ? r.json() : []);
+                            const pubQuiz = quizzes.find(q => q.isPublished);
+                            if (pubQuiz) {
+                                const quizDiv = document.createElement('div');
+                                quizDiv.className = 'lesson-item';
+                                quizDiv.style.background = '#faf5ff';
+                                quizDiv.innerHTML = `
+                                    <div class="lesson-icon" style="background: #d946ef; color: white;">📝</div>
+                                    <div class="lesson-info">
+                                        <div class="lesson-title">${pubQuiz.title || 'Quiz del modulo'}</div>
+                                        <div class="lesson-desc">Soglia: ${pubQuiz.passingScore || 70}%</div>
+                                    </div>
+                                `;
+                                quizDiv.addEventListener('click', () => {
+                                    window.location.href = '/learn/quiz.html?quizId=' + pubQuiz.id;
+                                });
+                                modDiv.appendChild(quizDiv);
+                            }
+                        } catch (e) { /* quiz not available */ }
+                    })();
+
                     modLessons.forEach((lesson, index) => {
                         const lProgress = progressMap[lesson.id];
                         const isCompleted = (lProgress && lProgress.completedAt) || (lProgress && lProgress.hasAttendance);

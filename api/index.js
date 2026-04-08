@@ -4152,23 +4152,27 @@ app.post('/api/lms/lessons/:id/progress', requireStudent, async (req, res) => {
 app.get('/api/lms/quizzes', async (req, res) => {
   if (!ensurePool(res)) return;
   try {
-    const { lessonId } = req.query;
+    const { lessonId, moduleId } = req.query;
     const filters = [];
     const values = [];
-    
+
     // Check if admin token is present
     const authHeader = req.headers.authorization;
-    const isAdmin = authHeader && authHeader.startsWith('Bearer ') && 
+    const isAdmin = authHeader && authHeader.startsWith('Bearer ') &&
                     authHeader.slice(7) === ADMIN_PASSWORD;
-    
+
     // Non-admin users only see published quizzes
     if (!isAdmin) {
       filters.push('is_published = true');
     }
-    
+
     if (lessonId) {
       filters.push(`lms_lesson_id = $${values.length + 1}`);
       values.push(lessonId);
+    }
+    if (moduleId) {
+      filters.push(`lms_module_id = $${values.length + 1}`);
+      values.push(moduleId);
     }
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const { rows } = await pool.query(`

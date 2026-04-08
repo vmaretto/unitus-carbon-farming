@@ -4450,9 +4450,45 @@ Buono studio!</textarea>
                             method: 'POST',
                             body: JSON.stringify({ moduleId: mid, numQuestions: parseInt(numQ), difficulty: diff })
                         });
-                        resultDiv.innerHTML = `<p style="color: #86198f; font-weight: 600;">✅ ${result.numQuestions} domande generate per "${result.lessonTitle}"</p>
-                            <pre style="max-height: 200px; overflow: auto; font-size: 0.8rem; background: white; padding: 8px; border-radius: 6px;">${JSON.stringify(result.questions, null, 2)}</pre>`;
-                        showToast('Quiz modulo generato!', 'success');
+
+                        if (!result.questions || !result.questions.length) {
+                            resultDiv.innerHTML = '<p style="color: #b91c1c;">❌ Nessuna domanda generata</p>';
+                            genModQuizBtn.disabled = false;
+                            genModQuizBtn.textContent = '🤖 Genera quiz modulo';
+                            return;
+                        }
+
+                        // Auto-save: create quiz in DB
+                        resultDiv.innerHTML = '<p style="color: #86198f;">💾 Salvataggio quiz...</p>';
+                        const quizResult = await apiRequest('/api/lms/quizzes', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                moduleId: mid,
+                                title: 'Quiz Modulo - ' + result.lessonTitle,
+                                passingScore: 70,
+                                isPublished: true
+                            })
+                        });
+
+                        // Save each question
+                        for (let i = 0; i < result.questions.length; i++) {
+                            const q = result.questions[i];
+                            await apiRequest('/api/lms/quiz-questions', {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                    quizId: quizResult.id,
+                                    questionText: q.questionText,
+                                    questionType: 'single_choice',
+                                    options: q.options,
+                                    correctAnswer: q.correctAnswer,
+                                    points: q.points || 1,
+                                    sortOrder: i
+                                })
+                            });
+                        }
+
+                        resultDiv.innerHTML = `<p style="color: #86198f; font-weight: 600;">✅ Quiz salvato con ${result.questions.length} domande (pubblicato)</p>`;
+                        showToast('Quiz modulo creato e pubblicato!', 'success');
                     } catch (e) {
                         resultDiv.innerHTML = `<p style="color: #b91c1c;">❌ ${e.message}</p>`;
                     }
@@ -4664,7 +4700,7 @@ Buono studio!</textarea>
                                             lessonId,
                                             title: 'Quiz di verifica - ' + result.lessonTitle,
                                             passingScore: 70,
-                                            isPublished: false
+                                            isPublished: true
                                         })
                                     });
 

@@ -1884,6 +1884,7 @@ Buono studio!</textarea>
         // AUTH MANAGEMENT
         // ============================================
         let adminToken = localStorage.getItem('adminToken') || null;
+        let isAuthenticated = false;
 
         // Helper functions per safe DOM access
         function safeValue(selector, form = document) {
@@ -1907,6 +1908,7 @@ Buono studio!</textarea>
             const headerEl = document.querySelector('header');
 
             function showAdmin() {
+                isAuthenticated = true;
                 loginGate.style.display = 'none';
                 // Rimuovi campo password dal DOM per evitare prompt Safari "Vuoi salvare la password?"
                 const pwdField = document.getElementById('admin-login-password');
@@ -1930,6 +1932,7 @@ Buono studio!</textarea>
             }
 
             function showLogin() {
+                isAuthenticated = false;
                 loginGate.style.display = 'flex';
                 mainContent.style.display = 'none';
                 headerEl.style.display = 'none';
@@ -2018,9 +2021,10 @@ Buono studio!</textarea>
         });
 
         function adminLogout() {
+            isAuthenticated = false;
             adminToken = null;
             localStorage.removeItem('adminToken');
-            checkAuth();
+            showLogin();
         }
 
         // Avvia il check auth al caricamento
@@ -2076,6 +2080,9 @@ Buono studio!</textarea>
 
         async function apiRequest(url, options = {}) {
             try {
+                if (!isAuthenticated && !url.includes('/api/auth/')) {
+                    throw new Error('Non autenticato');
+                }
                 const headers = {
                     'Content-Type': 'application/json',
                     ...(options.headers || {})
@@ -2092,9 +2099,7 @@ Buono studio!</textarea>
                     if (response.status === 401) {
                         adminToken = null;
                         localStorage.removeItem('adminToken');
-                        checkAuth();
-                        // Forza reload per mostrare il form di login
-                        setTimeout(() => window.location.reload(), 500);
+                        showLogin();
                         throw new Error('Sessione scaduta. Effettua nuovamente il login.');
                     }
                     const payload = await response.json().catch(() => ({ error: 'Errore sconosciuto' }));

@@ -4974,7 +4974,7 @@ app.post('/api/attendance/import-csv', requireAdmin, async (req, res) => {
     const lessonDuration = lessonRows[0]?.duration_minutes || 180;
 
     let imported = 0;
-    let skipped = 0;
+    let updated = 0;
     let partial = 0;
     const unmatched = [];
     const matched = [];
@@ -5013,20 +5013,23 @@ app.post('/api/attendance/import-csv', requireAdmin, async (req, res) => {
       const joinISO = parseZoomDate(p.joinTime) || new Date().toISOString();
       const leaveISO = parseZoomDate(p.leaveTime) || null;
 
-      const { rowCount } = await pool.query(`
+      const { rows: insertRows } = await pool.query(`
         INSERT INTO attendance (id, user_id, lesson_id, attendance_type, method, check_in_at, check_out_at)
         VALUES ($1, $2, $3, $4, 'csv_import', $5, $6)
-        ON CONFLICT (user_id, lesson_id) DO NOTHING
+        ON CONFLICT (user_id, lesson_id) DO UPDATE SET
+          attendance_type = EXCLUDED.attendance_type,
+          check_in_at = EXCLUDED.check_in_at,
+          check_out_at = EXCLUDED.check_out_at
+        RETURNING (xmax = 0) AS is_new
       `, [uuidv4(), userId, lessonId, attendanceType, joinISO, leaveISO]);
 
-      if (rowCount > 0) {
-        imported++;
-        if (attendanceType === 'remote_partial') partial++;
-        matched.push(name + (attendanceType === 'remote_partial' ? ' (parziale)' : ''));
-      } else { skipped++; }
+      const isNew = insertRows[0]?.is_new;
+      if (isNew) { imported++; } else { updated++; }
+      if (attendanceType === 'remote_partial') partial++;
+      matched.push(name + (attendanceType === 'remote_partial' ? ' (parziale)' : ''));
     }
 
-    res.json({ imported, skipped, partial, notFound: unmatched.length, matched, unmatched });
+    res.json({ imported, updated, partial, notFound: unmatched.length, matched, unmatched });
   } catch (error) {
     console.error('Error importing attendance CSV', error);
     res.status(500).json({ error: 'Unable to import attendance' });

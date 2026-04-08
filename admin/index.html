@@ -1607,6 +1607,7 @@ Buono studio!</textarea>
                             <select id="att-manual-type" style="margin-top: 4px;">
                                 <option value="in_person">In presenza</option>
                                 <option value="remote_live">Da remoto</option>
+                                <option value="remote_partial">⏱️ Remoto parziale</option>
                             </select>
                         </label>
                         <button class="primary" id="att-manual-checkin">Segna presente</button>
@@ -1644,6 +1645,7 @@ Buono studio!</textarea>
                             <option value="">Tutti i tipi</option>
                             <option value="in_person">🏫 In presenza</option>
                             <option value="remote_live">💻 Da remoto</option>
+                            <option value="remote_partial">⏱️ Remoto parziale</option>
                             <option value="async">📹 Asincrona</option>
                         </select>
                         <button class="secondary" id="att-export-csv">📥 Esporta CSV</button>
@@ -1666,6 +1668,7 @@ Buono studio!</textarea>
                                 <th>Email</th>
                                 <th>🏫 In presenza</th>
                                 <th>💻 Da remoto</th>
+                                <th>⏱️ Parziale</th>
                                 <th>📹 Asincrona</th>
                                 <th>Totale</th>
                                 <th>%</th>
@@ -5401,14 +5404,15 @@ Buono studio!</textarea>
                     <th>Email</th>
                     <th>🏫 In presenza</th>
                     <th>💻 Da remoto</th>
+                    <th>⏱️ Parziale</th>
                     <th>📹 Asincrona</th>
                     <th>Totale</th>
                     <th>%</th>
                 `;
             }
-            
+
             if (!data.students || !data.students.length) {
-                const cols = lessonId ? 7 : 8;
+                const cols = lessonId ? 7 : 9;
                 tbody.innerHTML = `<tr><td colspan="${cols}" class="empty-state">Nessun dato di presenze.</td></tr>`;
                 return;
             }
@@ -5417,7 +5421,7 @@ Buono studio!</textarea>
                 // Vista singola lezione
                 tbody.innerHTML = data.students.map(s => {
                     const present = s.total > 0;
-                    const typeIcon = s.attendanceType === 'in_person' ? '🏫' : s.attendanceType === 'remote_live' ? '💻' : '📹';
+                    const typeIcon = s.attendanceType === 'in_person' ? '🏫' : s.attendanceType === 'remote_live' ? '💻' : s.attendanceType === 'remote_partial' ? '⏱️' : '📹';
                     const checkTime = s.checkInAt ? new Date(s.checkInAt).toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}) : '—';
                     return `
                     <tr style="${present ? '' : 'opacity: 0.5;'}">
@@ -5439,6 +5443,7 @@ Buono studio!</textarea>
                         <td>${s.email}</td>
                         <td>${s.inPerson}</td>
                         <td>${s.remoteLive}</td>
+                        <td>${s.remotePartial || 0}</td>
                         <td>${s.async}</td>
                         <td><strong>${s.total}</strong>/${s.totalLessons}</td>
                         <td>${s.percentage}%</td>

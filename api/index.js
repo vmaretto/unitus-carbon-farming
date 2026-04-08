@@ -5127,8 +5127,9 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
 
       const inPerson = filteredAttendances.filter(a => a.attendance_type === 'in_person').length;
       const remoteLive = filteredAttendances.filter(a => a.attendance_type === 'remote_live').length;
-      const async = filteredAttendances.filter(a => a.attendance_type === 'async').length;
-      const total = inPerson + remoteLive + async;
+      const remotePartial = filteredAttendances.filter(a => a.attendance_type === 'remote_partial').length;
+      const asyncCount = filteredAttendances.filter(a => a.attendance_type === 'async').length;
+      const total = inPerson + remoteLive + remotePartial + asyncCount;
       const percentage = totalLessons > 0 ? Math.round((total / totalLessons) * 100) : 0;
 
       // Per singola lezione, includi dettagli presenza
@@ -5141,7 +5142,8 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
         lastName: s.lastName,
         inPerson,
         remoteLive,
-        async: async,
+        remotePartial,
+        async: asyncCount,
         total,
         totalLessons,
         percentage,
@@ -5205,15 +5207,16 @@ app.get('/api/attendance/export/:courseEditionId', requireAdmin, async (req, res
     `, [courseEditionId]);
     const totalLessons = countRows[0]?.total || 0;
 
-    let csv = 'cognome,nome,email,in_persona,da_remoto,asincrona,totale,lezioni_totali,percentuale\n';
+    let csv = 'cognome,nome,email,in_persona,da_remoto,parziale,asincrona,totale,lezioni_totali,percentuale\n';
     students.forEach(s => {
       const sa = attendances.filter(a => a.user_id === s.id);
       const inPerson = sa.filter(a => a.attendance_type === 'in_person').length;
       const remoteLive = sa.filter(a => a.attendance_type === 'remote_live').length;
+      const remotePartial = sa.filter(a => a.attendance_type === 'remote_partial').length;
       const asyncCount = sa.filter(a => a.attendance_type === 'async').length;
-      const total = inPerson + remoteLive + asyncCount;
+      const total = inPerson + remoteLive + remotePartial + asyncCount;
       const pct = totalLessons > 0 ? Math.round((total / totalLessons) * 100) : 0;
-      csv += `"${s.last_name}","${s.first_name}","${s.email}",${inPerson},${remoteLive},${asyncCount},${total},${totalLessons},${pct}%\n`;
+      csv += `"${s.last_name}","${s.first_name}","${s.email}",${inPerson},${remoteLive},${remotePartial},${asyncCount},${total},${totalLessons},${pct}%\n`;
     });
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');

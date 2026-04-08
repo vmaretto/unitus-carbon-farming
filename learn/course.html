@@ -128,7 +128,7 @@
 
                 document.getElementById('course-title').textContent = course.title;
                 document.getElementById('breadcrumb-title').textContent = course.title;
-                document.getElementById('course-meta').textContent = `${course.editionName} — ${completed}/${total} lezioni completate (${pct}%)`;
+                document.getElementById('course-meta').textContent = `${course.editionName} — ${completed > 0 ? completed + ' lezioni completate' : 'Nessuna lezione completata'}`;
                 document.getElementById('progress-fill').style.width = pct + '%';
                 document.title = `${course.title} - Carbon Farming Master`;
 
@@ -182,8 +182,13 @@
                 // Sort modules by sort_order
                 modules.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
+                const ordinals = ['Prima', 'Seconda', 'Terza', 'Quarta', 'Quinta', 'Sesta', 'Settima', 'Ottava', 'Nona', 'Decima', 'Undicesima', 'Dodicesima'];
+
                 modules.forEach(mod => {
-                    const modLessons = (lessonsByModule[mod.id] || []).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+                    const modLessons = (lessonsByModule[mod.id] || []).sort((a, b) => {
+                        if (a.startDatetime && b.startDatetime) return new Date(a.startDatetime) - new Date(b.startDatetime);
+                        return (a.sortOrder || 0) - (b.sortOrder || 0);
+                    });
                     const completedInMod = modLessons.filter(l => progressMap[l.id] && progressMap[l.id].completedAt).length;
 
                     const modDiv = document.createElement('div');
@@ -191,7 +196,7 @@
                     modDiv.innerHTML = `
                         <div class="module-title">
                             <span>${mod.title}</span>
-                            <span class="badge">${completedInMod}/${modLessons.length} completate</span>
+                            <span class="badge">${completedInMod > 0 ? completedInMod + '/' + modLessons.length + ' completate' : '0/' + modLessons.length + ' completate'}</span>
                         </div>
                     `;
 
@@ -199,19 +204,20 @@
                         modDiv.innerHTML += '<div style="padding: 8px 16px; color: var(--gray-500); font-size: 0.85rem;">Lezioni in arrivo...</div>';
                     }
 
-                    modLessons.forEach(lesson => {
+                    modLessons.forEach((lesson, index) => {
                         const lProgress = progressMap[lesson.id];
                         const isCompleted = lProgress && lProgress.completedAt;
                         const iconClass = isCompleted ? 'completed' : 'available';
                         const icon = isCompleted ? '&#10003;' : '&#9654;';
                         const durationMin = lesson.durationMinutes ? `${lesson.durationMinutes} min` : '';
+                        const ordinal = ordinals[index] || (index + 1) + 'ª';
 
                         const lessonDiv = document.createElement('div');
                         lessonDiv.className = 'lesson-item';
                         lessonDiv.innerHTML = `
                             <div class="lesson-icon ${iconClass}">${icon}</div>
                             <div class="lesson-info">
-                                <div class="lesson-title">${lesson.title}</div>
+                                <div class="lesson-title">${ordinal} lezione: ${lesson.title}</div>
                                 ${lesson.description ? `<div class="lesson-desc">${lesson.description}</div>` : ''}
                             </div>
                             ${durationMin ? `<div class="lesson-duration">${durationMin}</div>` : ''}

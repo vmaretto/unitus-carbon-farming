@@ -146,7 +146,7 @@
                     div.innerHTML = `
                         <div class="course-card-content">
                             <h3>${c.title}</h3>
-                            <div class="course-meta">${c.editionName} &bull; ${completed}/${total} lezioni completate (${pct}%)</div>
+                            <div class="course-meta">${c.editionName} &bull; ${completed > 0 ? completed + ' lezioni completate' : 'Nessuna lezione completata'}</div>
                             <div class="progress-bar"><div class="progress-fill" style="width: ${pct}%"></div></div>
                         </div>
                     `;

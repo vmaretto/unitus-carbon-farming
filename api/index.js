@@ -2986,7 +2986,8 @@ app.post('/api/lessons', requireAdmin, async (req, res) => {
       notes || null,
       moduleId || null,
       teacherId || null,
-      externalTeacherName || null
+      externalTeacherName || null,
+      materials ? JSON.stringify(materials) : null
     ];
 
     const { rows } = await pool.query(insert, values);

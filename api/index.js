@@ -4966,9 +4966,13 @@ app.post('/api/attendance/import-csv', requireAdmin, async (req, res) => {
   // Parse Zoom date format DD/MM/YYYY HH:MM:SS AM/PM → ISO
   function parseZoomDate(dateStr) {
     if (!dateStr) return null;
-    const match = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)?/i);
+    const match = dateStr.match(/(\d{2})\/(\d{2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i);
     if (!match) return dateStr; // fallback
-    let [, day, month, year, hours, mins, secs, ampm] = match;
+    let [, day, month, year, hours, mins, secsRaw, ampm] = match;
+    let yearNum = parseInt(year);
+    if (yearNum < 100) yearNum += 2000;
+    year = String(yearNum);
+    const secs = secsRaw || '00';
     hours = parseInt(hours);
     if (ampm && ampm.toUpperCase() === 'PM' && hours < 12) hours += 12;
     if (ampm && ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;

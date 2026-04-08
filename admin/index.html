@@ -5251,13 +5251,13 @@ Buono studio!</textarea>
         });
 
         // Import CSV Teams/Zoom
-        function parseCSVLine(line) {
+        function parseCSVLine(line, separator = ',') {
             const result = [];
             let current = '';
             let inQuotes = false;
             for (let i = 0; i < line.length; i++) {
                 if (line[i] === '"') { inQuotes = !inQuotes; }
-                else if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+                else if (line[i] === separator && !inQuotes) { result.push(current.trim()); current = ''; }
                 else { current += line[i]; }
             }
             result.push(current.trim());
@@ -5274,8 +5274,11 @@ Buono studio!</textarea>
             const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
             if (lines.length < 2) { showToast('CSV vuoto', 'error'); e.target.value = ''; return; }
 
+            // Auto-detect separator: semicolon or comma
+            const sep = (lines[0].split(';').length > lines[0].split(',').length) ? ';' : ',';
+
             // Detect columns from header
-            const headerCols = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+            const headerCols = parseCSVLine(lines[0], sep).map(h => h.toLowerCase());
             const colName = headerCols.findIndex(h => h.includes('nome') || h.includes('name'));
             const colEmail = headerCols.findIndex(h => h.includes('mail'));
             const colJoin = headerCols.findIndex(h => h.includes('ingresso') || h.includes('join'));
@@ -5287,7 +5290,7 @@ Buono studio!</textarea>
             // Parse rows and aggregate by name
             const byName = {};
             for (let i = 1; i < lines.length; i++) {
-                const cols = parseCSVLine(lines[i]);
+                const cols = parseCSVLine(lines[i], sep);
                 if (cols.length <= colName) continue;
                 let rawName = cols[colName] || '';
                 // Remove company suffixes like " | Company" or " - Company"

@@ -5240,8 +5240,9 @@ Buono studio!</textarea>
                     method: 'POST',
                     body: JSON.stringify({ lessonId, userId, type })
                 });
-                resultDiv.innerHTML = '<span style="color: var(--green-700);">✓ Presenza registrata</span>';
-                showToast('Presenza registrata');
+                const msg = result.updated ? 'Presenza aggiornata' : 'Presenza registrata';
+                resultDiv.innerHTML = '<span style="color: var(--green-700);">✓ ' + msg + '</span>';
+                showToast(msg);
                 
                 // Reset e refresh
                 document.getElementById('att-manual-student-select').value = '';
@@ -5437,7 +5438,12 @@ Buono studio!</textarea>
                         <td>${s.firstName || ''}</td>
                         <td>${s.email}</td>
                         <td>${present ? '✅' : '❌'}</td>
-                        <td>${present ? typeIcon + ' ' + (s.attendanceType || '').replace('_', ' ') : '—'}</td>
+                        <td>${present ? `<select data-att-id="${s.attendanceId}" onchange="updateAttendanceType(this)" style="padding: 4px; border-radius: 6px; border: 1px solid #d1d5db; font-size: 0.85rem;">
+                          <option value="in_person" ${s.attendanceType === 'in_person' ? 'selected' : ''}>🏫 In presenza</option>
+                          <option value="remote_live" ${s.attendanceType === 'remote_live' ? 'selected' : ''}>💻 Da remoto</option>
+                          <option value="remote_partial" ${s.attendanceType === 'remote_partial' ? 'selected' : ''}>⏱️ Parziale</option>
+                          <option value="async" ${s.attendanceType === 'async' ? 'selected' : ''}>📹 Asincrona</option>
+                        </select>` : '—'}</td>
                         <td>${s.method || '—'}</td>
                         <td>${checkTime}</td>
                     </tr>
@@ -5457,6 +5463,20 @@ Buono studio!</textarea>
                         <td>${s.percentage}%</td>
                     </tr>
                 `).join('');
+            }
+        }
+
+        async function updateAttendanceType(selectEl) {
+            const attId = selectEl.dataset.attId;
+            const newType = selectEl.value;
+            try {
+                await apiRequest('/api/attendance/' + attId, {
+                    method: 'PUT',
+                    body: JSON.stringify({ attendanceType: newType })
+                });
+                showToast('Tipo presenza aggiornato', 'success');
+            } catch (e) {
+                showToast('Errore aggiornamento: ' + e.message, 'error');
             }
         }
 

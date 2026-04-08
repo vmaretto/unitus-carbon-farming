@@ -4932,26 +4932,41 @@ app.post('/api/attendance/manual-checkin', requireAdmin, async (req, res) => {
   try {
     const attendanceId = uuidv4();
     const attendanceType = type || 'in_person';
-    
-    // Controlla se esiste già
-    const { rows: existing } = await pool.query(
-      'SELECT id FROM attendance WHERE lesson_id = $1 AND user_id = $2',
-      [lessonId, userId]
-    );
-    
-    if (existing.length > 0) {
-      return res.status(409).json({ error: 'Presenza già registrata per questa lezione' });
-    }
-    
-    await pool.query(`
+
+    const { rows } = await pool.query(`
       INSERT INTO attendance (id, lesson_id, user_id, check_in_at, attendance_type, method)
       VALUES ($1, $2, $3, NOW(), $4, 'manual')
+      ON CONFLICT (user_id, lesson_id) DO UPDATE SET
+        attendance_type = EXCLUDED.attendance_type,
+        method = EXCLUDED.method,
+        check_in_at = NOW()
+      RETURNING id, (xmax = 0) AS is_new
     `, [attendanceId, lessonId, userId, attendanceType]);
-    
-    res.status(201).json({ success: true, id: attendanceId });
+
+    const isNew = rows[0]?.is_new;
+    res.status(isNew ? 201 : 200).json({ success: true, id: rows[0].id, updated: !isNew });
   } catch (error) {
     console.error('Error manual check-in', error);
     res.status(500).json({ error: 'Unable to register attendance' });
+  }
+});
+
+// Admin: update attendance type
+app.put('/api/attendance/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { id } = req.params;
+  const { attendanceType } = req.body;
+  if (!attendanceType) return res.status(400).json({ error: 'attendanceType required' });
+  try {
+    const { rows } = await pool.query(
+      'UPDATE attendance SET attendance_type = $1 WHERE id = $2 RETURNING *',
+      [attendanceType, id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Attendance not found' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error updating attendance', error);
+    res.status(500).json({ error: 'Unable to update attendance' });
   }
 });
 
@@ -5102,7 +5117,7 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
 
     // Build filters for attendance query
     let attendanceQuery = `
-      SELECT a.user_id, a.lesson_id, a.lms_lesson_id, a.attendance_type, a.method,
+      SELECT a.id, a.user_id, a.lesson_id, a.lms_lesson_id, a.attendance_type, a.method,
              a.check_in_at, a.check_out_at
       FROM attendance a
       WHERE a.user_id = ANY($1)
@@ -5152,6 +5167,7 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
         totalLessons,
         percentage,
         // Campi per vista singola lezione
+        attendanceId: singleLessonAttendance?.id,
         attendanceType: singleLessonAttendance?.attendance_type,
         method: singleLessonAttendance?.method,
         checkInAt: singleLessonAttendance?.check_in_at,

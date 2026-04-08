@@ -1715,7 +1715,7 @@ const ALLOWED_UPDATE_FIELDS = {
   blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'is_published', 'published_at'],
   partners: ['name', 'logo_url', 'website_url', 'category', 'sort_order', 'is_visible'],
   modules: ['name', 'ssd', 'cfu', 'hours', 'description', 'sort_order'],
-  lessons: ['title', 'module_id', 'teacher_id', 'external_teacher_name', 'start_datetime', 'duration_hours', 'location_physical', 'location_remote', 'status', 'notes', 'materials'],
+  lessons: ['title', 'module_id', 'teacher_id', 'external_teacher_name', 'start_datetime', 'duration_minutes', 'location_physical', 'location_remote', 'status', 'notes', 'materials'],
   courses: ['title', 'slug', 'description', 'cover_image_url', 'is_published'],
   course_editions: ['edition_name', 'course_id', 'start_date', 'end_date', 'max_students', 'is_active'],
   lms_modules: ['title', 'description', 'sort_order', 'is_published'],

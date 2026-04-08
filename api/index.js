@@ -4815,7 +4815,8 @@ app.get('/api/attendance/lessons/:courseEditionId', requireAdmin, async (req, re
     const { rows } = await pool.query(`
       SELECT l.id, l.title, l.start_datetime AS "startDatetime"
       FROM lessons l
-      JOIN modules m ON m.id = l.module_id
+      JOIN lms_lessons ll ON ll.calendar_lesson_id = l.id
+      JOIN lms_modules m ON m.id = ll.lms_module_id
       JOIN courses c ON c.id = m.course_id
       JOIN course_editions ce ON ce.course_id = c.id
       WHERE ce.id = $1 AND l.status != 'cancelled'

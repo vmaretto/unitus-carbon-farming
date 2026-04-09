@@ -1319,22 +1319,71 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
   try {
     const newStatus = action === 'approve' ? 'approved' : 'rejected';
     const reviewNotes = action === 'reject' ? String(notes).trim() : null;
+    await pool.query('BEGIN');
+    try {
+      const { rows } = await pool.query(
+        `UPDATE materials_pending
+         SET status = $1,
+             notes = CASE WHEN $1 = 'rejected' THEN $2 ELSE NULL END,
+             updated_at = NOW()
+         WHERE id = $3
+         RETURNING id, faculty_id AS "facultyId", lesson_id AS "lessonId",
+                   file_url AS "fileUrl", file_name AS "fileName", file_type AS "fileType",
+                   status, notes, updated_at AS "updatedAt"`,
+        [newStatus, reviewNotes, id]
+      );
 
-    const { rows } = await pool.query(
-      `UPDATE materials_pending
-       SET status = $1,
-           notes = CASE WHEN $1 = 'rejected' THEN $2 ELSE NULL END,
-           updated_at = NOW()
-       WHERE id = $3
-       RETURNING id, status, notes, updated_at AS "updatedAt"`,
-      [newStatus, reviewNotes, id]
-    );
+      if (!rows.length) {
+        await pool.query('ROLLBACK');
+        return res.status(404).json({ error: 'Material not found' });
+      }
 
-    if (!rows.length) {
-      return res.status(404).json({ error: 'Material not found' });
+      // On approval, publish as resource automatically for students.
+      if (action === 'approve') {
+        const item = rows[0];
+        const resourceTypeFromFile = (mimeOrName = '') => {
+          const v = String(mimeOrName).toLowerCase();
+          if (v.includes('pdf') || v.endsWith('.pdf')) return 'pdf';
+          if (v.includes('video') || v.endsWith('.mp4') || v.endsWith('.mov') || v.endsWith('.webm')) return 'video';
+          if (v.includes('audio') || v.endsWith('.mp3') || v.endsWith('.wav')) return 'audio';
+          return 'document';
+        };
+        const resourceType = resourceTypeFromFile(item.fileType || item.fileName);
+        const resourceTitle = item.fileName || 'Materiale docente';
+
+        const { rows: existing } = await pool.query(
+          `SELECT id FROM resources
+           WHERE url = $1
+             AND COALESCE(lesson_id::text, '') = COALESCE($2::text, '')
+             AND COALESCE(teacher_id::text, '') = COALESCE($3::text, '')
+           LIMIT 1`,
+          [item.fileUrl, item.lessonId || null, item.facultyId || null]
+        );
+
+        if (existing.length) {
+          await pool.query(
+            `UPDATE resources
+             SET is_published = true, updated_at = NOW()
+             WHERE id = $1`,
+            [existing[0].id]
+          );
+        } else {
+          await pool.query(
+            `INSERT INTO resources
+               (id, title, resource_type, url, is_published, teacher_id, lesson_id, created_at, updated_at)
+             VALUES
+               ($1, $2, $3, $4, true, $5, $6, NOW(), NOW())`,
+            [uuidv4(), resourceTitle, resourceType, item.fileUrl, item.facultyId || null, item.lessonId || null]
+          );
+        }
+      }
+
+      await pool.query('COMMIT');
+      res.json({ success: true, material: rows[0] });
+    } catch (error) {
+      await pool.query('ROLLBACK');
+      throw error;
     }
-
-    res.json({ success: true, material: rows[0] });
   } catch (error) {
     console.error('Review teacher material error:', error);
     res.status(500).json({ error: 'Errore nella revisione del materiale' });
@@ -2423,6 +2472,14 @@ app.put('/api/resources/:id/request-review', requireAdmin, async (req, res) => {
   if (!teacherId) return res.status(400).json({ error: 'teacherId is required' });
 
   try {
+    const { rows: facultyRows } = await pool.query(
+      'SELECT id FROM faculty WHERE id = $1 LIMIT 1',
+      [teacherId]
+    );
+    if (!facultyRows.length) {
+      return res.status(400).json({ error: 'Teacher not found' });
+    }
+
     const { rows } = await pool.query(
       `UPDATE resources
        SET teacher_id = $1,
@@ -2505,7 +2562,7 @@ app.put('/api/teachers/quizzes/:id/review', requireTeacher, async (req, res) => 
       : action === 'reject'
         ? 'teacher_rejected'
         : 'pending_teacher_approval';
-    const isPublished = action === 'approve';
+    const isPublished = action === 'approve' ? true : action === 'reject' ? false : null;
     const reviewNotes = action === 'save' ? 'Bozza modificata dal docente' : (notes || null);
     const { rows } = await pool.query(
       `UPDATE resources
@@ -2513,7 +2570,7 @@ app.put('/api/teachers/quizzes/:id/review', requireTeacher, async (req, res) => 
            review_status = $2,
            teacher_review_notes = $3,
            teacher_reviewed_at = CASE WHEN $2 = 'pending_teacher_approval' THEN teacher_reviewed_at ELSE NOW() END,
-           is_published = $4,
+           is_published = COALESCE($4, is_published),
            updated_at = NOW()
        WHERE id = $5
          AND teacher_id = $6

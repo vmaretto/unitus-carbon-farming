@@ -4872,7 +4872,7 @@ Buono studio!</textarea>
                                 <label>Max tentativi (0=illimitati) <input type="number" data-field="maxAttempts" min="0" value="0"></label>
                             </div>
                             <div class="actions">
-                                <label class="switch"><input type="checkbox" data-field="isPublished" checked><span class="slider"></span> Pubblicato</label>
+                                <label class="switch"><input type="checkbox" data-field="isPublished"><span class="slider"></span> Pubblicato subito</label>
                                 <button class="primary" type="submit">Crea quiz</button>
                             </div>
                         </form>
@@ -4941,7 +4941,7 @@ Buono studio!</textarea>
                                             lessonId,
                                             title: 'Quiz di verifica - ' + result.lessonTitle,
                                             passingScore: 70,
-                                            isPublished: true
+                                            isPublished: false
                                         })
                                     });
 
@@ -4962,7 +4962,7 @@ Buono studio!</textarea>
                                         });
                                     }
 
-                                    showToast(`Quiz creato con ${generatedQuestions.length} domande e aggiunto ai materiali della lezione`, 'success');
+                                    showToast(`Quiz creato con ${generatedQuestions.length} domande e inviato alla revisione docente`, 'success');
                                     loadLmsQuiz(lessonId, container);
                                 } catch (error) {
                                     showToast('Errore nel salvataggio: ' + error.message, 'error');
@@ -5000,7 +5000,7 @@ Buono studio!</textarea>
                         if (!payload.title) { showToast('Inserisci il titolo del quiz', 'error'); return; }
                         try {
                             await apiRequest('/api/lms/quizzes', { method: 'POST', body: JSON.stringify(payload) });
-                            showToast('Quiz creato e aggiunto ai materiali della lezione');
+                            showToast('Quiz creato e inviato alla revisione docente');
                             loadLmsQuiz(lessonId, container);
                         } catch (error) {}
                     });

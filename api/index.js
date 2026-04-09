@@ -1900,7 +1900,9 @@ async function getLmsQuizResourceContext(quizId) {
       url: 'data:application/json,' + encodeURIComponent(JSON.stringify(quizData)),
       isPublished: Boolean(quiz.isPublished),
       teacherId,
-      lessonId: quiz.calendarLessonId || null
+      // Lesson quizzes use a backing resource only for teacher review workflow.
+      // They must not surface again as linked lesson resources in the student UI.
+      lessonId: quiz.lessonId ? null : (quiz.calendarLessonId || null)
     }
   };
 }
@@ -1973,25 +1975,65 @@ async function syncQuizIntoLessonMaterials(quizId) {
 
   const currentMaterials = Array.isArray(lessonRows[0].materials) ? lessonRows[0].materials : [];
   const quizUrl = `/learn/quiz.html?quizId=${quiz.id}`;
-  const nextItem = {
-    type: 'quiz',
-    name: quiz.title || 'Quiz di verifica',
-    url: quizUrl,
-    quizId: quiz.id,
-    resourceId: quiz.resourceId || null
-  };
-
   const nextMaterials = currentMaterials.filter(item => {
-    if (!item || item.type !== 'quiz') return true;
-    return item.quizId !== quiz.id && item.resourceId !== quiz.resourceId && item.url !== quizUrl;
+    if (!item) return true;
+    if (item.quizId === quiz.id) return false;
+    if (quiz.resourceId && item.resourceId === quiz.resourceId) return false;
+    if (item.url === quizUrl) return false;
+    if (item.type === 'quiz') return false;
+    return true;
   });
-  nextMaterials.push(nextItem);
 
   await pool.query(
     'UPDATE lms_lessons SET materials = $2, updated_at = NOW() WHERE id = $1',
     [quiz.lessonId, JSON.stringify(nextMaterials)]
   );
-  return nextItem;
+  return null;
+}
+
+async function ensureLessonQuizTeacherReviewState(quizId) {
+  const context = await getLmsQuizResourceContext(quizId);
+  if (!context) return null;
+
+  const { quiz, resourcePayload } = context;
+  if (!quiz.lessonId || !quiz.resourceId) return null;
+
+  const resourceColumns = await getTableColumns('resources');
+  if (!resourceColumns.has('teacher_id')) return null;
+
+  const setClauses = [
+    'teacher_id = COALESCE($2, teacher_id)',
+    'is_published = false',
+    'updated_at = NOW()'
+  ];
+  const values = [quiz.resourceId, resourcePayload.teacherId || null];
+
+  if (resourceColumns.has('review_status')) {
+    setClauses.push(`review_status = 'pending_teacher_approval'`);
+  }
+  if (resourceColumns.has('teacher_review_notes')) {
+    setClauses.push('teacher_review_notes = NULL');
+  }
+  if (resourceColumns.has('teacher_reviewed_at')) {
+    setClauses.push('teacher_reviewed_at = NULL');
+  }
+
+  await pool.query(
+    `UPDATE resources
+     SET ${setClauses.join(', ')}
+     WHERE id = $1`,
+    values
+  );
+
+  await pool.query(
+    `UPDATE quizzes
+     SET is_published = false,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [quizId]
+  );
+
+  return quiz.resourceId;
 }
 
 async function removeQuizFromLessonMaterials(quizId) {
@@ -2011,8 +2053,12 @@ async function removeQuizFromLessonMaterials(quizId) {
   const currentMaterials = Array.isArray(lessonRows[0].materials) ? lessonRows[0].materials : [];
   const quizUrl = `/learn/quiz.html?quizId=${quiz.id}`;
   const nextMaterials = currentMaterials.filter(item => {
-    if (!item || item.type !== 'quiz') return true;
-    return item.quizId !== quiz.id && item.resourceId !== quiz.resourceId && item.url !== quizUrl;
+    if (!item) return true;
+    if (item.quizId === quiz.id) return false;
+    if (quiz.resourceId && item.resourceId === quiz.resourceId) return false;
+    if (item.url === quizUrl) return false;
+    if (item.type === 'quiz') return false;
+    return true;
   });
 
   await pool.query(
@@ -2758,11 +2804,15 @@ app.get('/api/teachers/quizzes', requireTeacher, async (req, res) => {
       'r.is_published AS "isPublished"',
       'r.created_at AS "createdAt"',
       'r.updated_at AS "updatedAt"',
-      hasLessonId ? 'l.id AS "lessonId"' : 'NULL::uuid AS "lessonId"',
-      hasLessonId ? 'l.title AS "lessonTitle"' : 'NULL::text AS "lessonTitle"'
+      'cal.id AS "lessonId"',
+      'cal.title AS "lessonTitle"'
     ];
 
-    const joinLessonClause = hasLessonId ? 'LEFT JOIN lessons l ON l.id = r.lesson_id' : '';
+    const joinLessonClause = `
+      LEFT JOIN quizzes q ON q.resource_id = r.id
+      LEFT JOIN lms_lessons ll ON ll.id = q.lms_lesson_id
+      LEFT JOIN lessons cal ON cal.id = COALESCE(${hasLessonId ? 'r.lesson_id' : 'NULL::uuid'}, ll.calendar_lesson_id)
+    `;
 
     const { rows } = await pool.query(
       `SELECT ${selectClauses.join(', ')}
@@ -4000,7 +4050,9 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
                r.description, f.name AS "teacherName"
         FROM resources r
         LEFT JOIN faculty f ON f.id = r.teacher_id
-        WHERE r.lesson_id = $1 AND r.is_published = true
+        WHERE r.lesson_id = $1
+          AND r.is_published = true
+          AND r.resource_type <> 'quiz'
         ORDER BY r.sort_order NULLS LAST, r.created_at
       `, [lesson.calendarLessonId]);
       lesson.linkedResources = resRows;
@@ -4759,6 +4811,7 @@ app.post('/api/lms/quizzes', requireAdmin, async (req, res) => {
   }
   try {
     const id = uuidv4();
+    const nextIsPublished = lessonId ? false : (isPublished !== false);
     const { rows } = await pool.query(`
       INSERT INTO quizzes (id, lms_lesson_id, lms_module_id, title, description, passing_score, max_attempts, time_limit_minutes, is_published)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -4767,9 +4820,12 @@ app.post('/api/lms/quizzes', requireAdmin, async (req, res) => {
                 max_attempts AS "maxAttempts", time_limit_minutes AS "timeLimitMinutes",
                 is_published AS "isPublished"
     `, [id, lessonId || null, moduleId || null, title, description || null,
-        passingScore || 70, maxAttempts || 0, timeLimitMinutes || null, isPublished !== false]);
+        passingScore || 70, maxAttempts || 0, timeLimitMinutes || null, nextIsPublished]);
     const resourceId = await syncQuizResource(id);
     await syncQuizIntoLessonMaterials(id);
+    if (lessonId) {
+      await ensureLessonQuizTeacherReviewState(id);
+    }
     res.status(201).json({ ...rows[0], resourceId });
   } catch (error) {
     console.error('Error creating quiz', error);

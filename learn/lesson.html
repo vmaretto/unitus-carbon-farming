@@ -384,16 +384,20 @@
 
                 // Setup materials - combina assets, materials JSON e risorse collegate
                 const assetMaterials = assets ? assets.filter(a => a.assetType !== 'recording_final') : [];
-                const lessonMaterials = (lesson.materials || []).map(m => ({
-                    title: m.name,
-                    url: m.url,
-                    assetType: m.url.includes('.pdf') ? 'pdf' : (m.url.includes('.ppt') ? 'slide' : 'link')
-                }));
-                const linkedResources = (lesson.linkedResources || []).map(r => ({
-                    title: r.title,
-                    url: r.url,
-                    assetType: r.resourceType === 'pdf' ? 'pdf' : (r.resourceType === 'document' ? 'slide' : r.resourceType || 'file')
-                }));
+                const lessonMaterials = (lesson.materials || [])
+                    .filter(m => m && m.type !== 'quiz' && !m.quizId)
+                    .map(m => ({
+                        title: m.name,
+                        url: m.url,
+                        assetType: m.url.includes('.pdf') ? 'pdf' : (m.url.includes('.ppt') ? 'slide' : 'link')
+                    }));
+                const linkedResources = (lesson.linkedResources || [])
+                    .filter(r => r && r.resourceType !== 'quiz')
+                    .map(r => ({
+                        title: r.title,
+                        url: r.url,
+                        assetType: r.resourceType === 'pdf' ? 'pdf' : (r.resourceType === 'document' ? 'slide' : r.resourceType || 'file')
+                    }));
                 renderMaterials([...lessonMaterials, ...assetMaterials, ...linkedResources]);
 
                 // Setup watermark

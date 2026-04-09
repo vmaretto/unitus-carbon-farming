@@ -617,17 +617,31 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
 
   try {
     const facultyId = req.teacher.id;
-
-    // Count teacher's lessons
-    const { rows: lessonsCount } = await pool.query(
-      'SELECT COUNT(*) as total FROM lessons WHERE teacher_id = $1',
+    
+    // Teacher lessons in scope: future OR completed, excluding cancelled
+    const { rows: lessonStats } = await pool.query(
+      `SELECT
+         COUNT(*)::int AS total_lessons,
+         COUNT(*) FILTER (WHERE l.status = 'completed')::int AS completed_lessons,
+         COUNT(*) FILTER (WHERE COALESCE(l.status, 'scheduled') != 'completed')::int AS planned_lessons,
+         COALESCE(SUM(COALESCE(l.duration_minutes, 0)) FILTER (WHERE COALESCE(l.status, 'scheduled') != 'completed'), 0)::int AS planned_minutes,
+         COALESCE(SUM(COALESCE(l.duration_minutes, 0)) FILTER (WHERE l.status = 'completed'), 0)::int AS completed_minutes
+       FROM lessons l
+       WHERE l.teacher_id = $1
+         AND COALESCE(l.status, 'scheduled') != 'cancelled'
+         AND (
+           l.start_datetime >= NOW()
+           OR l.status = 'completed'
+         )`,
       [facultyId]
     );
 
     // Count published materials
     const { rows: materialsCount } = await pool.query(
-      `SELECT COUNT(*) as total FROM materials_pending
-       WHERE faculty_id = $1 AND status = 'approved'`,
+      `SELECT (
+          (SELECT COUNT(*)::int FROM materials_pending WHERE faculty_id = $1 AND status = 'approved') +
+          (SELECT COUNT(*)::int FROM resources WHERE teacher_id = $1 AND is_published = true)
+        ) AS total`,
       [facultyId]
     );
 
@@ -647,8 +661,19 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
       [facultyId]
     );
 
+    const plannedHours = Math.round(((lessonStats[0]?.planned_minutes || 0) / 60) * 100) / 100;
+    const completedHours = Math.round(((lessonStats[0]?.completed_minutes || 0) / 60) * 100) / 100;
+    const plannedCfu = Math.round((plannedHours / 8) * 100) / 100;
+    const completedCfu = Math.round((completedHours / 8) * 100) / 100;
+
     res.json({
-      total_lessons: parseInt(lessonsCount[0].total),
+      total_lessons: lessonStats[0]?.total_lessons || 0,
+      planned_lessons: lessonStats[0]?.planned_lessons || 0,
+      completed_lessons: lessonStats[0]?.completed_lessons || 0,
+      planned_hours: plannedHours,
+      completed_hours: completedHours,
+      planned_cfu: plannedCfu,
+      completed_cfu: completedCfu,
       materials_published: parseInt(materialsCount[0].total),
       materials_pending: parseInt(pendingCount[0].total),
       documents_pending: parseInt(docsCount[0].total)
@@ -664,14 +689,22 @@ app.get('/api/teachers/lessons', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
 
   try {
-    // Find the matching faculty id for this teacher (linked by email)
     const { rows: lessons } = await pool.query(
       `SELECT l.id, l.title, l.start_datetime, l.duration_minutes,
               l.location_physical, l.location_remote, l.status, l.notes,
-              m.name AS module_name
+              m.name AS module_name,
+              CASE
+                WHEN l.status = 'completed' THEN 'completed'
+                ELSE 'planned'
+              END AS lesson_state
        FROM lessons l
        LEFT JOIN modules m ON l.module_id = m.id
        WHERE l.teacher_id = $1
+         AND COALESCE(l.status, 'scheduled') != 'cancelled'
+         AND (
+           l.start_datetime >= NOW()
+           OR l.status = 'completed'
+         )
        ORDER BY l.start_datetime ASC`,
       [req.teacher.id]
     );
@@ -1224,6 +1257,87 @@ app.delete('/api/admin/teachers/:id', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Delete teacher error:', error);
     res.status(500).json({ error: 'Errore nell\'eliminazione del docente' });
+  }
+});
+
+// Admin: list materials uploaded by teachers (with optional filters)
+app.get('/api/admin/teacher-materials', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { status, facultyId, lessonId } = req.query;
+    const values = [];
+    let idx = 1;
+    let where = 'WHERE 1=1';
+
+    if (status) {
+      where += ` AND mp.status = $${idx++}`;
+      values.push(status);
+    }
+    if (facultyId) {
+      where += ` AND mp.faculty_id = $${idx++}`;
+      values.push(facultyId);
+    }
+    if (lessonId) {
+      where += ` AND mp.lesson_id = $${idx++}`;
+      values.push(lessonId);
+    }
+
+    const { rows } = await pool.query(
+      `SELECT mp.id, mp.faculty_id AS "facultyId", mp.lesson_id AS "lessonId",
+              mp.file_url AS "fileUrl", mp.file_name AS "fileName", mp.file_type AS "fileType",
+              mp.status, mp.notes, mp.created_at AS "createdAt", mp.updated_at AS "updatedAt",
+              f.first_name AS "teacherFirstName", f.last_name AS "teacherLastName", f.email AS "teacherEmail",
+              l.title AS "lessonTitle", l.start_datetime AS "lessonStartDateTime"
+       FROM materials_pending mp
+       LEFT JOIN faculty f ON f.id = mp.faculty_id
+       LEFT JOIN lessons l ON l.id = mp.lesson_id
+       ${where}
+       ORDER BY mp.created_at DESC`,
+      values
+    );
+
+    res.json(rows);
+  } catch (error) {
+    console.error('List teacher materials error:', error);
+    res.status(500).json({ error: 'Errore nel recupero materiali docenti' });
+  }
+});
+
+// Admin: approve/reject teacher uploaded material
+app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { id } = req.params;
+  const { action, notes } = req.body || {};
+
+  if (!['approve', 'reject'].includes(action)) {
+    return res.status(400).json({ error: 'action must be approve or reject' });
+  }
+  if (action === 'reject' && (!notes || !String(notes).trim())) {
+    return res.status(400).json({ error: 'notes are required when rejecting' });
+  }
+
+  try {
+    const newStatus = action === 'approve' ? 'approved' : 'rejected';
+    const reviewNotes = action === 'reject' ? String(notes).trim() : null;
+
+    const { rows } = await pool.query(
+      `UPDATE materials_pending
+       SET status = $1,
+           notes = CASE WHEN $1 = 'rejected' THEN $2 ELSE NULL END,
+           updated_at = NOW()
+       WHERE id = $3
+       RETURNING id, status, notes, updated_at AS "updatedAt"`,
+      [newStatus, reviewNotes, id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+
+    res.json({ success: true, material: rows[0] });
+  } catch (error) {
+    console.error('Review teacher material error:', error);
+    res.status(500).json({ error: 'Errore nella revisione del materiale' });
   }
 });
 
@@ -4850,19 +4964,24 @@ app.post('/api/attendance/checkin', requireStudent, async (req, res) => {
     );
 
     const { rows } = await pool.query(`
-      INSERT INTO attendance (id, user_id, lesson_id, attendance_type, method)
-      VALUES ($1, $2, $3, 'in_person', 'pin')
-      ON CONFLICT (user_id, lesson_id) DO NOTHING
-      RETURNING id
+      INSERT INTO attendance (id, user_id, lesson_id, attendance_type, method, check_in_at)
+      VALUES ($1, $2, $3, 'in_person', 'pin', NOW())
+      ON CONFLICT (user_id, lesson_id) DO UPDATE SET
+        attendance_type = 'in_person',
+        method = 'pin',
+        check_in_at = NOW()
+      RETURNING id, (xmax = 0) AS is_new
     `, [uuidv4(), req.user.userId, lessonId]);
 
     const lessonTitle = lessonRows.length ? lessonRows[0].title : '';
 
-    if (rows.length) {
-      res.json({ success: true, message: 'Presenza registrata', lessonTitle });
-    } else {
-      res.json({ success: true, message: 'Presenza già registrata', lessonTitle });
-    }
+    const isNew = rows[0]?.is_new;
+    res.json({
+      success: true,
+      message: isNew ? 'Presenza registrata' : 'Presenza aggiornata',
+      lessonTitle,
+      updated: !isNew
+    });
   } catch (error) {
     console.error('Error checking in', error);
     res.status(500).json({ error: 'Unable to process check-in' });
@@ -6297,4 +6416,3 @@ if (require.main === module) {
 
 module.exports = handler;
 module.exports.app = app;
-

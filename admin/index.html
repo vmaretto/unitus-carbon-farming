@@ -500,6 +500,7 @@
                 <a href="#blog">Gestione blog</a>
                 <a href="#partners">Gestione partner</a>
                 <a href="#resources">Risorse</a>
+                <a href="#teacher-materials">Materiali Docenti</a>
                 <a href="#teacher-docs">Liberatorie Docenti</a>
                 <a href="#lms-courses">Percorsi Formativi</a>
                 <a href="#lms-modules">Moduli e Lezioni</a>
@@ -1278,6 +1279,62 @@ Buono studio!</textarea>
             </div>
         </section>
 
+        <section id="teacher-materials">
+            <header>
+                <h2>Materiali Docenti in Attesa</h2>
+                <p class="section-description">Revisione materiali caricati dai docenti: approva/rifiuta con nota obbligatoria in caso di rifiuto.</p>
+            </header>
+
+            <form id="teacher-materials-filter-form" class="form-grid" style="margin-bottom: 16px;">
+                <label>
+                    Stato
+                    <select id="tm-filter-status">
+                        <option value="">Tutti</option>
+                        <option value="pending" selected>In attesa</option>
+                        <option value="approved">Approvati</option>
+                        <option value="rejected">Rifiutati</option>
+                    </select>
+                </label>
+                <label>
+                    Docente
+                    <select id="tm-filter-faculty">
+                        <option value="">Tutti i docenti</option>
+                    </select>
+                </label>
+                <label>
+                    Lezione
+                    <select id="tm-filter-lesson">
+                        <option value="">Tutte le lezioni</option>
+                    </select>
+                </label>
+                <div class="form-buttons" style="align-self: end;">
+                    <button type="submit">Applica filtri</button>
+                    <button type="button" id="tm-filter-reset" class="secondary">Reset</button>
+                </div>
+            </form>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Docente</th>
+                            <th>Lezione</th>
+                            <th>File</th>
+                            <th>Stato</th>
+                            <th>Note revisione</th>
+                            <th>Creato</th>
+                            <th>Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="teacher-materials-tbody">
+                        <tr class="empty-state" data-empty-tm>
+                            <td colspan="7">Nessun materiale docente trovato per i filtri selezionati.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         <!-- ============================================ -->
         <!-- CORSI LMS -->
         <!-- ============================================ -->
@@ -1922,6 +1979,7 @@ Buono studio!</textarea>
             if (typeof loadLmsCourses === 'function') loadLmsCourses();
             if (typeof loadStudentsList === 'function') loadStudentsList();
             if (typeof loadTeacherDocs === 'function') loadTeacherDocs();
+            if (typeof loadTeacherPendingMaterials === 'function') loadTeacherPendingMaterials();
         }
 
         function showLogin() {
@@ -2033,6 +2091,7 @@ Buono studio!</textarea>
             resources: [],
             modules: [],
             lessons: [],
+            teacherPendingMaterials: [],
             calendarYear: new Date().getFullYear(),
             calendarMonth: new Date().getMonth(),
             calendarView: 'calendar' // 'calendar' or 'list'
@@ -2241,6 +2300,128 @@ Buono studio!</textarea>
                 document.getElementById('tdoc-sigs-modal').style.display = 'block';
             } catch (e) { showToast('Errore nel caricamento firme', 'error'); }
         }
+
+        // ============================================
+        // TEACHER MATERIALS REVIEW
+        // ============================================
+        function fillTeacherMaterialsFilterOptions() {
+            const facultySel = document.getElementById('tm-filter-faculty');
+            const lessonSel = document.getElementById('tm-filter-lesson');
+
+            if (facultySel) {
+                const currentFaculty = facultySel.value;
+                facultySel.innerHTML = '<option value="">Tutti i docenti</option>' +
+                    (state.faculty || []).map(f => `<option value="${f.id}">${f.name || [f.firstName, f.lastName].filter(Boolean).join(' ') || f.email}</option>`).join('');
+                if (currentFaculty) facultySel.value = currentFaculty;
+            }
+
+            if (lessonSel) {
+                const currentLesson = lessonSel.value;
+                lessonSel.innerHTML = '<option value="">Tutte le lezioni</option>' +
+                    (state.lessons || []).map(l => `<option value="${l.id}">${l.title || 'Lezione'}${l.startDatetime ? ' (' + new Date(l.startDatetime).toLocaleDateString('it-IT') + ')' : ''}</option>`).join('');
+                if (currentLesson) lessonSel.value = currentLesson;
+            }
+        }
+
+        function teacherMaterialStatusLabel(status) {
+            if (status === 'approved') return 'Approvato';
+            if (status === 'rejected') return 'Rifiutato';
+            return 'In attesa';
+        }
+
+        function teacherMaterialStatusClass(status) {
+            if (status === 'approved') return 'published';
+            if (status === 'rejected') return 'cancelled';
+            return 'scheduled';
+        }
+
+        async function loadTeacherPendingMaterials() {
+            try {
+                fillTeacherMaterialsFilterOptions();
+                const status = document.getElementById('tm-filter-status')?.value || '';
+                const facultyId = document.getElementById('tm-filter-faculty')?.value || '';
+                const lessonId = document.getElementById('tm-filter-lesson')?.value || '';
+                const params = new URLSearchParams();
+                if (status) params.set('status', status);
+                if (facultyId) params.set('facultyId', facultyId);
+                if (lessonId) params.set('lessonId', lessonId);
+
+                const items = await apiRequest('/api/admin/teacher-materials?' + params.toString());
+                state.teacherPendingMaterials = items || [];
+                const tbody = document.getElementById('teacher-materials-tbody');
+                tbody.querySelectorAll('tr:not([data-empty-tm])').forEach(r => r.remove());
+
+                items.forEach(item => {
+                    const tr = document.createElement('tr');
+                    const teacherName = [item.teacherFirstName, item.teacherLastName].filter(Boolean).join(' ') || item.teacherEmail || '—';
+                    const lessonInfo = item.lessonTitle
+                        ? `${item.lessonTitle}${item.lessonStartDateTime ? ' (' + new Date(item.lessonStartDateTime).toLocaleDateString('it-IT') + ')' : ''}`
+                        : '—';
+                    const fileLabel = item.fileName || 'File';
+                    tr.innerHTML = `
+                        <td>${teacherName}</td>
+                        <td>${lessonInfo}</td>
+                        <td><a href="${item.fileUrl}" target="_blank">${fileLabel}</a></td>
+                        <td><span class="status-pill" data-status="${teacherMaterialStatusClass(item.status)}">${teacherMaterialStatusLabel(item.status)}</span></td>
+                        <td>${item.notes || '—'}</td>
+                        <td>${item.createdAt ? new Date(item.createdAt).toLocaleString('it-IT') : '—'}</td>
+                        <td>
+                            ${item.status === 'pending' ? `
+                                <button class="action" data-tm-approve="${item.id}">Approva</button>
+                                <button class="action danger" data-tm-reject="${item.id}">Rifiuta</button>
+                            ` : '<span style="color: var(--gray-500);">Nessuna azione</span>'}
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                toggleEmptyState(tbody, items.length > 0, '[data-empty-tm]');
+            } catch (e) {
+                console.error('Load teacher materials error:', e);
+            }
+        }
+
+        document.getElementById('teacher-materials-filter-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await loadTeacherPendingMaterials();
+        });
+
+        document.getElementById('tm-filter-reset').addEventListener('click', async () => {
+            document.getElementById('tm-filter-status').value = 'pending';
+            document.getElementById('tm-filter-faculty').value = '';
+            document.getElementById('tm-filter-lesson').value = '';
+            await loadTeacherPendingMaterials();
+        });
+
+        document.getElementById('teacher-materials-tbody').addEventListener('click', async (e) => {
+            const approveId = e.target?.dataset?.tmApprove;
+            const rejectId = e.target?.dataset?.tmReject;
+            if (!approveId && !rejectId) return;
+
+            try {
+                if (approveId) {
+                    await apiRequest(`/api/admin/teacher-materials/${approveId}/review`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ action: 'approve' })
+                    });
+                    showToast('Materiale approvato');
+                } else if (rejectId) {
+                    const notes = prompt('Inserisci nota obbligatoria per il rifiuto:');
+                    if (!notes || !notes.trim()) {
+                        showToast('Nota obbligatoria per rifiutare', 'error');
+                        return;
+                    }
+                    await apiRequest(`/api/admin/teacher-materials/${rejectId}/review`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ action: 'reject', notes: notes.trim() })
+                    });
+                    showToast('Materiale rifiutato');
+                }
+                await Promise.all([loadTeacherPendingMaterials(), loadFaculty()]);
+            } catch (err) {
+                showToast(err.message || 'Errore revisione materiale', 'error');
+            }
+        });
 
         async function loadResources() {
             const tableBody = document.getElementById('resource-table-body');
@@ -2931,9 +3112,11 @@ Buono studio!</textarea>
                 toggleEmptyState(tableBody, items.length > 0, '[data-empty-faculty]');
                 if (typeof updateTeacherSelect === 'function') updateTeacherSelect();
                 if (typeof updateResourceTeacherSelect === 'function') updateResourceTeacherSelect();
+                if (typeof fillTeacherMaterialsFilterOptions === 'function') fillTeacherMaterialsFilterOptions();
             } catch (error) {
                 state.faculty = [];
                 toggleEmptyState(tableBody, false, '[data-empty-faculty]');
+                if (typeof fillTeacherMaterialsFilterOptions === 'function') fillTeacherMaterialsFilterOptions();
             }
         }
 
@@ -3352,8 +3535,10 @@ Buono studio!</textarea>
                 renderCalendar();
                 renderLessonsList();
                 if (typeof updateResourceLessonSelect === 'function') updateResourceLessonSelect();
+                if (typeof fillTeacherMaterialsFilterOptions === 'function') fillTeacherMaterialsFilterOptions();
             } catch (error) {
                 state.lessons = [];
+                if (typeof fillTeacherMaterialsFilterOptions === 'function') fillTeacherMaterialsFilterOptions();
             }
         }
 
@@ -5222,7 +5407,7 @@ Buono studio!</textarea>
             if (!userId) { showToast('Seleziona uno studente', 'error'); return; }
             
             try {
-                await apiRequest('/api/attendance/manual-checkin', {
+                const result = await apiRequest('/api/attendance/manual-checkin', {
                     method: 'POST',
                     body: JSON.stringify({ lessonId, userId, type })
                 });

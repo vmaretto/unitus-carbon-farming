@@ -641,7 +641,7 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
     // Count pending documents to sign
     const { rows: docsCount } = await pool.query(
       `SELECT COUNT(*) as total FROM teacher_documents td
-       WHERE td.is_active = true AND NOT EXISTS (
+       WHERE td.status != 'archived' AND NOT EXISTS (
          SELECT 1 FROM teacher_document_signatures tds WHERE tds.document_id = td.id AND tds.faculty_id = $1
        )`,
       [facultyId]
@@ -775,9 +775,9 @@ app.get('/api/teachers/documents/pending', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { rows } = await pool.query(`
-      SELECT td.id, td.title, td.content, td.document_type
+      SELECT td.id, td.title, td.content, td.type AS document_type
       FROM teacher_documents td
-      WHERE td.is_active = true
+      WHERE td.status != 'archived'
         AND NOT EXISTS (
           SELECT 1 FROM teacher_document_signatures tds
           WHERE tds.document_id = td.id AND tds.faculty_id = $1
@@ -796,8 +796,8 @@ app.get('/api/teachers/documents/signed', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { rows } = await pool.query(`
-      SELECT tds.id, tds.consent_given, tds.signed_at, tds.signer_name, tds.signer_surname,
-             td.title, td.document_type
+      SELECT tds.id, tds.signature_data, tds.signed_at,
+             td.title, td.type AS document_type
       FROM teacher_document_signatures tds
       JOIN teacher_documents td ON td.id = tds.document_id
       WHERE tds.faculty_id = $1
@@ -823,7 +823,7 @@ app.post('/api/teachers/documents/:id/sign', requireTeacher, async (req, res) =>
 
     // Verify document exists and is active
     const { rows: docs } = await pool.query(
-      'SELECT id FROM teacher_documents WHERE id = $1 AND is_active = true',
+      'SELECT id FROM teacher_documents WHERE id = $1 AND status != \'archived\'',
       [documentId]
     );
     if (docs.length === 0) {
@@ -833,14 +833,16 @@ app.post('/api/teachers/documents/:id/sign', requireTeacher, async (req, res) =>
     const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     const userAgent = req.headers['user-agent'];
 
+    // signature_data stores a JSON with all signature details
+    const signatureData = JSON.stringify({ consentGiven, signatureImage, signatureMethod: signatureMethod || 'draw', signerName, signerSurname, userAgent });
+
     await pool.query(`
       INSERT INTO teacher_document_signatures
-        (document_id, faculty_id, consent_given, signature_image, signature_method, ip_address, user_agent, signer_name, signer_surname)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        (document_id, faculty_id, signature_data, ip_address, signed_at)
+      VALUES ($1, $2, $3, $4, NOW())
       ON CONFLICT (document_id, faculty_id) DO UPDATE SET
-        consent_given = $3, signature_image = $4, signature_method = $5,
-        ip_address = $6, user_agent = $7, signer_name = $8, signer_surname = $9, signed_at = NOW()
-    `, [documentId, req.teacher.id, consentGiven, signatureImage, signatureMethod || 'draw', ipAddress, userAgent, signerName, signerSurname]);
+        signature_data = $3, ip_address = $4, signed_at = NOW()
+    `, [documentId, req.teacher.id, signatureData, ipAddress]);
 
     res.json({ success: true });
   } catch (error) {
@@ -858,7 +860,7 @@ app.post('/api/teacher-documents', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Titolo e contenuto sono obbligatori' });
     }
     const { rows } = await pool.query(
-      `INSERT INTO teacher_documents (title, content, document_type) VALUES ($1, $2, $3) RETURNING *`,
+      `INSERT INTO teacher_documents (title, content, type) VALUES ($1, $2, $3) RETURNING *`,
       [title, content, documentType || 'liberatoria']
     );
     res.json(rows[0]);
@@ -875,7 +877,7 @@ app.get('/api/teacher-documents', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT td.*,
         (SELECT COUNT(*) FROM teacher_document_signatures tds WHERE tds.document_id = td.id) as signature_count,
-        (SELECT COUNT(*) FROM teacher_document_signatures tds WHERE tds.document_id = td.id AND tds.consent_given = true) as consent_count
+        (SELECT COUNT(*) FROM teacher_document_signatures tds WHERE tds.document_id = td.id AND tds.signed_at IS NOT NULL) as consent_count
       FROM teacher_documents td ORDER BY td.created_at DESC
     `);
     res.json(rows);

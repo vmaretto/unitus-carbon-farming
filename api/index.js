@@ -420,7 +420,7 @@ app.post('/api/teachers/login', async (req, res) => {
   try {
     // Find teacher by email
     const { rows: teachers } = await pool.query(
-      'SELECT * FROM teachers WHERE LOWER(email) = LOWER($1) AND is_active = true',
+      'SELECT * FROM faculty WHERE LOWER(email) = LOWER($1) AND is_active = true',
       [email]
     );
     
@@ -435,7 +435,7 @@ app.post('/api/teachers/login', async (req, res) => {
     
     // Update last login
     await pool.query(
-      'UPDATE teachers SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1',
+      'UPDATE faculty SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1',
       [teacher.id]
     );
     
@@ -474,7 +474,7 @@ app.post('/api/teachers/request-magic-link', async (req, res) => {
 
   try {
     const { rows: teachers } = await pool.query(
-      'SELECT * FROM teachers WHERE LOWER(email) = LOWER($1) AND is_active = true',
+      'SELECT * FROM faculty WHERE LOWER(email) = LOWER($1) AND is_active = true',
       [email]
     );
 
@@ -549,7 +549,7 @@ app.post('/api/teachers/magic-login', async (req, res) => {
     
     // Get teacher info
     const { rows: teachers } = await pool.query(
-      'SELECT * FROM teachers WHERE id = $1 AND is_active = true',
+      'SELECT * FROM faculty WHERE id = $1 AND is_active = true',
       [payload.id]
     );
     
@@ -561,7 +561,7 @@ app.post('/api/teachers/magic-login', async (req, res) => {
     
     // Update last login
     await pool.query(
-      'UPDATE teachers SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1',
+      'UPDATE faculty SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1',
       [teacher.id]
     );
     
@@ -596,7 +596,7 @@ app.get('/api/teachers/me', requireTeacher, async (req, res) => {
   
   try {
     const { rows: teachers } = await pool.query(
-      'SELECT id, email, first_name, last_name, role, bio, is_active, last_login_at, created_at FROM teachers WHERE id = $1',
+      'SELECT id, email, first_name, last_name, role, bio, is_active, last_login_at, created_at FROM faculty WHERE id = $1',
       [req.teacher.id]
     );
     
@@ -616,14 +616,9 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
 
   try {
-    // Find the matching faculty id for this teacher (linked by email)
-    const { rows: fRows } = await pool.query(
-      'SELECT f.id FROM faculty f INNER JOIN teachers t ON LOWER(f.email) = LOWER(t.email) WHERE t.id = $1',
-      [req.teacher.id]
-    );
-    const facultyId = fRows.length ? fRows[0].id : null;
+    const facultyId = req.teacher.id;
 
-    // Count teacher's lessons (lessons.teacher_id references faculty.id)
+    // Count teacher's lessons
     const { rows: lessonsCount } = await pool.query(
       'SELECT COUNT(*) as total FROM lessons WHERE teacher_id = $1',
       [facultyId]
@@ -632,24 +627,24 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
     // Count published materials
     const { rows: materialsCount } = await pool.query(
       `SELECT COUNT(*) as total FROM materials_pending
-       WHERE teacher_id = $1 AND status = 'approved'`,
-      [req.teacher.id]
+       WHERE faculty_id = $1 AND status = 'approved'`,
+      [facultyId]
     );
 
     // Count pending materials
     const { rows: pendingCount } = await pool.query(
       `SELECT COUNT(*) as total FROM materials_pending
-       WHERE teacher_id = $1 AND status = 'pending'`,
-      [req.teacher.id]
+       WHERE faculty_id = $1 AND status = 'pending'`,
+      [facultyId]
     );
 
     // Count pending documents to sign
     const { rows: docsCount } = await pool.query(
       `SELECT COUNT(*) as total FROM teacher_documents td
        WHERE td.is_active = true AND NOT EXISTS (
-         SELECT 1 FROM teacher_document_signatures tds WHERE tds.document_id = td.id AND tds.teacher_id = $1
+         SELECT 1 FROM teacher_document_signatures tds WHERE tds.document_id = td.id AND tds.faculty_id = $1
        )`,
-      [req.teacher.id]
+      [facultyId]
     );
 
     res.json({
@@ -670,12 +665,6 @@ app.get('/api/teachers/lessons', requireTeacher, async (req, res) => {
 
   try {
     // Find the matching faculty id for this teacher (linked by email)
-    const { rows: fRows } = await pool.query(
-      'SELECT f.id FROM faculty f INNER JOIN teachers t ON LOWER(f.email) = LOWER(t.email) WHERE t.id = $1',
-      [req.teacher.id]
-    );
-    const facultyId = fRows.length ? fRows[0].id : null;
-
     const { rows: lessons } = await pool.query(
       `SELECT l.id, l.title, l.start_datetime, l.duration_minutes,
               l.location_physical, l.location_remote, l.status, l.notes,
@@ -684,7 +673,7 @@ app.get('/api/teachers/lessons', requireTeacher, async (req, res) => {
        LEFT JOIN modules m ON l.module_id = m.id
        WHERE l.teacher_id = $1
        ORDER BY l.start_datetime ASC`,
-      [facultyId]
+      [req.teacher.id]
     );
 
     res.json(lessons);
@@ -706,12 +695,9 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
   }
   
   try {
-    // Verify teacher has access to this lesson (lessons.teacher_id = faculty.id, linked by email)
+    // Verify teacher has access to this lesson
     const { rows: teacherLessons } = await pool.query(
-      `SELECT l.id FROM lessons l
-       INNER JOIN faculty f ON l.teacher_id = f.id
-       INNER JOIN teachers t ON LOWER(f.email) = LOWER(t.email)
-       WHERE t.id = $1 AND l.id = $2`,
+      'SELECT id FROM lessons WHERE teacher_id = $1 AND id = $2',
       [req.teacher.id, lesson_id]
     );
 
@@ -727,18 +713,15 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
     
     // Save to materials_pending
     const { rows: materials } = await pool.query(
-      `INSERT INTO materials_pending 
-       (teacher_id, lesson_id, title, description, file_url, file_name, file_size, file_type, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+      `INSERT INTO materials_pending
+       (faculty_id, lesson_id, file_url, file_name, file_type, status)
+       VALUES ($1, $2, $3, $4, $5, 'pending')
        RETURNING id`,
       [
         req.teacher.id,
-        lesson_id, 
-        title,
-        description || null,
+        lesson_id,
         url,
         file.originalname,
-        file.size,
         file.mimetype
       ]
     );
@@ -760,32 +743,23 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
 app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
-    // Find the matching faculty id for this teacher (linked by email)
-    const { rows: fRows } = await pool.query(
-      'SELECT f.id FROM faculty f INNER JOIN teachers t ON LOWER(f.email) = LOWER(t.email) WHERE t.id = $1',
-      [req.teacher.id]
-    );
-    const facultyId = fRows.length ? fRows[0].id : null;
+    const facultyId = req.teacher.id;
 
     // Materials uploaded by teacher (pending approval)
     const { rows: pending } = await pool.query(
-      `SELECT id, title, description, file_url, file_name, file_size, file_type, status, created_at, 'upload' AS source
-       FROM materials_pending WHERE teacher_id = $1 ORDER BY created_at DESC`,
-      [req.teacher.id]
+      `SELECT id, file_url, file_name, file_type, status, created_at, 'upload' AS source
+       FROM materials_pending WHERE faculty_id = $1 ORDER BY created_at DESC`,
+      [facultyId]
     );
 
     // Resources assigned to this teacher by admin
-    let resources = [];
-    if (facultyId) {
-      const { rows: res2 } = await pool.query(
-        `SELECT id, title, description, url AS file_url, NULL AS file_name, file_size_bytes AS file_size,
-                resource_type AS file_type, CASE WHEN is_published THEN 'approved' ELSE 'pending' END AS status,
-                created_at, 'admin' AS source
-         FROM resources WHERE teacher_id = $1 ORDER BY created_at DESC`,
-        [facultyId]
-      );
-      resources = res2;
-    }
+    const { rows: resources } = await pool.query(
+      `SELECT id, title, description, url AS file_url, NULL AS file_name, file_size_bytes AS file_size,
+              resource_type AS file_type, CASE WHEN is_published THEN 'approved' ELSE 'pending' END AS status,
+              created_at, 'admin' AS source
+       FROM resources WHERE teacher_id = $1 ORDER BY created_at DESC`,
+      [facultyId]
+    );
 
     // Merge and sort by date
     const all = [...pending, ...resources].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -806,7 +780,7 @@ app.get('/api/teachers/documents/pending', requireTeacher, async (req, res) => {
       WHERE td.is_active = true
         AND NOT EXISTS (
           SELECT 1 FROM teacher_document_signatures tds
-          WHERE tds.document_id = td.id AND tds.teacher_id = $1
+          WHERE tds.document_id = td.id AND tds.faculty_id = $1
         )
       ORDER BY td.created_at
     `, [req.teacher.id]);
@@ -826,7 +800,7 @@ app.get('/api/teachers/documents/signed', requireTeacher, async (req, res) => {
              td.title, td.document_type
       FROM teacher_document_signatures tds
       JOIN teacher_documents td ON td.id = tds.document_id
-      WHERE tds.teacher_id = $1
+      WHERE tds.faculty_id = $1
       ORDER BY tds.signed_at DESC
     `, [req.teacher.id]);
     res.json(rows);
@@ -861,9 +835,9 @@ app.post('/api/teachers/documents/:id/sign', requireTeacher, async (req, res) =>
 
     await pool.query(`
       INSERT INTO teacher_document_signatures
-        (document_id, teacher_id, consent_given, signature_image, signature_method, ip_address, user_agent, signer_name, signer_surname)
+        (document_id, faculty_id, consent_given, signature_image, signature_method, ip_address, user_agent, signer_name, signer_surname)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      ON CONFLICT (document_id, teacher_id) DO UPDATE SET
+      ON CONFLICT (document_id, faculty_id) DO UPDATE SET
         consent_given = $3, signature_image = $4, signature_method = $5,
         ip_address = $6, user_agent = $7, signer_name = $8, signer_surname = $9, signed_at = NOW()
     `, [documentId, req.teacher.id, consentGiven, signatureImage, signatureMethod || 'draw', ipAddress, userAgent, signerName, signerSurname]);
@@ -916,9 +890,9 @@ app.get('/api/teacher-documents/:id/signatures', requireAdmin, async (req, res) 
   if (!ensurePool(res)) return;
   try {
     const { rows } = await pool.query(`
-      SELECT tds.*, t.email, t.first_name, t.last_name
+      SELECT tds.*, f.email, f.first_name, f.last_name
       FROM teacher_document_signatures tds
-      JOIN teachers t ON t.id = tds.teacher_id
+      JOIN faculty f ON f.id = tds.faculty_id
       WHERE tds.document_id = $1
       ORDER BY tds.signed_at DESC
     `, [req.params.id]);
@@ -929,53 +903,18 @@ app.get('/api/teacher-documents/:id/signatures', requireAdmin, async (req, res) 
   }
 });
 
-// Sync faculty member to teachers table (for login)
+// Sync faculty member for login (now a no-op since faculty IS the teachers table)
 app.post('/api/faculty/sync-teacher', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
-  
   const { email } = req.body;
-  
-  if (!email) {
-    return res.status(400).json({ error: 'Email richiesta' });
-  }
-  
+  if (!email) return res.status(400).json({ error: 'Email richiesta' });
   try {
-    // Get faculty member
-    const { rows: faculty } = await pool.query(
-      'SELECT * FROM faculty WHERE LOWER(email) = LOWER($1) OR LOWER(bio) LIKE LOWER($2)',
-      [email, `%${email}%`]
-    );
-    
-    if (faculty.length === 0) {
-      return res.status(404).json({ error: 'Docente non trovato nella faculty' });
-    }
-    
-    const facultyMember = faculty[0];
-    
-    // Extract name parts
-    const nameParts = facultyMember.name.split(' ');
-    const firstName = nameParts[0] || 'Nome';
-    const lastName = nameParts.slice(1).join(' ') || 'Cognome';
-    
-    // Insert or update in teachers table
-    const { rows: teachers } = await pool.query(
-      `INSERT INTO teachers (email, first_name, last_name, role, bio)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (email) DO UPDATE SET
-         first_name = EXCLUDED.first_name,
-         last_name = EXCLUDED.last_name,
-         role = EXCLUDED.role,
-         bio = EXCLUDED.bio,
-         updated_at = CURRENT_TIMESTAMP
-       RETURNING *`,
-      [email.toLowerCase(), firstName, lastName, facultyMember.role || 'Docente', facultyMember.bio]
-    );
-    
-    res.json({ teacher: teachers[0], message: 'Teacher synchronized successfully' });
-    
+    const { rows } = await pool.query('SELECT * FROM faculty WHERE LOWER(email) = LOWER($1)', [email]);
+    if (!rows.length) return res.status(404).json({ error: 'Docente non trovato' });
+    res.json({ teacher: rows[0], message: 'OK' });
   } catch (error) {
     console.error('Sync teacher error:', error);
-    res.status(500).json({ error: 'Errore nella sincronizzazione docente' });
+    res.status(500).json({ error: 'Errore' });
   }
 });
 
@@ -992,7 +931,7 @@ app.post('/api/faculty/send-magic-link', requireAdmin, async (req, res) => {
   try {
     // Get teacher from teachers table
     const { rows: teachers } = await pool.query(
-      'SELECT * FROM teachers WHERE LOWER(email) = LOWER($1)',
+      'SELECT * FROM faculty WHERE LOWER(email) = LOWER($1)',
       [email]
     );
     
@@ -1062,13 +1001,15 @@ app.get('/api/admin/teachers', requireAdmin, async (req, res) => {
   
   try {
     const { rows: teachers } = await pool.query(`
-      SELECT 
-        t.*,
+      SELECT
+        f.id, f.name, f.email, f.first_name, f.last_name, f.role, f.bio,
+        f.is_active, f.last_login_at, f.created_at,
         COUNT(mp.id) as pending_materials_count
-      FROM teachers t
-      LEFT JOIN materials_pending mp ON t.id = mp.teacher_id AND mp.status = 'pending'
-      GROUP BY t.id, t.email, t.first_name, t.last_name, t.role, t.bio, t.is_active, t.last_login_at, t.created_at
-      ORDER BY t.created_at DESC
+      FROM faculty f
+      LEFT JOIN materials_pending mp ON f.id = mp.faculty_id AND mp.status = 'pending'
+      WHERE f.email IS NOT NULL
+      GROUP BY f.id
+      ORDER BY f.created_at DESC
     `);
     
     res.json(teachers);
@@ -1091,7 +1032,7 @@ app.post('/api/admin/teachers', requireAdmin, async (req, res) => {
   try {
     // Check if teacher already exists
     const { rows: existing } = await pool.query(
-      'SELECT id FROM teachers WHERE LOWER(email) = LOWER($1)',
+      'SELECT id FROM faculty WHERE LOWER(email) = LOWER($1)',
       [email]
     );
     
@@ -1101,10 +1042,10 @@ app.post('/api/admin/teachers', requireAdmin, async (req, res) => {
     
     // Insert new teacher
     const { rows: teachers } = await pool.query(
-      `INSERT INTO teachers (email, first_name, last_name, role, bio)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO faculty (id, name, email, first_name, last_name, role, bio, is_published, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true, true)
        RETURNING *`,
-      [email.toLowerCase(), first_name, last_name, role || 'Docente', bio || null]
+      [uuidv4(), `${first_name} ${last_name}`, email.toLowerCase(), first_name, last_name, role || 'Docente', bio || null]
     );
     
     const newTeacher = teachers[0];
@@ -1180,8 +1121,8 @@ app.put('/api/admin/teachers/:id', requireAdmin, async (req, res) => {
   
   try {
     const { rows: teachers } = await pool.query(
-      `UPDATE teachers 
-       SET first_name = $1, last_name = $2, role = $3, bio = $4, is_active = $5, updated_at = CURRENT_TIMESTAMP
+      `UPDATE faculty
+       SET first_name = $1, last_name = $2, name = $1 || ' ' || $2, role = $3, bio = $4, is_active = $5, updated_at = CURRENT_TIMESTAMP
        WHERE id = $6
        RETURNING *`,
       [first_name, last_name, role, bio, is_active !== false, teacherId]
@@ -1206,7 +1147,7 @@ app.post('/api/admin/teachers/:id/send-link', requireAdmin, async (req, res) => 
   
   try {
     const { rows: teachers } = await pool.query(
-      'SELECT * FROM teachers WHERE id = $1',
+      'SELECT * FROM faculty WHERE id = $1',
       [teacherId]
     );
     
@@ -1269,7 +1210,7 @@ app.delete('/api/admin/teachers/:id', requireAdmin, async (req, res) => {
   
   try {
     const { rows } = await pool.query(
-      'DELETE FROM teachers WHERE id = $1 RETURNING email',
+      'DELETE FROM faculty WHERE id = $1 RETURNING email',
       [teacherId]
     );
     
@@ -1335,10 +1276,14 @@ async function initDatabase() {
       name TEXT NOT NULL,
       role TEXT,
       email VARCHAR(255),
+      first_name VARCHAR(255),
+      last_name VARCHAR(255),
       bio TEXT,
       photo_url TEXT,
       sort_order INTEGER,
       is_published BOOLEAN DEFAULT FALSE,
+      is_active BOOLEAN DEFAULT TRUE,
+      last_login_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
@@ -1711,7 +1656,7 @@ function ensurePool(res) {
 
 // Whitelist colonne aggiornabili per tabella (sicurezza)
 const ALLOWED_UPDATE_FIELDS = {
-  faculty: ['name', 'role', 'email', 'bio', 'photo_url', 'profile_link', 'sort_order', 'is_published'],
+  faculty: ['name', 'first_name', 'last_name', 'role', 'email', 'bio', 'photo_url', 'profile_link', 'sort_order', 'is_published', 'is_active'],
   blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'is_published', 'published_at'],
   partners: ['name', 'logo_url', 'website_url', 'category', 'sort_order', 'is_visible'],
   modules: ['name', 'ssd', 'cfu', 'hours', 'description', 'sort_order'],

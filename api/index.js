@@ -1831,6 +1831,196 @@ async function getTableColumns(tableName) {
   return new Set(rows.map(row => row.column_name));
 }
 
+async function getLmsQuizResourceContext(quizId) {
+  const { rows: quizRows } = await pool.query(`
+    SELECT q.id, q.lms_module_id AS "moduleId", q.lms_lesson_id AS "lessonId",
+           q.resource_id AS "resourceId", q.title, q.description,
+           q.passing_score AS "passingScore", q.max_attempts AS "maxAttempts",
+           q.time_limit_minutes AS "timeLimitMinutes", q.is_published AS "isPublished",
+           ll.title AS "lessonTitle", ll.description AS "lessonDescription",
+           ll.calendar_lesson_id AS "calendarLessonId",
+           cal.title AS "calendarLessonTitle", cal.teacher_id AS "calendarTeacherId",
+           m.name AS "moduleTitle"
+    FROM quizzes q
+    LEFT JOIN lms_lessons ll ON ll.id = q.lms_lesson_id
+    LEFT JOIN lessons cal ON cal.id = ll.calendar_lesson_id
+    LEFT JOIN modules m ON m.id = q.lms_module_id
+    WHERE q.id = $1
+  `, [quizId]);
+  if (!quizRows.length) return null;
+
+  const quiz = quizRows[0];
+  const { rows: questionRows } = await pool.query(`
+    SELECT id, question_text AS "questionText", question_type AS "questionType",
+           options, correct_answer AS "correctAnswer", points, sort_order AS "sortOrder"
+    FROM quiz_questions
+    WHERE quiz_id = $1
+    ORDER BY sort_order ASC, created_at ASC
+  `, [quizId]);
+
+  let teacherId = quiz.calendarTeacherId || null;
+  if (!teacherId && quiz.moduleId) {
+    const { rows: teacherRows } = await pool.query(`
+      SELECT DISTINCT cal.teacher_id AS "teacherId"
+      FROM lms_lessons ll
+      JOIN lessons cal ON cal.id = ll.calendar_lesson_id
+      WHERE ll.lms_module_id = $1
+        AND cal.teacher_id IS NOT NULL
+    `, [quiz.moduleId]);
+    if (teacherRows.length === 1) {
+      teacherId = teacherRows[0].teacherId;
+    }
+  }
+
+  const title = quiz.title || (quiz.lessonTitle ? `Quiz di verifica - ${quiz.lessonTitle}` : `Quiz Modulo - ${quiz.moduleTitle || 'Modulo'}`);
+  const descriptor = quiz.lessonTitle
+    ? `Quiz LMS collegato alla lezione: ${quiz.lessonTitle}`
+    : `Quiz LMS collegato al modulo: ${quiz.moduleTitle || 'Modulo'}`;
+  const quizData = {
+    source: 'lms_quiz',
+    quizId: quiz.id,
+    moduleId: quiz.moduleId || null,
+    lessonId: quiz.lessonId || null,
+    title,
+    description: quiz.description || null,
+    passingScore: quiz.passingScore,
+    maxAttempts: quiz.maxAttempts,
+    timeLimitMinutes: quiz.timeLimitMinutes,
+    questions: questionRows,
+    updatedAt: new Date().toISOString()
+  };
+
+  return {
+    quiz,
+    questionRows,
+    resourcePayload: {
+      title,
+      description: quiz.description || descriptor,
+      resourceType: 'quiz',
+      url: 'data:application/json,' + encodeURIComponent(JSON.stringify(quizData)),
+      isPublished: Boolean(quiz.isPublished),
+      teacherId,
+      lessonId: quiz.calendarLessonId || null
+    }
+  };
+}
+
+async function syncQuizResource(quizId) {
+  const context = await getLmsQuizResourceContext(quizId);
+  if (!context) return null;
+
+  const { quiz, resourcePayload } = context;
+  let resourceId = quiz.resourceId || null;
+
+  if (resourceId) {
+    const { rows } = await pool.query(`
+      UPDATE resources
+      SET title = $2,
+          description = $3,
+          resource_type = $4,
+          url = $5,
+          is_published = $6,
+          teacher_id = $7,
+          lesson_id = $8,
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING id
+    `, [
+      resourceId,
+      resourcePayload.title,
+      resourcePayload.description,
+      resourcePayload.resourceType,
+      resourcePayload.url,
+      resourcePayload.isPublished,
+      resourcePayload.teacherId || null,
+      resourcePayload.lessonId || null
+    ]);
+    if (rows.length) return rows[0].id;
+  }
+
+  resourceId = uuidv4();
+  await pool.query(`
+    INSERT INTO resources (
+      id, title, description, resource_type, url, is_published, teacher_id, lesson_id
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  `, [
+    resourceId,
+    resourcePayload.title,
+    resourcePayload.description,
+    resourcePayload.resourceType,
+    resourcePayload.url,
+    resourcePayload.isPublished,
+    resourcePayload.teacherId || null,
+    resourcePayload.lessonId || null
+  ]);
+
+  await pool.query('UPDATE quizzes SET resource_id = $2, updated_at = NOW() WHERE id = $1', [quizId, resourceId]);
+  return resourceId;
+}
+
+async function syncQuizIntoLessonMaterials(quizId) {
+  const context = await getLmsQuizResourceContext(quizId);
+  if (!context) return null;
+
+  const { quiz } = context;
+  if (!quiz.lessonId) return null;
+
+  const { rows: lessonRows } = await pool.query(
+    'SELECT materials FROM lms_lessons WHERE id = $1',
+    [quiz.lessonId]
+  );
+  if (!lessonRows.length) return null;
+
+  const currentMaterials = Array.isArray(lessonRows[0].materials) ? lessonRows[0].materials : [];
+  const quizUrl = `/learn/quiz.html?quizId=${quiz.id}`;
+  const nextItem = {
+    type: 'quiz',
+    name: quiz.title || 'Quiz di verifica',
+    url: quizUrl,
+    quizId: quiz.id,
+    resourceId: quiz.resourceId || null
+  };
+
+  const nextMaterials = currentMaterials.filter(item => {
+    if (!item || item.type !== 'quiz') return true;
+    return item.quizId !== quiz.id && item.resourceId !== quiz.resourceId && item.url !== quizUrl;
+  });
+  nextMaterials.push(nextItem);
+
+  await pool.query(
+    'UPDATE lms_lessons SET materials = $2, updated_at = NOW() WHERE id = $1',
+    [quiz.lessonId, JSON.stringify(nextMaterials)]
+  );
+  return nextItem;
+}
+
+async function removeQuizFromLessonMaterials(quizId) {
+  const { rows: quizRows } = await pool.query(
+    'SELECT id, lms_lesson_id AS "lessonId", resource_id AS "resourceId" FROM quizzes WHERE id = $1',
+    [quizId]
+  );
+  if (!quizRows.length || !quizRows[0].lessonId) return;
+
+  const quiz = quizRows[0];
+  const { rows: lessonRows } = await pool.query(
+    'SELECT materials FROM lms_lessons WHERE id = $1',
+    [quiz.lessonId]
+  );
+  if (!lessonRows.length) return;
+
+  const currentMaterials = Array.isArray(lessonRows[0].materials) ? lessonRows[0].materials : [];
+  const quizUrl = `/learn/quiz.html?quizId=${quiz.id}`;
+  const nextMaterials = currentMaterials.filter(item => {
+    if (!item || item.type !== 'quiz') return true;
+    return item.quizId !== quiz.id && item.resourceId !== quiz.resourceId && item.url !== quizUrl;
+  });
+
+  await pool.query(
+    'UPDATE lms_lessons SET materials = $2, updated_at = NOW() WHERE id = $1',
+    [quiz.lessonId, JSON.stringify(nextMaterials)]
+  );
+}
+
 // Whitelist colonne aggiornabili per tabella (sicurezza)
 const ALLOWED_UPDATE_FIELDS = {
   faculty: ['name', 'first_name', 'last_name', 'role', 'email', 'bio', 'photo_url', 'profile_link', 'sort_order', 'is_published', 'is_active'],
@@ -4497,6 +4687,7 @@ app.get('/api/lms/quizzes', async (req, res) => {
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const { rows } = await pool.query(`
       SELECT id, lms_lesson_id AS "lessonId", lms_module_id AS "moduleId",
+             resource_id AS "resourceId",
              title, description, passing_score AS "passingScore",
              max_attempts AS "maxAttempts", time_limit_minutes AS "timeLimitMinutes",
              is_published AS "isPublished",
@@ -4517,6 +4708,7 @@ app.get('/api/lms/quizzes/:id', async (req, res) => {
   try {
     const { rows: quizRows } = await pool.query(`
       SELECT id, lms_lesson_id AS "lessonId", lms_module_id AS "moduleId",
+             resource_id AS "resourceId",
              title, description, passing_score AS "passingScore",
              max_attempts AS "maxAttempts", time_limit_minutes AS "timeLimitMinutes",
              is_published AS "isPublished"
@@ -4554,12 +4746,14 @@ app.post('/api/lms/quizzes', requireAdmin, async (req, res) => {
       INSERT INTO quizzes (id, lms_lesson_id, lms_module_id, title, description, passing_score, max_attempts, time_limit_minutes, is_published)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id, lms_lesson_id AS "lessonId", lms_module_id AS "moduleId",
-                title, description, passing_score AS "passingScore",
+                resource_id AS "resourceId", title, description, passing_score AS "passingScore",
                 max_attempts AS "maxAttempts", time_limit_minutes AS "timeLimitMinutes",
                 is_published AS "isPublished"
     `, [id, lessonId || null, moduleId || null, title, description || null,
         passingScore || 70, maxAttempts || 0, timeLimitMinutes || null, isPublished !== false]);
-    res.status(201).json(rows[0]);
+    const resourceId = await syncQuizResource(id);
+    await syncQuizIntoLessonMaterials(id);
+    res.status(201).json({ ...rows[0], resourceId });
   } catch (error) {
     console.error('Error creating quiz', error);
     res.status(500).json({ error: 'Unable to create quiz' });
@@ -4580,8 +4774,10 @@ app.put('/api/lms/quizzes/:id', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(query, values);
     if (!rows.length) return res.status(404).json({ error: 'Quiz not found' });
     const r = rows[0];
+    const resourceId = await syncQuizResource(req.params.id);
+    await syncQuizIntoLessonMaterials(req.params.id);
     res.json({
-      id: r.id, lessonId: r.lms_lesson_id, moduleId: r.lms_module_id,
+      id: r.id, lessonId: r.lms_lesson_id, moduleId: r.lms_module_id, resourceId,
       title: r.title, description: r.description, passingScore: r.passing_score,
       maxAttempts: r.max_attempts, timeLimitMinutes: r.time_limit_minutes,
       isPublished: r.is_published
@@ -4595,8 +4791,14 @@ app.put('/api/lms/quizzes/:id', requireAdmin, async (req, res) => {
 app.delete('/api/lms/quizzes/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
-    const { rowCount } = await pool.query('DELETE FROM quizzes WHERE id = $1', [req.params.id]);
-    if (!rowCount) return res.status(404).json({ error: 'Quiz not found' });
+    const { rows: existingRows } = await pool.query('SELECT resource_id AS "resourceId" FROM quizzes WHERE id = $1', [req.params.id]);
+    if (!existingRows.length) return res.status(404).json({ error: 'Quiz not found' });
+    const resourceId = existingRows[0].resourceId;
+    await removeQuizFromLessonMaterials(req.params.id);
+    await pool.query('DELETE FROM quizzes WHERE id = $1', [req.params.id]);
+    if (resourceId) {
+      await pool.query('DELETE FROM resources WHERE id = $1', [resourceId]);
+    }
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting quiz', error);
@@ -4653,14 +4855,20 @@ app.post('/api/lms/quizzes/generate', requireAdmin, async (req, res) => {
     } else {
       // Single lesson quiz (existing logic)
       const { rows: lessons } = await pool.query(
-        'SELECT title, description, materials FROM lessons WHERE id = $1', [lessonId]
+        `SELECT ll.title, ll.description, ll.materials, ll.calendar_lesson_id AS "calendarLessonId",
+                cal.title AS "calendarLessonTitle", cal.notes
+         FROM lms_lessons ll
+         LEFT JOIN lessons cal ON cal.id = ll.calendar_lesson_id
+         WHERE ll.id = $1`,
+        [lessonId]
       );
       if (!lessons.length) return res.status(404).json({ error: 'Lezione non trovata' });
       const lesson = lessons[0];
       const materials = lesson.materials || [];
-      contextTitle = lesson.title;
+      contextTitle = lesson.title || lesson.calendarLessonTitle;
       context = `Titolo lezione: ${lesson.title}\n`;
       if (lesson.description) context += `Descrizione: ${lesson.description}\n`;
+      if (lesson.notes) context += `Note docente: ${lesson.notes}\n`;
       if (materials.length > 0) {
         context += `\nMateriali disponibili:\n`;
         materials.forEach(m => { context += `- ${m.name} (${m.type}): ${m.url}\n`; });
@@ -4886,6 +5094,8 @@ app.post('/api/lms/quiz-questions', requireAdmin, async (req, res) => {
     `, [id, quizId, questionText, questionType || 'single_choice',
         JSON.stringify(options || []), JSON.stringify(correctAnswer || null),
         points || 1, sortOrder || 0]);
+    await syncQuizResource(quizId);
+    await syncQuizIntoLessonMaterials(quizId);
     res.status(201).json(rows[0]);
   } catch (error) {
     console.error('Error creating quiz question', error);
@@ -4907,6 +5117,8 @@ app.put('/api/lms/quiz-questions/:id', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(query, values);
     if (!rows.length) return res.status(404).json({ error: 'Question not found' });
     const r = rows[0];
+    await syncQuizResource(r.quiz_id);
+    await syncQuizIntoLessonMaterials(r.quiz_id);
     res.json({
       id: r.id, quizId: r.quiz_id, questionText: r.question_text,
       questionType: r.question_type, options: r.options,
@@ -4921,8 +5133,10 @@ app.put('/api/lms/quiz-questions/:id', requireAdmin, async (req, res) => {
 app.delete('/api/lms/quiz-questions/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
-    const { rowCount } = await pool.query('DELETE FROM quiz_questions WHERE id = $1', [req.params.id]);
-    if (!rowCount) return res.status(404).json({ error: 'Question not found' });
+    const { rows } = await pool.query('DELETE FROM quiz_questions WHERE id = $1 RETURNING quiz_id AS "quizId"', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Question not found' });
+    await syncQuizResource(rows[0].quizId);
+    await syncQuizIntoLessonMaterials(rows[0].quizId);
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting quiz question', error);

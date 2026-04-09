@@ -85,6 +85,16 @@
         /* Upload modal */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
         .modal-content { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 32px; border-radius: 12px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+        .quiz-modal-content { max-width: 960px; padding: 24px; }
+        .quiz-editor-field label { display: block; margin-bottom: 6px; font-weight: 600; color: var(--gray-700); }
+        .quiz-editor-field input, .quiz-editor-field textarea, .quiz-editor-field select { width: 100%; padding: 10px 12px; border: 1px solid var(--gray-300); border-radius: 8px; font: inherit; }
+        .quiz-editor-field textarea { min-height: 90px; resize: vertical; }
+        .quiz-question-card { border: 1px solid var(--gray-200); border-radius: 10px; padding: 16px; background: var(--gray-50); margin-top: 14px; }
+        .quiz-question-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+        .quiz-option-row { display: grid; grid-template-columns: 1fr 140px 42px; gap: 10px; align-items: center; margin-top: 10px; }
+        .quiz-editor-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
+        .quiz-editor-actions-right { display: flex; gap: 12px; flex-wrap: wrap; }
+        .btn-red { background: var(--red-500); color: white; }
         .upload-zone { border: 2px dashed var(--gray-300); border-radius: 8px; padding: 32px; text-align: center; margin: 16px 0; cursor: pointer; }
         .upload-zone:hover, .upload-zone.dragover { border-color: var(--green-500); background: var(--green-50); }
         .hidden { display: none; }
@@ -112,6 +122,7 @@
             .item-actions { width: 100%; justify-content: flex-end; }
             .consent-choices { flex-direction: column; }
             .sig-name-row { grid-template-columns: 1fr; }
+            .quiz-option-row { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -299,11 +310,32 @@
         </div>
     </div>
 
+    <div id="quiz-editor-modal" class="modal-overlay">
+        <div class="modal-content quiz-modal-content">
+            <h3 id="quiz-editor-heading">Modifica Quiz</h3>
+            <p style="margin: 6px 0 16px; color: var(--gray-500); font-size: 14px;">Modifica il quiz in formato testuale, senza intervenire sul JSON.</p>
+            <div class="quiz-editor-field">
+                <label for="quiz-editor-title-input">Titolo quiz</label>
+                <input type="text" id="quiz-editor-title-input" placeholder="Titolo del quiz">
+            </div>
+            <div id="quiz-editor-questions"></div>
+            <div class="quiz-editor-actions">
+                <button type="button" class="btn-sm btn-blue" id="quiz-add-question-btn">+ Aggiungi domanda</button>
+                <div class="quiz-editor-actions-right">
+                    <button type="button" class="btn-sm btn-gray" id="quiz-editor-cancel-btn">Annulla</button>
+                    <button type="button" class="btn-sm btn-green" id="quiz-editor-save-btn">Salva modifiche</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let teacherToken = null;
         let currentTeacher = null;
         let signingDocId = null;
         let consentValue = null;
+        let editingQuizId = null;
+        let editingQuizData = null;
 
         // === AUTH ===
         window.addEventListener('load', async () => {
@@ -499,7 +531,7 @@
                             </div>
                             <div class="item-actions">
                                 <span class="badge ${cls}">${label}</span>
-                                <button class="btn-sm btn-gray" onclick="editQuizJson('${q.id}')">Modifica</button>
+                                <button class="btn-sm btn-gray" onclick="openQuizEditor('${q.id}')">Modifica</button>
                                 ${q.reviewStatus === 'pending_teacher_approval' || q.reviewStatus === 'teacher_rejected'
                                     ? `<button class="btn-sm btn-green" onclick="reviewQuiz('${q.id}','approve')">Approva</button>
                                        <button class="btn-sm btn-gray" onclick="reviewQuiz('${q.id}','reject')">Rifiuta</button>`
@@ -513,7 +545,80 @@
             }
         }
 
-        async function editQuizJson(quizId) {
+        function escapeHtml(text) {
+            return String(text ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function buildEmptyQuizQuestion() {
+            return { questionText: '', options: ['', ''], correctAnswer: '', points: 1 };
+        }
+
+        function normalizeQuizData(data) {
+            const normalized = {
+                title: typeof data?.title === 'string' ? data.title : 'Quiz',
+                questions: Array.isArray(data?.questions) ? data.questions : []
+            };
+            if (!normalized.questions.length) normalized.questions.push(buildEmptyQuizQuestion());
+            normalized.questions = normalized.questions.map((question) => {
+                const options = Array.isArray(question?.options) ? question.options.map(opt => String(opt ?? '')) : ['', ''];
+                while (options.length < 2) options.push('');
+                return {
+                    questionText: String(question?.questionText || ''),
+                    options,
+                    correctAnswer: String(question?.correctAnswer || ''),
+                    points: Number(question?.points) > 0 ? Number(question.points) : 1
+                };
+            });
+            return normalized;
+        }
+
+        function renderQuizEditor() {
+            if (!editingQuizData) return;
+            document.getElementById('quiz-editor-title-input').value = editingQuizData.title || '';
+            const container = document.getElementById('quiz-editor-questions');
+            container.innerHTML = editingQuizData.questions.map((question, questionIndex) => `
+                <div class="quiz-question-card">
+                    <div class="quiz-question-head">
+                        <div><strong>Domanda ${questionIndex + 1}</strong></div>
+                        <button type="button" class="btn-sm btn-red" data-remove-question="${questionIndex}">Elimina</button>
+                    </div>
+                    <div class="quiz-editor-field">
+                        <label>Testo domanda</label>
+                        <textarea data-question-text="${questionIndex}" placeholder="Scrivi la domanda">${escapeHtml(question.questionText)}</textarea>
+                    </div>
+                    <div class="quiz-editor-field" style="margin-top: 12px;">
+                        <label>Punteggio</label>
+                        <input type="number" min="1" step="1" data-question-points="${questionIndex}" value="${question.points}">
+                    </div>
+                    ${question.options.map((option, optionIndex) => `
+                        <div class="quiz-option-row">
+                            <input type="text" data-option-text="${questionIndex}:${optionIndex}" value="${escapeHtml(option)}" placeholder="Opzione ${optionIndex + 1}">
+                            <select data-correct-option="${questionIndex}:${optionIndex}">
+                                <option value="false">Opzione</option>
+                                <option value="true" ${question.correctAnswer === option ? 'selected' : ''}>Corretta</option>
+                            </select>
+                            <button type="button" class="btn-sm btn-gray" data-remove-option="${questionIndex}:${optionIndex}">✕</button>
+                        </div>
+                    `).join('')}
+                    <div style="margin-top: 12px;">
+                        <button type="button" class="btn-sm btn-blue" data-add-option="${questionIndex}">+ Aggiungi opzione</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function closeQuizEditor() {
+            document.getElementById('quiz-editor-modal').style.display = 'none';
+            editingQuizId = null;
+            editingQuizData = null;
+        }
+
+        async function openQuizEditor(quizId) {
             try {
                 const quizzes = await apiCall('/api/teachers/quizzes');
                 const quiz = quizzes.find(q => q.id === quizId);
@@ -522,17 +627,50 @@
                 if (quiz.url && quiz.url.startsWith('data:application/json,')) {
                     currentData = JSON.parse(decodeURIComponent(quiz.url.replace('data:application/json,', '')));
                 }
-                const nextRaw = prompt('Modifica JSON quiz (title/questions):', JSON.stringify(currentData, null, 2));
-                if (!nextRaw) return;
-                const quizData = JSON.parse(nextRaw);
-                await apiCall('/api/teachers/quizzes/' + quizId + '/review', {
+                editingQuizId = quizId;
+                editingQuizData = normalizeQuizData(currentData);
+                document.getElementById('quiz-editor-heading').textContent = `Modifica Quiz: ${quiz.title || 'Quiz'}`;
+                renderQuizEditor();
+                document.getElementById('quiz-editor-modal').style.display = 'block';
+            } catch (e) {
+                showToast('Errore apertura quiz', 'error');
+            }
+        }
+
+        function collectQuizEditorData() {
+            if (!editingQuizData) throw new Error('Quiz non disponibile');
+            const title = document.getElementById('quiz-editor-title-input').value.trim();
+            if (!title) throw new Error('Inserisci il titolo del quiz');
+            const questions = editingQuizData.questions.map((question, questionIndex) => {
+                const questionText = document.querySelector(`[data-question-text="${questionIndex}"]`)?.value.trim() || '';
+                const points = Number(document.querySelector(`[data-question-points="${questionIndex}"]`)?.value) || 1;
+                const optionInputs = Array.from(document.querySelectorAll(`[data-option-text^="${questionIndex}:"]`));
+                const options = optionInputs.map(input => input.value.trim()).filter(Boolean);
+                const correctSelects = Array.from(document.querySelectorAll(`[data-correct-option^="${questionIndex}:"]`));
+                let correctAnswer = '';
+                correctSelects.forEach((select, optionIndex) => {
+                    if (select.value === 'true' && options[optionIndex]) correctAnswer = options[optionIndex];
+                });
+                if (!questionText) throw new Error(`La domanda ${questionIndex + 1} non ha testo`);
+                if (options.length < 2) throw new Error(`La domanda ${questionIndex + 1} deve avere almeno 2 opzioni`);
+                if (!correctAnswer) throw new Error(`Seleziona la risposta corretta per la domanda ${questionIndex + 1}`);
+                return { questionText, options, correctAnswer, points };
+            });
+            return { title, questions };
+        }
+
+        async function saveQuizEditor() {
+            try {
+                const quizData = collectQuizEditorData();
+                await apiCall('/api/teachers/quizzes/' + editingQuizId + '/review', {
                     method: 'PUT',
                     body: JSON.stringify({ action: 'save', quizData })
                 });
                 showToast('Quiz aggiornato', 'success');
+                closeQuizEditor();
                 await loadTeacherQuizzes();
             } catch (e) {
-                showToast('JSON non valido o errore aggiornamento quiz', 'error');
+                showToast(e.message || 'Errore aggiornamento quiz', 'error');
             }
         }
 
@@ -680,6 +818,48 @@
         }
 
         document.getElementById('sign-modal').addEventListener('click', e => { if (e.target.id === 'sign-modal') closeSignModal(); });
+        document.getElementById('quiz-editor-modal').addEventListener('click', e => { if (e.target.id === 'quiz-editor-modal') closeQuizEditor(); });
+        document.getElementById('quiz-editor-cancel-btn').addEventListener('click', closeQuizEditor);
+        document.getElementById('quiz-editor-save-btn').addEventListener('click', saveQuizEditor);
+        document.getElementById('quiz-add-question-btn').addEventListener('click', () => {
+            if (!editingQuizData) return;
+            editingQuizData.questions.push(buildEmptyQuizQuestion());
+            renderQuizEditor();
+        });
+        document.getElementById('quiz-editor-questions').addEventListener('click', (event) => {
+            if (!editingQuizData) return;
+
+            const removeQuestion = event.target.closest('[data-remove-question]');
+            if (removeQuestion) {
+                const index = Number(removeQuestion.dataset.removeQuestion);
+                editingQuizData.questions.splice(index, 1);
+                if (!editingQuizData.questions.length) editingQuizData.questions.push(buildEmptyQuizQuestion());
+                renderQuizEditor();
+                return;
+            }
+
+            const addOption = event.target.closest('[data-add-option]');
+            if (addOption) {
+                const questionIndex = Number(addOption.dataset.addOption);
+                editingQuizData.questions[questionIndex].options.push('');
+                renderQuizEditor();
+                return;
+            }
+
+            const removeOption = event.target.closest('[data-remove-option]');
+            if (removeOption) {
+                const [questionIndexRaw, optionIndexRaw] = removeOption.dataset.removeOption.split(':');
+                const questionIndex = Number(questionIndexRaw);
+                const optionIndex = Number(optionIndexRaw);
+                const question = editingQuizData.questions[questionIndex];
+                if (question.options.length <= 2) {
+                    showToast('Ogni domanda deve avere almeno 2 opzioni', 'error');
+                    return;
+                }
+                question.options.splice(optionIndex, 1);
+                renderQuizEditor();
+            }
+        });
 
         // === UPLOAD MODAL ===
         function openUploadModal(lessonId, lessonTitle) {

@@ -2861,6 +2861,17 @@ app.put('/api/teachers/quizzes/:id/review', requireTeacher, async (req, res) => 
       [nextUrl, status, reviewNotes, isPublished, id, req.teacher.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Quiz not found for this teacher' });
+
+    // Keep LMS quiz visibility/title aligned when this resource is the public-facing wrapper.
+    await pool.query(
+      `UPDATE quizzes
+       SET title = COALESCE($2, title),
+           is_published = COALESCE($3, is_published),
+           updated_at = NOW()
+       WHERE resource_id = $1`,
+      [id, quizData?.title || null, typeof isPublished === 'boolean' ? isPublished : null]
+    );
+
     res.json(rows[0]);
   } catch (error) {
     console.error('Error reviewing teacher quiz', error);

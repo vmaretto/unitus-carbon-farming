@@ -4671,7 +4671,10 @@ Buono studio!</textarea>
             });
 
             // Edit/delete lessons + assets toggle
-            panel.addEventListener('click', async (ev) => {
+            if (panel._lmsLessonsClickHandler) {
+                panel.removeEventListener('click', panel._lmsLessonsClickHandler);
+            }
+            panel._lmsLessonsClickHandler = async (ev) => {
                 const editLessonBtn = ev.target.closest('[data-edit-lms-lesson]');
                 const deleteLessonBtn = ev.target.closest('[data-delete-lms-lesson]');
                 const toggleQuizBtn = ev.target.closest('[data-toggle-quiz]');
@@ -4810,7 +4813,8 @@ Buono studio!</textarea>
                         loadLmsQuiz(lid, quizDiv);
                     } catch (error) {}
                 }
-            });
+            };
+            panel.addEventListener('click', panel._lmsLessonsClickHandler);
         }
 
         // ============================================

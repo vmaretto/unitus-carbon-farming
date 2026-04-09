@@ -617,17 +617,31 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
 
   try {
     const facultyId = req.teacher.id;
-
-    // Count teacher's lessons
-    const { rows: lessonsCount } = await pool.query(
-      'SELECT COUNT(*) as total FROM lessons WHERE teacher_id = $1',
+    
+    // Teacher lessons in scope: future OR completed, excluding cancelled
+    const { rows: lessonStats } = await pool.query(
+      `SELECT
+         COUNT(*)::int AS total_lessons,
+         COUNT(*) FILTER (WHERE l.status = 'completed')::int AS completed_lessons,
+         COUNT(*) FILTER (WHERE COALESCE(l.status, 'scheduled') != 'completed')::int AS planned_lessons,
+         COALESCE(SUM(COALESCE(l.duration_minutes, 0)) FILTER (WHERE COALESCE(l.status, 'scheduled') != 'completed'), 0)::int AS planned_minutes,
+         COALESCE(SUM(COALESCE(l.duration_minutes, 0)) FILTER (WHERE l.status = 'completed'), 0)::int AS completed_minutes
+       FROM lessons l
+       WHERE l.teacher_id = $1
+         AND COALESCE(l.status, 'scheduled') != 'cancelled'
+         AND (
+           l.start_datetime >= NOW()
+           OR l.status = 'completed'
+         )`,
       [facultyId]
     );
 
     // Count published materials
     const { rows: materialsCount } = await pool.query(
-      `SELECT COUNT(*) as total FROM materials_pending
-       WHERE faculty_id = $1 AND status = 'approved'`,
+      `SELECT (
+          (SELECT COUNT(*)::int FROM materials_pending WHERE faculty_id = $1 AND status = 'approved') +
+          (SELECT COUNT(*)::int FROM resources WHERE teacher_id = $1 AND is_published = true)
+        ) AS total`,
       [facultyId]
     );
 
@@ -647,8 +661,19 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
       [facultyId]
     );
 
+    const plannedHours = Math.round(((lessonStats[0]?.planned_minutes || 0) / 60) * 100) / 100;
+    const completedHours = Math.round(((lessonStats[0]?.completed_minutes || 0) / 60) * 100) / 100;
+    const plannedCfu = Math.round((plannedHours / 8) * 100) / 100;
+    const completedCfu = Math.round((completedHours / 8) * 100) / 100;
+
     res.json({
-      total_lessons: parseInt(lessonsCount[0].total),
+      total_lessons: lessonStats[0]?.total_lessons || 0,
+      planned_lessons: lessonStats[0]?.planned_lessons || 0,
+      completed_lessons: lessonStats[0]?.completed_lessons || 0,
+      planned_hours: plannedHours,
+      completed_hours: completedHours,
+      planned_cfu: plannedCfu,
+      completed_cfu: completedCfu,
       materials_published: parseInt(materialsCount[0].total),
       materials_pending: parseInt(pendingCount[0].total),
       documents_pending: parseInt(docsCount[0].total)
@@ -664,14 +689,22 @@ app.get('/api/teachers/lessons', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
 
   try {
-    // Find the matching faculty id for this teacher (linked by email)
     const { rows: lessons } = await pool.query(
       `SELECT l.id, l.title, l.start_datetime, l.duration_minutes,
               l.location_physical, l.location_remote, l.status, l.notes,
-              m.name AS module_name
+              m.name AS module_name,
+              CASE
+                WHEN l.status = 'completed' THEN 'completed'
+                ELSE 'planned'
+              END AS lesson_state
        FROM lessons l
        LEFT JOIN modules m ON l.module_id = m.id
        WHERE l.teacher_id = $1
+         AND COALESCE(l.status, 'scheduled') != 'cancelled'
+         AND (
+           l.start_datetime >= NOW()
+           OR l.status = 'completed'
+         )
        ORDER BY l.start_datetime ASC`,
       [req.teacher.id]
     );

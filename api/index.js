@@ -1326,54 +1326,12 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
            notes = CASE WHEN $1 = 'rejected' THEN $2 ELSE NULL END,
            updated_at = NOW()
        WHERE id = $3
-       RETURNING id, faculty_id AS "facultyId", lesson_id AS "lessonId",
-                 file_url AS "fileUrl", file_name AS "fileName", file_type AS "fileType",
-                 status, notes, updated_at AS "updatedAt"`,
+       RETURNING id, status, notes, updated_at AS "updatedAt"`,
       [newStatus, reviewNotes, id]
     );
 
     if (!rows.length) {
       return res.status(404).json({ error: 'Material not found' });
-    }
-
-    // On approval, publish as resource automatically for students.
-    if (action === 'approve') {
-      const item = rows[0];
-      const resourceTypeFromFile = (mimeOrName = '') => {
-        const v = String(mimeOrName).toLowerCase();
-        if (v.includes('pdf') || v.endsWith('.pdf')) return 'pdf';
-        if (v.includes('video') || v.endsWith('.mp4') || v.endsWith('.mov') || v.endsWith('.webm')) return 'video';
-        if (v.includes('audio') || v.endsWith('.mp3') || v.endsWith('.wav')) return 'audio';
-        return 'document';
-      };
-      const resourceType = resourceTypeFromFile(item.fileType || item.fileName);
-      const resourceTitle = item.fileName || 'Materiale docente';
-
-      const { rows: existing } = await pool.query(
-        `SELECT id FROM resources
-         WHERE url = $1
-           AND COALESCE(lesson_id::text, '') = COALESCE($2::text, '')
-           AND COALESCE(teacher_id::text, '') = COALESCE($3::text, '')
-         LIMIT 1`,
-        [item.fileUrl, item.lessonId || null, item.facultyId || null]
-      );
-
-      if (existing.length) {
-        await pool.query(
-          `UPDATE resources
-           SET is_published = true, updated_at = NOW()
-           WHERE id = $1`,
-          [existing[0].id]
-        );
-      } else {
-        await pool.query(
-          `INSERT INTO resources
-             (id, title, resource_type, url, is_published, teacher_id, lesson_id, created_at, updated_at)
-           VALUES
-             ($1, $2, $3, $4, true, $5, $6, NOW(), NOW())`,
-          [uuidv4(), resourceTitle, resourceType, item.fileUrl, item.facultyId || null, item.lessonId || null]
-        );
-      }
     }
 
     res.json({ success: true, material: rows[0] });

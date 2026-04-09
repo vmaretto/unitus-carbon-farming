@@ -1821,6 +1821,16 @@ function ensurePool(res) {
   return true;
 }
 
+async function getTableColumns(tableName) {
+  const { rows } = await pool.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = $1`,
+    [tableName]
+  );
+  return new Set(rows.map(row => row.column_name));
+}
+
 // Whitelist colonne aggiornabili per tabella (sicurezza)
 const ALLOWED_UPDATE_FIELDS = {
   faculty: ['name', 'first_name', 'last_name', 'role', 'email', 'bio', 'photo_url', 'profile_link', 'sort_order', 'is_published', 'is_active'],
@@ -2480,16 +2490,40 @@ app.put('/api/resources/:id/request-review', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Teacher not found' });
     }
 
+    const resourceColumns = await getTableColumns('resources');
+    const hasReviewWorkflowColumns =
+      resourceColumns.has('review_status') &&
+      resourceColumns.has('teacher_review_notes') &&
+      resourceColumns.has('teacher_reviewed_at');
+
+    if (!resourceColumns.has('teacher_id')) {
+      return res.status(500).json({ error: 'Resources schema missing teacher_id column' });
+    }
+
+    const setClauses = ['teacher_id = $1', 'updated_at = NOW()'];
+    const returningClauses = [
+      'id',
+      'title',
+      'resource_type AS "resourceType"',
+      'teacher_id AS "teacherId"',
+      'is_published AS "isPublished"'
+    ];
+    if (hasReviewWorkflowColumns) {
+      setClauses.push(
+        `review_status = 'pending_teacher_approval'`,
+        'teacher_review_notes = NULL',
+        'teacher_reviewed_at = NULL'
+      );
+      returningClauses.push('review_status AS "reviewStatus"');
+    } else {
+      returningClauses.push(`'pending_teacher_approval' AS "reviewStatus"`);
+    }
+
     const { rows } = await pool.query(
       `UPDATE resources
-       SET teacher_id = $1,
-           review_status = 'pending_teacher_approval',
-           teacher_review_notes = NULL,
-           teacher_reviewed_at = NULL,
-           updated_at = NOW()
+       SET ${setClauses.join(', ')}
        WHERE id = $2 AND resource_type = 'quiz'
-       RETURNING id, title, resource_type AS "resourceType", teacher_id AS "teacherId",
-                 review_status AS "reviewStatus", is_published AS "isPublished"`,
+       RETURNING ${returningClauses.join(', ')}`,
       [teacherId, id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Quiz resource not found' });
@@ -2504,24 +2538,46 @@ app.put('/api/resources/:id/request-review', requireAdmin, async (req, res) => {
 app.get('/api/teachers/quizzes', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const resourceColumns = await getTableColumns('resources');
+    if (!resourceColumns.has('teacher_id')) {
+      return res.status(500).json({ error: 'Resources schema missing teacher_id column' });
+    }
+
+    const hasReviewStatus = resourceColumns.has('review_status');
+    const hasReviewNotes = resourceColumns.has('teacher_review_notes');
+    const hasReviewedAt = resourceColumns.has('teacher_reviewed_at');
+    const hasLessonId = resourceColumns.has('lesson_id');
     const { status } = req.query;
     const values = [req.teacher.id];
     let where = `WHERE r.teacher_id = $1 AND r.resource_type = 'quiz'`;
-    if (status) {
+    if (status && hasReviewStatus) {
       where += ` AND r.review_status = $2`;
       values.push(status);
-    } else {
+    } else if (hasReviewStatus) {
       where += ` AND r.review_status IN ('pending_teacher_approval', 'teacher_rejected', 'teacher_approved')`;
     }
 
+    const selectClauses = [
+      'r.id',
+      'r.title',
+      'r.description',
+      'r.url',
+      hasReviewStatus ? 'r.review_status AS "reviewStatus"' : `'pending_teacher_approval' AS "reviewStatus"`,
+      hasReviewNotes ? 'r.teacher_review_notes AS "reviewNotes"' : 'NULL::text AS "reviewNotes"',
+      hasReviewedAt ? 'r.teacher_reviewed_at AS "reviewedAt"' : 'NULL::timestamptz AS "reviewedAt"',
+      'r.is_published AS "isPublished"',
+      'r.created_at AS "createdAt"',
+      'r.updated_at AS "updatedAt"',
+      hasLessonId ? 'l.id AS "lessonId"' : 'NULL::uuid AS "lessonId"',
+      hasLessonId ? 'l.title AS "lessonTitle"' : 'NULL::text AS "lessonTitle"'
+    ];
+
+    const joinLessonClause = hasLessonId ? 'LEFT JOIN lessons l ON l.id = r.lesson_id' : '';
+
     const { rows } = await pool.query(
-      `SELECT r.id, r.title, r.description, r.url,
-              r.review_status AS "reviewStatus", r.teacher_review_notes AS "reviewNotes",
-              r.teacher_reviewed_at AS "reviewedAt", r.is_published AS "isPublished",
-              r.created_at AS "createdAt", r.updated_at AS "updatedAt",
-              l.id AS "lessonId", l.title AS "lessonTitle"
+      `SELECT ${selectClauses.join(', ')}
        FROM resources r
-       LEFT JOIN lessons l ON l.id = r.lesson_id
+       ${joinLessonClause}
        ${where}
        ORDER BY r.updated_at DESC`,
       values
@@ -2547,6 +2603,14 @@ app.put('/api/teachers/quizzes/:id/review', requireTeacher, async (req, res) => 
   }
 
   try {
+    const resourceColumns = await getTableColumns('resources');
+    if (!resourceColumns.has('teacher_id')) {
+      return res.status(500).json({ error: 'Resources schema missing teacher_id column' });
+    }
+
+    const hasReviewStatus = resourceColumns.has('review_status');
+    const hasReviewNotes = resourceColumns.has('teacher_review_notes');
+    const hasReviewedAt = resourceColumns.has('teacher_reviewed_at');
     let nextUrl = null;
     if (quizData && Array.isArray(quizData.questions)) {
       const payload = {
@@ -2564,19 +2628,40 @@ app.put('/api/teachers/quizzes/:id/review', requireTeacher, async (req, res) => 
         : 'pending_teacher_approval';
     const isPublished = action === 'approve' ? true : action === 'reject' ? false : null;
     const reviewNotes = action === 'save' ? 'Bozza modificata dal docente' : (notes || null);
+    const setClauses = [
+      'url = COALESCE($1, url)',
+      'is_published = COALESCE($4, is_published)',
+      'updated_at = NOW()'
+    ];
+    if (hasReviewStatus) {
+      setClauses.push('review_status = $2');
+    }
+    if (hasReviewNotes) {
+      setClauses.push('teacher_review_notes = $3');
+    }
+    if (hasReviewedAt) {
+      if (hasReviewStatus) {
+        setClauses.push(`teacher_reviewed_at = CASE WHEN $2 = 'pending_teacher_approval' THEN teacher_reviewed_at ELSE NOW() END`);
+      } else {
+        setClauses.push('teacher_reviewed_at = NOW()');
+      }
+    }
+
+    const returningClauses = [
+      'id',
+      'title',
+      hasReviewStatus ? 'review_status AS "reviewStatus"' : `$2 AS "reviewStatus"`,
+      hasReviewNotes ? 'teacher_review_notes AS "reviewNotes"' : '$3::text AS "reviewNotes"',
+      'is_published AS "isPublished"'
+    ];
+
     const { rows } = await pool.query(
       `UPDATE resources
-       SET url = COALESCE($1, url),
-           review_status = $2,
-           teacher_review_notes = $3,
-           teacher_reviewed_at = CASE WHEN $2 = 'pending_teacher_approval' THEN teacher_reviewed_at ELSE NOW() END,
-           is_published = COALESCE($4, is_published),
-           updated_at = NOW()
+       SET ${setClauses.join(', ')}
        WHERE id = $5
          AND teacher_id = $6
          AND resource_type = 'quiz'
-       RETURNING id, title, review_status AS "reviewStatus",
-                 teacher_review_notes AS "reviewNotes", is_published AS "isPublished"`,
+       RETURNING ${returningClauses.join(', ')}`,
       [nextUrl, status, reviewNotes, isPublished, id, req.teacher.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Quiz not found for this teacher' });

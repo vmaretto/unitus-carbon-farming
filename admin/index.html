@@ -1968,6 +1968,13 @@ Buono studio!</textarea>
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
+        function isAuthTransitionError(error) {
+            if (!error) return false;
+            return error.status === 401 ||
+                error.message === 'Non autenticato' ||
+                error.message === 'Sessione scaduta. Effettua nuovamente il login.';
+        }
+
         async function bootstrapAdminData() {
             if (adminBootstrapPromise) return adminBootstrapPromise;
 
@@ -1987,9 +1994,11 @@ Buono studio!</textarea>
                 ];
 
                 for (const task of startupTasks) {
+                    if (!isAuthenticated || !adminToken) break;
                     try {
                         await task();
                     } catch (error) {
+                        if (isAuthTransitionError(error)) break;
                         console.error('Startup task failed:', error);
                     }
                 }
@@ -2155,9 +2164,12 @@ Buono studio!</textarea>
         async function apiRequest(url, options = {}) {
             const maxAttempts = options._maxAttempts || 3;
             const retryDelay = options._retryDelay || 1200;
+            const suppressErrors = options.suppressErrors === true;
             try {
                 if (!isAuthenticated && !url.includes('/api/auth/')) {
-                    throw new Error('Non autenticato');
+                    const authError = new Error('Non autenticato');
+                    authError.status = 401;
+                    throw authError;
                 }
                 for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                     const headers = {
@@ -2196,8 +2208,10 @@ Buono studio!</textarea>
                     throw error;
                 }
             } catch (error) {
-                console.error('API error', error);
-                showToast(error.message || 'Impossibile completare l\'operazione', 'error');
+                if (!suppressErrors) {
+                    console.error('API error', error);
+                    showToast(error.message || 'Impossibile completare l\'operazione', 'error');
+                }
                 throw error;
             }
         }
@@ -2302,7 +2316,9 @@ Buono studio!</textarea>
                     tbody.appendChild(tr);
                 });
                 toggleEmptyState(tbody, docs.length > 0, '[data-empty-tdoc]');
-            } catch (e) { console.error('Load teacher docs error:', e); }
+            } catch (e) {
+                if (!isAuthTransitionError(e)) console.error('Load teacher docs error:', e);
+            }
         }
 
         document.getElementById('teacher-doc-form').addEventListener('submit', async (e) => {
@@ -2417,7 +2433,7 @@ Buono studio!</textarea>
 
                 toggleEmptyState(tbody, items.length > 0, '[data-empty-tm]');
             } catch (e) {
-                console.error('Load teacher materials error:', e);
+                if (!isAuthTransitionError(e)) console.error('Load teacher materials error:', e);
             }
         }
 

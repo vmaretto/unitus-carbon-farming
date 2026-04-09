@@ -2431,7 +2431,7 @@ Buono studio!</textarea>
                 const items = await apiRequest('/api/resources');
                 state.resources = items;
 
-                const typeIcons = { video: '🎬', pdf: '📄', document: '📝', audio: '🎧', link: '🔗' };
+                const typeIcons = { video: '🎬', pdf: '📄', document: '📝', audio: '🎧', link: '🔗', quiz: '🧠' };
 
                 items.forEach((item) => {
                     const row = document.createElement('tr');
@@ -2443,6 +2443,7 @@ Buono studio!</textarea>
                         <td data-status><span class="status-pill" data-status="${item.isPublished ? 'published' : 'draft'}">${item.isPublished ? 'Visibile' : 'Bozza'}</span></td>
                         <td>
                             <button data-edit class="icon-btn" title="Modifica">✏️</button>
+                            ${item.resourceType === 'quiz' ? '<button data-request-review class="icon-btn" title="Invia revisione docente">🧑‍🏫</button>' : ''}
                             <button data-delete class="icon-btn danger" title="Elimina">🗑️</button>
                         </td>
                     `;
@@ -3019,6 +3020,7 @@ Buono studio!</textarea>
         document.getElementById('resource-table-body').addEventListener('click', async (event) => {
             const editButton = event.target.closest('button[data-edit]');
             const deleteButton = event.target.closest('button[data-delete]');
+            const requestReviewButton = event.target.closest('button[data-request-review]');
             const row = event.target.closest('tr[data-id]');
             if (!row) return;
             const id = row.dataset.id;
@@ -3049,6 +3051,26 @@ Buono studio!</textarea>
                     loadResources();
                 } catch (error) {
                     // handled
+                }
+            }
+
+            if (requestReviewButton) {
+                const current = state.resources.find((item) => item.id === id);
+                if (!current) return;
+                const teacherId = current.teacherId || document.getElementById('resource-teacher').value;
+                if (!teacherId) {
+                    showToast('Assegna un docente alla risorsa quiz prima di inviarla in revisione', 'error');
+                    return;
+                }
+                try {
+                    await apiRequest(`/api/resources/${id}/request-review`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ teacherId })
+                    });
+                    showToast('Quiz inviato al docente per approvazione');
+                    loadResources();
+                } catch (error) {
+                    showToast(error.message || 'Errore invio revisione quiz', 'error');
                 }
             }
         });

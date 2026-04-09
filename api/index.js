@@ -1500,6 +1500,8 @@ async function initDatabase() {
       name TEXT NOT NULL,
       description TEXT,
       sort_order INTEGER DEFAULT 0,
+      course_id UUID REFERENCES courses(id) ON DELETE SET NULL,
+      is_published BOOLEAN DEFAULT true,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
@@ -1661,11 +1663,10 @@ const ALLOWED_UPDATE_FIELDS = {
   faculty: ['name', 'first_name', 'last_name', 'role', 'email', 'bio', 'photo_url', 'profile_link', 'sort_order', 'is_published', 'is_active'],
   blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'is_published', 'published_at'],
   partners: ['name', 'logo_url', 'website_url', 'category', 'sort_order', 'is_visible'],
-  modules: ['name', 'ssd', 'cfu', 'hours', 'description', 'sort_order'],
+  modules: ['name', 'ssd', 'cfu', 'hours', 'description', 'sort_order', 'course_id', 'is_published'],
   lessons: ['title', 'module_id', 'teacher_id', 'external_teacher_name', 'start_datetime', 'duration_minutes', 'location_physical', 'location_remote', 'status', 'notes', 'materials'],
   courses: ['title', 'slug', 'description', 'cover_image_url', 'is_published'],
   course_editions: ['edition_name', 'course_id', 'start_date', 'end_date', 'max_students', 'is_active'],
-  lms_modules: ['title', 'description', 'sort_order', 'is_published'],
   lms_lessons: ['title', 'description', 'video_url', 'duration_minutes', 'sort_order', 'is_published', 'calendar_lesson_id'],
   quizzes: ['title', 'description', 'passing_score', 'max_attempts', 'time_limit_minutes', 'is_active'],
 };
@@ -3243,10 +3244,10 @@ app.get('/api/lms/modules', async (req, res) => {
     }
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const { rows } = await pool.query(`
-      SELECT id, course_id AS "courseId", title, description,
+      SELECT id, course_id AS "courseId", name AS title, description,
              sort_order AS "sortOrder", is_published AS "isPublished",
              created_at AS "createdAt", updated_at AS "updatedAt"
-      FROM lms_modules ${where}
+      FROM modules ${where}
       ORDER BY sort_order ASC, created_at ASC
     `, values);
     res.json(rows);
@@ -3260,10 +3261,10 @@ app.get('/api/lms/modules/:id', async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { rows } = await pool.query(`
-      SELECT id, course_id AS "courseId", title, description,
+      SELECT id, course_id AS "courseId", name AS title, description,
              sort_order AS "sortOrder", is_published AS "isPublished",
              created_at AS "createdAt", updated_at AS "updatedAt"
-      FROM lms_modules WHERE id = $1
+      FROM modules WHERE id = $1
     `, [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Module not found' });
     res.json(rows[0]);
@@ -3280,9 +3281,9 @@ app.post('/api/lms/modules', requireAdmin, async (req, res) => {
   try {
     const id = uuidv4();
     const { rows } = await pool.query(`
-      INSERT INTO lms_modules (id, course_id, title, description, sort_order, is_published)
+      INSERT INTO modules (id, course_id, name, description, sort_order, is_published)
       VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, course_id AS "courseId", title, description,
+      RETURNING id, course_id AS "courseId", name AS title, description,
                 sort_order AS "sortOrder", is_published AS "isPublished",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `, [id, courseId, title, description || null, typeof sortOrder === 'number' ? sortOrder : 0, isPublished !== false]);
@@ -3297,8 +3298,8 @@ app.put('/api/lms/modules/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   const { courseId, title, description, sortOrder, isPublished } = req.body;
   try {
-    const { query, values } = buildUpdateQuery('lms_modules', {
-      course_id: courseId, title, description,
+    const { query, values } = buildUpdateQuery('modules', {
+      course_id: courseId, name: title, description,
       sort_order: sortOrder,
       is_published: typeof isPublished === 'boolean' ? isPublished : undefined
     }, req.params.id);
@@ -3306,7 +3307,7 @@ app.put('/api/lms/modules/:id', requireAdmin, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Module not found' });
     const r = rows[0];
     res.json({
-      id: r.id, courseId: r.course_id, title: r.title, description: r.description,
+      id: r.id, courseId: r.course_id, title: r.name, description: r.description,
       sortOrder: r.sort_order, isPublished: r.is_published,
       createdAt: r.created_at, updatedAt: r.updated_at
     });
@@ -3319,7 +3320,7 @@ app.put('/api/lms/modules/:id', requireAdmin, async (req, res) => {
 app.delete('/api/lms/modules/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
-    const { rowCount } = await pool.query('DELETE FROM lms_modules WHERE id = $1', [req.params.id]);
+    const { rowCount } = await pool.query('DELETE FROM modules WHERE id = $1', [req.params.id]);
     if (!rowCount) return res.status(404).json({ error: 'Module not found' });
     res.status(204).send();
   } catch (error) {
@@ -3356,7 +3357,7 @@ app.get('/api/lms/lessons', async (req, res) => {
              ll.created_at AS "createdAt", ll.updated_at AS "updatedAt"
       FROM lms_lessons ll
       LEFT JOIN lessons cal ON cal.id = ll.calendar_lesson_id
-      ${needsJoin ? 'JOIN lms_modules m ON m.id = ll.lms_module_id' : ''}
+      ${needsJoin ? 'JOIN modules m ON m.id = ll.lms_module_id' : ''}
       ${where}
       ORDER BY ll.sort_order ASC, ll.created_at ASC
     `, values);
@@ -3384,7 +3385,7 @@ app.get('/api/lms/lessons/progress', requireStudent, async (req, res) => {
     const values = [req.user.userId];
     if (courseId) {
       query += ` WHERE ll.lms_module_id IN (
-        SELECT m.id FROM lms_modules m WHERE m.course_id = $2
+        SELECT m.id FROM modules m WHERE m.course_id = $2
       )`;
       values.push(courseId);
     }
@@ -3996,12 +3997,12 @@ app.get('/api/lms/my-courses', requireStudent, async (req, res) => {
       SELECT c.id, c.title, c.slug, c.description, c.cover_image_url AS "coverImageUrl",
              ce.id AS "editionId", ce.edition_name AS "editionName",
              e.status AS "enrollmentStatus", e.enrolled_at AS "enrolledAt",
-             (SELECT COUNT(*)::int FROM lms_modules m WHERE m.course_id = c.id) AS "totalModules",
+             (SELECT COUNT(*)::int FROM modules m WHERE m.course_id = c.id) AS "totalModules",
              (SELECT COUNT(*)::int FROM lms_lessons ll
-              JOIN lms_modules m2 ON m2.id = ll.lms_module_id
+              JOIN modules m2 ON m2.id = ll.lms_module_id
               WHERE m2.course_id = c.id AND ll.is_published = true) AS "totalLessons",
              (SELECT COUNT(DISTINCT ll2.id)::int FROM lms_lessons ll2
-              JOIN lms_modules m3 ON m3.id = ll2.lms_module_id
+              JOIN modules m3 ON m3.id = ll2.lms_module_id
               WHERE m3.course_id = c.id AND (
                 EXISTS (SELECT 1 FROM lesson_progress lp WHERE lp.lms_lesson_id = ll2.id AND lp.user_id = $1 AND lp.completed_at IS NOT NULL)
                 OR
@@ -4035,7 +4036,7 @@ app.get('/api/lms/my-progress', requireStudent, async (req, res) => {
       FROM enrollments e
       JOIN course_editions ce ON ce.id = e.course_edition_id
       JOIN courses c ON c.id = ce.course_id
-      LEFT JOIN lms_modules m ON m.course_id = c.id
+      LEFT JOIN modules m ON m.course_id = c.id
       LEFT JOIN lms_lessons ll ON ll.lms_module_id = m.id AND ll.is_published = true
       WHERE e.user_id = $1 AND e.status = 'active'
       GROUP BY c.id, c.title
@@ -4247,7 +4248,7 @@ app.post('/api/lms/quizzes/generate', requireAdmin, async (req, res) => {
 
     if (moduleId) {
       // Module quiz — gather all lessons in the module
-      const { rows: modRows } = await pool.query('SELECT title FROM lms_modules WHERE id = $1', [moduleId]);
+      const { rows: modRows } = await pool.query('SELECT name AS title FROM modules WHERE id = $1', [moduleId]);
       if (!modRows.length) return res.status(404).json({ error: 'Modulo non trovato' });
       contextTitle = modRows[0].title;
       context = `Modulo: ${contextTitle}\n\n`;
@@ -4782,7 +4783,7 @@ app.get('/api/attendance/lessons/:courseEditionId', requireAdmin, async (req, re
       SELECT l.id, l.title, l.start_datetime AS "startDatetime"
       FROM lessons l
       JOIN lms_lessons ll ON ll.calendar_lesson_id = l.id
-      JOIN lms_modules m ON m.id = ll.lms_module_id
+      JOIN modules m ON m.id = ll.lms_module_id
       JOIN courses c ON c.id = m.course_id
       JOIN course_editions ce ON ce.course_id = c.id
       WHERE ce.id = $1 AND l.status != 'cancelled'
@@ -5053,7 +5054,7 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
     const { rows: lmsLessons } = await pool.query(`
       SELECT ll.id, ll.title
       FROM lms_lessons ll
-      JOIN lms_modules lm ON lm.id = ll.lms_module_id
+      JOIN modules lm ON lm.id = ll.lms_module_id
       JOIN course_editions ce ON ce.course_id = lm.course_id
       WHERE ce.id = $1 AND ll.is_published = true
       ORDER BY lm.sort_order ASC, ll.sort_order ASC
@@ -5168,7 +5169,7 @@ app.get('/api/attendance/export/:courseEditionId', requireAdmin, async (req, res
          JOIN modules m ON m.id = l.module_id
          WHERE l.status != 'cancelled') +
         (SELECT COUNT(*)::int FROM lms_lessons ll
-         JOIN lms_modules lm ON lm.id = ll.lms_module_id
+         JOIN modules lm ON lm.id = ll.lms_module_id
          JOIN course_editions ce ON ce.course_id = lm.course_id
          WHERE ce.id = $1 AND ll.is_published = true) AS total
     `, [courseEditionId]);
@@ -5477,10 +5478,10 @@ app.get('/api/workflow/status', requireAdmin, async (req, res) => {
   try {
     const { courseId } = req.query;
     let query = `
-      SELECT cw.*, ll.title AS lesson_title, lm.title AS module_title
+      SELECT cw.*, ll.title AS lesson_title, lm.name AS module_title
       FROM content_workflow cw
       JOIN lms_lessons ll ON ll.id = cw.lms_lesson_id
-      JOIN lms_modules lm ON lm.id = ll.lms_module_id
+      JOIN modules lm ON lm.id = ll.lms_module_id
     `;
     const values = [];
     if (courseId) {
@@ -5502,10 +5503,10 @@ app.get('/api/workflow/review/:token', async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { rows } = await pool.query(`
-      SELECT cw.*, ll.title AS lesson_title, lm.title AS module_title
+      SELECT cw.*, ll.title AS lesson_title, lm.name AS module_title
       FROM content_workflow cw
       JOIN lms_lessons ll ON ll.id = cw.lms_lesson_id
-      JOIN lms_modules lm ON lm.id = ll.lms_module_id
+      JOIN modules lm ON lm.id = ll.lms_module_id
       WHERE cw.review_token = $1 AND cw.review_token_expires_at > NOW()
     `, [req.params.token]);
     if (!rows.length) return res.status(404).json({ error: 'Link non valido o scaduto' });

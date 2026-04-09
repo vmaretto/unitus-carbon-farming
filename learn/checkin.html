@@ -175,7 +175,7 @@
                     resultDiv.innerHTML = '✅ <strong>' + data.message + '</strong>' + 
                         (data.lessonTitle ? `<br><span style="font-size: 0.9em; opacity: 0.9;">${data.lessonTitle}</span>` : '') +
                         '<br><span style="font-size: 0.85em; margin-top: 8px; display: block;">Verrai reindirizzato alla dashboard tra 3 secondi...</span>';
-                    checkinBtn.textContent = 'Presenza registrata!';
+                    checkinBtn.textContent = data.updated ? 'Presenza aggiornata!' : 'Presenza registrata!';
                     checkinBtn.style.background = '#16a34a';
                     // Redirect alla dashboard dopo 3 secondi
                     setTimeout(() => {

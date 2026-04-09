@@ -5222,7 +5222,7 @@ Buono studio!</textarea>
             if (!userId) { showToast('Seleziona uno studente', 'error'); return; }
             
             try {
-                await apiRequest('/api/attendance/manual-checkin', {
+                const result = await apiRequest('/api/attendance/manual-checkin', {
                     method: 'POST',
                     body: JSON.stringify({ lessonId, userId, type })
                 });

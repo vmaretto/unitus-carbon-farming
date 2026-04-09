@@ -150,7 +150,7 @@
                 <div class="card">
                     <div class="card-header"><span>📚</span><h3>Lezioni</h3></div>
                     <div class="stat-number" id="total-lessons">0</div>
-                    <div class="stat-label">Lezioni programmate</div>
+                    <div class="stat-label"><span id="planned-lessons">0</span> pianificate · <span id="completed-lessons">0</span> svolte</div>
                 </div>
                 <div class="card">
                     <div class="card-header"><span>✅</span><h3>Materiali</h3></div>
@@ -166,6 +166,16 @@
                     <div class="card-header"><span>📝</span><h3>Liberatorie</h3></div>
                     <div class="stat-number" id="docs-pending-count">0</div>
                     <div class="stat-label">Da firmare</div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><span>⏱️</span><h3>Ore</h3></div>
+                    <div class="stat-number" id="hours-total">0</div>
+                    <div class="stat-label"><span id="hours-planned">0</span> pianificate · <span id="hours-completed">0</span> svolte</div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><span>🎓</span><h3>CFU</h3></div>
+                    <div class="stat-number" id="cfu-total">0</div>
+                    <div class="stat-label"><span id="cfu-planned">0</span> pianificati · <span id="cfu-completed">0</span> svolti</div>
                 </div>
             </div>
 
@@ -369,10 +379,18 @@
             try {
                 const s = await apiCall('/api/teachers/stats');
                 document.getElementById('total-lessons').textContent = s.total_lessons || 0;
+                document.getElementById('planned-lessons').textContent = s.planned_lessons || 0;
+                document.getElementById('completed-lessons').textContent = s.completed_lessons || 0;
                 document.getElementById('materials-count').textContent = s.materials_published || 0;
                 document.getElementById('pending-count').textContent = s.materials_pending || 0;
                 const dp = s.documents_pending || 0;
                 document.getElementById('docs-pending-count').textContent = dp;
+                document.getElementById('hours-total').textContent = ((s.planned_hours || 0) + (s.completed_hours || 0)).toFixed(2);
+                document.getElementById('hours-planned').textContent = (s.planned_hours || 0).toFixed(2);
+                document.getElementById('hours-completed').textContent = (s.completed_hours || 0).toFixed(2);
+                document.getElementById('cfu-total').textContent = ((s.planned_cfu || 0) + (s.completed_cfu || 0)).toFixed(2);
+                document.getElementById('cfu-planned').textContent = (s.planned_cfu || 0).toFixed(2);
+                document.getElementById('cfu-completed').textContent = (s.completed_cfu || 0).toFixed(2);
                 const badge = document.getElementById('docs-tab-badge');
                 if (dp > 0) { badge.textContent = dp; badge.style.display = 'inline-block'; }
                 else { badge.style.display = 'none'; }
@@ -407,7 +425,7 @@
                             </div>
                         </div>
                         <div class="item-actions">
-                            <span class="badge ${statusBadgeClass(l.status)}">${statusLabel(l.status)}</span>
+                            <span class="badge ${l.lesson_state === 'completed' ? 'badge-green' : 'badge-blue'}">${l.lesson_state === 'completed' ? 'Svolta' : 'Pianificata'}</span>
                             <button class="btn-sm btn-blue" onclick="openUploadModal('${l.id}','${(l.title||'').replace(/'/g,"\\'")}')">📤 Carica</button>
                         </div>
                     </div>

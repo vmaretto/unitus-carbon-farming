@@ -1962,6 +1962,45 @@ Buono studio!</textarea>
         const loginGate = document.getElementById('login-gate');
         const mainContent = document.querySelector('main');
         const headerEl = document.querySelector('header');
+        let adminBootstrapPromise = null;
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function bootstrapAdminData() {
+            if (adminBootstrapPromise) return adminBootstrapPromise;
+
+            adminBootstrapPromise = (async () => {
+                const startupTasks = [
+                    () => typeof loadDocuments === 'function' ? loadDocuments() : Promise.resolve(),
+                    () => typeof loadResources === 'function' ? loadResources() : Promise.resolve(),
+                    () => typeof loadFaculty === 'function' ? loadFaculty() : Promise.resolve(),
+                    () => typeof loadBlogPosts === 'function' ? loadBlogPosts() : Promise.resolve(),
+                    () => typeof loadPartners === 'function' ? loadPartners() : Promise.resolve(),
+                    () => typeof loadModules === 'function' ? loadModules() : Promise.resolve(),
+                    () => typeof loadLessons === 'function' ? loadLessons() : Promise.resolve(),
+                    () => typeof loadLmsCourses === 'function' ? loadLmsCourses() : Promise.resolve(),
+                    () => typeof loadStudentsList === 'function' ? loadStudentsList() : Promise.resolve(),
+                    () => typeof loadTeacherDocs === 'function' ? loadTeacherDocs() : Promise.resolve(),
+                    () => typeof loadTeacherPendingMaterials === 'function' ? loadTeacherPendingMaterials() : Promise.resolve()
+                ];
+
+                for (const task of startupTasks) {
+                    try {
+                        await task();
+                    } catch (error) {
+                        console.error('Startup task failed:', error);
+                    }
+                }
+            })();
+
+            try {
+                await adminBootstrapPromise;
+            } finally {
+                adminBootstrapPromise = null;
+            }
+        }
 
         function showAdmin() {
             isAuthenticated = true;
@@ -1969,17 +2008,7 @@ Buono studio!</textarea>
             mainContent.style.display = 'block';
             headerEl.style.display = 'block';
             document.getElementById('logout-btn').style.display = 'inline-block';
-            if (typeof loadDocuments === 'function') loadDocuments();
-            if (typeof loadResources === 'function') loadResources();
-            if (typeof loadFaculty === 'function') loadFaculty();
-            if (typeof loadBlogPosts === 'function') loadBlogPosts();
-            if (typeof loadPartners === 'function') loadPartners();
-            if (typeof loadModules === 'function') loadModules();
-            if (typeof loadLessons === 'function') loadLessons();
-            if (typeof loadLmsCourses === 'function') loadLmsCourses();
-            if (typeof loadStudentsList === 'function') loadStudentsList();
-            if (typeof loadTeacherDocs === 'function') loadTeacherDocs();
-            if (typeof loadTeacherPendingMaterials === 'function') loadTeacherPendingMaterials();
+            bootstrapAdminData();
         }
 
         function showLogin() {
@@ -2124,37 +2153,48 @@ Buono studio!</textarea>
         }
 
         async function apiRequest(url, options = {}) {
+            const maxAttempts = options._maxAttempts || 3;
+            const retryDelay = options._retryDelay || 1200;
             try {
                 if (!isAuthenticated && !url.includes('/api/auth/')) {
                     throw new Error('Non autenticato');
                 }
-                const headers = {
-                    'Content-Type': 'application/json',
-                    ...(options.headers || {})
-                };
-                if (adminToken) {
-                    headers['Authorization'] = 'Bearer ' + adminToken;
-                }
-                const response = await fetch(url, {
-                    ...options,
-                    headers
-                });
+                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                    const headers = {
+                        'Content-Type': 'application/json',
+                        ...(options.headers || {})
+                    };
+                    if (adminToken) {
+                        headers['Authorization'] = 'Bearer ' + adminToken;
+                    }
+                    const response = await fetch(url, {
+                        ...options,
+                        headers
+                    });
 
-                if (!response.ok) {
+                    if (response.ok) {
+                        if (response.status === 204) return null;
+                        return await response.json();
+                    }
+
                     if (response.status === 401) {
                         adminToken = null;
                         localStorage.removeItem('adminToken');
                         showLogin();
                         throw new Error('Sessione scaduta. Effettua nuovamente il login.');
                     }
+
                     const payload = await response.json().catch(() => ({ error: 'Errore sconosciuto' }));
+                    const isInitFailure = response.status === 500 && payload.error === 'Failed to initialise database connection';
+                    if (isInitFailure && attempt < maxAttempts) {
+                        await sleep(retryDelay * attempt);
+                        continue;
+                    }
+
                     const error = new Error(payload.error || 'Errore nella richiesta');
                     error.status = response.status;
                     throw error;
                 }
-
-                if (response.status === 204) return null;
-                return await response.json();
             } catch (error) {
                 console.error('API error', error);
                 showToast(error.message || 'Impossibile completare l\'operazione', 'error');

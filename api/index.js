@@ -2785,8 +2785,8 @@ app.put('/api/teachers/quizzes/:id/review', requireTeacher, async (req, res) => 
   const { id } = req.params;
   const { action, notes, quizData } = req.body || {};
 
-  if (!['approve', 'reject', 'save'].includes(action)) {
-    return res.status(400).json({ error: 'action must be approve, reject or save' });
+  if (!['approve', 'reject', 'save', 'unpublish'].includes(action)) {
+    return res.status(400).json({ error: 'action must be approve, reject, save or unpublish' });
   }
   if (action === 'reject' && (!notes || !String(notes).trim())) {
     return res.status(400).json({ error: 'notes are required when rejecting' });
@@ -2815,9 +2815,15 @@ app.put('/api/teachers/quizzes/:id/review', requireTeacher, async (req, res) => 
       ? 'teacher_approved'
       : action === 'reject'
         ? 'teacher_rejected'
+        : action === 'unpublish'
+          ? 'teacher_approved'
         : 'pending_teacher_approval';
-    const isPublished = action === 'approve' ? true : action === 'reject' ? false : null;
-    const reviewNotes = action === 'save' ? 'Bozza modificata dal docente' : (notes || null);
+    const isPublished = action === 'approve' ? true : action === 'reject' || action === 'unpublish' ? false : null;
+    const reviewNotes = action === 'save'
+      ? 'Bozza modificata dal docente'
+      : action === 'unpublish'
+        ? 'Pubblicazione ritirata dal docente'
+        : (notes || null);
     const setClauses = [
       'url = COALESCE($1, url)',
       'is_published = COALESCE($4, is_published)',

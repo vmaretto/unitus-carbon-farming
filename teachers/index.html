@@ -536,6 +536,9 @@
                                     ? `<button class="btn-sm btn-green" onclick="reviewQuiz('${q.id}','approve')">Approva</button>
                                        <button class="btn-sm btn-gray" onclick="reviewQuiz('${q.id}','reject')">Rifiuta</button>`
                                     : ''}
+                                ${q.reviewStatus === 'teacher_approved' && q.isPublished
+                                    ? `<button class="btn-sm btn-gray" onclick="reviewQuiz('${q.id}','unpublish')">Ritira</button>`
+                                    : ''}
                             </div>
                         </div>
                     `;
@@ -685,7 +688,14 @@
                     method: 'PUT',
                     body: JSON.stringify({ action, notes })
                 });
-                showToast(action === 'approve' ? 'Quiz approvato e pubblicato' : 'Quiz rifiutato', 'success');
+                showToast(
+                    action === 'approve'
+                        ? 'Quiz approvato e pubblicato'
+                        : action === 'unpublish'
+                            ? 'Pubblicazione del quiz ritirata'
+                            : 'Quiz rifiutato',
+                    'success'
+                );
                 await loadTeacherQuizzes();
             } catch (e) {
                 showToast(e.message || 'Errore nella revisione del quiz', 'error');

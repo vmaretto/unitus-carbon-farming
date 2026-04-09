@@ -150,7 +150,7 @@
                 <div class="card">
                     <div class="card-header"><span>📚</span><h3>Lezioni</h3></div>
                     <div class="stat-number" id="total-lessons">0</div>
-                    <div class="stat-label">Lezioni programmate</div>
+                    <div class="stat-label"><span id="planned-lessons">0</span> pianificate · <span id="completed-lessons">0</span> svolte</div>
                 </div>
                 <div class="card">
                     <div class="card-header"><span>✅</span><h3>Materiali</h3></div>
@@ -167,12 +167,23 @@
                     <div class="stat-number" id="docs-pending-count">0</div>
                     <div class="stat-label">Da firmare</div>
                 </div>
+                <div class="card">
+                    <div class="card-header"><span>⏱️</span><h3>Ore</h3></div>
+                    <div class="stat-number" id="hours-total">0</div>
+                    <div class="stat-label"><span id="hours-planned">0</span> pianificate · <span id="hours-completed">0</span> svolte</div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><span>🎓</span><h3>CFU</h3></div>
+                    <div class="stat-number" id="cfu-total">0</div>
+                    <div class="stat-label"><span id="cfu-planned">0</span> pianificati · <span id="cfu-completed">0</span> svolti</div>
+                </div>
             </div>
 
             <!-- Tabs -->
             <div class="tabs">
                 <div class="tab active" data-tab="lessons">📅 Lezioni</div>
                 <div class="tab" data-tab="materials">📁 Materiali</div>
+                <div class="tab" data-tab="quizzes">🧠 Quiz</div>
                 <div class="tab" data-tab="documents">📝 Liberatorie <span id="docs-tab-badge" class="tab-badge" style="display:none;">0</span></div>
             </div>
 
@@ -191,6 +202,16 @@
                 <div class="section-card">
                     <div class="section-header"><h2>📁 I Tuoi Materiali</h2></div>
                     <div class="section-body" id="materials-container">
+                        <div class="empty-state">Caricamento...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: Quiz -->
+            <div class="tab-panel" id="panel-quizzes">
+                <div class="section-card">
+                    <div class="section-header"><h2>🧠 Quiz da Approvare</h2></div>
+                    <div class="section-body" id="quizzes-container">
                         <div class="empty-state">Caricamento...</div>
                     </div>
                 </div>
@@ -356,6 +377,7 @@
                 loadTeacherStats(),
                 loadTeacherLessons(),
                 loadTeacherMaterials(),
+                loadTeacherQuizzes(),
                 loadPendingDocs(),
                 loadSignedDocs()
             ]);
@@ -369,10 +391,18 @@
             try {
                 const s = await apiCall('/api/teachers/stats');
                 document.getElementById('total-lessons').textContent = s.total_lessons || 0;
+                document.getElementById('planned-lessons').textContent = s.planned_lessons || 0;
+                document.getElementById('completed-lessons').textContent = s.completed_lessons || 0;
                 document.getElementById('materials-count').textContent = s.materials_published || 0;
                 document.getElementById('pending-count').textContent = s.materials_pending || 0;
                 const dp = s.documents_pending || 0;
                 document.getElementById('docs-pending-count').textContent = dp;
+                document.getElementById('hours-total').textContent = ((s.planned_hours || 0) + (s.completed_hours || 0)).toFixed(2);
+                document.getElementById('hours-planned').textContent = (s.planned_hours || 0).toFixed(2);
+                document.getElementById('hours-completed').textContent = (s.completed_hours || 0).toFixed(2);
+                document.getElementById('cfu-total').textContent = ((s.planned_cfu || 0) + (s.completed_cfu || 0)).toFixed(2);
+                document.getElementById('cfu-planned').textContent = (s.planned_cfu || 0).toFixed(2);
+                document.getElementById('cfu-completed').textContent = (s.completed_cfu || 0).toFixed(2);
                 const badge = document.getElementById('docs-tab-badge');
                 if (dp > 0) { badge.textContent = dp; badge.style.display = 'inline-block'; }
                 else { badge.style.display = 'none'; }
@@ -407,7 +437,7 @@
                             </div>
                         </div>
                         <div class="item-actions">
-                            <span class="badge ${statusBadgeClass(l.status)}">${statusLabel(l.status)}</span>
+                            <span class="badge ${l.lesson_state === 'completed' ? 'badge-green' : 'badge-blue'}">${l.lesson_state === 'completed' ? 'Svolta' : 'Pianificata'}</span>
                             <button class="btn-sm btn-blue" onclick="openUploadModal('${l.id}','${(l.title||'').replace(/'/g,"\\'")}')">📤 Carica</button>
                         </div>
                     </div>
@@ -440,6 +470,88 @@
                     </div>`;
                 }).join('');
             } catch (e) { console.error('Materials error:', e); }
+        }
+
+        // === QUIZZES ===
+        async function loadTeacherQuizzes() {
+            try {
+                const quizzes = await apiCall('/api/teachers/quizzes');
+                const c = document.getElementById('quizzes-container');
+                if (!quizzes.length) {
+                    c.innerHTML = '<div class="empty-state">Nessun quiz assegnato per revisione.</div>';
+                    return;
+                }
+                const statusLabel = {
+                    pending_teacher_approval: ['In approvazione', 'badge-orange'],
+                    teacher_approved: ['Approvato', 'badge-green'],
+                    teacher_rejected: ['Rifiutato', 'badge-red']
+                };
+                c.innerHTML = quizzes.map(q => {
+                    const [label, cls] = statusLabel[q.reviewStatus] || [q.reviewStatus, 'badge-gray'];
+                    return `
+                        <div class="list-item">
+                            <div class="item-info">
+                                <div class="item-title">${q.title}</div>
+                                <div class="item-meta">
+                                    ${q.lessonTitle ? 'Lezione: ' + q.lessonTitle + ' — ' : ''}
+                                    ${q.reviewNotes ? 'Note: ' + q.reviewNotes : 'In attesa di revisione docente'}
+                                </div>
+                            </div>
+                            <div class="item-actions">
+                                <span class="badge ${cls}">${label}</span>
+                                <button class="btn-sm btn-gray" onclick="editQuizJson('${q.id}')">Modifica</button>
+                                ${q.reviewStatus === 'pending_teacher_approval' || q.reviewStatus === 'teacher_rejected'
+                                    ? `<button class="btn-sm btn-green" onclick="reviewQuiz('${q.id}','approve')">Approva</button>
+                                       <button class="btn-sm btn-gray" onclick="reviewQuiz('${q.id}','reject')">Rifiuta</button>`
+                                    : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.error('Quizzes error:', e);
+            }
+        }
+
+        async function editQuizJson(quizId) {
+            try {
+                const quizzes = await apiCall('/api/teachers/quizzes');
+                const quiz = quizzes.find(q => q.id === quizId);
+                if (!quiz) return showToast('Quiz non trovato', 'error');
+                let currentData = {};
+                if (quiz.url && quiz.url.startsWith('data:application/json,')) {
+                    currentData = JSON.parse(decodeURIComponent(quiz.url.replace('data:application/json,', '')));
+                }
+                const nextRaw = prompt('Modifica JSON quiz (title/questions):', JSON.stringify(currentData, null, 2));
+                if (!nextRaw) return;
+                const quizData = JSON.parse(nextRaw);
+                await apiCall('/api/teachers/quizzes/' + quizId + '/review', {
+                    method: 'PUT',
+                    body: JSON.stringify({ action: 'save', quizData })
+                });
+                showToast('Quiz aggiornato', 'success');
+                await loadTeacherQuizzes();
+            } catch (e) {
+                showToast('JSON non valido o errore aggiornamento quiz', 'error');
+            }
+        }
+
+        async function reviewQuiz(quizId, action) {
+            try {
+                let notes = null;
+                if (action === 'reject') {
+                    notes = prompt('Inserisci motivazione del rifiuto (obbligatoria):');
+                    if (!notes || !notes.trim()) return showToast('Motivazione obbligatoria', 'error');
+                }
+                await apiCall('/api/teachers/quizzes/' + quizId + '/review', {
+                    method: 'PUT',
+                    body: JSON.stringify({ action, notes })
+                });
+                showToast(action === 'approve' ? 'Quiz approvato e pubblicato' : 'Quiz rifiutato', 'success');
+                await loadTeacherQuizzes();
+            } catch (e) {
+                showToast(e.message || 'Errore nella revisione del quiz', 'error');
+            }
         }
 
         // === DOCUMENTS ===

@@ -4850,19 +4850,24 @@ app.post('/api/attendance/checkin', requireStudent, async (req, res) => {
     );
 
     const { rows } = await pool.query(`
-      INSERT INTO attendance (id, user_id, lesson_id, attendance_type, method)
-      VALUES ($1, $2, $3, 'in_person', 'pin')
-      ON CONFLICT (user_id, lesson_id) DO NOTHING
-      RETURNING id
+      INSERT INTO attendance (id, user_id, lesson_id, attendance_type, method, check_in_at)
+      VALUES ($1, $2, $3, 'in_person', 'pin', NOW())
+      ON CONFLICT (user_id, lesson_id) DO UPDATE SET
+        attendance_type = 'in_person',
+        method = 'pin',
+        check_in_at = NOW()
+      RETURNING id, (xmax = 0) AS is_new
     `, [uuidv4(), req.user.userId, lessonId]);
 
     const lessonTitle = lessonRows.length ? lessonRows[0].title : '';
 
-    if (rows.length) {
-      res.json({ success: true, message: 'Presenza registrata', lessonTitle });
-    } else {
-      res.json({ success: true, message: 'Presenza già registrata', lessonTitle });
-    }
+    const isNew = rows[0]?.is_new;
+    res.json({
+      success: true,
+      message: isNew ? 'Presenza registrata' : 'Presenza aggiornata',
+      lessonTitle,
+      updated: !isNew
+    });
   } catch (error) {
     console.error('Error checking in', error);
     res.status(500).json({ error: 'Unable to process check-in' });

@@ -7,6 +7,8 @@ const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const { put } = require('@vercel/blob');
+const pdfParse = require('pdf-parse');
+const JSZip = require('jszip');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -17,7 +19,7 @@ const uploadSmall = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 4 * 1024 * 1024 }, // 4MB max per Vercel Functions
   fileFilter: (req, file, cb) => {
-    const allowed = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
+    const allowed = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt', '.md', '.srt', '.vtt', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowed.includes(ext)) {
       cb(null, true);
@@ -32,7 +34,7 @@ const uploadMaterials = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 }, // 20MB max per materiali lezioni
   fileFilter: (req, file, cb) => {
-    const allowed = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
+    const allowed = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt', '.md', '.srt', '.vtt', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowed.includes(ext)) {
       cb(null, true);
@@ -41,7 +43,7 @@ const uploadMaterials = multer({
     }
   }
 });
-const BUILD_VERSION = '2026-04-08-v24-PARTIAL-ATTENDANCE'; // Per debug deploy
+const BUILD_VERSION = '2026-04-10-v25-QUIZ-CONTENT-EXTRACTION'; // Per debug deploy
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -1360,6 +1362,7 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
           [item.fileUrl, item.lessonId || null, item.facultyId || null]
         );
 
+        let approvedResourceId = null;
         if (existing.length) {
           await pool.query(
             `UPDATE resources
@@ -1367,15 +1370,24 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
              WHERE id = $1`,
             [existing[0].id]
           );
+          approvedResourceId = existing[0].id;
         } else {
+          approvedResourceId = uuidv4();
           await pool.query(
             `INSERT INTO resources
                (id, title, resource_type, url, is_published, teacher_id, lesson_id, created_at, updated_at)
              VALUES
                ($1, $2, $3, $4, true, $5, $6, NOW(), NOW())`,
-            [uuidv4(), resourceTitle, resourceType, item.fileUrl, item.facultyId || null, item.lessonId || null]
+            [approvedResourceId, resourceTitle, resourceType, item.fileUrl, item.facultyId || null, item.lessonId || null]
           );
         }
+        await pool.query('COMMIT');
+        try {
+          await extractAndPersistResourceContent(approvedResourceId, { force: true });
+        } catch (extractionError) {
+          console.error('Teacher material extraction failed', extractionError);
+        }
+        return res.json({ success: true, material: rows[0] });
       }
 
       await pool.query('COMMIT');
@@ -1831,6 +1843,518 @@ async function getTableColumns(tableName) {
   return new Set(rows.map(row => row.column_name));
 }
 
+function decodeXmlEntities(text = '') {
+  return String(text)
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#([0-9]+);/g, (_, num) => String.fromCodePoint(parseInt(num, 10)));
+}
+
+function normalizeExtractedText(text = '') {
+  return String(text || '')
+    .replace(/\r/g, '\n')
+    .replace(/\u0000/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+function truncateText(text = '', maxChars = 6000) {
+  const normalized = normalizeExtractedText(text);
+  if (normalized.length <= maxChars) return normalized;
+  return normalized.slice(0, maxChars).trim() + '\n[contenuto troncato]';
+}
+
+function guessUrlExtension(url = '') {
+  try {
+    const parsed = new URL(url);
+    return path.extname(parsed.pathname || '').toLowerCase();
+  } catch (_error) {
+    return path.extname(String(url).split('?')[0] || '').toLowerCase();
+  }
+}
+
+function stripHtml(html = '') {
+  return normalizeExtractedText(
+    decodeXmlEntities(
+      String(html)
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+    )
+  );
+}
+
+function stripTimedText(text = '') {
+  return normalizeExtractedText(
+    String(text)
+      .replace(/^WEBVTT.*$/gim, '')
+      .replace(/^\d+\s*$/gim, '')
+      .replace(/^\d{2}:\d{2}:\d{2}[,\.]\d{3}\s+-->\s+\d{2}:\d{2}:\d{2}[,\.]\d{3}.*$/gim, '')
+      .replace(/^\d{2}:\d{2}[,\.]\d{3}\s+-->\s+\d{2}:\d{2}[,\.]\d{3}.*$/gim, '')
+  );
+}
+
+function xmlNodesToText(xml = '', tagPattern) {
+  const matches = [];
+  let match;
+  while ((match = tagPattern.exec(xml)) !== null) {
+    matches.push(decodeXmlEntities(match[1]));
+  }
+  return normalizeExtractedText(matches.join('\n'));
+}
+
+async function extractDocxText(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const candidates = Object.keys(zip.files)
+    .filter(name => /^word\/(document|header\d+|footer\d+)\.xml$/.test(name))
+    .sort();
+  const chunks = [];
+  for (const name of candidates) {
+    const xml = await zip.files[name].async('string');
+    const text = xmlNodesToText(xml, /<w:t[^>]*>([\s\S]*?)<\/w:t>/g);
+    if (text) chunks.push(text);
+  }
+  return normalizeExtractedText(chunks.join('\n\n'));
+}
+
+async function extractPptxText(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const slideFiles = Object.keys(zip.files)
+    .filter(name => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => {
+      const aNum = Number(a.match(/slide(\d+)\.xml$/)?.[1] || 0);
+      const bNum = Number(b.match(/slide(\d+)\.xml$/)?.[1] || 0);
+      return aNum - bNum;
+    });
+  const chunks = [];
+  for (const name of slideFiles) {
+    const xml = await zip.files[name].async('string');
+    const text = xmlNodesToText(xml, /<a:t>([\s\S]*?)<\/a:t>/g);
+    if (text) chunks.push(text);
+  }
+  return normalizeExtractedText(chunks.join('\n\n'));
+}
+
+async function extractXlsxText(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const sharedStringsXml = zip.file('xl/sharedStrings.xml')
+    ? await zip.file('xl/sharedStrings.xml').async('string')
+    : '';
+  const sharedStrings = [];
+  let sharedMatch;
+  const sharedRegex = /<t[^>]*>([\s\S]*?)<\/t>/g;
+  while ((sharedMatch = sharedRegex.exec(sharedStringsXml)) !== null) {
+    sharedStrings.push(decodeXmlEntities(sharedMatch[1]));
+  }
+
+  const sheetFiles = Object.keys(zip.files)
+    .filter(name => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+    .sort();
+  const chunks = [];
+  for (const name of sheetFiles) {
+    const xml = await zip.files[name].async('string');
+    const values = [];
+    let cellMatch;
+    const cellRegex = /<c\b[^>]*?(?: t="([^"]+)")?[^>]*>([\s\S]*?)<\/c>/g;
+    while ((cellMatch = cellRegex.exec(xml)) !== null) {
+      const cellType = cellMatch[1];
+      const body = cellMatch[2];
+      const vMatch = body.match(/<v>([\s\S]*?)<\/v>/);
+      if (!vMatch) continue;
+      const rawValue = decodeXmlEntities(vMatch[1]);
+      if (cellType === 's') {
+        const idx = Number(rawValue);
+        if (Number.isInteger(idx) && sharedStrings[idx]) values.push(sharedStrings[idx]);
+      } else {
+        values.push(rawValue);
+      }
+    }
+    const text = normalizeExtractedText(values.join('\n'));
+    if (text) chunks.push(text);
+  }
+  return normalizeExtractedText(chunks.join('\n\n'));
+}
+
+function extractQuizTextFromResourceUrl(url = '') {
+  if (!String(url).startsWith('data:application/json,')) return '';
+  try {
+    const payload = JSON.parse(decodeURIComponent(String(url).slice('data:application/json,'.length)));
+    const parts = [];
+    if (payload.title) parts.push(`Titolo quiz: ${payload.title}`);
+    (payload.questions || []).forEach((question, index) => {
+      parts.push(`Domanda ${index + 1}: ${question.questionText || ''}`);
+      (question.options || []).forEach((option, optionIndex) => {
+        parts.push(`Opzione ${optionIndex + 1}: ${option}`);
+      });
+      if (question.correctAnswer) {
+        parts.push(`Risposta corretta: ${Array.isArray(question.correctAnswer) ? question.correctAnswer.join(', ') : question.correctAnswer}`);
+      }
+    });
+    return normalizeExtractedText(parts.join('\n'));
+  } catch (_error) {
+    return '';
+  }
+}
+
+async function fetchUrlBuffer(url) {
+  const resolvedUrl = String(url).startsWith('/')
+    ? new URL(url, process.env.PUBLIC_BASE_URL || 'https://unitus.carbonfarmingmaster.it').toString()
+    : url;
+  const response = await fetch(resolvedUrl);
+  if (!response.ok) {
+    throw new Error(`Unable to fetch source (${response.status})`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    contentType: response.headers.get('content-type') || ''
+  };
+}
+
+async function extractTextFromUrl(url, resourceType = null) {
+  const ext = guessUrlExtension(url);
+  const { buffer, contentType } = await fetchUrlBuffer(url);
+  const lowerType = String(contentType).toLowerCase();
+
+  if (ext === '.pdf' || lowerType.includes('application/pdf')) {
+    const parsed = await pdfParse(buffer);
+    return { text: parsed.text || '', metadata: { strategy: 'pdf', contentType } };
+  }
+  if (ext === '.docx') {
+    return { text: await extractDocxText(buffer), metadata: { strategy: 'docx', contentType } };
+  }
+  if (ext === '.pptx') {
+    return { text: await extractPptxText(buffer), metadata: { strategy: 'pptx', contentType } };
+  }
+  if (ext === '.xlsx') {
+    return { text: await extractXlsxText(buffer), metadata: { strategy: 'xlsx', contentType } };
+  }
+  if (['.txt', '.md', '.csv'].includes(ext) || lowerType.startsWith('text/plain') || lowerType.includes('text/csv')) {
+    return { text: buffer.toString('utf8'), metadata: { strategy: 'plain_text', contentType } };
+  }
+  if (['.srt', '.vtt'].includes(ext)) {
+    return { text: stripTimedText(buffer.toString('utf8')), metadata: { strategy: 'timed_text', contentType } };
+  }
+  if (lowerType.includes('text/html') || ext === '.html' || ext === '.htm') {
+    return { text: stripHtml(buffer.toString('utf8')), metadata: { strategy: 'html', contentType } };
+  }
+  if (resourceType === 'link') {
+    return { text: stripHtml(buffer.toString('utf8')), metadata: { strategy: 'link_html_fallback', contentType } };
+  }
+
+  return { text: '', metadata: { strategy: 'unsupported', contentType, extension: ext } };
+}
+
+async function getLatestWorkflowTranscriptForLesson(lmsLessonId) {
+  if (!lmsLessonId) return '';
+  const { rows } = await pool.query(`
+    SELECT transcript_text AS "transcriptText", transcript_url AS "transcriptUrl"
+    FROM content_workflow
+    WHERE lms_lesson_id = $1
+      AND (transcript_text IS NOT NULL OR transcript_url IS NOT NULL)
+      AND stage IN ('transcript_ready', 'teacher_review_transcript', 'avatar_rendering', 'teacher_review_video', 'published')
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC
+    LIMIT 1
+  `, [lmsLessonId]);
+  const row = rows[0];
+  const transcriptText = normalizeExtractedText(row?.transcriptText || '');
+  if (transcriptText) return transcriptText;
+  if (row?.transcriptUrl) {
+    try {
+      const extracted = await extractTextFromUrl(row.transcriptUrl, 'document');
+      return normalizeExtractedText(extracted.text);
+    } catch (_error) {
+      return '';
+    }
+  }
+  return '';
+}
+
+async function getLatestWorkflowTranscriptForCalendarLesson(calendarLessonId) {
+  if (!calendarLessonId) return '';
+  const { rows } = await pool.query(`
+    SELECT cw.transcript_text AS "transcriptText", cw.transcript_url AS "transcriptUrl"
+    FROM content_workflow cw
+    JOIN lms_lessons ll ON ll.id = cw.lms_lesson_id
+    WHERE ll.calendar_lesson_id = $1
+      AND (cw.transcript_text IS NOT NULL OR cw.transcript_url IS NOT NULL)
+      AND cw.stage IN ('transcript_ready', 'teacher_review_transcript', 'avatar_rendering', 'teacher_review_video', 'published')
+    ORDER BY cw.updated_at DESC NULLS LAST, cw.created_at DESC
+    LIMIT 1
+  `, [calendarLessonId]);
+  const row = rows[0];
+  const transcriptText = normalizeExtractedText(row?.transcriptText || '');
+  if (transcriptText) return transcriptText;
+  if (row?.transcriptUrl) {
+    try {
+      const extracted = await extractTextFromUrl(row.transcriptUrl, 'document');
+      return normalizeExtractedText(extracted.text);
+    } catch (_error) {
+      return '';
+    }
+  }
+  return '';
+}
+
+async function persistResourceExtraction(resourceId, { text, status, metadata, error }) {
+  await pool.query(
+    `UPDATE resources
+     SET extracted_text = $2,
+         extraction_status = $3,
+         extraction_metadata = $4::jsonb,
+         extracted_at = CASE WHEN $3 = 'ready' THEN NOW() ELSE extracted_at END,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [
+      resourceId,
+      text || null,
+      status,
+      JSON.stringify({
+        ...(metadata || {}),
+        ...(error ? { error: error.message || String(error) } : {})
+      })
+    ]
+  );
+}
+
+async function extractAndPersistResourceContent(resourceId, options = {}) {
+  const { force = false } = options;
+  const { rows } = await pool.query(`
+    SELECT id, title, resource_type AS "resourceType", url, lesson_id AS "lessonId",
+           extracted_text AS "extractedText", extraction_status AS "extractionStatus"
+    FROM resources
+    WHERE id = $1
+  `, [resourceId]);
+  if (!rows.length) return null;
+
+  const resource = rows[0];
+  if (!force && resource.extractionStatus === 'ready' && resource.extractedText) {
+    return resource.extractedText;
+  }
+
+  try {
+    let text = '';
+    let metadata = {};
+
+    if (resource.resourceType === 'quiz') {
+      text = extractQuizTextFromResourceUrl(resource.url);
+      metadata = { strategy: 'quiz_data_url' };
+    } else if ((resource.resourceType === 'video' || resource.resourceType === 'audio') && resource.lessonId) {
+      text = await getLatestWorkflowTranscriptForCalendarLesson(resource.lessonId);
+      metadata = { strategy: 'workflow_transcript', calendarLessonId: resource.lessonId };
+      if (!text && resource.url) {
+        const extracted = await extractTextFromUrl(resource.url, resource.resourceType);
+        text = extracted.text;
+        metadata = extracted.metadata;
+      }
+    } else if (resource.url) {
+      const extracted = await extractTextFromUrl(resource.url, resource.resourceType);
+      text = extracted.text;
+      metadata = extracted.metadata;
+    }
+
+    text = normalizeExtractedText(text);
+    const status = text ? 'ready' : 'unavailable';
+    await persistResourceExtraction(resourceId, { text, status, metadata });
+    return text;
+  } catch (error) {
+    await persistResourceExtraction(resourceId, { text: null, status: 'failed', metadata: {}, error });
+    return '';
+  }
+}
+
+async function getResourceQuizSourceText(resource) {
+  let text = normalizeExtractedText(resource.extractedText || '');
+  if (!text && resource.id) {
+    text = await extractAndPersistResourceContent(resource.id);
+  }
+  return normalizeExtractedText(text);
+}
+
+function appendContextSection(sections, title, text, options = {}) {
+  const { perSectionLimit = 5000, totalLimit = 35000, tracker = { total: 0 } } = options;
+  const cleaned = truncateText(text, perSectionLimit);
+  if (!cleaned) return;
+  if (tracker.total >= totalLimit) return;
+  const remaining = totalLimit - tracker.total;
+  const finalText = cleaned.length > remaining ? truncateText(cleaned, remaining) : cleaned;
+  if (!finalText) return;
+  sections.push(`${title}:\n${finalText}`);
+  tracker.total += finalText.length;
+}
+
+async function buildLessonQuizGenerationContext(lessonId) {
+  const { rows: lessons } = await pool.query(
+    `SELECT ll.id, ll.title, ll.description, ll.materials, ll.calendar_lesson_id AS "calendarLessonId",
+            cal.title AS "calendarLessonTitle", cal.notes
+     FROM lms_lessons ll
+     LEFT JOIN lessons cal ON cal.id = ll.calendar_lesson_id
+     WHERE ll.id = $1`,
+    [lessonId]
+  );
+  if (!lessons.length) {
+    const error = new Error('Lezione non trovata');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const lesson = lessons[0];
+  const contextTitle = lesson.title || lesson.calendarLessonTitle || 'Lezione';
+  const sections = [];
+  const tracker = { total: 0 };
+  appendContextSection(sections, `Lezione`, [
+    `Titolo: ${contextTitle}`,
+    lesson.description ? `Descrizione: ${lesson.description}` : '',
+    lesson.notes ? `Note docente: ${lesson.notes}` : ''
+  ].filter(Boolean).join('\n'), { tracker, perSectionLimit: 3000, totalLimit: 40000 });
+
+  const transcriptText = await getLatestWorkflowTranscriptForLesson(lessonId);
+  appendContextSection(sections, 'Trascrizione video lezione', transcriptText, {
+    tracker,
+    perSectionLimit: 12000,
+    totalLimit: 40000
+  });
+
+  const { rows: resourceRows } = lesson.calendarLessonId
+    ? await pool.query(`
+        SELECT id, title, resource_type AS "resourceType", url,
+               extracted_text AS "extractedText", extraction_status AS "extractionStatus"
+        FROM resources
+        WHERE lesson_id = $1
+          AND resource_type <> 'quiz'
+        ORDER BY sort_order NULLS LAST, created_at
+      `, [lesson.calendarLessonId])
+    : { rows: [] };
+
+  const resourceTextsByUrl = new Map();
+  for (const resource of resourceRows) {
+    const text = await getResourceQuizSourceText(resource);
+    if (!text) continue;
+    resourceTextsByUrl.set(resource.url, text);
+    appendContextSection(sections, `Materiale: ${resource.title} (${resource.resourceType})`, text, {
+      tracker,
+      perSectionLimit: 7000,
+      totalLimit: 40000
+    });
+  }
+
+  const lessonMaterials = Array.isArray(lesson.materials) ? lesson.materials : [];
+  for (const material of lessonMaterials) {
+    if (!material || !material.url || material.type === 'quiz' || resourceTextsByUrl.has(material.url)) continue;
+    try {
+      const extracted = await extractTextFromUrl(material.url, material.type || null);
+      appendContextSection(sections, `Materiale lezione: ${material.name || material.url}`, extracted.text, {
+        tracker,
+        perSectionLimit: 5000,
+        totalLimit: 40000
+      });
+    } catch (error) {
+      appendContextSection(sections, `Materiale lezione: ${material.name || material.url}`, [
+        `Tipo: ${material.type || 'file'}`,
+        `URL: ${material.url}`
+      ].join('\n'), { tracker, perSectionLimit: 1200, totalLimit: 40000 });
+    }
+  }
+
+  return {
+    contextTitle,
+    context: sections.join('\n\n')
+  };
+}
+
+async function buildModuleQuizGenerationContext(moduleId) {
+  const { rows: modRows } = await pool.query('SELECT name AS title FROM modules WHERE id = $1', [moduleId]);
+  if (!modRows.length) {
+    const error = new Error('Modulo non trovato');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const contextTitle = modRows[0].title;
+  const { rows: lessons } = await pool.query(`
+    SELECT ll.id, ll.title, ll.description, ll.materials,
+           ll.calendar_lesson_id AS "calendarLessonId",
+           cal.title AS "calendarLessonTitle", cal.notes
+    FROM lms_lessons ll
+    LEFT JOIN lessons cal ON cal.id = ll.calendar_lesson_id
+    WHERE ll.lms_module_id = $1
+    ORDER BY ll.sort_order
+  `, [moduleId]);
+
+  const sections = [];
+  const tracker = { total: 0 };
+  appendContextSection(sections, 'Modulo', `Titolo modulo: ${contextTitle}`, {
+    tracker,
+    perSectionLimit: 2000,
+    totalLimit: 50000
+  });
+
+  for (const lesson of lessons) {
+    appendContextSection(sections, `Lezione del modulo: ${lesson.title}`, [
+      lesson.description ? `Descrizione: ${lesson.description}` : '',
+      lesson.notes ? `Note docente: ${lesson.notes}` : ''
+    ].filter(Boolean).join('\n'), { tracker, perSectionLimit: 2500, totalLimit: 50000 });
+
+    const transcriptText = await getLatestWorkflowTranscriptForLesson(lesson.id);
+    appendContextSection(sections, `Trascrizione video: ${lesson.title}`, transcriptText, {
+      tracker,
+      perSectionLimit: 6000,
+      totalLimit: 50000
+    });
+
+    const resourceTextsByUrl = new Map();
+    if (lesson.calendarLessonId) {
+      const { rows: resourceRows } = await pool.query(`
+        SELECT id, title, resource_type AS "resourceType", url,
+               extracted_text AS "extractedText", extraction_status AS "extractionStatus"
+        FROM resources
+        WHERE lesson_id = $1
+          AND resource_type <> 'quiz'
+        ORDER BY sort_order NULLS LAST, created_at
+      `, [lesson.calendarLessonId]);
+
+      for (const resource of resourceRows) {
+        const text = await getResourceQuizSourceText(resource);
+        if (text) resourceTextsByUrl.set(resource.url, text);
+        appendContextSection(sections, `Fonte modulo: ${lesson.title} / ${resource.title}`, text, {
+          tracker,
+          perSectionLimit: 4000,
+          totalLimit: 50000
+        });
+      }
+    }
+
+    const lessonMaterials = Array.isArray(lesson.materials) ? lesson.materials : [];
+    for (const material of lessonMaterials) {
+      if (!material || !material.url || material.type === 'quiz' || resourceTextsByUrl.has(material.url)) continue;
+      try {
+        const extracted = await extractTextFromUrl(material.url, material.type || null);
+        appendContextSection(sections, `Materiale modulo: ${lesson.title} / ${material.name || material.url}`, extracted.text, {
+          tracker,
+          perSectionLimit: 3500,
+          totalLimit: 50000
+        });
+      } catch (_error) {
+        appendContextSection(sections, `Materiale modulo: ${lesson.title} / ${material.name || material.url}`, [
+          `Tipo: ${material.type || 'file'}`,
+          `URL: ${material.url}`
+        ].join('\n'), { tracker, perSectionLimit: 800, totalLimit: 50000 });
+      }
+    }
+  }
+
+  return {
+    contextTitle,
+    context: sections.join('\n\n')
+  };
+}
+
 async function getLmsQuizResourceContext(quizId) {
   const { rows: quizRows } = await pool.query(`
     SELECT q.id, q.lms_module_id AS "moduleId", q.lms_lesson_id AS "lessonId",
@@ -1937,7 +2461,10 @@ async function syncQuizResource(quizId) {
       resourcePayload.teacherId || null,
       resourcePayload.lessonId || null
     ]);
-    if (rows.length) return rows[0].id;
+    if (rows.length) {
+      await extractAndPersistResourceContent(rows[0].id, { force: true });
+      return rows[0].id;
+    }
   }
 
   resourceId = uuidv4();
@@ -1957,6 +2484,7 @@ async function syncQuizResource(quizId) {
   ]);
 
   await pool.query('UPDATE quizzes SET resource_id = $2, updated_at = NOW() WHERE id = $1', [quizId, resourceId]);
+  await extractAndPersistResourceContent(resourceId, { force: true });
   return resourceId;
 }
 
@@ -2577,6 +3105,7 @@ app.get('/api/resources', async (req, res) => {
              r.url, r.thumbnail_url AS "thumbnailUrl", r.file_size_bytes AS "fileSizeBytes",
              r.sort_order AS "sortOrder", r.is_published AS "isPublished",
              r.teacher_id AS "teacherId", r.lesson_id AS "lessonId",
+             r.extraction_status AS "extractionStatus", r.extracted_at AS "extractedAt",
              f.name AS "teacherName", l.title AS "lessonTitle",
              r.created_at AS "createdAt", r.updated_at AS "updatedAt"
       FROM resources r
@@ -2600,7 +3129,9 @@ app.get('/api/resources/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT id, title, description, resource_type AS "resourceType",
-             url, thumbnail_url AS "thumbnailUrl", is_published AS "isPublished"
+             url, thumbnail_url AS "thumbnailUrl", is_published AS "isPublished",
+             extracted_text AS "extractedText", extraction_status AS "extractionStatus",
+             extraction_metadata AS "extractionMetadata", extracted_at AS "extractedAt"
       FROM resources WHERE id = $1
     `, [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Resource not found' });
@@ -2633,6 +3164,7 @@ app.post('/api/resources', requireAdmin, async (req, res) => {
                 url, thumbnail_url AS "thumbnailUrl", file_size_bytes AS "fileSizeBytes",
                 sort_order AS "sortOrder", is_published AS "isPublished",
                 teacher_id AS "teacherId", lesson_id AS "lessonId",
+                extraction_status AS "extractionStatus", extracted_at AS "extractedAt",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `;
     const values = [
@@ -2650,6 +3182,11 @@ app.post('/api/resources', requireAdmin, async (req, res) => {
     ];
 
     const { rows } = await pool.query(insert, values);
+    try {
+      await extractAndPersistResourceContent(rows[0].id, { force: true });
+    } catch (extractionError) {
+      console.error('Resource extraction failed on create', extractionError);
+    }
     res.status(201).json(rows[0]);
   } catch (error) {
     console.error('Error creating resource', error);
@@ -2682,6 +3219,7 @@ app.put('/api/resources/:id', requireAdmin, async (req, res) => {
                 url, thumbnail_url AS "thumbnailUrl", file_size_bytes AS "fileSizeBytes",
                 sort_order AS "sortOrder", is_published AS "isPublished",
                 teacher_id AS "teacherId", lesson_id AS "lessonId",
+                extraction_status AS "extractionStatus", extracted_at AS "extractedAt",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `;
     const values = [
@@ -2701,6 +3239,11 @@ app.put('/api/resources/:id', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(update, values);
     if (!rows.length) {
       return res.status(404).json({ error: 'Resource not found' });
+    }
+    try {
+      await extractAndPersistResourceContent(rows[0].id, { force: true });
+    } catch (extractionError) {
+      console.error('Resource extraction failed on update', extractionError);
     }
     res.json(rows[0]);
   } catch (error) {
@@ -2921,6 +3464,7 @@ app.put('/api/teachers/quizzes/:id/review', requireTeacher, async (req, res) => 
        WHERE resource_id = $1`,
       [id, quizData?.title || null, typeof isPublished === 'boolean' ? isPublished : null]
     );
+    await extractAndPersistResourceContent(id, { force: true });
 
     res.json(rows[0]);
   } catch (error) {
@@ -4894,58 +5438,15 @@ app.post('/api/lms/quizzes/generate', requireAdmin, async (req, res) => {
     let contextTitle = '';
 
     if (moduleId) {
-      // Module quiz — gather all lessons in the module
-      const { rows: modRows } = await pool.query('SELECT name AS title FROM modules WHERE id = $1', [moduleId]);
-      if (!modRows.length) return res.status(404).json({ error: 'Modulo non trovato' });
-      contextTitle = modRows[0].title;
-      context = `Modulo: ${contextTitle}\n\n`;
-
-      const { rows: modLessons } = await pool.query(`
-        SELECT ll.title, ll.description, l.title AS cal_title, l.notes
-        FROM lms_lessons ll
-        LEFT JOIN lessons l ON l.id = ll.calendar_lesson_id
-        WHERE ll.lms_module_id = $1
-        ORDER BY ll.sort_order
-      `, [moduleId]);
-
-      modLessons.forEach((ml, i) => {
-        context += `Lezione ${i + 1}: ${ml.title}\n`;
-        if (ml.description) context += `  Descrizione: ${ml.description}\n`;
-        if (ml.notes) context += `  Note: ${ml.notes}\n`;
-      });
-
-      // Also get resources linked to these calendar lessons
-      const { rows: modResources } = await pool.query(`
-        SELECT r.title, r.resource_type FROM resources r
-        WHERE r.lesson_id IN (
-          SELECT ll.calendar_lesson_id FROM lms_lessons ll WHERE ll.lms_module_id = $1 AND ll.calendar_lesson_id IS NOT NULL
-        ) AND r.is_published = true
-      `, [moduleId]);
-      if (modResources.length) {
-        context += `\nRisorse del modulo:\n`;
-        modResources.forEach(r => { context += `- ${r.title} (${r.resource_type})\n`; });
-      }
+      ({ contextTitle, context } = await buildModuleQuizGenerationContext(moduleId));
     } else {
-      // Single lesson quiz (existing logic)
-      const { rows: lessons } = await pool.query(
-        `SELECT ll.title, ll.description, ll.materials, ll.calendar_lesson_id AS "calendarLessonId",
-                cal.title AS "calendarLessonTitle", cal.notes
-         FROM lms_lessons ll
-         LEFT JOIN lessons cal ON cal.id = ll.calendar_lesson_id
-         WHERE ll.id = $1`,
-        [lessonId]
-      );
-      if (!lessons.length) return res.status(404).json({ error: 'Lezione non trovata' });
-      const lesson = lessons[0];
-      const materials = lesson.materials || [];
-      contextTitle = lesson.title || lesson.calendarLessonTitle;
-      context = `Titolo lezione: ${lesson.title}\n`;
-      if (lesson.description) context += `Descrizione: ${lesson.description}\n`;
-      if (lesson.notes) context += `Note docente: ${lesson.notes}\n`;
-      if (materials.length > 0) {
-        context += `\nMateriali disponibili:\n`;
-        materials.forEach(m => { context += `- ${m.name} (${m.type}): ${m.url}\n`; });
-      }
+      ({ contextTitle, context } = await buildLessonQuizGenerationContext(lessonId));
+    }
+
+    if (!normalizeExtractedText(context)) {
+      return res.status(400).json({
+        error: 'Nessun contenuto reale disponibile per generare il quiz. Carica PDF/slide/documenti leggibili o un transcript video approvato.'
+      });
     }
 
     // 2. Chiama Claude per generare le domande
@@ -4962,11 +5463,15 @@ app.post('/api/lms/quizzes/generate', requireAdmin, async (req, res) => {
 
     const prompt = `Sei un esperto di formazione e valutazione. Devi creare un quiz di verifica per una lezione universitaria.
 
-CONTESTO DELLA LEZIONE:
+CONTESTO DIDATTICO ESTRATTO DAI MATERIALI REALI:
 ${context}
 
 ISTRUZIONI:
 Genera esattamente ${numQuestions} domande a risposta multipla con difficoltà ${difficultyMap[difficulty] || 'intermedia'}.
+
+Le domande devono basarsi prima di tutto sul contenuto reale estratto da PDF, slide, documenti e transcript video.
+Usa titoli, descrizioni e note solo come supporto, non come fonte principale.
+Evita domande generiche che potrebbero essere scritte senza aver letto il materiale.
 
 Per ogni domanda:
 - 4 opzioni di risposta (A, B, C, D)
@@ -5018,7 +5523,7 @@ Rispondi SOLO con il JSON, nessun altro testo.`;
 
   } catch (error) {
     console.error('Error generating quiz:', error);
-    res.status(500).json({ error: 'Errore nella generazione del quiz: ' + error.message });
+    res.status(error.statusCode || 500).json({ error: 'Errore nella generazione del quiz: ' + error.message });
   }
 });
 
@@ -5031,7 +5536,12 @@ app.post('/api/resources/generate-quiz', requireAdmin, async (req, res) => {
   try {
     // 1. Recupera le risorse pubblicate
     const { rows: resources } = await pool.query(`
-      SELECT title, description, resource_type, url FROM resources WHERE is_published = true ORDER BY sort_order
+      SELECT id, title, description, resource_type AS "resourceType", url,
+             extracted_text AS "extractedText"
+      FROM resources
+      WHERE is_published = true
+        AND resource_type <> 'quiz'
+      ORDER BY sort_order
     `);
     
     if (!resources.length) {
@@ -5039,12 +5549,23 @@ app.post('/api/resources/generate-quiz', requireAdmin, async (req, res) => {
     }
     
     // Costruisci il contesto dalle risorse
-    let context = `Risorse disponibili per il Master Carbon Farming:\n\n`;
-    resources.forEach((r, i) => {
-      context += `${i + 1}. ${r.title} (${r.resource_type})`;
-      if (r.description) context += ` - ${r.description}`;
-      context += `\n`;
+    const sections = [];
+    const tracker = { total: 0 };
+    appendContextSection(sections, 'Raccolta risorse Master Carbon Farming', 'Usa le fonti seguenti per costruire il quiz preliminare.', {
+      tracker,
+      perSectionLimit: 1000,
+      totalLimit: 35000
     });
+    for (const resource of resources) {
+      const text = await getResourceQuizSourceText(resource);
+      appendContextSection(
+        sections,
+        `Risorsa: ${resource.title} (${resource.resourceType})`,
+        text || [resource.description, resource.url].filter(Boolean).join('\n'),
+        { tracker, perSectionLimit: 5000, totalLimit: 35000 }
+      );
+    }
+    let context = sections.join('\n\n');
 
     // 2. Chiama Claude per generare le domande
     const Anthropic = require('@anthropic-ai/sdk').default;
@@ -5063,13 +5584,13 @@ app.post('/api/resources/generate-quiz', requireAdmin, async (req, res) => {
 CONTESTO - MASTER CARBON FARMING:
 Il Carbon Farming è l'insieme di pratiche agricole che mirano a sequestrare carbonio nel suolo e nella biomassa vegetale, contribuendo alla mitigazione del cambiamento climatico e generando crediti di carbonio certificati.
 
-RISORSE DEL CORSO:
+RISORSE DEL CORSO ESTRATTE:
 ${context}
 
 ISTRUZIONI:
 Genera esattamente ${numQuestions} domande a risposta multipla con difficoltà ${difficultyMap[difficulty] || 'intermedia'}.
 
-Le domande devono coprire:
+Le domande devono coprire, sulla base del contenuto reale delle risorse:
 - Concetti base del carbon farming
 - Pratiche agricole sostenibili
 - Sequestro del carbonio nel suolo
@@ -5123,7 +5644,7 @@ Rispondi SOLO con il JSON, nessun altro testo.`;
 
   } catch (error) {
     console.error('Error generating preliminary quiz:', error);
-    res.status(500).json({ error: 'Errore nella generazione del quiz: ' + error.message });
+    res.status(error.statusCode || 500).json({ error: 'Errore nella generazione del quiz: ' + error.message });
   }
 });
 

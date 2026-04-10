@@ -125,6 +125,17 @@
         .sig-canvas-wrap { border: 1px solid var(--gray-300); border-radius: 8px; overflow: hidden; margin: 8px 0; background: white; }
         .sig-canvas-wrap canvas { display: block; width: 100%; cursor: crosshair; touch-action: none; }
         .sig-name-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+        .signature-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--gray-200); }
+        .signature-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .signature-tab { padding: 10px 20px; border: none; background: var(--gray-100); border-radius: 8px; cursor: pointer; font-weight: 500; }
+        .signature-tab.active { background: var(--green-600); color: white; }
+        .signature-panel { display: none; }
+        .signature-panel.active { display: block; }
+        .signature-note { background: var(--green-50); border: 1px solid var(--green-200); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 0.9rem; color: var(--green-700); }
+        .signature-upload-zone { border: 2px dashed var(--gray-300); border-radius: 8px; padding: 24px; text-align: center; cursor: pointer; background: white; }
+        .signature-upload-zone:hover, .signature-upload-zone.dragover { border-color: var(--green-500); background: var(--green-50); }
+        .signature-upload-zone.has-file { border-color: var(--green-500); background: var(--green-50); }
+        .signature-preview { max-width: 300px; max-height: 100px; margin-top: 12px; display: none; }
 
         /* Toast */
         .toast { position: fixed; top: 20px; right: 20px; padding: 14px 24px; border-radius: 8px; color: white; font-weight: 600; z-index: 1001; transform: translateX(400px); transition: transform 0.3s; }
@@ -311,17 +322,36 @@
                 <input type="text" id="signer-surname" placeholder="Cognome" style="padding: 10px; border: 1px solid var(--gray-300); border-radius: 8px;">
             </div>
 
-            <h4 style="margin: 16px 0 8px;">Firma</h4>
-            <div class="sig-canvas-wrap">
-                <canvas id="sig-canvas" width="540" height="160"></canvas>
-            </div>
-            <div style="display: flex; gap: 8px; margin: 8px 0 16px;">
-                <button type="button" class="btn-sm btn-gray" onclick="clearSignature()">Cancella firma</button>
+            <div class="signature-section">
+                <h4 style="margin: 16px 0 8px;">Firma</h4>
+                <div class="signature-tabs">
+                    <button type="button" class="signature-tab active" data-signature-tab="draw">Disegna firma</button>
+                    <button type="button" class="signature-tab" data-signature-tab="upload">Carica immagine</button>
+                </div>
+
+                <div class="signature-panel active" id="signature-panel-draw">
+                    <div class="signature-note">✏️ Disegna la tua firma nel riquadro qui sotto</div>
+                    <div class="sig-canvas-wrap">
+                        <canvas id="sig-canvas" width="540" height="160"></canvas>
+                    </div>
+                    <div style="display: flex; gap: 8px; margin: 8px 0 16px;">
+                        <button type="button" class="btn-sm btn-gray" onclick="clearSignature()">Cancella firma</button>
+                    </div>
+                </div>
+
+                <div class="signature-panel" id="signature-panel-upload">
+                    <div class="signature-upload-zone" id="signature-upload-zone">
+                        <p>📎 Clicca o trascina un'immagine della tua firma</p>
+                        <p style="font-size: 0.85rem; color: var(--gray-500);">PNG, JPG (max 2MB)</p>
+                        <img id="signature-preview" class="signature-preview" alt="Anteprima firma">
+                    </div>
+                    <input type="file" id="signature-file" accept="image/*" class="hidden">
+                </div>
             </div>
 
             <div style="display: flex; gap: 12px;">
                 <button type="button" class="btn-sm btn-gray" style="flex: 1;" onclick="closeSignModal()">Annulla</button>
-                <button type="button" id="sign-submit" class="btn-sm btn-green" style="flex: 2;" onclick="submitSignature()">Firma Documento</button>
+                <button type="button" id="sign-submit" class="btn-sm btn-green" style="flex: 2;" onclick="submitSignature()" disabled>Firma Documento</button>
             </div>
         </div>
     </div>
@@ -351,6 +381,8 @@
         let currentTeacher = null;
         let signingDocId = null;
         let consentValue = null;
+        let signatureData = null;
+        let signatureMethod = 'draw';
         let editingQuizId = null;
         let editingQuizData = null;
         let editingQuizMeta = null;
@@ -900,7 +932,18 @@
             document.getElementById('consent-no').className = 'consent-choice';
             document.getElementById('signer-name').value = currentTeacher ? currentTeacher.first_name : '';
             document.getElementById('signer-surname').value = currentTeacher ? currentTeacher.last_name : '';
+            document.querySelectorAll('[data-signature-tab]').forEach(tab => tab.classList.remove('active'));
+            document.querySelector('[data-signature-tab="draw"]').classList.add('active');
+            document.querySelectorAll('.signature-panel').forEach(panel => panel.classList.remove('active'));
+            document.getElementById('signature-panel-draw').classList.add('active');
+            document.getElementById('signature-upload-zone').classList.remove('has-file');
+            document.getElementById('signature-preview').style.display = 'none';
+            document.getElementById('signature-preview').src = '';
+            document.getElementById('signature-file').value = '';
+            signatureData = null;
+            signatureMethod = 'draw';
             clearSignature();
+            updateSignSubmitButton();
             document.getElementById('sign-modal').style.display = 'block';
         }
 
@@ -913,6 +956,7 @@
             consentValue = val;
             document.getElementById('consent-yes').className = 'consent-choice' + (val === true ? ' selected-yes' : '');
             document.getElementById('consent-no').className = 'consent-choice' + (val === false ? ' selected-no' : '');
+            updateSignSubmitButton();
         }
 
         // Signature canvas
@@ -948,6 +992,9 @@
             sigCtx.lineTo(p.x, p.y);
             sigCtx.stroke();
             sigHasData = true;
+            signatureData = sigCanvas.toDataURL('image/png');
+            signatureMethod = 'draw';
+            updateSignSubmitButton();
         }
 
         function endSignatureStroke() {
@@ -981,14 +1028,84 @@
             sigCanvas.addEventListener('touchend', endSignatureStroke);
         }
 
-        function clearSignature() { initSigCanvas(); sigHasData = false; }
+        function clearSignature() {
+            initSigCanvas();
+            sigHasData = false;
+            signatureData = null;
+            signatureMethod = 'draw';
+            updateSignSubmitButton();
+        }
+
+        function updateSignSubmitButton() {
+            const btn = document.getElementById('sign-submit');
+            const name = document.getElementById('signer-name')?.value?.trim();
+            const surname = document.getElementById('signer-surname')?.value?.trim();
+            if (!btn) return;
+            btn.disabled = consentValue === null || !signatureData || !name || !surname;
+        }
+
+        document.querySelectorAll('[data-signature-tab]').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('[data-signature-tab]').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.signature-panel').forEach(panel => panel.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('signature-panel-' + tab.dataset.signatureTab).classList.add('active');
+                updateSignSubmitButton();
+            });
+        });
+
+        const signatureUploadZone = document.getElementById('signature-upload-zone');
+        const signatureFileInput = document.getElementById('signature-file');
+        const signaturePreview = document.getElementById('signature-preview');
+
+        signatureUploadZone.addEventListener('click', () => signatureFileInput.click());
+        signatureUploadZone.addEventListener('dragover', e => {
+            e.preventDefault();
+            signatureUploadZone.classList.add('dragover');
+        });
+        signatureUploadZone.addEventListener('dragleave', () => {
+            signatureUploadZone.classList.remove('dragover');
+        });
+        signatureUploadZone.addEventListener('drop', e => {
+            e.preventDefault();
+            signatureUploadZone.classList.remove('dragover');
+            if (e.dataTransfer.files[0]) handleSignatureFile(e.dataTransfer.files[0]);
+        });
+        signatureFileInput.addEventListener('change', () => {
+            if (signatureFileInput.files[0]) handleSignatureFile(signatureFileInput.files[0]);
+        });
+
+        function handleSignatureFile(file) {
+            if (!file) return;
+            if (file.size > 2 * 1024 * 1024) {
+                showToast('File troppo grande (max 2MB)', 'error');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = event => {
+                signatureData = event.target.result;
+                signatureMethod = 'upload';
+                signaturePreview.src = signatureData;
+                signaturePreview.style.display = 'block';
+                signatureUploadZone.classList.add('has-file');
+                document.querySelectorAll('[data-signature-tab]').forEach(t => t.classList.remove('active'));
+                document.querySelector('[data-signature-tab="upload"]').classList.add('active');
+                document.querySelectorAll('.signature-panel').forEach(panel => panel.classList.remove('active'));
+                document.getElementById('signature-panel-upload').classList.add('active');
+                updateSignSubmitButton();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        document.getElementById('signer-name').addEventListener('input', updateSignSubmitButton);
+        document.getElementById('signer-surname').addEventListener('input', updateSignSubmitButton);
 
         async function submitSignature() {
             if (consentValue === null) { showToast('Seleziona se presti o neghi il consenso', 'error'); return; }
             const name = document.getElementById('signer-name').value.trim();
             const surname = document.getElementById('signer-surname').value.trim();
             if (!name || !surname) { showToast('Inserisci nome e cognome', 'error'); return; }
-            if (!sigHasData) { showToast('Disegna la tua firma', 'error'); return; }
+            if (!signatureData) { showToast('Inserisci la firma disegnandola o caricando un’immagine', 'error'); return; }
 
             const btn = document.getElementById('sign-submit');
             btn.disabled = true; btn.textContent = 'Invio in corso...';
@@ -997,8 +1114,8 @@
                     method: 'POST',
                     body: JSON.stringify({
                         consentGiven: consentValue,
-                        signatureImage: sigCanvas.toDataURL('image/png'),
-                        signatureMethod: 'draw',
+                        signatureImage: signatureData,
+                        signatureMethod: signatureMethod,
                         signerName: name,
                         signerSurname: surname
                     })

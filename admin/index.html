@@ -1226,6 +1226,15 @@ Buono studio!</textarea>
             <form id="teacher-doc-form">
                 <div class="form-grid">
                     <label>
+                        Template
+                        <select id="tdoc-template">
+                            <option value="">-- Seleziona template --</option>
+                            <option value="teacher_media_release">Liberatoria utilizzo immagini e video docenti</option>
+                            <option value="teacher_recording_consent">Consenso registrazione lezioni</option>
+                            <option value="teacher_avatar_consent">Consenso utilizzo avatar AI</option>
+                        </select>
+                    </label>
+                    <label>
                         Titolo documento *
                         <input type="text" id="tdoc-title" required placeholder="Es. Liberatoria registrazione lezioni">
                     </label>
@@ -2311,6 +2320,41 @@ Buono studio!</textarea>
         // TEACHER DOCUMENTS (LIBERATORIE DOCENTI)
         // ============================================
         let currentTeacherDocumentId = null;
+        const teacherDocumentTemplates = {
+            teacher_media_release: {
+                type: 'liberatoria',
+                title: 'Liberatoria utilizzo immagini e video docenti',
+                content: `<div style="font-family: Georgia, serif; line-height: 1.7;">
+<h2 style="text-align:center; color:#166534;">LIBERATORIA PER UTILIZZO DI IMMAGINI E VIDEO</h2>
+<p style="text-align:center;"><strong>Master Carbon Farming</strong></p>
+<p>Il/La sottoscritto/a autorizza il Master Carbon Farming e i suoi soggetti organizzatori a utilizzare immagini, registrazioni audio e video realizzate durante lezioni, seminari, webinar, interviste o contenuti collegati alle attivita' didattiche e divulgative del corso.</p>
+<p>L'autorizzazione comprende l'uso dei materiali per finalita' istituzionali, promozionali, editoriali e di comunicazione del Master, inclusi sito web, piattaforma LMS, social network, materiali informativi e contenuti multimediali.</p>
+<p>La presente autorizzazione e' gratuita, non esclusiva e revocabile per iscritto per utilizzi futuri, fermo restando quanto gia' pubblicato o distribuito prima della revoca.</p>
+</div>`
+            },
+            teacher_recording_consent: {
+                type: 'consenso',
+                title: 'Consenso registrazione lezioni',
+                content: `<div style="font-family: Georgia, serif; line-height: 1.7;">
+<h2 style="text-align:center; color:#166534;">CONSENSO ALLA REGISTRAZIONE DELLE LEZIONI</h2>
+<p style="text-align:center;"><strong>Master Carbon Farming</strong></p>
+<p>Il/La sottoscritto/a presta il proprio consenso alla registrazione audio/video delle lezioni, testimonianze o interventi tenuti nell'ambito del Master Carbon Farming.</p>
+<p>Le registrazioni potranno essere utilizzate per finalita' didattiche interne, recupero lezioni, fruizione asincrona da parte degli iscritti e archiviazione a supporto delle attivita' formative del corso.</p>
+<p>Resta inteso che i contenuti saranno utilizzati nel rispetto delle finalita' del Master e delle normative applicabili in materia di privacy e trattamento dei dati personali.</p>
+</div>`
+            },
+            teacher_avatar_consent: {
+                type: 'consenso',
+                title: 'Consenso utilizzo avatar AI',
+                content: `<div style="font-family: Georgia, serif; line-height: 1.7;">
+<h2 style="text-align:center; color:#166534;">CONSENSO PER UTILIZZO AVATAR AI</h2>
+<p style="text-align:center;"><strong>Master Carbon Farming</strong></p>
+<p>Il/La sottoscritto/a autorizza l'utilizzo della propria immagine, voce e materiali didattici per la generazione di contenuti digitali con supporto di sistemi di intelligenza artificiale, inclusi avatar video e contenuti sintetici destinati alla fruizione didattica del Master.</p>
+<p>L'autorizzazione riguarda esclusivamente attivita' collegate al Master Carbon Farming e non consente utilizzi ulteriori estranei alle finalita' formative, istituzionali o promozionali del corso.</p>
+<p>Il/La docente potra' richiedere in qualunque momento la sospensione di nuovi utilizzi, fermo restando il materiale gia' prodotto o pubblicato in precedenza.</p>
+</div>`
+            }
+        };
 
         async function loadTeacherDocs() {
             try {
@@ -2348,6 +2392,14 @@ Buono studio!</textarea>
                 document.getElementById('teacher-doc-form').reset();
                 loadTeacherDocs();
             } catch (e) { /* handled */ }
+        });
+
+        document.getElementById('tdoc-template').addEventListener('change', (e) => {
+            const selected = teacherDocumentTemplates[e.target.value];
+            if (!selected) return;
+            document.getElementById('tdoc-type').value = selected.type;
+            document.getElementById('tdoc-title').value = selected.title;
+            document.getElementById('tdoc-content').value = selected.content;
         });
 
         async function viewTeacherDocSigs(docId, docTitle) {

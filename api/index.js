@@ -7,7 +7,6 @@ const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const { put } = require('@vercel/blob');
-const pdfParse = require('pdf-parse');
 const JSZip = require('jszip');
 
 const app = express();
@@ -1890,6 +1889,15 @@ function stripHtml(html = '') {
   );
 }
 
+let pdfParseModulePromise = null;
+
+async function getPdfParse() {
+  if (!pdfParseModulePromise) {
+    pdfParseModulePromise = import('pdf-parse').then(mod => mod.default || mod);
+  }
+  return pdfParseModulePromise;
+}
+
 function stripTimedText(text = '') {
   return normalizeExtractedText(
     String(text)
@@ -2023,6 +2031,7 @@ async function extractTextFromUrl(url, resourceType = null) {
   const lowerType = String(contentType).toLowerCase();
 
   if (ext === '.pdf' || lowerType.includes('application/pdf')) {
+    const pdfParse = await getPdfParse();
     const parsed = await pdfParse(buffer);
     return { text: parsed.text || '', metadata: { strategy: 'pdf', contentType } };
   }

@@ -108,6 +108,15 @@
 
         /* Signature */
         .doc-content { max-height: 300px; overflow-y: auto; padding: 16px; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 8px; font-size: 14px; line-height: 1.7; margin: 12px 0; }
+        .doc-preview-card { border: 1px solid var(--gray-200); border-radius: 12px; padding: 18px; background: white; }
+        .doc-preview-card h3 { margin-bottom: 6px; color: var(--gray-900); }
+        .doc-preview-meta { color: var(--gray-500); font-size: 14px; margin-bottom: 12px; }
+        .doc-preview-snippet { color: var(--gray-700); font-size: 14px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .doc-modal-shell { background: white; border: 1px solid var(--gray-200); border-radius: 14px; padding: 18px; margin-bottom: 20px; }
+        .doc-modal-shell h4 { margin-bottom: 10px; color: var(--gray-900); font-size: 22px; }
+        .doc-modal-shell p { color: var(--gray-500); margin-bottom: 16px; }
+        .doc-modal-render { max-height: 360px; overflow-y: auto; padding: 22px; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 12px; }
+        .doc-modal-render > *:first-child { margin-top: 0; }
         .consent-choices { display: flex; gap: 16px; margin: 16px 0; }
         .consent-choice { flex: 1; padding: 16px; border: 2px solid var(--gray-200); border-radius: 8px; cursor: pointer; text-align: center; font-weight: 600; transition: all 0.2s; }
         .consent-choice:hover { border-color: var(--gray-400); }
@@ -286,7 +295,7 @@
 
     <!-- Sign Document Modal -->
     <div id="sign-modal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-content" style="max-width: 860px;">
             <h3 id="sign-doc-title"></h3>
             <div id="sign-doc-content" class="doc-content"></div>
 
@@ -345,6 +354,7 @@
         let editingQuizId = null;
         let editingQuizData = null;
         let editingQuizMeta = null;
+        const teacherPendingDocs = new Map();
 
         // === AUTH ===
         window.addEventListener('load', async () => {
@@ -566,6 +576,14 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
+        }
+
+        function htmlToSnippet(html) {
+            return String(html || '')
+                .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
         }
 
         function buildEmptyQuizQuestion() {
@@ -814,16 +832,21 @@
         async function loadPendingDocs() {
             try {
                 const docs = await apiCall('/api/teachers/documents/pending');
+                teacherPendingDocs.clear();
+                docs.forEach(doc => teacherPendingDocs.set(doc.id, doc));
                 const c = document.getElementById('docs-pending-container');
                 if (!docs.length) { c.innerHTML = '<div class="empty-state">Nessun documento da firmare.</div>'; return; }
                 c.innerHTML = docs.map(d => `
                     <div class="list-item">
-                        <div class="item-info">
-                            <div class="item-title">${d.title}</div>
-                            <div class="item-meta">${d.document_type || 'Liberatoria'}</div>
-                        </div>
-                        <div class="item-actions">
-                            <button class="btn-sm btn-green" onclick="openSignModal('${d.id}', ${JSON.stringify(d.title).replace(/'/g,"&#39;")}, ${JSON.stringify(d.content||'').replace(/'/g,"&#39;")})">📝 Firma</button>
+                        <div class="item-info" style="width:100%;">
+                            <div class="doc-preview-card">
+                                <h3>${escapeHtml(d.title)}</h3>
+                                <div class="doc-preview-meta">${escapeHtml(d.document_type || 'Liberatoria')} · Documento da firmare</div>
+                                <div class="doc-preview-snippet">${escapeHtml(htmlToSnippet(d.content || ''))}</div>
+                                <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+                                    <button class="btn-sm btn-green" data-open-doc="${d.id}">Apri e firma</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 `).join('');
@@ -855,11 +878,24 @@
         }
 
         // === SIGN MODAL ===
-        function openSignModal(docId, title, content) {
+        function openSignModal(docId) {
+            const doc = teacherPendingDocs.get(docId);
+            if (!doc) {
+                showToast('Documento non trovato', 'error');
+                return;
+            }
             signingDocId = docId;
             consentValue = null;
-            document.getElementById('sign-doc-title').textContent = title;
-            document.getElementById('sign-doc-content').innerHTML = content;
+            document.getElementById('sign-doc-title').textContent = doc.title;
+            document.getElementById('sign-doc-content').innerHTML = `
+                <div class="doc-modal-shell">
+                    <h4>📋 ${escapeHtml(doc.title)}</h4>
+                    <p>Leggi attentamente il documento, compila i dati richiesti e indica la tua scelta.</p>
+                    <div class="doc-modal-render">
+                        ${doc.content || ''}
+                    </div>
+                </div>
+            `;
             document.getElementById('consent-yes').className = 'consent-choice';
             document.getElementById('consent-no').className = 'consent-choice';
             document.getElementById('signer-name').value = currentTeacher ? currentTeacher.first_name : '';
@@ -937,6 +973,11 @@
         }
 
         document.getElementById('sign-modal').addEventListener('click', e => { if (e.target.id === 'sign-modal') closeSignModal(); });
+        document.getElementById('docs-pending-container').addEventListener('click', (event) => {
+            const button = event.target.closest('[data-open-doc]');
+            if (!button) return;
+            openSignModal(button.dataset.openDoc);
+        });
         document.getElementById('quiz-editor-modal').addEventListener('click', e => { if (e.target.id === 'quiz-editor-modal') closeQuizEditor(); });
         document.getElementById('quiz-editor-cancel-btn').addEventListener('click', closeQuizEditor);
         document.getElementById('quiz-editor-save-btn').addEventListener('click', saveQuizEditor);

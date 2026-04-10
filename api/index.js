@@ -833,7 +833,8 @@ app.get('/api/teachers/documents/signed', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { rows } = await pool.query(`
-      SELECT tds.id, tds.signature_data, tds.signed_at,
+      SELECT tds.id, tds.document_id, tds.signed_at, tds.consent_given, tds.signature_image,
+             tds.signature_method, tds.signer_name, tds.signer_surname,
              td.title, td.type AS document_type
       FROM teacher_document_signatures tds
       JOIN teacher_documents td ON td.id = tds.document_id
@@ -875,11 +876,19 @@ app.post('/api/teachers/documents/:id/sign', requireTeacher, async (req, res) =>
 
     await pool.query(`
       INSERT INTO teacher_document_signatures
-        (document_id, faculty_id, signature_data, ip_address, signed_at)
-      VALUES ($1, $2, $3, $4, NOW())
+        (document_id, faculty_id, signature_data, consent_given, signature_image, signature_method, signer_name, signer_surname, user_agent, ip_address, signed_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
       ON CONFLICT (document_id, faculty_id) DO UPDATE SET
-        signature_data = $3, ip_address = $4, signed_at = NOW()
-    `, [documentId, req.teacher.id, signatureData, ipAddress]);
+        signature_data = $3,
+        consent_given = $4,
+        signature_image = $5,
+        signature_method = $6,
+        signer_name = $7,
+        signer_surname = $8,
+        user_agent = $9,
+        ip_address = $10,
+        signed_at = NOW()
+    `, [documentId, req.teacher.id, signatureData, consentGiven, signatureImage, signatureMethod || 'draw', signerName, signerSurname, userAgent, ipAddress]);
 
     res.json({ success: true });
   } catch (error) {
@@ -914,7 +923,7 @@ app.get('/api/teacher-documents', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT td.*,
         (SELECT COUNT(*) FROM teacher_document_signatures tds WHERE tds.document_id = td.id) as signature_count,
-        (SELECT COUNT(*) FROM teacher_document_signatures tds WHERE tds.document_id = td.id AND tds.signed_at IS NOT NULL) as consent_count
+        (SELECT COUNT(*) FROM teacher_document_signatures tds WHERE tds.document_id = td.id AND tds.consent_given = true) as consent_count
       FROM teacher_documents td ORDER BY td.created_at DESC
     `);
     res.json(rows);
@@ -929,7 +938,10 @@ app.get('/api/teacher-documents/:id/signatures', requireAdmin, async (req, res) 
   if (!ensurePool(res)) return;
   try {
     const { rows } = await pool.query(`
-      SELECT tds.*, f.email, f.first_name, f.last_name
+      SELECT tds.id, tds.document_id, tds.faculty_id, tds.signed_at, tds.ip_address,
+             tds.consent_given, tds.signature_image, tds.signature_method,
+             tds.signer_name, tds.signer_surname,
+             f.email, f.first_name, f.last_name
       FROM teacher_document_signatures tds
       JOIN faculty f ON f.id = tds.faculty_id
       WHERE tds.document_id = $1
@@ -939,6 +951,203 @@ app.get('/api/teacher-documents/:id/signatures', requireAdmin, async (req, res) 
   } catch (error) {
     console.error('Get teacher doc signatures error:', error);
     res.status(500).json({ error: 'Errore nel caricamento firme' });
+  }
+});
+
+app.get('/api/teachers/documents/:id/my-pdf', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT td.title, td.content, tds.consent_given, tds.signature_image, tds.signed_at,
+             tds.signer_name, tds.signer_surname, tds.ip_address
+      FROM teacher_document_signatures tds
+      JOIN teacher_documents td ON td.id = tds.document_id
+      WHERE td.id = $1 AND tds.faculty_id = $2
+    `, [req.params.id, req.teacher.id]);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Firma non trovata' });
+    }
+
+    const data = rows[0];
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="liberatoria_docente_${(data.signer_surname || 'firmata').replace(/\s+/g, '_')}.pdf"`);
+    doc.pipe(res);
+
+    const plainContent = (data.content || '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    doc.fillColor('#166534').fontSize(20).text('Master Carbon Farming', { align: 'center' });
+    doc.fillColor('#666').fontSize(10).text('Documento firmato dal docente', { align: 'center' });
+    doc.moveDown(2);
+    doc.fillColor('#000').fontSize(16).text(data.title, { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(11).fillColor('#333').text(plainContent, { align: 'justify', lineGap: 4 });
+    doc.moveDown(2);
+    doc.strokeColor('#ccc').lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+    doc.moveDown();
+    doc.fillColor('#166534').fontSize(14).text('DICHIARAZIONE', { align: 'center' });
+    doc.moveDown();
+    doc.fillColor('#000').fontSize(11);
+    doc.text(`Nome: ${data.signer_name || 'N/D'}`, 50);
+    doc.text(`Cognome: ${data.signer_surname || 'N/D'}`, 300, doc.y - 14);
+    doc.moveDown();
+    const consensoText = data.consent_given
+      ? '✓ PRESTO IL CONSENSO - Autorizzo l\'utilizzo di immagini e video'
+      : '✗ NEGO IL CONSENSO - Non desidero essere ripreso/a';
+    doc.fillColor(data.consent_given ? '#166534' : '#dc2626').fontSize(12).text(consensoText);
+    doc.moveDown(2);
+    doc.fillColor('#000').fontSize(11).text('Firma:');
+    if (data.signature_image && data.signature_image.startsWith('data:image')) {
+      try {
+        const base64Data = data.signature_image.split(',')[1];
+        const imgBuffer = Buffer.from(base64Data, 'base64');
+        doc.image(imgBuffer, { width: 200, height: 80 });
+      } catch (_e) {
+        doc.text('[Firma non disponibile]');
+      }
+    }
+    doc.moveDown(2);
+    doc.fontSize(9).fillColor('#666');
+    doc.text(`Data firma: ${new Date(data.signed_at).toLocaleString('it-IT')}`, 50);
+    doc.text(`IP: ${data.ip_address || 'N/D'}`);
+    doc.moveDown();
+    doc.text('Documento generato automaticamente dalla piattaforma Master Carbon Farming', { align: 'center' });
+    doc.end();
+  } catch (error) {
+    console.error('Error generating teacher signed PDF:', error);
+    res.status(500).json({ error: 'Errore nella generazione del PDF' });
+  }
+});
+
+app.get('/api/teacher-signatures/:id/pdf', (req, res, next) => {
+  if (req.query.token && !req.headers.authorization) {
+    req.headers.authorization = 'Bearer ' + req.query.token;
+  }
+  requireAdmin(req, res, next);
+}, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT tds.id, tds.consent_given, tds.signature_image, tds.signature_method, tds.signed_at,
+             tds.signer_name, tds.signer_surname, tds.ip_address,
+             f.email, f.first_name, f.last_name, td.title, td.content
+      FROM teacher_document_signatures tds
+      JOIN faculty f ON f.id = tds.faculty_id
+      JOIN teacher_documents td ON td.id = tds.document_id
+      WHERE tds.id = $1
+    `, [req.params.id]);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Firma non trovata' });
+    }
+    const data = rows[0];
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const surname = data.signer_surname || data.last_name || 'docente';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="liberatoria_docente_${surname}.pdf"`);
+    doc.pipe(res);
+
+    const plainContent = (data.content || '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    doc.fillColor('#166534').fontSize(20).text('Master Carbon Farming', { align: 'center' });
+    doc.fillColor('#666').fontSize(10).text('Firma docente', { align: 'center' });
+    doc.moveDown(2);
+    doc.fillColor('#000').fontSize(16).text(data.title, { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(11).fillColor('#333').text(plainContent, { align: 'justify', lineGap: 4 });
+    doc.moveDown(2);
+    doc.strokeColor('#ccc').lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+    doc.moveDown();
+    doc.fillColor('#166534').fontSize(14).text('DICHIARAZIONE', { align: 'center' });
+    doc.moveDown();
+    doc.fillColor('#000').fontSize(11);
+    doc.text(`Nome: ${data.signer_name || data.first_name || 'N/D'}`, 50);
+    doc.text(`Cognome: ${data.signer_surname || data.last_name || 'N/D'}`, 300, doc.y - 14);
+    doc.text(`Email: ${data.email || 'N/D'}`, 50);
+    doc.moveDown();
+    const consensoText = data.consent_given
+      ? '✓ PRESTO IL CONSENSO - Autorizzo l\'utilizzo di immagini e video'
+      : '✗ NEGO IL CONSENSO - Non desidero essere ripreso/a';
+    doc.fillColor(data.consent_given ? '#166534' : '#dc2626').fontSize(12).text(consensoText);
+    doc.moveDown(2);
+    doc.fillColor('#000').fontSize(11).text('Firma:');
+    if (data.signature_image && data.signature_image.startsWith('data:image')) {
+      try {
+        const base64Data = data.signature_image.split(',')[1];
+        const imgBuffer = Buffer.from(base64Data, 'base64');
+        doc.image(imgBuffer, { width: 200, height: 80 });
+      } catch (_e) {
+        doc.text('[Firma non disponibile]');
+      }
+    }
+    doc.moveDown(2);
+    doc.fontSize(9).fillColor('#666');
+    doc.text(`Data firma: ${new Date(data.signed_at).toLocaleString('it-IT')}`, 50);
+    doc.text(`IP: ${data.ip_address || 'N/D'}`);
+    doc.end();
+  } catch (error) {
+    console.error('Error generating teacher admin PDF:', error);
+    res.status(500).json({ error: 'Errore nella generazione del PDF' });
+  }
+});
+
+app.get('/api/teacher-signatures/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT tds.id, tds.consent_given, tds.signature_image, tds.signature_method, tds.signed_at,
+             tds.signer_name, tds.signer_surname, tds.ip_address,
+             f.email, f.first_name, f.last_name, td.title, td.content
+      FROM teacher_document_signatures tds
+      JOIN faculty f ON f.id = tds.faculty_id
+      JOIN teacher_documents td ON td.id = tds.document_id
+      WHERE tds.id = $1
+    `, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Firma non trovata' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching teacher signature:', error);
+    res.status(500).json({ error: 'Errore nel caricamento firma' });
+  }
+});
+
+app.get('/api/teacher-documents/:id/export', (req, res, next) => {
+  if (req.query.token && !req.headers.authorization) {
+    req.headers.authorization = 'Bearer ' + req.query.token;
+  }
+  requireAdmin(req, res, next);
+}, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT f.email, f.first_name, f.last_name,
+             tds.consent_given, tds.signature_method, tds.signed_at, tds.ip_address
+      FROM teacher_document_signatures tds
+      JOIN faculty f ON f.id = tds.faculty_id
+      WHERE tds.document_id = $1
+      ORDER BY tds.signed_at DESC NULLS LAST, f.last_name, f.first_name
+    `, [req.params.id]);
+    let csv = 'email,nome,cognome,consenso,metodo_firma,data_firma,ip\n';
+    rows.forEach(r => {
+      csv += `"${r.email || ''}","${r.first_name || ''}","${r.last_name || ''}","${r.consent_given ? 'SI' : 'NO'}","${r.signature_method || ''}","${r.signed_at || ''}","${r.ip_address || ''}"\n`;
+    });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="teacher_signatures_export.csv"');
+    res.send('\uFEFF' + csv);
+  } catch (error) {
+    console.error('Error exporting teacher signatures:', error);
+    res.status(500).json({ error: 'Errore nell\'export firme docenti' });
   }
 });
 

@@ -1270,7 +1270,10 @@ Buono studio!</textarea>
             <!-- Modal firme docenti -->
             <div id="tdoc-sigs-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
                 <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; border-radius:12px; padding:32px; width:90%; max-width:700px; max-height:80vh; overflow-y:auto;">
-                    <h3 id="tdoc-sigs-title" style="margin-bottom: 16px;"></h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+                        <h3 id="tdoc-sigs-title" style="margin:0;"></h3>
+                        <button id="tdoc-export-btn" class="secondary" style="font-size:0.85rem;">📥 Esporta CSV</button>
+                    </div>
                     <div id="tdoc-sigs-content"></div>
                     <div style="text-align: right; margin-top: 16px;">
                         <button class="secondary" onclick="document.getElementById('tdoc-sigs-modal').style.display='none'">Chiudi</button>
@@ -2307,6 +2310,8 @@ Buono studio!</textarea>
         // ============================================
         // TEACHER DOCUMENTS (LIBERATORIE DOCENTI)
         // ============================================
+        let currentTeacherDocumentId = null;
+
         async function loadTeacherDocs() {
             try {
                 const docs = await apiRequest('/api/teacher-documents');
@@ -2347,21 +2352,33 @@ Buono studio!</textarea>
 
         async function viewTeacherDocSigs(docId, docTitle) {
             try {
+                currentTeacherDocumentId = docId;
                 const sigs = await apiRequest('/api/teacher-documents/' + docId + '/signatures');
                 document.getElementById('tdoc-sigs-title').textContent = 'Firme: ' + docTitle;
                 const content = document.getElementById('tdoc-sigs-content');
                 if (!sigs.length) {
                     content.innerHTML = '<p style="color: var(--gray-500);">Nessuna firma ricevuta.</p>';
                 } else {
-                    content.innerHTML = '<table style="width:100%;"><thead><tr><th>Docente</th><th>Email</th><th>Consenso</th><th>Data</th></tr></thead><tbody>' +
+                    content.innerHTML = '<table style="width:100%;"><thead><tr><th>Docente</th><th>Email</th><th>Consenso</th><th>Data</th><th>Firma</th></tr></thead><tbody>' +
                         sigs.map(s => '<tr><td>' + (s.signer_name || s.first_name || '') + ' ' + (s.signer_surname || s.last_name || '') + '</td>' +
                             '<td>' + (s.email || '') + '</td>' +
                             '<td>' + (s.consent_given ? '<span style="color:green;">Si</span>' : '<span style="color:red;">No</span>') + '</td>' +
-                            '<td>' + (s.signed_at ? new Date(s.signed_at).toLocaleDateString('it-IT') : '') + '</td></tr>'
+                            '<td>' + (s.signed_at ? new Date(s.signed_at).toLocaleDateString('it-IT') : '') + '</td>' +
+                            '<td><button class="secondary" style="font-size:0.75rem; padding:2px 6px;" onclick="downloadTeacherSignaturePDF(\'' + s.id + '\')">PDF</button></td></tr>'
                         ).join('') + '</tbody></table>';
                 }
                 document.getElementById('tdoc-sigs-modal').style.display = 'block';
             } catch (e) { showToast('Errore nel caricamento firme', 'error'); }
+        }
+
+        document.getElementById('tdoc-export-btn').addEventListener('click', () => {
+            if (currentTeacherDocumentId) {
+                window.open(`/api/teacher-documents/${currentTeacherDocumentId}/export?token=${adminToken}`, '_blank');
+            }
+        });
+
+        function downloadTeacherSignaturePDF(signatureId) {
+            window.open('/api/teacher-signatures/' + signatureId + '/pdf?token=' + adminToken, '_blank');
         }
 
         // ============================================

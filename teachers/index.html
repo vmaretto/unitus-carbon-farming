@@ -787,6 +787,29 @@
             }
         }
 
+        async function downloadTeacherSignedDocPdf(documentId) {
+            try {
+                const res = await fetch(`/api/teachers/documents/${documentId}/my-pdf`, {
+                    headers: { 'Authorization': 'Bearer ' + teacherToken }
+                });
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Errore nel download del PDF');
+                }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `liberatoria_docente_${documentId}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                showToast(e.message || 'Errore nel download del PDF', 'error');
+            }
+        }
+
         // === DOCUMENTS ===
         async function loadPendingDocs() {
             try {
@@ -824,6 +847,7 @@
                             <span class="badge ${d.consent_given ? 'badge-green' : 'badge-red'}">
                                 ${d.consent_given ? '✅ Consenso prestato' : '❌ Consenso negato'}
                             </span>
+                            <button class="btn-sm btn-gray" onclick="downloadTeacherSignedDocPdf('${d.document_id || d.documentId}')">Scarica PDF</button>
                         </div>
                     </div>
                 `).join('');

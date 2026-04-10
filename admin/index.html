@@ -1975,6 +1975,10 @@ Buono studio!</textarea>
                 error.message === 'Sessione scaduta. Effettua nuovamente il login.';
         }
 
+        function hasActiveAdminSession() {
+            return Boolean(isAuthenticated && adminToken);
+        }
+
         async function bootstrapAdminData() {
             if (adminBootstrapPromise) return adminBootstrapPromise;
 
@@ -1994,7 +1998,7 @@ Buono studio!</textarea>
                 ];
 
                 for (const task of startupTasks) {
-                    if (!isAuthenticated || !adminToken) break;
+                    if (!hasActiveAdminSession()) break;
                     try {
                         await task();
                     } catch (error) {
@@ -2027,6 +2031,7 @@ Buono studio!</textarea>
             loginGate.style.display = 'flex';
             mainContent.style.display = 'none';
             headerEl.style.display = 'none';
+            document.getElementById('logout-btn').style.display = 'none';
         }
 
         async function checkAuth() {
@@ -2193,7 +2198,9 @@ Buono studio!</textarea>
                         adminToken = null;
                         localStorage.removeItem('adminToken');
                         showLogin();
-                        throw new Error('Sessione scaduta. Effettua nuovamente il login.');
+                        const authExpiredError = new Error('Sessione scaduta. Effettua nuovamente il login.');
+                        authExpiredError.status = 401;
+                        throw authExpiredError;
                     }
 
                     const payload = await response.json().catch(() => ({ error: 'Errore sconosciuto' }));
@@ -2208,7 +2215,7 @@ Buono studio!</textarea>
                     throw error;
                 }
             } catch (error) {
-                if (!suppressErrors) {
+                if (!suppressErrors && !isAuthTransitionError(error)) {
                     console.error('API error', error);
                     showToast(error.message || 'Impossibile completare l\'operazione', 'error');
                 }
@@ -4041,6 +4048,7 @@ Buono studio!</textarea>
         }
 
         function updateLmsCourseSelects() {
+            if (!hasActiveAdminSession()) return;
             // Module page course select
             const modSelect = document.getElementById('lms-mod-course-select');
             const curMod = modSelect.value;
@@ -5176,6 +5184,7 @@ Buono studio!</textarea>
 
         let _enrollEditionSelectUpdating = false;
         async function updateEnrollEditionSelect() {
+            if (!hasActiveAdminSession()) return;
             // Evita chiamate multiple simultanee
             if (_enrollEditionSelectUpdating) return;
             _enrollEditionSelectUpdating = true;
@@ -5411,6 +5420,7 @@ Buono studio!</textarea>
 
         let _attEditionSelectUpdating = false;
         async function updateAttEditionSelect() {
+            if (!hasActiveAdminSession()) return;
             // Evita chiamate multiple simultanee
             if (_attEditionSelectUpdating) return;
             _attEditionSelectUpdating = true;
@@ -5814,6 +5824,7 @@ Buono studio!</textarea>
         state.workflows = [];
 
         async function loadWfCourseSelect() {
+            if (!hasActiveAdminSession()) return;
             const select = document.getElementById('wf-course-select');
             select.innerHTML = '<option value="">-- Tutti i corsi --</option>';
             state.lmsCourses.forEach(c => {
@@ -5822,6 +5833,7 @@ Buono studio!</textarea>
         }
 
         async function loadWfLessonSelect() {
+            if (!hasActiveAdminSession()) return;
             const select = document.getElementById('wf-lesson-select');
             select.innerHTML = '<option value="">-- Seleziona lezione --</option>';
             // Load all LMS lessons
@@ -5864,6 +5876,7 @@ Buono studio!</textarea>
         });
 
         async function loadWorkflows() {
+            if (!hasActiveAdminSession()) return;
             const courseId = document.getElementById('wf-course-select').value;
             try {
                 const params = courseId ? `?courseId=${courseId}` : '';
@@ -5990,6 +6003,7 @@ Buono studio!</textarea>
 
         // --- Consensi docenti ---
         async function loadWfConsents() {
+            if (!hasActiveAdminSession()) return;
             try {
                 const consents = await apiRequest('/api/teacher-consents');
                 const tbody = document.getElementById('wf-consents-body');
@@ -6012,6 +6026,7 @@ Buono studio!</textarea>
         }
 
         async function loadWfTeacherSelect() {
+            if (!hasActiveAdminSession()) return;
             const select = document.getElementById('wf-consent-teacher');
             select.innerHTML = '<option value="">-- Seleziona docente --</option>';
             try {
@@ -6053,6 +6068,7 @@ Buono studio!</textarea>
 
         // Init workflow section when LMS courses are loaded
         function initWorkflowSection() {
+            if (!hasActiveAdminSession()) return;
             loadWfCourseSelect();
             loadWfLessonSelect();
             loadWorkflows();

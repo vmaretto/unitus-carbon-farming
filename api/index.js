@@ -656,7 +656,9 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
     // Count pending documents to sign
     const { rows: docsCount } = await pool.query(
       `SELECT COUNT(*) as total FROM teacher_documents td
-       WHERE td.status != 'archived' AND NOT EXISTS (
+       WHERE td.status != 'archived'
+         AND (td.faculty_id IS NULL OR td.faculty_id = $1)
+         AND NOT EXISTS (
          SELECT 1 FROM teacher_document_signatures tds WHERE tds.document_id = td.id AND tds.faculty_id = $1
        )`,
       [facultyId]
@@ -815,6 +817,7 @@ app.get('/api/teachers/documents/pending', requireTeacher, async (req, res) => {
       SELECT td.id, td.title, td.content, td.type AS document_type
       FROM teacher_documents td
       WHERE td.status != 'archived'
+        AND (td.faculty_id IS NULL OR td.faculty_id = $1)
         AND NOT EXISTS (
           SELECT 1 FROM teacher_document_signatures tds
           WHERE tds.document_id = td.id AND tds.faculty_id = $1
@@ -901,13 +904,13 @@ app.post('/api/teachers/documents/:id/sign', requireTeacher, async (req, res) =>
 app.post('/api/teacher-documents', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
-    const { title, content, documentType } = req.body;
+    const { title, content, documentType, facultyId } = req.body;
     if (!title || !content) {
       return res.status(400).json({ error: 'Titolo e contenuto sono obbligatori' });
     }
     const { rows } = await pool.query(
-      `INSERT INTO teacher_documents (title, content, type) VALUES ($1, $2, $3) RETURNING *`,
-      [title, content, documentType || 'liberatoria']
+      `INSERT INTO teacher_documents (faculty_id, title, content, type) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [facultyId || null, title, content, documentType || 'liberatoria']
     );
     res.json(rows[0]);
   } catch (error) {

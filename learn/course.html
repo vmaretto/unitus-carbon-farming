@@ -189,7 +189,10 @@
                         if (a.startDatetime && b.startDatetime) return new Date(a.startDatetime) - new Date(b.startDatetime);
                         return (a.sortOrder || 0) - (b.sortOrder || 0);
                     });
-                    const completedInMod = modLessons.filter(l => progressMap[l.id] && progressMap[l.id].completedAt).length;
+                    const completedInMod = modLessons.filter(l => {
+                        const progress = progressMap[l.id];
+                        return progress && (progress.completedAt || progress.hasAttendance);
+                    }).length;
 
                     const modDiv = document.createElement('div');
                     modDiv.className = 'module';

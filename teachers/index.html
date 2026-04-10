@@ -123,7 +123,7 @@
         .consent-choice.selected-yes { border-color: var(--green-600); background: var(--green-50); color: var(--green-700); }
         .consent-choice.selected-no { border-color: var(--red-600); background: #fef2f2; color: var(--red-600); }
         .sig-canvas-wrap { border: 1px solid var(--gray-300); border-radius: 8px; overflow: hidden; margin: 8px 0; background: white; }
-        .sig-canvas-wrap canvas { display: block; width: 100%; cursor: crosshair; }
+        .sig-canvas-wrap canvas { display: block; width: 100%; cursor: crosshair; touch-action: none; }
         .sig-name-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
 
         /* Toast */
@@ -935,13 +935,51 @@
             return { x: t.clientX - r.left, y: t.clientY - r.top };
         }
 
-        sigCanvas.addEventListener('mousedown', e => { sigDrawing = true; const p = getPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); });
-        sigCanvas.addEventListener('mousemove', e => { if (!sigDrawing) return; const p = getPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); sigHasData = true; });
-        sigCanvas.addEventListener('mouseup', () => sigDrawing = false);
-        sigCanvas.addEventListener('mouseleave', () => sigDrawing = false);
-        sigCanvas.addEventListener('touchstart', e => { e.preventDefault(); sigDrawing = true; const p = getPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); }, { passive: false });
-        sigCanvas.addEventListener('touchmove', e => { e.preventDefault(); if (!sigDrawing) return; const p = getPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); sigHasData = true; }, { passive: false });
-        sigCanvas.addEventListener('touchend', () => sigDrawing = false);
+        function beginSignatureStroke(e) {
+            sigDrawing = true;
+            const p = getPos(e);
+            sigCtx.beginPath();
+            sigCtx.moveTo(p.x, p.y);
+        }
+
+        function continueSignatureStroke(e) {
+            if (!sigDrawing) return;
+            const p = getPos(e);
+            sigCtx.lineTo(p.x, p.y);
+            sigCtx.stroke();
+            sigHasData = true;
+        }
+
+        function endSignatureStroke() {
+            sigDrawing = false;
+        }
+
+        if (window.PointerEvent) {
+            sigCanvas.addEventListener('pointerdown', e => {
+                e.preventDefault();
+                sigCanvas.setPointerCapture?.(e.pointerId);
+                beginSignatureStroke(e);
+            });
+            sigCanvas.addEventListener('pointermove', e => {
+                e.preventDefault();
+                continueSignatureStroke(e);
+            });
+            sigCanvas.addEventListener('pointerup', e => {
+                e.preventDefault();
+                sigCanvas.releasePointerCapture?.(e.pointerId);
+                endSignatureStroke();
+            });
+            sigCanvas.addEventListener('pointercancel', endSignatureStroke);
+            sigCanvas.addEventListener('pointerleave', endSignatureStroke);
+        } else {
+            sigCanvas.addEventListener('mousedown', beginSignatureStroke);
+            sigCanvas.addEventListener('mousemove', continueSignatureStroke);
+            sigCanvas.addEventListener('mouseup', endSignatureStroke);
+            sigCanvas.addEventListener('mouseleave', endSignatureStroke);
+            sigCanvas.addEventListener('touchstart', e => { e.preventDefault(); beginSignatureStroke(e); }, { passive: false });
+            sigCanvas.addEventListener('touchmove', e => { e.preventDefault(); continueSignatureStroke(e); }, { passive: false });
+            sigCanvas.addEventListener('touchend', endSignatureStroke);
+        }
 
         function clearSignature() { initSigCanvas(); sigHasData = false; }
 

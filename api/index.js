@@ -1565,8 +1565,8 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
     try {
       const { rows } = await pool.query(
         `UPDATE materials_pending
-         SET status = $1,
-             notes = CASE WHEN $1 = 'rejected' THEN $2 ELSE NULL END,
+         SET status = $1::varchar,
+             notes = CASE WHEN $1::varchar = 'rejected' THEN $2::text ELSE NULL END,
              updated_at = NOW()
          WHERE id = $3
          RETURNING id, faculty_id AS "facultyId", lesson_id AS "lessonId",

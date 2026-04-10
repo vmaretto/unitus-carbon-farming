@@ -1651,6 +1651,10 @@ Buono studio!</textarea>
                         <div style="font-size: 0.9rem; color: var(--gray-500); margin-bottom: 8px;">Codice PIN (valido 15 minuti)</div>
                         <div id="att-pin-code" style="font-size: 4rem; font-weight: 700; letter-spacing: 12px; color: var(--green-900);"></div>
                         <div id="att-pin-expiry" style="font-size: 0.85rem; color: var(--gray-500); margin-top: 8px;"></div>
+                        <div style="margin-top: 16px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                            <a id="att-open-display" class="secondary" href="/checkin-display.html" target="_blank" rel="noopener" style="text-decoration: none; display: inline-flex; align-items: center;">Apri schermata QR</a>
+                            <a id="att-open-student-checkin" class="secondary" href="/learn/checkin.html" target="_blank" rel="noopener" style="text-decoration: none; display: inline-flex; align-items: center;">Apri pagina studente</a>
+                        </div>
                     </div>
                 </div>
 
@@ -5589,6 +5593,8 @@ Buono studio!</textarea>
                 document.getElementById('att-pin-code').textContent = result.code;
                 const expiry = new Date(result.expiresAt);
                 document.getElementById('att-pin-expiry').textContent = `Scade alle ${expiry.toLocaleTimeString('it-IT')}`;
+                document.getElementById('att-open-display').href = '/checkin-display.html';
+                document.getElementById('att-open-student-checkin').href = '/learn/checkin.html?code=' + encodeURIComponent(result.code);
                 showToast('Codice PIN generato');
             } catch (error) {
                 showToast('Errore nella generazione del PIN', 'error');

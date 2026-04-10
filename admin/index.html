@@ -4726,7 +4726,8 @@ Buono studio!</textarea>
                                 moduleId: mid,
                                 title: 'Quiz Modulo - ' + result.lessonTitle,
                                 passingScore: 70,
-                                isPublished: true
+                                isPublished: true,
+                                generationReport: result.generationReport || null
                             })
                         });
 
@@ -4747,7 +4748,10 @@ Buono studio!</textarea>
                             });
                         }
 
-                        resultDiv.innerHTML = `<p style="color: #86198f; font-weight: 600;">✅ Quiz salvato con ${result.questions.length} domande (pubblicato). Lo trovi in Gestione Risorse per l'assegnazione al docente.</p>`;
+                        resultDiv.innerHTML = `
+                            <p style="color: #86198f; font-weight: 600;">✅ Quiz salvato con ${result.questions.length} domande (pubblicato). Lo trovi in Gestione Risorse per l'assegnazione al docente.</p>
+                            ${renderQuizGenerationReport(result.generationReport)}
+                        `;
                         showToast('Quiz modulo creato e pubblicato. Lo trovi in Gestione Risorse.', 'success');
                     } catch (e) {
                         resultDiv.innerHTML = `<p style="color: #b91c1c;">❌ ${e.message}</p>`;
@@ -4836,6 +4840,37 @@ Buono studio!</textarea>
         // ============================================
         // QUIZ MANAGEMENT (inside lesson panels)
         // ============================================
+
+        function escapeQuizReportHtml(text) {
+            return String(text ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderQuizGenerationReport(report) {
+            const sources = Array.isArray(report?.sources) ? report.sources : [];
+            if (!sources.length) return '';
+            return `
+                <div style="margin: 14px 0; padding: 14px; border: 1px solid #dbeafe; border-radius: 10px; background: #f8fbff;">
+                    <h5 style="margin: 0 0 8px; color: #075985;">Fonti usate per la generazione</h5>
+                    <div style="font-size: 0.85rem; color: #64748b; margin-bottom: 10px;">
+                        ${sources.length} fonti${report.contextTitle ? ` · ${escapeQuizReportHtml(report.contextTitle)}` : ''}
+                    </div>
+                    <div style="display: grid; gap: 8px;">
+                        ${sources.map(source => `
+                            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;">
+                                <div style="font-weight: 600; color: #0f172a; margin-bottom: 4px;">${escapeQuizReportHtml(source.title || 'Fonte')}</div>
+                                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 6px;">${escapeQuizReportHtml(source.resourceType || source.kind || 'contenuto')} · ${escapeQuizReportHtml(source.extractionStatus || 'n/d')}</div>
+                                <div style="font-size: 0.82rem; color: #334155; line-height: 1.45;">${escapeQuizReportHtml(source.preview || 'Anteprima non disponibile')}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
 
         async function loadLmsQuiz(lessonId, container) {
             try {
@@ -4943,6 +4978,7 @@ Buono studio!</textarea>
                             });
                             previewHtml += `
                                 </div>
+                                ${renderQuizGenerationReport(result.generationReport)}
                                 <div style="margin-top: 12px; display: flex; gap: 12px;">
                                     <button type="button" class="primary" data-save-ai-quiz style="background: #16a34a;">✅ Salva quiz</button>
                                     <button type="button" class="secondary" data-discard-ai-quiz>❌ Annulla</button>
@@ -4961,7 +4997,8 @@ Buono studio!</textarea>
                                             lessonId,
                                             title: 'Quiz di verifica - ' + result.lessonTitle,
                                             passingScore: 70,
-                                            isPublished: false
+                                            isPublished: false,
+                                            generationReport: result.generationReport || null
                                         })
                                     });
 
@@ -5039,6 +5076,7 @@ Buono studio!</textarea>
                         — ${quiz.isPublished ? 'Pubblicato' : 'Bozza'}
                         <button type="button" class="danger" data-delete-quiz="${quiz.id}" data-lesson-id="${lessonId}" style="margin-left: 12px; padding: 2px 8px; font-size: 0.8rem;">Elimina quiz</button>
                     </div>
+                    ${renderQuizGenerationReport(quiz.generationReport)}
 
                     <h5 style="margin: 16px 0 8px; color: var(--green-900);">Domande (${questions.length})</h5>
                     <form data-question-form="${quiz.id}">

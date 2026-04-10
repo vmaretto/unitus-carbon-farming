@@ -791,7 +791,10 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
       `SELECT id, title, description, url AS file_url, NULL AS file_name, file_size_bytes AS file_size,
               resource_type AS file_type, CASE WHEN is_published THEN 'approved' ELSE 'pending' END AS status,
               created_at, 'admin' AS source
-       FROM resources WHERE teacher_id = $1 ORDER BY created_at DESC`,
+       FROM resources
+       WHERE teacher_id = $1
+         AND resource_type <> 'quiz'
+       ORDER BY created_at DESC`,
       [facultyId]
     );
 
@@ -1989,10 +1992,19 @@ async function extractXlsxText(buffer) {
   return normalizeExtractedText(chunks.join('\n\n'));
 }
 
-function extractQuizTextFromResourceUrl(url = '') {
-  if (!String(url).startsWith('data:application/json,')) return '';
+function parseQuizDataUrl(url = '') {
+  if (!String(url).startsWith('data:application/json,')) return null;
   try {
-    const payload = JSON.parse(decodeURIComponent(String(url).slice('data:application/json,'.length)));
+    return JSON.parse(decodeURIComponent(String(url).slice('data:application/json,'.length)));
+  } catch (_error) {
+    return null;
+  }
+}
+
+function extractQuizTextFromResourceUrl(url = '') {
+  const payload = parseQuizDataUrl(url);
+  if (!payload) return '';
+  try {
     const parts = [];
     if (payload.title) parts.push(`Titolo quiz: ${payload.title}`);
     (payload.questions || []).forEach((question, index) => {
@@ -2198,6 +2210,24 @@ function appendContextSection(sections, title, text, options = {}) {
   tracker.total += finalText.length;
 }
 
+function summarizePreview(text = '', maxChars = 240) {
+  const cleaned = normalizeExtractedText(text).replace(/\n/g, ' ');
+  if (!cleaned) return '';
+  if (cleaned.length <= maxChars) return cleaned;
+  return cleaned.slice(0, maxChars).trim() + '...';
+}
+
+function buildGenerationSource({ kind, title, resourceType = null, extractionStatus = null, preview = '', note = null }) {
+  return {
+    kind,
+    title,
+    resourceType,
+    extractionStatus,
+    preview: summarizePreview(preview),
+    note: note || null
+  };
+}
+
 async function buildLessonQuizGenerationContext(lessonId) {
   const { rows: lessons } = await pool.query(
     `SELECT ll.id, ll.title, ll.description, ll.materials, ll.calendar_lesson_id AS "calendarLessonId",
@@ -2217,6 +2247,7 @@ async function buildLessonQuizGenerationContext(lessonId) {
   const contextTitle = lesson.title || lesson.calendarLessonTitle || 'Lezione';
   const sections = [];
   const tracker = { total: 0 };
+  const sources = [];
   appendContextSection(sections, `Lezione`, [
     `Titolo: ${contextTitle}`,
     lesson.description ? `Descrizione: ${lesson.description}` : '',
@@ -2229,6 +2260,15 @@ async function buildLessonQuizGenerationContext(lessonId) {
     perSectionLimit: 12000,
     totalLimit: 40000
   });
+  if (transcriptText) {
+    sources.push(buildGenerationSource({
+      kind: 'transcript',
+      title: `Trascrizione video - ${contextTitle}`,
+      resourceType: 'video',
+      extractionStatus: 'ready',
+      preview: transcriptText
+    }));
+  }
 
   const { rows: resourceRows } = lesson.calendarLessonId
     ? await pool.query(`
@@ -2246,6 +2286,13 @@ async function buildLessonQuizGenerationContext(lessonId) {
     const text = await getResourceQuizSourceText(resource);
     if (!text) continue;
     resourceTextsByUrl.set(resource.url, text);
+    sources.push(buildGenerationSource({
+      kind: 'resource',
+      title: resource.title,
+      resourceType: resource.resourceType,
+      extractionStatus: resource.extractionStatus || (text ? 'ready' : 'unavailable'),
+      preview: text
+    }));
     appendContextSection(sections, `Materiale: ${resource.title} (${resource.resourceType})`, text, {
       tracker,
       perSectionLimit: 7000,
@@ -2258,6 +2305,15 @@ async function buildLessonQuizGenerationContext(lessonId) {
     if (!material || !material.url || material.type === 'quiz' || resourceTextsByUrl.has(material.url)) continue;
     try {
       const extracted = await extractTextFromUrl(material.url, material.type || null);
+      if (normalizeExtractedText(extracted.text)) {
+        sources.push(buildGenerationSource({
+          kind: 'lesson_material',
+          title: material.name || material.url,
+          resourceType: material.type || 'document',
+          extractionStatus: 'ready',
+          preview: extracted.text
+        }));
+      }
       appendContextSection(sections, `Materiale lezione: ${material.name || material.url}`, extracted.text, {
         tracker,
         perSectionLimit: 5000,
@@ -2273,7 +2329,13 @@ async function buildLessonQuizGenerationContext(lessonId) {
 
   return {
     contextTitle,
-    context: sections.join('\n\n')
+    context: sections.join('\n\n'),
+    generationReport: {
+      mode: 'lesson',
+      contextTitle,
+      sourceCount: sources.length,
+      sources
+    }
   };
 }
 
@@ -2298,6 +2360,7 @@ async function buildModuleQuizGenerationContext(moduleId) {
 
   const sections = [];
   const tracker = { total: 0 };
+  const sources = [];
   appendContextSection(sections, 'Modulo', `Titolo modulo: ${contextTitle}`, {
     tracker,
     perSectionLimit: 2000,
@@ -2316,6 +2379,15 @@ async function buildModuleQuizGenerationContext(moduleId) {
       perSectionLimit: 6000,
       totalLimit: 50000
     });
+    if (transcriptText) {
+      sources.push(buildGenerationSource({
+        kind: 'transcript',
+        title: `Trascrizione video - ${lesson.title}`,
+        resourceType: 'video',
+        extractionStatus: 'ready',
+        preview: transcriptText
+      }));
+    }
 
     const resourceTextsByUrl = new Map();
     if (lesson.calendarLessonId) {
@@ -2331,6 +2403,15 @@ async function buildModuleQuizGenerationContext(moduleId) {
       for (const resource of resourceRows) {
         const text = await getResourceQuizSourceText(resource);
         if (text) resourceTextsByUrl.set(resource.url, text);
+        if (text) {
+          sources.push(buildGenerationSource({
+            kind: 'resource',
+            title: `${lesson.title} / ${resource.title}`,
+            resourceType: resource.resourceType,
+            extractionStatus: resource.extractionStatus || 'ready',
+            preview: text
+          }));
+        }
         appendContextSection(sections, `Fonte modulo: ${lesson.title} / ${resource.title}`, text, {
           tracker,
           perSectionLimit: 4000,
@@ -2344,6 +2425,15 @@ async function buildModuleQuizGenerationContext(moduleId) {
       if (!material || !material.url || material.type === 'quiz' || resourceTextsByUrl.has(material.url)) continue;
       try {
         const extracted = await extractTextFromUrl(material.url, material.type || null);
+        if (normalizeExtractedText(extracted.text)) {
+          sources.push(buildGenerationSource({
+            kind: 'lesson_material',
+            title: `${lesson.title} / ${material.name || material.url}`,
+            resourceType: material.type || 'document',
+            extractionStatus: 'ready',
+            preview: extracted.text
+          }));
+        }
         appendContextSection(sections, `Materiale modulo: ${lesson.title} / ${material.name || material.url}`, extracted.text, {
           tracker,
           perSectionLimit: 3500,
@@ -2360,16 +2450,25 @@ async function buildModuleQuizGenerationContext(moduleId) {
 
   return {
     contextTitle,
-    context: sections.join('\n\n')
+    context: sections.join('\n\n'),
+    generationReport: {
+      mode: 'module',
+      contextTitle,
+      sourceCount: sources.length,
+      sources
+    }
   };
 }
 
 async function getLmsQuizResourceContext(quizId) {
+  const quizColumns = await getTableColumns('quizzes');
+  const hasGenerationReport = quizColumns.has('generation_report');
   const { rows: quizRows } = await pool.query(`
     SELECT q.id, q.lms_module_id AS "moduleId", q.lms_lesson_id AS "lessonId",
            q.resource_id AS "resourceId", q.title, q.description,
            q.passing_score AS "passingScore", q.max_attempts AS "maxAttempts",
            q.time_limit_minutes AS "timeLimitMinutes", q.is_published AS "isPublished",
+           ${hasGenerationReport ? `q.generation_report AS "generationReport",` : `NULL::jsonb AS "generationReport",`}
            ll.title AS "lessonTitle", ll.description AS "lessonDescription",
            ll.calendar_lesson_id AS "calendarLessonId",
            cal.title AS "calendarLessonTitle", cal.teacher_id AS "calendarTeacherId",
@@ -2419,6 +2518,7 @@ async function getLmsQuizResourceContext(quizId) {
     passingScore: quiz.passingScore,
     maxAttempts: quiz.maxAttempts,
     timeLimitMinutes: quiz.timeLimitMinutes,
+    generationReport: quiz.generationReport || null,
     questions: questionRows,
     updatedAt: new Date().toISOString()
   };
@@ -3327,6 +3427,7 @@ app.get('/api/teachers/quizzes', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const resourceColumns = await getTableColumns('resources');
+    const quizColumns = await getTableColumns('quizzes');
     if (!resourceColumns.has('teacher_id')) {
       return res.status(500).json({ error: 'Resources schema missing teacher_id column' });
     }
@@ -3335,6 +3436,7 @@ app.get('/api/teachers/quizzes', requireTeacher, async (req, res) => {
     const hasReviewNotes = resourceColumns.has('teacher_review_notes');
     const hasReviewedAt = resourceColumns.has('teacher_reviewed_at');
     const hasLessonId = resourceColumns.has('lesson_id');
+    const hasGenerationReport = quizColumns.has('generation_report');
     const { status } = req.query;
     const values = [req.teacher.id];
     let where = `WHERE r.teacher_id = $1 AND r.resource_type = 'quiz'`;
@@ -3356,6 +3458,7 @@ app.get('/api/teachers/quizzes', requireTeacher, async (req, res) => {
       'r.is_published AS "isPublished"',
       'r.created_at AS "createdAt"',
       'r.updated_at AS "updatedAt"',
+      hasGenerationReport ? 'q.generation_report AS "generationReport"' : 'NULL::jsonb AS "generationReport"',
       'cal.id AS "lessonId"',
       'cal.title AS "lessonTitle"'
     ];
@@ -3408,6 +3511,7 @@ app.put('/api/teachers/quizzes/:id/review', requireTeacher, async (req, res) => 
       const payload = {
         title: quizData.title || 'Quiz',
         questions: quizData.questions,
+        generationReport: quizData.generationReport || null,
         updatedAt: new Date().toISOString()
       };
       nextUrl = 'data:application/json,' + encodeURIComponent(JSON.stringify(payload));
@@ -3479,6 +3583,121 @@ app.put('/api/teachers/quizzes/:id/review', requireTeacher, async (req, res) => 
   } catch (error) {
     console.error('Error reviewing teacher quiz', error);
     res.status(500).json({ error: 'Unable to review quiz' });
+  }
+});
+
+app.get('/api/teachers/quizzes/:id/pdf', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT r.id, r.title, r.url, r.review_status AS "reviewStatus",
+             q.id AS "quizId",
+             ll.title AS "lessonTitle",
+             m.name AS "moduleTitle"
+      FROM resources r
+      LEFT JOIN quizzes q ON q.resource_id = r.id
+      LEFT JOIN lms_lessons ll ON ll.id = q.lms_lesson_id
+      LEFT JOIN modules m ON m.id = q.lms_module_id
+      WHERE r.id = $1
+        AND r.teacher_id = $2
+        AND r.resource_type = 'quiz'
+      LIMIT 1
+    `, [req.params.id, req.teacher.id]);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Quiz non trovato' });
+    }
+
+    const resource = rows[0];
+    const payload = parseQuizDataUrl(resource.url);
+    if (!payload || !Array.isArray(payload.questions)) {
+      return res.status(400).json({ error: 'Contenuto quiz non disponibile' });
+    }
+
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const safeName = String(payload.title || resource.title || 'quiz')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'quiz';
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`);
+    doc.pipe(res);
+
+    const writeLine = (text = '', options = {}) => {
+      const safeText = String(text ?? '').replace(/\s+/g, ' ').trim() || ' ';
+      if (doc.y > 740) doc.addPage();
+      doc.text(safeText, options);
+    };
+
+    doc.fillColor('#166534').fontSize(20).text(payload.title || resource.title || 'Quiz', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fillColor('#666666').fontSize(10);
+    if (resource.lessonTitle) writeLine(`Lezione: ${resource.lessonTitle}`, { align: 'center' });
+    if (resource.moduleTitle) writeLine(`Modulo: ${resource.moduleTitle}`, { align: 'center' });
+    writeLine(`Stato review: ${resource.reviewStatus || 'N/D'}`, { align: 'center' });
+    doc.moveDown(1.2);
+
+    doc.fillColor('#000000').fontSize(12);
+    payload.questions.forEach((question, questionIndex) => {
+      writeLine(`${questionIndex + 1}. ${question.questionText || 'Domanda senza testo'}`, { lineGap: 3 });
+      doc.moveDown(0.3);
+      (question.options || []).forEach((option, optionIndex) => {
+        const isCorrect = option === question.correctAnswer || (Array.isArray(question.correctAnswer) && question.correctAnswer.includes(option));
+        doc.fillColor(isCorrect ? '#166534' : '#333333');
+        writeLine(`   ${String.fromCharCode(65 + optionIndex)}. ${option}${isCorrect ? '  [corretta]' : ''}`);
+      });
+      doc.fillColor('#000000');
+      doc.moveDown(0.8);
+    });
+
+    if (payload.generationReport?.sources?.length) {
+      if (doc.y > 680) doc.addPage();
+      doc.fillColor('#166534').fontSize(14).text('Fonti usate per la generazione');
+      doc.moveDown(0.6);
+      doc.fillColor('#333333').fontSize(10);
+      payload.generationReport.sources.forEach((source, index) => {
+        writeLine(`${index + 1}. ${source.title || 'Fonte'} (${source.resourceType || source.kind || 'contenuto'})`);
+        if (source.preview) writeLine(`   Estratto: ${summarizePreview(source.preview, 260)}`);
+        doc.moveDown(0.4);
+      });
+    }
+
+    doc.end();
+  } catch (error) {
+    console.error('Error generating teacher quiz PDF', error);
+    res.status(500).json({ error: 'Errore nella generazione del PDF del quiz' });
+  }
+});
+
+app.delete('/api/teachers/quizzes/:id', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT r.id AS "resourceId", q.id AS "quizId"
+      FROM resources r
+      LEFT JOIN quizzes q ON q.resource_id = r.id
+      WHERE r.id = $1
+        AND r.teacher_id = $2
+        AND r.resource_type = 'quiz'
+      LIMIT 1
+    `, [req.params.id, req.teacher.id]);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Quiz non trovato' });
+    }
+
+    const target = rows[0];
+    if (target.quizId) {
+      await removeQuizFromLessonMaterials(target.quizId);
+      await pool.query('DELETE FROM quizzes WHERE id = $1', [target.quizId]);
+    }
+    await pool.query('DELETE FROM resources WHERE id = $1', [target.resourceId]);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting teacher quiz', error);
+    res.status(500).json({ error: 'Errore nella cancellazione del quiz' });
   }
 });
 
@@ -5284,6 +5503,8 @@ app.post('/api/lms/lessons/:id/progress', requireStudent, async (req, res) => {
 app.get('/api/lms/quizzes', async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const quizColumns = await getTableColumns('quizzes');
+    const hasGenerationReport = quizColumns.has('generation_report');
     const { lessonId, moduleId } = req.query;
     const filters = [];
     const values = [];
@@ -5312,6 +5533,7 @@ app.get('/api/lms/quizzes', async (req, res) => {
              resource_id AS "resourceId",
              title, description, passing_score AS "passingScore",
              max_attempts AS "maxAttempts", time_limit_minutes AS "timeLimitMinutes",
+             ${hasGenerationReport ? `generation_report AS "generationReport",` : `NULL::jsonb AS "generationReport",`}
              is_published AS "isPublished",
              created_at AS "createdAt", updated_at AS "updatedAt"
       FROM quizzes ${where}
@@ -5328,11 +5550,14 @@ app.get('/api/lms/quizzes', async (req, res) => {
 app.get('/api/lms/quizzes/:id', async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const quizColumns = await getTableColumns('quizzes');
+    const hasGenerationReport = quizColumns.has('generation_report');
     const { rows: quizRows } = await pool.query(`
       SELECT id, lms_lesson_id AS "lessonId", lms_module_id AS "moduleId",
              resource_id AS "resourceId",
              title, description, passing_score AS "passingScore",
              max_attempts AS "maxAttempts", time_limit_minutes AS "timeLimitMinutes",
+             ${hasGenerationReport ? `generation_report AS "generationReport",` : `NULL::jsonb AS "generationReport",`}
              is_published AS "isPublished"
       FROM quizzes WHERE id = $1
     `, [req.params.id]);
@@ -5358,22 +5583,33 @@ app.get('/api/lms/quizzes/:id', async (req, res) => {
 
 app.post('/api/lms/quizzes', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
-  const { lessonId, moduleId, title, description, passingScore, maxAttempts, timeLimitMinutes, isPublished } = req.body;
+  const { lessonId, moduleId, title, description, passingScore, maxAttempts, timeLimitMinutes, isPublished, generationReport } = req.body;
   if (!title || (!lessonId && !moduleId)) {
     return res.status(400).json({ error: 'title and lessonId or moduleId are required' });
   }
   try {
+    const quizColumns = await getTableColumns('quizzes');
+    const hasGenerationReport = quizColumns.has('generation_report');
     const id = uuidv4();
     const nextIsPublished = lessonId ? false : (isPublished !== false);
+    const insertColumns = ['id', 'lms_lesson_id', 'lms_module_id', 'title', 'description', 'passing_score', 'max_attempts', 'time_limit_minutes', 'is_published'];
+    const insertValues = ['$1', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9'];
+    const params = [id, lessonId || null, moduleId || null, title, description || null,
+      passingScore || 70, maxAttempts || 0, timeLimitMinutes || null, nextIsPublished];
+    if (hasGenerationReport) {
+      insertColumns.push('generation_report');
+      insertValues.push(`$${params.length + 1}`);
+      params.push(JSON.stringify(generationReport || {}));
+    }
     const { rows } = await pool.query(`
-      INSERT INTO quizzes (id, lms_lesson_id, lms_module_id, title, description, passing_score, max_attempts, time_limit_minutes, is_published)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO quizzes (${insertColumns.join(', ')})
+      VALUES (${insertValues.join(', ')})
       RETURNING id, lms_lesson_id AS "lessonId", lms_module_id AS "moduleId",
                 resource_id AS "resourceId", title, description, passing_score AS "passingScore",
                 max_attempts AS "maxAttempts", time_limit_minutes AS "timeLimitMinutes",
+                ${hasGenerationReport ? `generation_report AS "generationReport",` : `NULL::jsonb AS "generationReport",`}
                 is_published AS "isPublished"
-    `, [id, lessonId || null, moduleId || null, title, description || null,
-        passingScore || 70, maxAttempts || 0, timeLimitMinutes || null, nextIsPublished]);
+    `, params);
     const resourceId = await syncQuizResource(id);
     await syncQuizIntoLessonMaterials(id);
     if (lessonId) {
@@ -5445,11 +5681,12 @@ app.post('/api/lms/quizzes/generate', requireAdmin, async (req, res) => {
   try {
     let context = '';
     let contextTitle = '';
+    let generationReport = null;
 
     if (moduleId) {
-      ({ contextTitle, context } = await buildModuleQuizGenerationContext(moduleId));
+      ({ contextTitle, context, generationReport } = await buildModuleQuizGenerationContext(moduleId));
     } else {
-      ({ contextTitle, context } = await buildLessonQuizGenerationContext(lessonId));
+      ({ contextTitle, context, generationReport } = await buildLessonQuizGenerationContext(lessonId));
     }
 
     if (!normalizeExtractedText(context)) {
@@ -5526,6 +5763,7 @@ Rispondi SOLO con il JSON, nessun altro testo.`;
       lessonTitle: contextTitle,
       moduleId: moduleId || null,
       lessonId: lessonId || null,
+      generationReport: generationReport || null,
       numQuestions: generated.questions?.length || 0,
       questions: generated.questions || []
     });

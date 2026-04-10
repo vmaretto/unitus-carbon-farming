@@ -89,6 +89,13 @@
         .quiz-editor-field label { display: block; margin-bottom: 6px; font-weight: 600; color: var(--gray-700); }
         .quiz-editor-field input, .quiz-editor-field textarea, .quiz-editor-field select { width: 100%; padding: 10px 12px; border: 1px solid var(--gray-300); border-radius: 8px; font: inherit; }
         .quiz-editor-field textarea { min-height: 90px; resize: vertical; }
+        .quiz-sources-box { margin: 16px 0; padding: 14px; border: 1px solid var(--gray-200); border-radius: 12px; background: #f8fafc; }
+        .quiz-sources-box h4 { margin: 0 0 8px; font-size: 15px; color: var(--green-800); }
+        .quiz-sources-list { display: grid; gap: 10px; }
+        .quiz-source-item { background: white; border: 1px solid var(--gray-200); border-radius: 10px; padding: 10px 12px; }
+        .quiz-source-title { font-weight: 600; color: var(--gray-800); margin-bottom: 4px; }
+        .quiz-source-meta { font-size: 12px; color: var(--gray-500); margin-bottom: 6px; }
+        .quiz-source-preview { font-size: 13px; color: var(--gray-700); line-height: 1.45; }
         .quiz-question-card { border: 1px solid var(--gray-200); border-radius: 10px; padding: 16px; background: var(--gray-50); margin-top: 14px; }
         .quiz-question-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
         .quiz-option-row { display: grid; grid-template-columns: 1fr 140px 42px; gap: 10px; align-items: center; margin-top: 10px; }
@@ -318,6 +325,7 @@
                 <label for="quiz-editor-title-input">Titolo quiz</label>
                 <input type="text" id="quiz-editor-title-input" placeholder="Titolo del quiz">
             </div>
+            <div id="quiz-editor-sources"></div>
             <div id="quiz-editor-questions"></div>
             <div class="quiz-editor-actions">
                 <button type="button" class="btn-sm btn-blue" id="quiz-add-question-btn">+ Aggiungi domanda</button>
@@ -336,6 +344,7 @@
         let consentValue = null;
         let editingQuizId = null;
         let editingQuizData = null;
+        let editingQuizMeta = null;
 
         // === AUTH ===
         window.addEventListener('load', async () => {
@@ -531,6 +540,7 @@
                             </div>
                             <div class="item-actions">
                                 <span class="badge ${cls}">${label}</span>
+                                <button class="btn-sm btn-gray" onclick="downloadTeacherQuizPdf('${q.id}')">Scarica PDF</button>
                                 <button class="btn-sm btn-gray" onclick="openQuizEditor('${q.id}')">Modifica</button>
                                 ${q.reviewStatus === 'pending_teacher_approval' || q.reviewStatus === 'teacher_rejected'
                                     ? `<button class="btn-sm btn-green" onclick="reviewQuiz('${q.id}','approve')">Approva</button>
@@ -539,6 +549,7 @@
                                 ${q.reviewStatus === 'teacher_approved' && q.isPublished
                                     ? `<button class="btn-sm btn-gray" onclick="reviewQuiz('${q.id}','unpublish')">Ritira</button>`
                                     : ''}
+                                <button class="btn-sm btn-gray" onclick="deleteTeacherQuiz('${q.id}')">Elimina</button>
                             </div>
                         </div>
                     `;
@@ -564,7 +575,8 @@
         function normalizeQuizData(data) {
             const normalized = {
                 title: typeof data?.title === 'string' ? data.title : 'Quiz',
-                questions: Array.isArray(data?.questions) ? data.questions : []
+                questions: Array.isArray(data?.questions) ? data.questions : [],
+                generationReport: data?.generationReport || null
             };
             if (!normalized.questions.length) normalized.questions.push(buildEmptyQuizQuestion());
             normalized.questions = normalized.questions.map((question) => {
@@ -580,9 +592,34 @@
             return normalized;
         }
 
+        function renderQuizSources(report) {
+            const container = document.getElementById('quiz-editor-sources');
+            const sources = Array.isArray(report?.sources) ? report.sources : [];
+            if (!sources.length) {
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = `
+                <div class="quiz-sources-box">
+                    <h4>Fonti usate per generare il quiz</h4>
+                    <div class="quiz-source-meta">${sources.length} fonti rilevate${report.contextTitle ? ` · ${escapeHtml(report.contextTitle)}` : ''}</div>
+                    <div class="quiz-sources-list">
+                        ${sources.map(source => `
+                            <div class="quiz-source-item">
+                                <div class="quiz-source-title">${escapeHtml(source.title || 'Fonte')}</div>
+                                <div class="quiz-source-meta">${escapeHtml(source.resourceType || source.kind || 'contenuto')} · ${escapeHtml(source.extractionStatus || 'n/d')}</div>
+                                <div class="quiz-source-preview">${escapeHtml(source.preview || 'Anteprima non disponibile')}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
         function renderQuizEditor() {
             if (!editingQuizData) return;
             document.getElementById('quiz-editor-title-input').value = editingQuizData.title || '';
+            renderQuizSources(editingQuizData.generationReport || editingQuizMeta?.generationReport || null);
             const container = document.getElementById('quiz-editor-questions');
             container.innerHTML = editingQuizData.questions.map((question, questionIndex) => `
                 <div class="quiz-question-card">
@@ -619,6 +656,8 @@
             document.getElementById('quiz-editor-modal').style.display = 'none';
             editingQuizId = null;
             editingQuizData = null;
+            editingQuizMeta = null;
+            document.getElementById('quiz-editor-sources').innerHTML = '';
         }
 
         async function openQuizEditor(quizId) {
@@ -630,8 +669,12 @@
                 if (quiz.url && quiz.url.startsWith('data:application/json,')) {
                     currentData = JSON.parse(decodeURIComponent(quiz.url.replace('data:application/json,', '')));
                 }
+                editingQuizMeta = quiz;
                 editingQuizId = quizId;
-                editingQuizData = normalizeQuizData(currentData);
+                editingQuizData = normalizeQuizData({
+                    ...currentData,
+                    generationReport: currentData.generationReport || quiz.generationReport || null
+                });
                 document.getElementById('quiz-editor-heading').textContent = `Modifica Quiz: ${quiz.title || 'Quiz'}`;
                 renderQuizEditor();
                 document.getElementById('quiz-editor-modal').style.display = 'block';
@@ -659,7 +702,7 @@
                 if (!correctAnswer) throw new Error(`Seleziona la risposta corretta per la domanda ${questionIndex + 1}`);
                 return { questionText, options, correctAnswer, points };
             });
-            return { title, questions };
+            return { title, questions, generationReport: editingQuizData.generationReport || editingQuizMeta?.generationReport || null };
         }
 
         async function saveQuizEditor() {
@@ -699,6 +742,48 @@
                 await loadTeacherQuizzes();
             } catch (e) {
                 showToast(e.message || 'Errore nella revisione del quiz', 'error');
+            }
+        }
+
+        async function downloadTeacherQuizPdf(quizId) {
+            try {
+                const res = await fetch(`/api/teachers/quizzes/${quizId}/pdf`, {
+                    headers: { 'Authorization': 'Bearer ' + teacherToken }
+                });
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Errore nel download del PDF');
+                }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `quiz_${quizId}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                showToast(e.message || 'Errore nel download del PDF', 'error');
+            }
+        }
+
+        async function deleteTeacherQuiz(quizId) {
+            if (!confirm('Eliminare definitivamente questo quiz da tutto il sistema?')) return;
+            try {
+                const res = await fetch(`/api/teachers/quizzes/${quizId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + teacherToken }
+                });
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Errore nella cancellazione del quiz');
+                }
+                if (editingQuizId === quizId) closeQuizEditor();
+                showToast('Quiz eliminato definitivamente', 'success');
+                await Promise.all([loadTeacherQuizzes(), loadTeacherMaterials(), loadTeacherStats()]);
+            } catch (e) {
+                showToast(e.message || 'Errore nella cancellazione del quiz', 'error');
             }
         }
 

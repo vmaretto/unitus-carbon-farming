@@ -171,6 +171,32 @@ function requireStudent(req, res, next) {
 
 let pool = null;
 
+async function resolveValidFacultyId(candidateFacultyId, lessonId = null) {
+  if (!pool) return null;
+
+  if (candidateFacultyId) {
+    const { rows } = await pool.query(
+      'SELECT id FROM faculty WHERE id = $1 LIMIT 1',
+      [candidateFacultyId]
+    );
+    if (rows.length) return rows[0].id;
+  }
+
+  if (lessonId) {
+    const { rows } = await pool.query(
+      `SELECT f.id
+       FROM lessons l
+       JOIN faculty f ON f.id = l.teacher_id
+       WHERE l.id = $1
+       LIMIT 1`,
+      [lessonId]
+    );
+    if (rows.length) return rows[0].id;
+  }
+
+  return null;
+}
+
 const defaultFaculty = [
   {
     name: 'Prof. Riccardo Valentini',
@@ -1566,6 +1592,17 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
         };
         const resourceType = resourceTypeFromFile(item.fileType || item.fileName);
         const resourceTitle = item.fileName || 'Materiale docente';
+        const normalizedFacultyId = await resolveValidFacultyId(item.facultyId, item.lessonId);
+
+        if (normalizedFacultyId !== item.facultyId) {
+          await pool.query(
+            `UPDATE materials_pending
+             SET faculty_id = $1, updated_at = NOW()
+             WHERE id = $2`,
+            [normalizedFacultyId, item.id]
+          );
+          item.facultyId = normalizedFacultyId;
+        }
 
         const { rows: existing } = await pool.query(
           `SELECT id FROM resources
@@ -1573,7 +1610,7 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
              AND COALESCE(lesson_id::text, '') = COALESCE($2::text, '')
              AND COALESCE(teacher_id::text, '') = COALESCE($3::text, '')
            LIMIT 1`,
-          [item.fileUrl, item.lessonId || null, item.facultyId || null]
+          [item.fileUrl, item.lessonId || null, normalizedFacultyId || null]
         );
 
         let approvedResourceId = null;
@@ -1592,7 +1629,7 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
                (id, title, resource_type, url, is_published, teacher_id, lesson_id, created_at, updated_at)
              VALUES
                ($1, $2, $3, $4, true, $5, $6, NOW(), NOW())`,
-            [approvedResourceId, resourceTitle, resourceType, item.fileUrl, item.facultyId || null, item.lessonId || null]
+            [approvedResourceId, resourceTitle, resourceType, item.fileUrl, normalizedFacultyId || null, item.lessonId || null]
           );
         }
         await pool.query('COMMIT');

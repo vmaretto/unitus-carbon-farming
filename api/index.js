@@ -1624,13 +1624,37 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
           approvedResourceId = existing[0].id;
         } else {
           approvedResourceId = uuidv4();
-          await pool.query(
-            `INSERT INTO resources
-               (id, title, resource_type, url, is_published, teacher_id, lesson_id, created_at, updated_at)
-             VALUES
-               ($1, $2, $3, $4, true, $5, $6, NOW(), NOW())`,
-            [approvedResourceId, resourceTitle, resourceType, item.fileUrl, normalizedFacultyId || null, item.lessonId || null]
-          );
+          const insertAttempts = [
+            { teacherId: normalizedFacultyId || null, lessonId: item.lessonId || null },
+            { teacherId: null, lessonId: item.lessonId || null },
+            { teacherId: normalizedFacultyId || null, lessonId: null },
+            { teacherId: null, lessonId: null }
+          ];
+          let insertError = null;
+
+          for (const attempt of insertAttempts) {
+            try {
+              await pool.query(
+                `INSERT INTO resources
+                   (id, title, resource_type, url, is_published, teacher_id, lesson_id, created_at, updated_at)
+                 VALUES
+                   ($1, $2, $3, $4, true, $5, $6, NOW(), NOW())`,
+                [approvedResourceId, resourceTitle, resourceType, item.fileUrl, attempt.teacherId, attempt.lessonId]
+              );
+              insertError = null;
+              break;
+            } catch (error) {
+              insertError = error;
+              console.error('Teacher material resource insert attempt failed', {
+                materialId: item.id,
+                teacherId: attempt.teacherId,
+                lessonId: attempt.lessonId,
+                error: error.message
+              });
+            }
+          }
+
+          if (insertError) throw insertError;
         }
         await pool.query('COMMIT');
         try {

@@ -308,6 +308,9 @@
         let currentLesson = null;
         let currentQuiz = null;
         let quizPassed = false;
+        let quizBestScore = null;
+        let completionState = null;
+        const viewedResourceIds = new Set();
 
         async function loadLesson() {
             try {
@@ -318,6 +321,9 @@
 
                 if (!lesson) return;
                 currentLesson = lesson;
+                completionState = lesson.completionStatus || null;
+                viewedResourceIds.clear();
+                (completionState?.details?.viewedResourceIds || []).forEach(id => viewedResourceIds.add(id));
 
                 // Title and meta
                 document.getElementById('lesson-title').textContent = lesson.title;
@@ -394,6 +400,7 @@
                 const linkedResources = (lesson.linkedResources || [])
                     .filter(r => r && r.resourceType !== 'quiz')
                     .map(r => ({
+                        resourceId: r.id,
                         title: r.title,
                         url: r.url,
                         assetType: r.resourceType === 'pdf' ? 'pdf' : (r.resourceType === 'document' ? 'slide' : r.resourceType || 'file')
@@ -575,7 +582,7 @@
                 const target = isPdf ? '' : 'target="_blank" rel="noopener"';
                 
                 return `
-                    <a class="asset-item" href="${href}" ${target}>
+                    <a class="asset-item" href="${href}" ${target} ${a.resourceId ? `data-resource-id="${escapeHtml(a.resourceId)}"` : ''}>
                         <div class="asset-icon">${iconMap[a.assetType] || 'DOC'}</div>
                         <div class="asset-info">
                             <div class="asset-title">${escapeHtml(a.title)}</div>
@@ -584,6 +591,31 @@
                     </a>
                 `;
             }).join('');
+
+            container.querySelectorAll('[data-resource-id]').forEach(link => {
+                link.addEventListener('click', () => {
+                    const resourceId = link.dataset.resourceId;
+                    if (resourceId) trackResourceView(resourceId);
+                });
+            });
+        }
+
+        async function trackResourceView(resourceId) {
+            try {
+                await api(`/api/lms/resources/${resourceId}/view`, {
+                    method: 'POST',
+                    body: JSON.stringify({})
+                });
+                if (!viewedResourceIds.has(resourceId)) {
+                    viewedResourceIds.add(resourceId);
+                    if (completionState?.details) {
+                        completionState.details.materialViewed = viewedResourceIds.size;
+                    }
+                    updateCompletionUI();
+                }
+            } catch (_error) {
+                // Silent by requirement
+            }
         }
 
         function escapeHtml(text) {
@@ -620,6 +652,9 @@
                 // Load previous attempts
                 const attempts = await api(`/api/lms/quizzes/${quiz.id}/attempts`);
                 quizPassed = attempts && attempts.some(a => a.passed);
+                quizBestScore = attempts && attempts.length
+                    ? Math.max(...attempts.map(a => Number(a.score || 0)))
+                    : null;
 
                 if (quizPassed) {
                     const best = attempts.find(a => a.passed);
@@ -795,6 +830,9 @@
 
                 // Reload attempts
                 const attempts = await api(`/api/lms/quizzes/${currentQuiz.id}/attempts`);
+                quizBestScore = attempts && attempts.length
+                    ? Math.max(...attempts.map(a => Number(a.score || 0)))
+                    : result.score;
                 renderAttempts(attempts);
 
                 // Update completion criteria
@@ -849,32 +887,31 @@
 
             const videoPercent = segmentTracker ? segmentTracker.getPercentage() : (progress ? progress.progressPercent : 0);
             const videoOk = videoPercent >= 80;
-
-            const timeSpent = Math.round((Date.now() - sessionStartTime) / 1000);
-            const minTime = currentLesson.durationSeconds ? Math.floor(currentLesson.durationSeconds * 0.75) : 0;
-            const timeOk = !currentLesson.durationSeconds || (timeSpent >= minTime);
-
-            const hasQuiz = currentQuiz !== null;
-            const quizOk = !hasQuiz || quizPassed;
+            const materialTotal = completionState?.details?.materialTotal || 0;
+            const materialViewed = viewedResourceIds.size || completionState?.details?.materialViewed || 0;
+            const materialsOk = materialTotal === 0 || (materialViewed / materialTotal) >= 0.5;
+            const hasQuiz = completionState?.details?.hasQuiz ?? (currentQuiz !== null);
+            const bestScore = quizBestScore ?? completionState?.details?.quizBestScore;
+            const quizOk = !hasQuiz || ((bestScore ?? -1) >= 70) || quizPassed;
 
             criteriaDiv.innerHTML = `
                 <div class="criterion ${videoOk ? 'met' : 'unmet'}">
                     <span class="criterion-icon">${videoOk ? '&#10003;' : '&#9675;'}</span>
                     <span>Video guardato almeno 80% (attuale: ${videoPercent}%)</span>
                 </div>
-                <div class="criterion ${timeOk ? 'met' : 'unmet'}">
-                    <span class="criterion-icon">${timeOk ? '&#10003;' : '&#9675;'}</span>
-                    <span>Tempo minimo sulla pagina${minTime > 0 ? ` (${formatTime(minTime)} richiesti, ${formatTime(timeSpent)} trascorsi)` : ''}</span>
+                <div class="criterion ${materialsOk ? 'met' : 'unmet'}">
+                    <span class="criterion-icon">${materialsOk ? '&#10003;' : '&#9675;'}</span>
+                    <span>Materiali visualizzati almeno 50% (${materialViewed}/${materialTotal})</span>
                 </div>
                 ${hasQuiz ? `
                 <div class="criterion ${quizOk ? 'met' : 'unmet'}">
                     <span class="criterion-icon">${quizOk ? '&#10003;' : '&#9675;'}</span>
-                    <span>Quiz superato${currentQuiz ? ` (minimo ${currentQuiz.passingScore}%)` : ''}</span>
+                    <span>Quiz almeno 70%${bestScore !== null && bestScore !== undefined ? ` (miglior punteggio: ${bestScore}%)` : ' (non ancora completato)'}</span>
                 </div>
                 ` : ''}
             `;
 
-            const allMet = videoOk && timeOk && quizOk;
+            const allMet = videoOk && materialsOk && quizOk;
             if (allMet) {
                 actionDiv.innerHTML = '<button class="btn btn-primary" id="complete-btn">Completa lezione</button>';
                 document.getElementById('complete-btn').onclick = completeLesson;
@@ -904,6 +941,11 @@
                 if (result.completed) {
                     currentLesson.progress = currentLesson.progress || {};
                     currentLesson.progress.completedAt = new Date().toISOString();
+                    completionState = {
+                        criteria: result.criteria || {},
+                        details: result.details || completionState?.details || {},
+                        completedAt: currentLesson.progress.completedAt
+                    };
                     updateCompletionUI();
                 }
             } catch (error) {

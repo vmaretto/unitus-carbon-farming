@@ -2466,6 +2466,85 @@ function summarizePreview(text = '', maxChars = 240) {
   return cleaned.slice(0, maxChars).trim() + '...';
 }
 
+async function getLessonCompletionStatus(lessonId, userId, preloaded = {}) {
+  const lesson = preloaded.lesson || (await pool.query(
+    'SELECT id, lms_module_id AS "moduleId", duration_seconds AS "durationSeconds", calendar_lesson_id AS "calendarLessonId" FROM lms_lessons WHERE id = $1',
+    [lessonId]
+  )).rows[0];
+
+  if (!lesson) {
+    const error = new Error('Lesson not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const progress = preloaded.progress || (await pool.query(
+    'SELECT progress_percent, time_spent_seconds, completed_at FROM lesson_progress WHERE user_id = $1 AND lms_lesson_id = $2',
+    [userId, lessonId]
+  )).rows[0] || null;
+
+  const videoPercent = Number(progress?.progress_percent || 0);
+  const videoOk = videoPercent >= 80;
+
+  const { rows: materialRows } = await pool.query(`
+    SELECT COUNT(DISTINCT r.id)::int AS "materialTotal",
+           COUNT(DISTINCT rv.resource_id)::int AS "materialViewed",
+           COALESCE(array_agg(DISTINCT rv.resource_id) FILTER (WHERE rv.resource_id IS NOT NULL), '{}') AS "viewedResourceIds"
+    FROM resources r
+    JOIN lessons les ON les.id = r.lesson_id
+    LEFT JOIN resource_views rv ON rv.resource_id = r.id AND rv.user_id = $2
+    WHERE les.module_id = $1
+      AND r.is_published = true
+      AND r.resource_type <> 'quiz'
+  `, [lesson.moduleId, userId]);
+  const materialTotal = Number(materialRows[0]?.materialTotal || 0);
+  const materialViewed = Number(materialRows[0]?.materialViewed || 0);
+  const viewedResourceIds = Array.isArray(materialRows[0]?.viewedResourceIds) ? materialRows[0].viewedResourceIds.filter(Boolean) : [];
+  const materialsOk = materialTotal === 0 || (materialViewed / materialTotal) >= 0.50;
+
+  const { rows: quizRows } = await pool.query(`
+    SELECT id
+    FROM quizzes
+    WHERE is_published = true
+      AND (lms_lesson_id = $1 OR lms_module_id = $2)
+    ORDER BY CASE WHEN lms_lesson_id = $1 THEN 0 ELSE 1 END, created_at ASC
+  `, [lessonId, lesson.moduleId]);
+  const quizIds = quizRows.map(row => row.id);
+
+  let quizBestScore = null;
+  let quizOk = true;
+  if (quizIds.length) {
+    const { rows: attemptRows } = await pool.query(
+      'SELECT MAX(score)::int AS "bestScore" FROM quiz_attempts WHERE user_id = $1 AND quiz_id = ANY($2) AND completed_at IS NOT NULL',
+      [userId, quizIds]
+    );
+    quizBestScore = attemptRows[0]?.bestScore === null || attemptRows[0]?.bestScore === undefined
+      ? null
+      : Number(attemptRows[0].bestScore);
+    quizOk = (quizBestScore ?? -1) >= 70;
+  }
+
+  const criteria = { video: videoOk, materials: materialsOk, quiz: quizOk };
+  const details = {
+    videoPercent,
+    videoRequired: 80,
+    materialViewed,
+    materialTotal,
+    materialRequiredPercent: 50,
+    quizBestScore,
+    quizRequired: quizIds.length ? 70 : null,
+    hasQuiz: quizIds.length > 0,
+    viewedResourceIds
+  };
+
+  return {
+    criteria,
+    details,
+    allMet: videoOk && materialsOk && quizOk,
+    completedAt: progress?.completed_at || null
+  };
+}
+
 function buildGenerationSource({ kind, title, resourceType = null, extractionStatus = null, preview = '', note = null }) {
   return {
     kind,
@@ -5096,6 +5175,16 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
           WHERE user_id = $1 AND lms_lesson_id = $2
         `, [payload.userId, req.params.id]);
         lesson.progress = progressRows[0] || null;
+        lesson.completionStatus = await getLessonCompletionStatus(req.params.id, payload.userId, {
+          lesson,
+          progress: progressRows[0]
+            ? {
+                progress_percent: progressRows[0].progressPercent,
+                time_spent_seconds: progressRows[0].timeSpentSeconds,
+                completed_at: progressRows[0].completedAt
+              }
+            : null
+        });
       }
     }
 
@@ -5103,6 +5192,32 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
   } catch (error) {
     console.error('Error fetching LMS lesson', error);
     res.status(500).json({ error: 'Unable to retrieve LMS lesson' });
+  }
+});
+
+app.post('/api/lms/resources/:id/view', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows: resources } = await pool.query(
+      'SELECT id FROM resources WHERE id = $1 AND is_published = true',
+      [req.params.id]
+    );
+    if (!resources.length) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
+
+    await pool.query(`
+      INSERT INTO resource_views (user_id, resource_id, first_viewed_at, view_count)
+      VALUES ($1, $2, NOW(), 1)
+      ON CONFLICT (user_id, resource_id) DO UPDATE SET
+        first_viewed_at = COALESCE(resource_views.first_viewed_at, NOW()),
+        view_count = resource_views.view_count + 1
+    `, [req.user.userId, req.params.id]);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking resource view', error);
+    res.status(500).json({ error: 'Unable to track resource view' });
   }
 });
 
@@ -6403,7 +6518,8 @@ app.post('/api/lms/lessons/:id/complete', requireStudent, async (req, res) => {
   try {
     // 1. Carica lezione
     const { rows: lessonRows } = await pool.query(
-      'SELECT id, duration_seconds FROM lms_lessons WHERE id = $1', [lessonId]
+      'SELECT id, lms_module_id AS "moduleId", duration_seconds AS "durationSeconds", calendar_lesson_id AS "calendarLessonId" FROM lms_lessons WHERE id = $1',
+      [lessonId]
     );
     if (!lessonRows.length) return res.status(404).json({ error: 'Lesson not found' });
     const lesson = lessonRows[0];
@@ -6428,14 +6544,17 @@ app.post('/api/lms/lessons/:id/complete', requireStudent, async (req, res) => {
       return res.json({ completed: true, message: 'Lezione completata (presenza registrata)', criteria: { attendance: true } });
     }
 
-    // 3. Nessuna presenza — controlla video e tempo
+    // 3. Nessuna presenza — controlla i criteri asincroni
     const { rows: progressRows } = await pool.query(
       'SELECT progress_percent, time_spent_seconds, completed_at FROM lesson_progress WHERE user_id = $1 AND lms_lesson_id = $2',
       [userId, lessonId]
     );
 
     if (!progressRows.length) {
-      return res.status(400).json({ error: 'Nessun progresso registrato', criteria: { video: false, time: false } });
+      return res.status(400).json({
+        error: 'Nessun progresso registrato',
+        criteria: { video: false, materials: false, quiz: false }
+      });
     }
 
     const progress = progressRows[0];
@@ -6443,25 +6562,16 @@ app.post('/api/lms/lessons/:id/complete', requireStudent, async (req, res) => {
       return res.json({ completed: true, message: 'Lezione già completata', completedAt: progress.completed_at });
     }
 
-    // Criterio 1: video >= 80%
-    const videoOk = progress.progress_percent >= 80;
+    const completion = await getLessonCompletionStatus(lessonId, userId, {
+      lesson,
+      progress
+    });
 
-    // Criterio 2: tempo permanenza >= 60% durata video
-    const minTime = lesson.duration_seconds ? Math.floor(lesson.duration_seconds * 0.60) : 0;
-    const timeOk = !lesson.duration_seconds || (progress.time_spent_seconds >= minTime);
-
-    const criteria = { video: videoOk, time: timeOk };
-
-    if (!videoOk || !timeOk) {
+    if (!completion.allMet) {
       return res.status(400).json({
         error: 'Criteri di completamento non soddisfatti',
-        criteria,
-        details: {
-          videoPercent: progress.progress_percent,
-          videoRequired: 80,
-          timeSpent: progress.time_spent_seconds,
-          timeRequired: minTime
-        }
+        criteria: completion.criteria,
+        details: completion.details
       });
     }
 
@@ -6478,7 +6588,12 @@ app.post('/api/lms/lessons/:id/complete', requireStudent, async (req, res) => {
       ON CONFLICT (user_id, lms_lesson_id) DO NOTHING
     `, [uuidv4(), userId, lessonId]);
 
-    res.json({ completed: true, message: 'Lezione completata!', criteria });
+    res.json({
+      completed: true,
+      message: 'Lezione completata!',
+      criteria: completion.criteria,
+      details: completion.details
+    });
   } catch (error) {
     console.error('Error completing lesson', error);
     res.status(500).json({ error: 'Unable to complete lesson' });

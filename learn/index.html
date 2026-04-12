@@ -137,16 +137,18 @@
 
                 coursesList.innerHTML = '';
                 courses.forEach(c => {
-                    const total = parseInt(c.totalLessons) || 0;
-                    const completed = parseInt(c.completedLessons) || 0;
-                    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                    const totalHours = parseFloat(c.totalPlannedHours) || 432;
+                    const attendedHours = parseFloat(c.attendedHours) || 0;
+                    const pct = totalHours > 0 ? Math.round((attendedHours / totalHours) * 100) : 0;
+                    const attendedHoursText = attendedHours.toFixed(1).replace('.0', '');
+                    const totalHoursText = totalHours.toFixed(1).replace('.0', '');
 
                     const div = document.createElement('div');
                     div.className = 'course-card';
                     div.innerHTML = `
                         <div class="course-card-content">
                             <h3>${c.title}</h3>
-                            <div class="course-meta">${c.editionName} &bull; ${completed > 0 ? completed + ' lezioni completate' : 'Nessuna lezione completata'}</div>
+                            <div class="course-meta">${c.editionName} &bull; ${attendedHoursText} ore su ${totalHoursText} frequentate (${pct}%)</div>
                             <div class="progress-bar"><div class="progress-fill" style="width: ${pct}%"></div></div>
                         </div>
                     `;

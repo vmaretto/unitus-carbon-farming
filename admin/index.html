@@ -502,6 +502,7 @@
                 <a href="#resources">Risorse</a>
                 <a href="#teacher-materials">Materiali Docenti</a>
                 <a href="#teacher-docs">Liberatorie Docenti</a>
+                <a href="#questions">💬 Domande <span id="questions-nav-badge" style="display:none; background:#f97316; color:white; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:700;">0</span></a>
                 <a href="#lms-courses">Percorsi Formativi</a>
                 <a href="#lms-modules">Moduli e Lezioni</a>
                 <a href="#lms-enrollments">Iscrizioni</a>
@@ -1347,6 +1348,23 @@ Buono studio!</textarea>
             </div>
         </section>
 
+        <section id="questions">
+            <header>
+                <h2>💬 Domande <span id="questions-section-badge" style="display:none; background:#f97316; color:white; border-radius:999px; padding:4px 10px; font-size:14px; vertical-align:middle;">0</span></h2>
+                <p class="section-description">Gestisci le domande degli studenti, assegna ai docenti, rispondi e promuovi in FAQ.</p>
+            </header>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;">
+                <button type="button" class="secondary-button" data-questions-filter="">Tutte</button>
+                <button type="button" class="secondary-button" data-questions-filter="open">Open</button>
+                <button type="button" class="secondary-button" data-questions-filter="assigned">Assigned</button>
+                <button type="button" class="secondary-button" data-questions-filter="answered">Answered</button>
+                <button type="button" class="secondary-button" data-questions-filter="promoted_faq">Promoted to FAQ</button>
+            </div>
+            <div id="questions-admin-list">
+                <div class="empty-state">Caricamento domande...</div>
+            </div>
+        </section>
+
         <!-- ============================================ -->
         <!-- CORSI LMS -->
         <!-- ============================================ -->
@@ -2010,7 +2028,8 @@ Buono studio!</textarea>
                     () => typeof loadLmsCourses === 'function' ? loadLmsCourses() : Promise.resolve(),
                     () => typeof loadStudentsList === 'function' ? loadStudentsList() : Promise.resolve(),
                     () => typeof loadTeacherDocs === 'function' ? loadTeacherDocs() : Promise.resolve(),
-                    () => typeof loadTeacherPendingMaterials === 'function' ? loadTeacherPendingMaterials() : Promise.resolve()
+                    () => typeof loadTeacherPendingMaterials === 'function' ? loadTeacherPendingMaterials() : Promise.resolve(),
+                    () => typeof loadStudentQuestions === 'function' ? loadStudentQuestions() : Promise.resolve()
                 ];
 
                 for (const task of startupTasks) {
@@ -2151,6 +2170,8 @@ Buono studio!</textarea>
             modules: [],
             lessons: [],
             teacherPendingMaterials: [],
+            studentQuestions: [],
+            questionsFilter: '',
             calendarYear: new Date().getFullYear(),
             calendarMonth: new Date().getMonth(),
             calendarView: 'calendar' // 'calendar' or 'list'
@@ -2166,6 +2187,15 @@ Buono studio!</textarea>
                 hour: '2-digit',
                 minute: '2-digit'
             });
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         function showToast(message, type = 'success') {
@@ -2556,6 +2586,188 @@ Buono studio!</textarea>
                 await Promise.all([loadTeacherPendingMaterials(), loadFaculty()]);
             } catch (err) {
                 showToast(err.message || 'Errore revisione materiale', 'error');
+            }
+        });
+
+        // ============================================
+        // STUDENT QUESTIONS
+        // ============================================
+        function questionStatusLabel(status) {
+            if (status === 'assigned') return 'Assegnata';
+            if (status === 'answered') return 'Risposta';
+            if (status === 'promoted_faq') return 'FAQ';
+            return 'Aperta';
+        }
+
+        function questionStatusClass(status) {
+            if (status === 'assigned') return 'scheduled';
+            if (status === 'answered') return 'published';
+            if (status === 'promoted_faq') return 'draft';
+            return 'scheduled';
+        }
+
+        function teacherOptionsForQuestions(selectedId = '') {
+            const teachers = (state.faculty || []).filter((item) => {
+                const role = String(item.role || '').toLowerCase();
+                return role.includes('doc') || role.includes('teach') || !role;
+            });
+            return '<option value="">Seleziona docente</option>' + teachers.map((teacher) => `
+                <option value="${teacher.id}" ${selectedId === teacher.id ? 'selected' : ''}>${escapeHtml(teacher.name || teacher.email || 'Docente')}</option>
+            `).join('');
+        }
+
+        function renderQuestionRepliesAdmin(replies) {
+            if (!replies || !replies.length) {
+                return '<div style="color: var(--gray-500);">Nessuna risposta.</div>';
+            }
+            return replies.map((reply) => `
+                <div style="padding:12px; border:1px solid rgba(107,114,128,0.15); border-radius:12px; margin-bottom:10px; background:#f8fafc;">
+                    <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:6px; font-size:12px; color:var(--gray-500);">
+                        <span><strong>${escapeHtml(reply.authorRole)}</strong> · ${escapeHtml(reply.authorName || 'Autore')}</span>
+                        <span>${reply.createdAt ? new Date(reply.createdAt).toLocaleString('it-IT') : ''}</span>
+                    </div>
+                    <div style="white-space:pre-wrap; line-height:1.5;">${escapeHtml(reply.replyText || '')}</div>
+                </div>
+            `).join('');
+        }
+
+        function updateQuestionsBadge() {
+            const openCount = (state.studentQuestions || []).filter((item) => item.status === 'open').length;
+            const navBadge = document.getElementById('questions-nav-badge');
+            const sectionBadge = document.getElementById('questions-section-badge');
+            [navBadge, sectionBadge].forEach((badge) => {
+                if (!badge) return;
+                if (openCount > 0) {
+                    badge.textContent = openCount;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            });
+        }
+
+        function renderStudentQuestions() {
+            const container = document.getElementById('questions-admin-list');
+            const items = state.studentQuestions || [];
+            if (!items.length) {
+                container.innerHTML = '<div class="empty-state">Nessuna domanda disponibile.</div>';
+                updateQuestionsBadge();
+                return;
+            }
+
+            container.innerHTML = items.map((item) => `
+                <div style="border:1px solid rgba(107,114,128,0.15); border-radius:18px; padding:18px; background:white; margin-bottom:14px;">
+                    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+                        <div style="flex:1; min-width:260px;">
+                            <div style="font-weight:700; line-height:1.5; margin-bottom:8px;">${escapeHtml(item.questionText)}</div>
+                            <div style="font-size:13px; color:var(--gray-500); display:flex; gap:12px; flex-wrap:wrap;">
+                                <span>Studente: ${escapeHtml(item.studentName || item.studentEmail || '—')}</span>
+                                <span>${item.moduleTitle ? 'Modulo: ' + escapeHtml(item.moduleTitle) : 'Domanda generale'}</span>
+                                <span>${item.lessonTitle ? 'Lezione: ' + escapeHtml(item.lessonTitle) : ''}</span>
+                                <span>${item.createdAt ? new Date(item.createdAt).toLocaleString('it-IT') : ''}</span>
+                                <span>${item.assignedTeacherName ? 'Assegnata a: ' + escapeHtml(item.assignedTeacherName) : ''}</span>
+                            </div>
+                        </div>
+                        <span class="status-pill" data-status="${questionStatusClass(item.status)}">${questionStatusLabel(item.status)}</span>
+                    </div>
+                    <details style="margin-top:14px;">
+                        <summary style="cursor:pointer; font-weight:600; color:var(--green-700);">Dettagli e risposte</summary>
+                        <div style="margin-top:14px;">
+                            ${renderQuestionRepliesAdmin(item.replies)}
+                            ${(item.status === 'open' || item.status === 'assigned') ? `
+                                <div style="display:grid; gap:12px; margin-top:14px;">
+                                    ${item.status === 'open' ? `
+                                        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                                            <select data-question-assign-select="${item.id}" style="min-width:240px;">${teacherOptionsForQuestions(item.assignedTo)}</select>
+                                            <button type="button" class="secondary-button" data-question-assign="${item.id}">Assign to Teacher</button>
+                                        </div>
+                                    ` : ''}
+                                    <textarea data-question-reply-input="${item.id}" placeholder="Scrivi una risposta..." style="min-height:100px;"></textarea>
+                                    <div><button type="button" class="secondary-button" data-question-reply="${item.id}">Reply</button></div>
+                                </div>
+                            ` : ''}
+                            ${item.status === 'answered' ? `
+                                <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:14px;">
+                                    <input type="text" data-question-faq-category="${item.id}" placeholder="Categoria FAQ (opzionale)" style="min-width:240px; max-width:320px;">
+                                    <button type="button" class="secondary-button" data-question-promote="${item.id}">Promote to FAQ</button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </details>
+                </div>
+            `).join('');
+            updateQuestionsBadge();
+        }
+
+        async function loadStudentQuestions() {
+            try {
+                const filter = state.questionsFilter ? `?status=${encodeURIComponent(state.questionsFilter)}` : '';
+                const items = await apiRequest('/api/questions' + filter);
+                state.studentQuestions = items || [];
+                renderStudentQuestions();
+            } catch (error) {
+                document.getElementById('questions-admin-list').innerHTML = '<div class="empty-state">Errore nel caricamento domande.</div>';
+            }
+        }
+
+        document.querySelectorAll('[data-questions-filter]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                state.questionsFilter = button.dataset.questionsFilter || '';
+                document.querySelectorAll('[data-questions-filter]').forEach((btn) => {
+                    btn.style.background = '';
+                    btn.style.color = '';
+                });
+                button.style.background = 'rgba(36, 90, 61, 0.14)';
+                button.style.color = 'var(--green-700)';
+                await loadStudentQuestions();
+            });
+        });
+
+        document.getElementById('questions-admin-list').addEventListener('click', async (e) => {
+            const assignId = e.target?.dataset?.questionAssign;
+            const replyId = e.target?.dataset?.questionReply;
+            const promoteId = e.target?.dataset?.questionPromote;
+            if (!assignId && !replyId && !promoteId) return;
+
+            try {
+                if (assignId) {
+                    const teacherId = document.querySelector(`[data-question-assign-select="${assignId}"]`)?.value;
+                    if (!teacherId) {
+                        showToast('Seleziona un docente', 'error');
+                        return;
+                    }
+                    await apiRequest(`/api/questions/${assignId}/assign`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ teacherId })
+                    });
+                    showToast('Domanda assegnata');
+                }
+
+                if (replyId) {
+                    const replyText = document.querySelector(`[data-question-reply-input="${replyId}"]`)?.value?.trim();
+                    if (!replyText) {
+                        showToast('Scrivi una risposta', 'error');
+                        return;
+                    }
+                    await apiRequest(`/api/questions/${replyId}/reply`, {
+                        method: 'POST',
+                        body: JSON.stringify({ replyText })
+                    });
+                    showToast('Risposta inviata');
+                }
+
+                if (promoteId) {
+                    const faqCategory = document.querySelector(`[data-question-faq-category="${promoteId}"]`)?.value?.trim() || null;
+                    await apiRequest(`/api/questions/${promoteId}/promote-faq`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ faqCategory })
+                    });
+                    showToast('Domanda promossa in FAQ');
+                }
+
+                await loadStudentQuestions();
+            } catch (error) {
+                showToast(error.message || 'Errore gestione domanda', 'error');
             }
         });
 

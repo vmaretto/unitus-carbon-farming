@@ -222,6 +222,7 @@
                 <div class="tab active" data-tab="lessons">📅 Lezioni</div>
                 <div class="tab" data-tab="materials">📁 Materiali</div>
                 <div class="tab" data-tab="quizzes">🧠 Quiz</div>
+                <div class="tab" data-tab="questions">💬 Domande <span id="questions-tab-badge" class="tab-badge" style="display:none;">0</span></div>
                 <div class="tab" data-tab="documents">📝 Liberatorie <span id="docs-tab-badge" class="tab-badge" style="display:none;">0</span></div>
             </div>
 
@@ -250,6 +251,15 @@
                 <div class="section-card">
                     <div class="section-header"><h2>🧠 Quiz da Approvare</h2></div>
                     <div class="section-body" id="quizzes-container">
+                        <div class="empty-state">Caricamento...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-panel" id="panel-questions">
+                <div class="section-card">
+                    <div class="section-header"><h2>💬 Domande assegnate</h2></div>
+                    <div class="section-body" id="questions-container">
                         <div class="empty-state">Caricamento...</div>
                     </div>
                 </div>
@@ -387,6 +397,7 @@
         let editingQuizData = null;
         let editingQuizMeta = null;
         const teacherPendingDocs = new Map();
+        let teacherQuestions = [];
 
         // === AUTH ===
         window.addEventListener('load', async () => {
@@ -461,6 +472,7 @@
                 loadTeacherLessons(),
                 loadTeacherMaterials(),
                 loadTeacherQuizzes(),
+                loadTeacherQuestions(),
                 loadPendingDocs(),
                 loadSignedDocs()
             ]);
@@ -709,6 +721,105 @@
             editingQuizMeta = null;
             document.getElementById('quiz-editor-sources').innerHTML = '';
         }
+
+        function renderTeacherQuestionReplies(replies) {
+            if (!replies || !replies.length) {
+                return '<div style="color: var(--gray-500);">Nessuna risposta.</div>';
+            }
+            return replies.map((reply) => `
+                <div style="padding:12px; border:1px solid var(--gray-200); border-radius:12px; background:var(--gray-50); margin-bottom:10px;">
+                    <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:12px; color:var(--gray-500); margin-bottom:6px;">
+                        <span><strong>${reply.authorRole}</strong> · ${reply.authorName || 'Autore'}</span>
+                        <span>${reply.createdAt ? new Date(reply.createdAt).toLocaleString('it-IT') : ''}</span>
+                    </div>
+                    <div style="white-space:pre-wrap; line-height:1.5;">${escapeHtml(reply.replyText || '')}</div>
+                </div>
+            `).join('');
+        }
+
+        function questionBadge(status) {
+            if (status === 'assigned') return '<span class="badge badge-orange">Assegnata</span>';
+            if (status === 'answered') return '<span class="badge badge-green">Risposta</span>';
+            if (status === 'promoted_faq') return '<span class="badge badge-blue">FAQ</span>';
+            return '<span class="badge badge-gray">Aperta</span>';
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        async function loadTeacherQuestions() {
+            try {
+                teacherQuestions = await apiCall('/api/teachers/questions');
+                const container = document.getElementById('questions-container');
+                const badge = document.getElementById('questions-tab-badge');
+                const count = (teacherQuestions || []).length;
+                if (count > 0) {
+                    badge.textContent = count;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+
+                if (!teacherQuestions.length) {
+                    container.innerHTML = '<div class="empty-state">Nessuna domanda assegnata.</div>';
+                    return;
+                }
+
+                container.innerHTML = teacherQuestions.map((question) => `
+                    <div class="list-item" style="display:block;">
+                        <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+                            <div class="item-info">
+                                <div class="item-title">${escapeHtml(question.questionText)}</div>
+                                <div class="item-meta">
+                                    ${escapeHtml(question.studentName || question.studentEmail || 'Studente')}
+                                    ${question.moduleTitle ? ' · Modulo: ' + escapeHtml(question.moduleTitle) : ''}
+                                    ${question.lessonTitle ? ' · Lezione: ' + escapeHtml(question.lessonTitle) : ''}
+                                    ${question.createdAt ? ' · ' + new Date(question.createdAt).toLocaleString('it-IT') : ''}
+                                </div>
+                            </div>
+                            ${questionBadge(question.status)}
+                        </div>
+                        <details style="margin-top:14px;">
+                            <summary style="cursor:pointer; font-weight:600; color:var(--green-700);">Dettagli e risposte</summary>
+                            <div style="margin-top:14px;">
+                                ${renderTeacherQuestionReplies(question.replies)}
+                                ${question.status !== 'answered' && question.status !== 'promoted_faq' ? `
+                                    <textarea data-teacher-question-reply="${question.id}" placeholder="Scrivi una risposta..." style="width:100%; min-height:110px; padding:12px; border:1px solid var(--gray-300); border-radius:8px; font:inherit; margin-top:10px;"></textarea>
+                                    <div style="margin-top:10px;"><button type="button" class="btn-sm btn-green" data-teacher-question-submit="${question.id}">Invia risposta</button></div>
+                                ` : ''}
+                            </div>
+                        </details>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Teacher questions error:', e);
+                document.getElementById('questions-container').innerHTML = '<div class="empty-state">Errore nel caricamento domande.</div>';
+            }
+        }
+
+        document.getElementById('questions-container').addEventListener('click', async (e) => {
+            const questionId = e.target?.dataset?.teacherQuestionSubmit;
+            if (!questionId) return;
+            try {
+                const textarea = document.querySelector(`[data-teacher-question-reply="${questionId}"]`);
+                const replyText = textarea?.value?.trim();
+                if (!replyText) return showToast('Scrivi una risposta', 'error');
+                await apiCall(`/api/teachers/questions/${questionId}/reply`, {
+                    method: 'POST',
+                    body: JSON.stringify({ replyText })
+                });
+                showToast('Risposta inviata', 'success');
+                await loadTeacherQuestions();
+            } catch (e2) {
+                showToast(e2.message || 'Errore nella risposta', 'error');
+            }
+        });
 
         async function openQuizEditor(quizId) {
             try {

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domande - Carbon Farming Master</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --green-900:#1b3a2d; --green-700:#245a3d; --green-500:#2c7a4b; --green-100:#ecf6f0; --blue-100:#dbeafe; --blue-700:#1d4ed8; --yellow-100:#fef3c7; --yellow-700:#b45309; --red-100:#fee2e2; --red-700:#b91c1c; --gray-900:#1c1c1c; --gray-700:#3d3d3d; --gray-500:#6b6b6b; --gray-300:#cbd5e1; --gray-200:#d9d9d9; --gray-100:#f3f4f6; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--gray-100); color: var(--gray-900); min-height: 100vh; }
+        header { background: linear-gradient(135deg, rgba(27,58,45,0.9), rgba(44,122,75,0.85)); color: white; padding: 24px; box-shadow: 0 10px 40px rgba(27,58,45,0.25); }
+        .header-content { max-width: 980px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        header h1 { font-size: 1.4rem; margin: 0; }
+        .nav-links { display: flex; gap: 10px; flex-wrap: wrap; }
+        .nav-links a { color: white; text-decoration: none; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.3); font-weight: 500; font-size: 0.9rem; transition: background 0.2s; }
+        .nav-links a:hover, .nav-links a.active { background: rgba(255,255,255,0.18); }
+        main { max-width: 980px; margin: 24px auto; padding: 0 24px 40px; }
+        .card { background: white; border-radius: 20px; padding: 28px; box-shadow: 0 8px 30px rgba(31,41,55,0.08); border: 1px solid rgba(36,90,61,0.08); margin-bottom: 24px; }
+        .card h2 { margin: 0 0 16px; color: var(--green-900); font-size: 1.3rem; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab-btn { border: 1px solid var(--gray-200); background: white; padding: 10px 16px; border-radius: 999px; cursor: pointer; font-weight: 600; color: var(--gray-700); }
+        .tab-btn.active { background: var(--green-100); border-color: var(--green-500); color: var(--green-700); }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        .form-grid { display: grid; gap: 16px; }
+        textarea, select { width: 100%; border: 1px solid var(--gray-200); border-radius: 12px; padding: 12px 14px; font: inherit; background: white; color: var(--gray-900); }
+        textarea { min-height: 120px; resize: vertical; }
+        textarea:focus, select:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px rgba(44,122,75,0.18); }
+        .btn { border: none; border-radius: 12px; padding: 12px 20px; font-weight: 600; cursor: pointer; }
+        .btn-primary { background: linear-gradient(135deg, var(--green-700), var(--green-500)); color: white; }
+        .btn-secondary { background: var(--gray-100); color: var(--gray-700); }
+        .question-card { border: 1px solid var(--gray-200); border-radius: 16px; padding: 18px; margin-bottom: 14px; background: white; }
+        .question-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+        .question-text { font-weight: 600; color: var(--gray-900); line-height: 1.5; }
+        .question-meta { margin-top: 8px; color: var(--gray-500); font-size: 0.85rem; display: flex; gap: 12px; flex-wrap: wrap; }
+        .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+        .badge-open { background: var(--gray-100); color: var(--gray-700); }
+        .badge-assigned { background: var(--yellow-100); color: var(--yellow-700); }
+        .badge-answered { background: var(--green-100); color: var(--green-700); }
+        .badge-faq { background: var(--blue-100); color: var(--blue-700); }
+        .expand-btn { margin-top: 12px; background: none; border: none; color: var(--green-700); cursor: pointer; font-weight: 600; padding: 0; }
+        .replies { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--gray-200); }
+        .replies.open { display: block; }
+        .reply-item { padding: 12px 14px; border-radius: 12px; background: var(--gray-100); margin-bottom: 10px; }
+        .reply-head { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--gray-500); margin-bottom: 6px; flex-wrap: wrap; }
+        .reply-role { font-weight: 700; color: var(--green-700); text-transform: uppercase; }
+        .reply-text { color: var(--gray-900); white-space: pre-wrap; line-height: 1.5; }
+        .faq-group { border: 1px solid var(--gray-200); border-radius: 16px; overflow: hidden; margin-bottom: 14px; background: white; }
+        .faq-group summary { list-style: none; cursor: pointer; padding: 16px 18px; font-weight: 700; color: var(--green-900); background: var(--green-100); }
+        .faq-group summary::-webkit-details-marker { display: none; }
+        .faq-group-body { padding: 18px; }
+        .empty { color: var(--gray-500); text-align: center; padding: 32px; }
+        .toast { position: fixed; top: 20px; right: 20px; padding: 14px 20px; border-radius: 10px; color: white; font-weight: 600; transform: translateX(420px); transition: transform 0.25s; z-index: 1000; }
+        .toast.show { transform: translateX(0); }
+        .toast.success { background: var(--green-700); }
+        .toast.error { background: var(--red-700); }
+        @media (max-width: 640px) { .header-content { flex-direction: column; align-items: flex-start; } }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div><h1>Carbon Farming Master</h1></div>
+            <div class="nav-links">
+                <a href="/learn/index.html">Dashboard</a>
+                <a href="/learn/resources.html">Risorse</a>
+                <a href="/learn/checkin.html">Check-in</a>
+                <a href="/learn/documents.html">Documenti</a>
+                <a href="/learn/questions.html" class="active">Domande</a>
+                <a href="#" id="logout-btn">Esci</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="card">
+            <h2>Domande e FAQ</h2>
+            <div class="tabs">
+                <button type="button" class="tab-btn active" data-tab="mine">Le mie domande</button>
+                <button type="button" class="tab-btn" data-tab="faq">FAQ</button>
+            </div>
+
+            <div class="tab-panel active" id="panel-mine">
+                <div class="card" style="padding: 20px; margin-bottom: 20px;">
+                    <h2 style="font-size:1.1rem;">Invia una domanda</h2>
+                    <div class="form-grid">
+                        <textarea id="question-text" placeholder="Scrivi la tua domanda..."></textarea>
+                        <select id="question-module">
+                            <option value="">Tutti i moduli / domanda generale</option>
+                        </select>
+                        <div>
+                            <button type="button" class="btn btn-primary" id="submit-question-btn">Invia domanda</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="my-questions-list"><div class="empty">Caricamento domande...</div></div>
+            </div>
+
+            <div class="tab-panel" id="panel-faq">
+                <div id="faq-list"><div class="empty">Caricamento FAQ...</div></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const token = localStorage.getItem('learnToken');
+        if (!token) window.location.href = '/learn/login.html';
+
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            localStorage.removeItem('learnToken');
+            localStorage.removeItem('learnUser');
+            window.location.href = '/learn/login.html';
+        });
+
+        const statusLabels = {
+            open: 'Aperta',
+            assigned: 'Assegnata',
+            answered: 'Risposta',
+            promoted_faq: 'FAQ'
+        };
+
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 10);
+            setTimeout(() => toast.remove(), 3500);
+        }
+
+        async function api(url, options = {}) {
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {})
+                }
+            });
+            if (response.status === 401) {
+                localStorage.removeItem('learnToken');
+                localStorage.removeItem('learnUser');
+                window.location.href = '/learn/login.html';
+                return null;
+            }
+            if (!response.ok) {
+                const payload = await response.json().catch(() => ({ error: 'Errore richiesta' }));
+                throw new Error(payload.error || 'Errore richiesta');
+            }
+            return response.status === 204 ? null : response.json();
+        }
+
+        async function publicApi(url) {
+            const response = await fetch(url);
+            if (!response.ok) {
+                const payload = await response.json().catch(() => ({ error: 'Errore richiesta' }));
+                throw new Error(payload.error || 'Errore richiesta');
+            }
+            return response.json();
+        }
+
+        function getStatusBadge(status) {
+            const cls = status === 'assigned' ? 'badge-assigned'
+                : status === 'answered' ? 'badge-answered'
+                : status === 'promoted_faq' ? 'badge-faq'
+                : 'badge-open';
+            return `<span class="badge ${cls}">${statusLabels[status] || status}</span>`;
+        }
+
+        function renderReplies(replies) {
+            if (!replies || !replies.length) {
+                return '<div class="reply-item"><div class="reply-text">Nessuna risposta ancora disponibile.</div></div>';
+            }
+            return replies.map((reply) => `
+                <div class="reply-item">
+                    <div class="reply-head">
+                        <span><span class="reply-role">${reply.authorRole}</span> · ${reply.authorName || 'Autore'}</span>
+                        <span>${reply.createdAt ? new Date(reply.createdAt).toLocaleString('it-IT') : ''}</span>
+                    </div>
+                    <div class="reply-text">${escapeHtml(reply.replyText || '')}</div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            return String(text || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderQuestionCard(question, prefix = 'q') {
+            const meta = [
+                question.moduleTitle ? `Modulo: ${question.moduleTitle}` : null,
+                question.lessonTitle ? `Lezione: ${question.lessonTitle}` : null,
+                question.createdAt ? new Date(question.createdAt).toLocaleString('it-IT') : null
+            ].filter(Boolean).join(' · ');
+            return `
+                <div class="question-card">
+                    <div class="question-head">
+                        <div style="flex:1; min-width:0;">
+                            <div class="question-text">${escapeHtml(question.questionText)}</div>
+                            <div class="question-meta">${meta || 'Domanda generale'}</div>
+                        </div>
+                        ${getStatusBadge(question.status)}
+                    </div>
+                    <button type="button" class="expand-btn" data-toggle-replies="${prefix}-${question.id}">Mostra risposte</button>
+                    <div class="replies" id="replies-${prefix}-${question.id}">
+                        ${renderReplies(question.replies)}
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadModuleOptions() {
+            try {
+                const courses = await api('/api/lms/my-courses');
+                if (!Array.isArray(courses)) return;
+                const moduleSelect = document.getElementById('question-module');
+                const seen = new Set();
+                for (const course of courses) {
+                    const response = await fetch(`/api/lms/modules?courseId=${course.id}`);
+                    const modules = response.ok ? await response.json() : [];
+                    modules.forEach((mod) => {
+                        if (seen.has(mod.id)) return;
+                        seen.add(mod.id);
+                        const option = document.createElement('option');
+                        option.value = mod.id;
+                        option.textContent = mod.title;
+                        moduleSelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading modules for questions', error);
+            }
+        }
+
+        async function loadMyQuestions() {
+            const container = document.getElementById('my-questions-list');
+            container.innerHTML = '<div class="empty">Caricamento domande...</div>';
+            try {
+                const moduleId = document.getElementById('question-module').value;
+                const url = moduleId ? `/api/lms/questions?moduleId=${encodeURIComponent(moduleId)}` : '/api/lms/questions';
+                const questions = await api(url);
+                if (!questions || !questions.length) {
+                    container.innerHTML = '<div class="empty">Non hai ancora inviato domande.</div>';
+                    return;
+                }
+                container.innerHTML = questions.map((question) => renderQuestionCard(question, 'mine')).join('');
+                bindReplyToggles(container);
+            } catch (error) {
+                container.innerHTML = `<div class="empty">${error.message}</div>`;
+            }
+        }
+
+        async function loadFaq() {
+            const container = document.getElementById('faq-list');
+            container.innerHTML = '<div class="empty">Caricamento FAQ...</div>';
+            try {
+                const grouped = await publicApi('/api/lms/faq');
+                const categories = Object.keys(grouped || {});
+                if (!categories.length) {
+                    container.innerHTML = '<div class="empty">Nessuna FAQ disponibile.</div>';
+                    return;
+                }
+                container.innerHTML = categories.map((category) => `
+                    <details class="faq-group" open>
+                        <summary>${escapeHtml(category)}</summary>
+                        <div class="faq-group-body">
+                            ${grouped[category].map((question) => renderQuestionCard(question, 'faq')).join('')}
+                        </div>
+                    </details>
+                `).join('');
+                bindReplyToggles(container);
+            } catch (error) {
+                container.innerHTML = `<div class="empty">${error.message}</div>`;
+            }
+        }
+
+        function bindReplyToggles(scope) {
+            scope.querySelectorAll('[data-toggle-replies]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const target = document.getElementById(`replies-${button.dataset.toggleReplies}`);
+                    const open = target.classList.toggle('open');
+                    button.textContent = open ? 'Nascondi risposte' : 'Mostra risposte';
+                });
+            });
+        }
+
+        document.getElementById('submit-question-btn').addEventListener('click', async () => {
+            const questionText = document.getElementById('question-text').value.trim();
+            const moduleId = document.getElementById('question-module').value || null;
+            if (!questionText) {
+                showToast('Scrivi una domanda prima di inviare.', 'error');
+                return;
+            }
+            try {
+                await api('/api/lms/questions', {
+                    method: 'POST',
+                    body: JSON.stringify({ questionText, moduleId })
+                });
+                document.getElementById('question-text').value = '';
+                showToast('Domanda inviata', 'success');
+                await loadMyQuestions();
+            } catch (error) {
+                showToast(error.message || 'Errore invio domanda', 'error');
+            }
+        });
+
+        document.getElementById('question-module').addEventListener('change', loadMyQuestions);
+
+        document.querySelectorAll('.tab-btn').forEach((button) => {
+            button.addEventListener('click', async () => {
+                document.querySelectorAll('.tab-btn').forEach((btn) => btn.classList.remove('active'));
+                document.querySelectorAll('.tab-panel').forEach((panel) => panel.classList.remove('active'));
+                button.classList.add('active');
+                document.getElementById(`panel-${button.dataset.tab}`).classList.add('active');
+                if (button.dataset.tab === 'faq') await loadFaq();
+                if (button.dataset.tab === 'mine') await loadMyQuestions();
+            });
+        });
+
+        loadModuleOptions();
+        loadMyQuestions();
+        loadFaq();
+    </script>
+</body>
+</html>

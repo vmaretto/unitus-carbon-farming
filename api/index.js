@@ -150,6 +150,7 @@ function requireAdmin(req, res, next) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
+  req.admin = payload;
   next();
 }
 
@@ -195,6 +196,72 @@ async function resolveValidFacultyId(candidateFacultyId, lessonId = null) {
   }
 
   return null;
+}
+
+function normalizeQuestionRow(row) {
+  return {
+    id: row.id,
+    userId: row.userId,
+    studentName: row.studentName,
+    studentEmail: row.studentEmail,
+    moduleId: row.moduleId,
+    moduleTitle: row.moduleTitle,
+    lmsLessonId: row.lmsLessonId,
+    lessonTitle: row.lessonTitle,
+    questionText: row.questionText,
+    status: row.status,
+    assignedTo: row.assignedTo,
+    assignedTeacherName: row.assignedTeacherName,
+    isFaq: row.isFaq,
+    faqCategory: row.faqCategory,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    replies: []
+  };
+}
+
+async function getRepliesForQuestionIds(questionIds) {
+  if (!pool || !Array.isArray(questionIds) || !questionIds.length) return [];
+
+  const { rows } = await pool.query(`
+    SELECT qr.id,
+           qr.question_id AS "questionId",
+           qr.author_id AS "authorId",
+           qr.author_role AS "authorRole",
+           qr.reply_text AS "replyText",
+           qr.created_at AS "createdAt",
+           CASE
+             WHEN qr.author_role = 'student' THEN COALESCE(NULLIF(TRIM(COALESCE(us.first_name, '') || ' ' || COALESCE(us.last_name, '')), ''), us.email, 'Studente')
+             WHEN qr.author_role = 'teacher' THEN COALESCE(ft.name, NULLIF(TRIM(COALESCE(ft.first_name, '') || ' ' || COALESCE(ft.last_name, '')), ''), ft.email, 'Docente')
+             ELSE 'Amministrazione'
+           END AS "authorName"
+    FROM question_replies qr
+    LEFT JOIN users us ON qr.author_role = 'student' AND us.id = qr.author_id
+    LEFT JOIN faculty ft ON qr.author_role = 'teacher' AND ft.id = qr.author_id
+    WHERE qr.question_id = ANY($1::uuid[])
+    ORDER BY qr.created_at ASC
+  `, [questionIds]);
+
+  return rows;
+}
+
+async function attachRepliesToQuestions(questionRows) {
+  const items = (questionRows || []).map(normalizeQuestionRow);
+  if (!items.length) return items;
+
+  const replies = await getRepliesForQuestionIds(items.map((item) => item.id));
+  const repliesByQuestion = new Map();
+  replies.forEach((reply) => {
+    const list = repliesByQuestion.get(reply.questionId) || [];
+    list.push(reply);
+    repliesByQuestion.set(reply.questionId, list);
+  });
+
+  items.forEach((item) => {
+    item.replies = repliesByQuestion.get(item.id) || [];
+  });
+
+  return items;
 }
 
 const defaultFaculty = [
@@ -3066,13 +3133,18 @@ app.get('/api/faculty', async (req, res) => {
   }
 
   try {
-    const { published } = req.query;
+    const { published, role } = req.query;
     const filters = [];
     const values = [];
 
     if (published !== undefined) {
       filters.push(`is_published = $${filters.length + 1}`);
       values.push(published === 'true');
+    }
+
+    if (role) {
+      filters.push(`LOWER(COALESCE(role, '')) LIKE $${filters.length + 1}`);
+      values.push(`%${String(role).trim().toLowerCase()}%`);
     }
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
@@ -5887,6 +5959,363 @@ app.get('/api/lms/progress/summary', requireStudent, async (req, res) => {
   } catch (error) {
     console.error('Error fetching student progress summary', error);
     res.status(500).json({ error: 'Unable to retrieve progress summary' });
+  }
+});
+
+// ============================================
+// STUDENT Q&A / FAQ
+// ============================================
+
+app.get('/api/lms/questions', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const values = [req.user.userId];
+    let where = 'WHERE sq.user_id = $1';
+    if (req.query.moduleId) {
+      values.push(req.query.moduleId);
+      where += ` AND sq.module_id = $${values.length}`;
+    }
+
+    const { rows } = await pool.query(`
+      SELECT sq.id,
+             sq.user_id AS "userId",
+             sq.module_id AS "moduleId",
+             m.title AS "moduleTitle",
+             sq.lms_lesson_id AS "lmsLessonId",
+             ll.title AS "lessonTitle",
+             sq.question_text AS "questionText",
+             sq.status,
+             sq.assigned_to AS "assignedTo",
+             COALESCE(ft.name, NULLIF(TRIM(COALESCE(ft.first_name, '') || ' ' || COALESCE(ft.last_name, '')), ''), ft.email) AS "assignedTeacherName",
+             sq.is_faq AS "isFaq",
+             sq.faq_category AS "faqCategory",
+             sq.created_at AS "createdAt",
+             sq.updated_at AS "updatedAt"
+      FROM student_questions sq
+      LEFT JOIN modules m ON m.id = sq.module_id
+      LEFT JOIN lms_lessons ll ON ll.id = sq.lms_lesson_id
+      LEFT JOIN faculty ft ON ft.id = sq.assigned_to
+      ${where}
+      ORDER BY sq.created_at DESC
+    `, values);
+
+    res.json(await attachRepliesToQuestions(rows));
+  } catch (error) {
+    console.error('Error fetching student questions', error);
+    res.status(500).json({ error: 'Unable to retrieve questions' });
+  }
+});
+
+app.post('/api/lms/questions', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { questionText, moduleId, lessonId } = req.body || {};
+  if (!questionText || !String(questionText).trim()) {
+    return res.status(400).json({ error: 'questionText is required' });
+  }
+
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO student_questions (id, user_id, module_id, lms_lesson_id, question_text, status)
+      VALUES ($1, $2, $3, $4, $5, 'open')
+      RETURNING id,
+                user_id AS "userId",
+                module_id AS "moduleId",
+                lms_lesson_id AS "lmsLessonId",
+                question_text AS "questionText",
+                status,
+                is_faq AS "isFaq",
+                faq_category AS "faqCategory",
+                created_at AS "createdAt",
+                updated_at AS "updatedAt"
+    `, [uuidv4(), req.user.userId, moduleId || null, lessonId || null, String(questionText).trim()]);
+
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating student question', error);
+    res.status(500).json({ error: 'Unable to create question' });
+  }
+});
+
+app.get('/api/lms/faq', async (_req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT sq.id,
+             sq.user_id AS "userId",
+             sq.module_id AS "moduleId",
+             m.title AS "moduleTitle",
+             sq.lms_lesson_id AS "lmsLessonId",
+             ll.title AS "lessonTitle",
+             sq.question_text AS "questionText",
+             sq.status,
+             sq.assigned_to AS "assignedTo",
+             COALESCE(ft.name, NULLIF(TRIM(COALESCE(ft.first_name, '') || ' ' || COALESCE(ft.last_name, '')), ''), ft.email) AS "assignedTeacherName",
+             sq.is_faq AS "isFaq",
+             COALESCE(NULLIF(sq.faq_category, ''), 'Generale') AS "faqCategory",
+             sq.created_at AS "createdAt",
+             sq.updated_at AS "updatedAt"
+      FROM student_questions sq
+      LEFT JOIN modules m ON m.id = sq.module_id
+      LEFT JOIN lms_lessons ll ON ll.id = sq.lms_lesson_id
+      LEFT JOIN faculty ft ON ft.id = sq.assigned_to
+      WHERE sq.is_faq = true
+      ORDER BY COALESCE(NULLIF(sq.faq_category, ''), 'Generale'), sq.created_at DESC
+    `);
+
+    const items = await attachRepliesToQuestions(rows);
+    const grouped = {};
+    items.forEach((item) => {
+      const category = item.faqCategory || 'Generale';
+      if (!grouped[category]) grouped[category] = [];
+      grouped[category].push(item);
+    });
+    res.json(grouped);
+  } catch (error) {
+    console.error('Error fetching FAQ', error);
+    res.status(500).json({ error: 'Unable to retrieve FAQ' });
+  }
+});
+
+app.get('/api/questions', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const values = [];
+    let where = '';
+    if (req.query.status) {
+      values.push(req.query.status);
+      where = `WHERE sq.status = $${values.length}`;
+    }
+
+    const { rows } = await pool.query(`
+      SELECT sq.id,
+             sq.user_id AS "userId",
+             COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email, 'Studente') AS "studentName",
+             u.email AS "studentEmail",
+             sq.module_id AS "moduleId",
+             m.title AS "moduleTitle",
+             sq.lms_lesson_id AS "lmsLessonId",
+             ll.title AS "lessonTitle",
+             sq.question_text AS "questionText",
+             sq.status,
+             sq.assigned_to AS "assignedTo",
+             COALESCE(ft.name, NULLIF(TRIM(COALESCE(ft.first_name, '') || ' ' || COALESCE(ft.last_name, '')), ''), ft.email) AS "assignedTeacherName",
+             sq.is_faq AS "isFaq",
+             sq.faq_category AS "faqCategory",
+             sq.created_at AS "createdAt",
+             sq.updated_at AS "updatedAt"
+      FROM student_questions sq
+      JOIN users u ON u.id = sq.user_id
+      LEFT JOIN modules m ON m.id = sq.module_id
+      LEFT JOIN lms_lessons ll ON ll.id = sq.lms_lesson_id
+      LEFT JOIN faculty ft ON ft.id = sq.assigned_to
+      ${where}
+      ORDER BY
+        CASE sq.status
+          WHEN 'open' THEN 1
+          WHEN 'assigned' THEN 2
+          WHEN 'answered' THEN 3
+          WHEN 'promoted_faq' THEN 4
+          ELSE 5
+        END,
+        sq.created_at DESC
+    `, values);
+
+    res.json(await attachRepliesToQuestions(rows));
+  } catch (error) {
+    console.error('Error fetching admin questions', error);
+    res.status(500).json({ error: 'Unable to retrieve questions' });
+  }
+});
+
+app.put('/api/questions/:id/assign', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { teacherId } = req.body || {};
+  if (!teacherId) {
+    return res.status(400).json({ error: 'teacherId is required' });
+  }
+  try {
+    const { rows: teachers } = await pool.query('SELECT id FROM faculty WHERE id = $1', [teacherId]);
+    if (!teachers.length) {
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+
+    const { rows } = await pool.query(`
+      UPDATE student_questions
+      SET assigned_to = $1, status = 'assigned', updated_at = NOW()
+      WHERE id = $2
+      RETURNING id,
+                user_id AS "userId",
+                module_id AS "moduleId",
+                lms_lesson_id AS "lmsLessonId",
+                question_text AS "questionText",
+                status,
+                assigned_to AS "assignedTo",
+                is_faq AS "isFaq",
+                faq_category AS "faqCategory",
+                created_at AS "createdAt",
+                updated_at AS "updatedAt"
+    `, [teacherId, req.params.id]);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error assigning question', error);
+    res.status(500).json({ error: 'Unable to assign question' });
+  }
+});
+
+app.post('/api/questions/:id/reply', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { replyText } = req.body || {};
+  if (!replyText || !String(replyText).trim()) {
+    return res.status(400).json({ error: 'replyText is required' });
+  }
+  try {
+    const { rows: questions } = await pool.query('SELECT id FROM student_questions WHERE id = $1', [req.params.id]);
+    if (!questions.length) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    const replyId = uuidv4();
+    const adminAuthorId = req.admin?.userId || '00000000-0000-0000-0000-000000000000';
+    const { rows } = await pool.query(`
+      WITH reply AS (
+        INSERT INTO question_replies (id, question_id, author_id, author_role, reply_text)
+        VALUES ($1, $2, $3, 'admin', $4)
+        RETURNING id,
+                  question_id AS "questionId",
+                  author_id AS "authorId",
+                  author_role AS "authorRole",
+                  reply_text AS "replyText",
+                  created_at AS "createdAt"
+      )
+      UPDATE student_questions
+      SET status = 'answered', updated_at = NOW()
+      WHERE id = $2
+      RETURNING (SELECT row_to_json(reply) FROM reply) AS reply
+    `, [replyId, req.params.id, adminAuthorId, String(replyText).trim()]);
+
+    const reply = rows[0]?.reply || null;
+    if (reply) reply.authorName = 'Amministrazione';
+    res.status(201).json({ questionId: req.params.id, ...reply });
+  } catch (error) {
+    console.error('Error replying to question as admin', error);
+    res.status(500).json({ error: 'Unable to reply to question' });
+  }
+});
+
+app.put('/api/questions/:id/promote-faq', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { faqCategory } = req.body || {};
+  try {
+    const { rows } = await pool.query(`
+      UPDATE student_questions
+      SET is_faq = true,
+          status = 'promoted_faq',
+          faq_category = COALESCE($1, faq_category),
+          updated_at = NOW()
+      WHERE id = $2
+      RETURNING id,
+                user_id AS "userId",
+                module_id AS "moduleId",
+                lms_lesson_id AS "lmsLessonId",
+                question_text AS "questionText",
+                status,
+                assigned_to AS "assignedTo",
+                is_faq AS "isFaq",
+                faq_category AS "faqCategory",
+                created_at AS "createdAt",
+                updated_at AS "updatedAt"
+    `, [faqCategory || null, req.params.id]);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error promoting question to FAQ', error);
+    res.status(500).json({ error: 'Unable to promote question to FAQ' });
+  }
+});
+
+app.get('/api/teachers/questions', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT sq.id,
+             sq.user_id AS "userId",
+             COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email, 'Studente') AS "studentName",
+             u.email AS "studentEmail",
+             sq.module_id AS "moduleId",
+             m.title AS "moduleTitle",
+             sq.lms_lesson_id AS "lmsLessonId",
+             ll.title AS "lessonTitle",
+             sq.question_text AS "questionText",
+             sq.status,
+             sq.assigned_to AS "assignedTo",
+             COALESCE(ft.name, NULLIF(TRIM(COALESCE(ft.first_name, '') || ' ' || COALESCE(ft.last_name, '')), ''), ft.email) AS "assignedTeacherName",
+             sq.is_faq AS "isFaq",
+             sq.faq_category AS "faqCategory",
+             sq.created_at AS "createdAt",
+             sq.updated_at AS "updatedAt"
+      FROM student_questions sq
+      JOIN users u ON u.id = sq.user_id
+      LEFT JOIN modules m ON m.id = sq.module_id
+      LEFT JOIN lms_lessons ll ON ll.id = sq.lms_lesson_id
+      LEFT JOIN faculty ft ON ft.id = sq.assigned_to
+      WHERE sq.assigned_to = $1
+      ORDER BY sq.created_at DESC
+    `, [req.teacher.id]);
+
+    res.json(await attachRepliesToQuestions(rows));
+  } catch (error) {
+    console.error('Error fetching teacher questions', error);
+    res.status(500).json({ error: 'Unable to retrieve questions' });
+  }
+});
+
+app.post('/api/teachers/questions/:id/reply', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { replyText } = req.body || {};
+  if (!replyText || !String(replyText).trim()) {
+    return res.status(400).json({ error: 'replyText is required' });
+  }
+  try {
+    const { rows: questions } = await pool.query(
+      'SELECT id FROM student_questions WHERE id = $1 AND assigned_to = $2',
+      [req.params.id, req.teacher.id]
+    );
+    if (!questions.length) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    const replyId = uuidv4();
+    const { rows } = await pool.query(`
+      WITH reply AS (
+        INSERT INTO question_replies (id, question_id, author_id, author_role, reply_text)
+        VALUES ($1, $2, $3, 'teacher', $4)
+        RETURNING id,
+                  question_id AS "questionId",
+                  author_id AS "authorId",
+                  author_role AS "authorRole",
+                  reply_text AS "replyText",
+                  created_at AS "createdAt"
+      )
+      UPDATE student_questions
+      SET status = 'answered', updated_at = NOW()
+      WHERE id = $2
+      RETURNING (SELECT row_to_json(reply) FROM reply) AS reply
+    `, [replyId, req.params.id, req.teacher.id, String(replyText).trim()]);
+
+    const reply = rows[0]?.reply || null;
+    if (reply) reply.authorName = req.teacher.name || 'Docente';
+    res.status(201).json({ questionId: req.params.id, ...reply });
+  } catch (error) {
+    console.error('Error replying to question as teacher', error);
+    res.status(500).json({ error: 'Unable to reply to question' });
   }
 });
 

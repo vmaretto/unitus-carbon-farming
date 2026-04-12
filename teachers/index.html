@@ -942,9 +942,13 @@
             document.getElementById('signature-file').value = '';
             signatureData = null;
             signatureMethod = 'draw';
+            document.getElementById('sign-modal').style.display = 'block';
             clearSignature();
             updateSignSubmitButton();
-            document.getElementById('sign-modal').style.display = 'block';
+            requestAnimationFrame(() => {
+                initSigCanvas();
+                updateSignSubmitButton();
+            });
         }
 
         function closeSignModal() {
@@ -966,8 +970,16 @@
 
         function initSigCanvas() {
             const rect = sigCanvas.parentElement.getBoundingClientRect();
-            sigCanvas.width = rect.width;
-            sigCanvas.height = 160;
+            const width = Math.max(Math.floor(rect.width || 540), 540);
+            const height = 160;
+            const dpr = window.devicePixelRatio || 1;
+            sigCanvas.width = width * dpr;
+            sigCanvas.height = height * dpr;
+            sigCanvas.style.width = width + 'px';
+            sigCanvas.style.height = height + 'px';
+            sigCtx.setTransform(1, 0, 0, 1, 0, 0);
+            sigCtx.scale(dpr, dpr);
+            sigCtx.clearRect(0, 0, width, height);
             sigCtx.strokeStyle = '#000';
             sigCtx.lineWidth = 2;
             sigCtx.lineCap = 'round';
@@ -1050,6 +1062,9 @@
                 document.querySelectorAll('.signature-panel').forEach(panel => panel.classList.remove('active'));
                 tab.classList.add('active');
                 document.getElementById('signature-panel-' + tab.dataset.signatureTab).classList.add('active');
+                if (tab.dataset.signatureTab === 'draw') {
+                    requestAnimationFrame(() => initSigCanvas());
+                }
                 updateSignSubmitButton();
             });
         });

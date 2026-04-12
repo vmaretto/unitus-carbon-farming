@@ -5648,11 +5648,20 @@ app.get('/api/lms/my-courses', requireStudent, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT c.id, c.title, c.slug, c.description, c.cover_image_url AS "coverImageUrl",
              ce.id AS "editionId", ce.edition_name AS "editionName",
+             COALESCE(ce.total_planned_hours, 432) AS "totalPlannedHours",
              e.status AS "enrollmentStatus", e.enrolled_at AS "enrolledAt",
              (SELECT COUNT(*)::int FROM modules m WHERE m.course_id = c.id) AS "totalModules",
              (SELECT COUNT(*)::int FROM lms_lessons ll
               JOIN modules m2 ON m2.id = ll.lms_module_id
               WHERE m2.course_id = c.id AND ll.is_published = true) AS "totalLessons",
+             (SELECT COALESCE(SUM(COALESCE(les.duration_minutes, 0)), 0) / 60.0
+              FROM attendance a
+              JOIN lessons les ON les.id = a.lesson_id
+              JOIN modules m_att ON m_att.id = les.module_id
+              WHERE a.user_id = $1
+                AND m_att.course_id = c.id
+                AND a.attendance_type IN ('in_person', 'remote_live', 'remote_partial')
+             ) AS "attendedHours",
              (SELECT COUNT(DISTINCT ll2.id)::int FROM lms_lessons ll2
               JOIN modules m3 ON m3.id = ll2.lms_module_id
               WHERE m3.course_id = c.id AND (
@@ -5680,7 +5689,16 @@ app.get('/api/lms/my-progress', requireStudent, async (req, res) => {
     // Lezioni completate e totali per ogni corso
     const { rows: courseProgress } = await pool.query(`
       SELECT c.id AS "courseId", c.title AS "courseTitle",
+             COALESCE(ce.total_planned_hours, 432) AS "totalPlannedHours",
              COUNT(DISTINCT ll.id) FILTER (WHERE ll.is_published = true) AS "totalLessons",
+             (SELECT COALESCE(SUM(COALESCE(les.duration_minutes, 0)), 0) / 60.0
+              FROM attendance a
+              JOIN lessons les ON les.id = a.lesson_id
+              JOIN modules m_att ON m_att.id = les.module_id
+              WHERE a.user_id = $1
+                AND m_att.course_id = c.id
+                AND a.attendance_type IN ('in_person', 'remote_live', 'remote_partial')
+             ) AS "attendedHours",
              COUNT(DISTINCT ll.id) FILTER (WHERE
                EXISTS (SELECT 1 FROM lesson_progress lp2 WHERE lp2.lms_lesson_id = ll.id AND lp2.user_id = $1 AND lp2.completed_at IS NOT NULL)
                OR EXISTS (SELECT 1 FROM attendance a2 WHERE a2.lesson_id = ll.calendar_lesson_id AND a2.user_id = $1 AND a2.attendance_type IN ('in_person', 'remote_live'))
@@ -5707,6 +5725,49 @@ app.get('/api/lms/my-progress', requireStudent, async (req, res) => {
   } catch (error) {
     console.error('Error fetching student progress', error);
     res.status(500).json({ error: 'Unable to retrieve progress' });
+  }
+});
+
+app.get('/api/lms/progress/summary', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows: courseProgress } = await pool.query(`
+      SELECT c.id AS "courseId", c.title AS "courseTitle",
+             COALESCE(ce.total_planned_hours, 432) AS "totalPlannedHours",
+             COUNT(DISTINCT ll.id) FILTER (WHERE ll.is_published = true) AS "totalLessons",
+             (SELECT COALESCE(SUM(COALESCE(les.duration_minutes, 0)), 0) / 60.0
+              FROM attendance a
+              JOIN lessons les ON les.id = a.lesson_id
+              JOIN modules m_att ON m_att.id = les.module_id
+              WHERE a.user_id = $1
+                AND m_att.course_id = c.id
+                AND a.attendance_type IN ('in_person', 'remote_live', 'remote_partial')
+             ) AS "attendedHours",
+             COUNT(DISTINCT ll.id) FILTER (WHERE
+               EXISTS (SELECT 1 FROM lesson_progress lp2 WHERE lp2.lms_lesson_id = ll.id AND lp2.user_id = $1 AND lp2.completed_at IS NOT NULL)
+               OR EXISTS (SELECT 1 FROM attendance a2 WHERE a2.lesson_id = ll.calendar_lesson_id AND a2.user_id = $1 AND a2.attendance_type IN ('in_person', 'remote_live'))
+             ) AS "completedLessons"
+      FROM enrollments e
+      JOIN course_editions ce ON ce.id = e.course_edition_id
+      JOIN courses c ON c.id = ce.course_id
+      LEFT JOIN modules m ON m.course_id = c.id
+      LEFT JOIN lms_lessons ll ON ll.lms_module_id = m.id AND ll.is_published = true
+      WHERE e.user_id = $1 AND e.status = 'active'
+      GROUP BY c.id, c.title, ce.total_planned_hours
+    `, [req.user.userId]);
+
+    const { rows: attendanceRows } = await pool.query(
+      'SELECT COUNT(*)::int AS total FROM attendance WHERE user_id = $1',
+      [req.user.userId]
+    );
+
+    res.json({
+      courses: courseProgress,
+      totalAttendances: attendanceRows[0]?.total || 0
+    });
+  } catch (error) {
+    console.error('Error fetching student progress summary', error);
+    res.status(500).json({ error: 'Unable to retrieve progress summary' });
   }
 });
 
@@ -6742,13 +6803,19 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
     `, [courseEditionId]);
 
     const totalLessons = calendarLessons.length + lmsLessons.length;
+    const { rows: editionRows } = await pool.query(
+      'SELECT COALESCE(total_planned_hours, 432) AS total_planned_hours FROM course_editions WHERE id = $1',
+      [courseEditionId]
+    );
+    const totalPlannedHours = Number(editionRows[0]?.total_planned_hours || 432);
     const studentIds = students.map(s => s.id);
 
     // Build filters for attendance query
     let attendanceQuery = `
       SELECT a.id, a.user_id, a.lesson_id, a.lms_lesson_id, a.attendance_type, a.method,
-             a.check_in_at, a.check_out_at
+             a.check_in_at, a.check_out_at, COALESCE(les.duration_minutes, 0) AS duration_minutes
       FROM attendance a
+      LEFT JOIN lessons les ON les.id = a.lesson_id
       WHERE a.user_id = ANY($1)
     `;
     const values = [studentIds];
@@ -6778,7 +6845,11 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
       const remotePartial = filteredAttendances.filter(a => a.attendance_type === 'remote_partial').length;
       const asyncCount = filteredAttendances.filter(a => a.attendance_type === 'async').length;
       const total = inPerson + remoteLive + remotePartial + asyncCount;
-      const percentage = totalLessons > 0 ? Math.round((total / totalLessons) * 100) : 0;
+      const attendedMinutes = filteredAttendances
+        .filter(a => ['in_person', 'remote_live', 'remote_partial'].includes(a.attendance_type))
+        .reduce((sum, a) => sum + Number(a.duration_minutes || 0), 0);
+      const attendedHours = attendedMinutes / 60.0;
+      const percentage = totalPlannedHours > 0 ? Math.round((attendedHours / totalPlannedHours) * 100) : 0;
 
       // Per singola lezione, includi dettagli presenza
       const singleLessonAttendance = lessonId && filteredAttendances.length > 0 ? filteredAttendances[0] : null;
@@ -6794,6 +6865,8 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
         async: asyncCount,
         total,
         totalLessons,
+        attendedHours,
+        totalPlannedHours,
         percentage,
         // Campi per vista singola lezione
         attendanceId: singleLessonAttendance?.id,
@@ -6814,7 +6887,8 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
       students: report,
       calendarLessons,
       lmsLessons,
-      totalLessons
+      totalLessons,
+      totalPlannedHours
     });
   } catch (error) {
     console.error('Error fetching attendance report', error);
@@ -6839,24 +6913,20 @@ app.get('/api/attendance/export/:courseEditionId', requireAdmin, async (req, res
     const studentIds = students.map(s => s.id);
 
     const { rows: attendances } = await pool.query(
-      'SELECT user_id, attendance_type FROM attendance WHERE user_id = ANY($1)',
+      `SELECT a.user_id, a.attendance_type, COALESCE(les.duration_minutes, 0) AS duration_minutes
+       FROM attendance a
+       LEFT JOIN lessons les ON les.id = a.lesson_id
+       WHERE a.user_id = ANY($1)`,
       [studentIds]
     );
 
-    // Count total lessons
-    const { rows: countRows } = await pool.query(`
-      SELECT
-        (SELECT COUNT(*)::int FROM lessons l
-         JOIN modules m ON m.id = l.module_id
-         WHERE l.status != 'cancelled') +
-        (SELECT COUNT(*)::int FROM lms_lessons ll
-         JOIN modules lm ON lm.id = ll.lms_module_id
-         JOIN course_editions ce ON ce.course_id = lm.course_id
-         WHERE ce.id = $1 AND ll.is_published = true) AS total
-    `, [courseEditionId]);
-    const totalLessons = countRows[0]?.total || 0;
+    const { rows: editionRows } = await pool.query(
+      'SELECT COALESCE(total_planned_hours, 432) AS total_planned_hours FROM course_editions WHERE id = $1',
+      [courseEditionId]
+    );
+    const totalPlannedHours = Number(editionRows[0]?.total_planned_hours || 432);
 
-    let csv = 'cognome,nome,email,in_persona,da_remoto,parziale,asincrona,totale,lezioni_totali,percentuale\n';
+    let csv = 'cognome,nome,email,in_persona,da_remoto,parziale,asincrona,totale_presenze,ore_frequentate,ore_pianificate,percentuale\n';
     students.forEach(s => {
       const sa = attendances.filter(a => a.user_id === s.id);
       const inPerson = sa.filter(a => a.attendance_type === 'in_person').length;
@@ -6864,8 +6934,12 @@ app.get('/api/attendance/export/:courseEditionId', requireAdmin, async (req, res
       const remotePartial = sa.filter(a => a.attendance_type === 'remote_partial').length;
       const asyncCount = sa.filter(a => a.attendance_type === 'async').length;
       const total = inPerson + remoteLive + remotePartial + asyncCount;
-      const pct = totalLessons > 0 ? Math.round((total / totalLessons) * 100) : 0;
-      csv += `"${s.last_name}","${s.first_name}","${s.email}",${inPerson},${remoteLive},${remotePartial},${asyncCount},${total},${totalLessons},${pct}%\n`;
+      const attendedMinutes = sa
+        .filter(a => ['in_person', 'remote_live', 'remote_partial'].includes(a.attendance_type))
+        .reduce((sum, a) => sum + Number(a.duration_minutes || 0), 0);
+      const attendedHours = (attendedMinutes / 60.0).toFixed(2);
+      const pct = totalPlannedHours > 0 ? Math.round((Number(attendedHours) / totalPlannedHours) * 100) : 0;
+      csv += `"${s.last_name}","${s.first_name}","${s.email}",${inPerson},${remoteLive},${remotePartial},${asyncCount},${total},${attendedHours},${totalPlannedHours},${pct}%\n`;
     });
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');

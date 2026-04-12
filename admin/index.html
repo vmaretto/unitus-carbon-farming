@@ -5792,12 +5792,14 @@ Buono studio!</textarea>
                     <th>⏱️ Parziale</th>
                     <th>📹 Asincrona</th>
                     <th>Totale</th>
+                    <th>Ore frequentate</th>
+                    <th>Ore pianificate</th>
                     <th>%</th>
                 `;
             }
 
             if (!data.students || !data.students.length) {
-                const cols = lessonId ? 7 : 9;
+                const cols = lessonId ? 7 : 11;
                 tbody.innerHTML = `<tr><td colspan="${cols}" class="empty-state">Nessun dato di presenze.</td></tr>`;
                 return;
             }
@@ -5836,6 +5838,8 @@ Buono studio!</textarea>
                         <td>${s.remotePartial || 0}</td>
                         <td>${s.async}</td>
                         <td><strong>${s.total}</strong>/${s.totalLessons}</td>
+                        <td>${(parseFloat(s.attendedHours) || 0).toFixed(1).replace('.0', '')}</td>
+                        <td>${parseFloat(s.totalPlannedHours) || 432}</td>
                         <td>${s.percentage}%</td>
                     </tr>
                 `).join('');

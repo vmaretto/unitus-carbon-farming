@@ -122,13 +122,15 @@
                     return;
                 }
 
-                const total = parseInt(course.totalLessons) || 0;
-                const completed = parseInt(course.completedLessons) || 0;
-                const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                const totalHours = parseFloat(course.totalPlannedHours) || 432;
+                const attendedHours = parseFloat(course.attendedHours) || 0;
+                const pct = totalHours > 0 ? Math.round((attendedHours / totalHours) * 100) : 0;
+                const attendedHoursText = attendedHours.toFixed(1).replace('.0', '');
+                const totalHoursText = totalHours.toFixed(1).replace('.0', '');
 
                 document.getElementById('course-title').textContent = course.title;
                 document.getElementById('breadcrumb-title').textContent = course.title;
-                document.getElementById('course-meta').textContent = `${course.editionName} — ${completed > 0 ? completed + ' lezioni completate' : 'Nessuna lezione completata'}`;
+                document.getElementById('course-meta').textContent = `${course.editionName} — ${attendedHoursText} ore su ${totalHoursText} frequentate (${pct}%)`;
                 document.getElementById('progress-fill').style.width = pct + '%';
                 document.title = `${course.title} - Carbon Farming Master`;
 

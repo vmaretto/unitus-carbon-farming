@@ -5107,9 +5107,13 @@ app.get('/api/lms/lessons/progress', requireStudent, async (req, res) => {
       SELECT ll.id AS "lessonId",
              lp.progress_percent AS "progressPercent",
              lp.completed_at AS "completedAt",
-             EXISTS (SELECT 1 FROM attendance a WHERE a.lesson_id = ll.calendar_lesson_id AND a.user_id = $1 AND a.attendance_type IN ('in_person', 'remote_live')) AS "hasAttendance"
+             EXISTS (SELECT 1 FROM attendance a2 WHERE a2.lesson_id = ll.calendar_lesson_id AND a2.user_id = $1 AND a2.attendance_type IN ('in_person', 'remote_live')) AS "hasAttendance",
+             a.attendance_type AS "attendanceType",
+             cal.start_datetime AS "startDatetime"
       FROM lms_lessons ll
       LEFT JOIN lesson_progress lp ON lp.lms_lesson_id = ll.id AND lp.user_id = $1
+      LEFT JOIN attendance a ON a.lesson_id = ll.calendar_lesson_id AND a.user_id = $1
+      LEFT JOIN lessons cal ON cal.id = ll.calendar_lesson_id
     `;
     const values = [req.user.userId];
     if (courseId) {
@@ -5120,7 +5124,7 @@ app.get('/api/lms/lessons/progress', requireStudent, async (req, res) => {
     }
     const { rows } = await pool.query(query, values);
     // Filter to only lessons with some data
-    res.json(rows.filter(r => r.progressPercent !== null || r.completedAt || r.hasAttendance));
+    res.json(rows);
   } catch (error) {
     console.error('Error fetching lesson progress', error);
     res.status(500).json({ error: 'Unable to retrieve lesson progress' });

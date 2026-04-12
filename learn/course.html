@@ -31,6 +31,9 @@
         .module { margin-bottom: 20px; }
         .module-title { font-weight: 600; font-size: 1.05rem; color: var(--green-900); padding: 12px 0; border-bottom: 2px solid var(--green-100); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
         .module-title .badge { font-size: 0.75rem; background: var(--green-100); color: var(--green-700); padding: 4px 10px; border-radius: 999px; font-weight: 500; }
+        .attendance-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 0 0 10px; font-size: 0.9rem; color: var(--gray-700); }
+        .attendance-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+        .attendance-summary { color: var(--gray-500); font-size: 0.95rem; margin: 0 0 18px; }
         .lesson-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px; margin-bottom: 6px; cursor: pointer; transition: background 0.2s; border: 1px solid transparent; }
         .lesson-item:hover { background: var(--green-100); border-color: rgba(44,122,75,0.15); }
         .lesson-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1rem; }
@@ -78,6 +81,15 @@
         <!-- Modules & Lessons -->
         <div class="card">
             <h2>Programma del corso</h2>
+            <div class="attendance-legend">
+                <span class="attendance-legend-item">🏫 In presenza</span>
+                <span class="attendance-legend-item">💻 Da remoto live</span>
+                <span class="attendance-legend-item">⏱️ Da remoto parziale</span>
+                <span class="attendance-legend-item">📹 Completata via video</span>
+                <span class="attendance-legend-item">❌ Assente</span>
+                <span class="attendance-legend-item">⬜ Lezione futura</span>
+            </div>
+            <div class="attendance-summary" id="attendance-summary">Caricamento riepilogo presenze...</div>
             <div id="modules-list">
                 <div class="empty">Caricamento moduli e lezioni...</div>
             </div>
@@ -160,10 +172,33 @@
                     lessonProgressList.forEach(p => { progressMap[p.lessonId || p.lms_lesson_id] = p; });
                 }
 
+                function getLessonStatus(progress, lesson) {
+                    const startDatetime = progress?.startDatetime || lesson?.startDatetime || null;
+                    const isPast = startDatetime ? new Date(startDatetime) <= new Date() : false;
+                    if (progress?.attendanceType === 'in_person') {
+                        return { icon: '🏫', key: 'in_person', isCompleted: true };
+                    }
+                    if (progress?.attendanceType === 'remote_live') {
+                        return { icon: '💻', key: 'remote_live', isCompleted: true };
+                    }
+                    if (progress?.attendanceType === 'remote_partial') {
+                        return { icon: '⏱️', key: 'remote_partial', isCompleted: false };
+                    }
+                    if (progress?.completedAt) {
+                        return { icon: '📹', key: 'async', isCompleted: true };
+                    }
+                    if (isPast) {
+                        return { icon: '❌', key: 'absent', isCompleted: false };
+                    }
+                    return { icon: '⬜', key: 'future', isCompleted: false };
+                }
+
                 const modulesList = document.getElementById('modules-list');
+                const attendanceSummary = document.getElementById('attendance-summary');
 
                 if (!modules.length && !lessons.length) {
                     modulesList.innerHTML = '<div class="empty">Nessun contenuto disponibile per questo corso. I moduli e le lezioni verranno aggiunti a breve.</div>';
+                    attendanceSummary.textContent = 'Nessuna lezione disponibile.';
                     return;
                 }
 
@@ -183,6 +218,20 @@
 
                 // Sort modules by sort_order
                 modules.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+                let inPersonCount = 0;
+                let remoteCount = 0;
+                let absentCount = 0;
+                let heldLessonsCount = 0;
+
+                lessons.forEach(lesson => {
+                    const status = getLessonStatus(progressMap[lesson.id], lesson);
+                    if (status.key !== 'future') heldLessonsCount += 1;
+                    if (status.key === 'in_person') inPersonCount += 1;
+                    if (status.key === 'remote_live' || status.key === 'remote_partial') remoteCount += 1;
+                    if (status.key === 'absent') absentCount += 1;
+                });
+                attendanceSummary.textContent = `${inPersonCount} presenze, ${remoteCount} parziali, ${absentCount} assenze su ${heldLessonsCount} lezioni svolte`;
 
                 const ordinals = ['Prima', 'Seconda', 'Terza', 'Quarta', 'Quinta', 'Sesta', 'Settima', 'Ottava', 'Nona', 'Decima', 'Undicesima', 'Dodicesima'];
 
@@ -211,9 +260,10 @@
 
                     modLessons.forEach((lesson, index) => {
                         const lProgress = progressMap[lesson.id];
-                        const isCompleted = (lProgress && lProgress.completedAt) || (lProgress && lProgress.hasAttendance);
+                        const lessonStatus = getLessonStatus(lProgress, lesson);
+                        const isCompleted = lessonStatus.isCompleted;
                         const iconClass = isCompleted ? 'completed' : 'available';
-                        const icon = isCompleted ? '&#10003;' : '&#9654;';
+                        const icon = lessonStatus.icon;
                         const durationMin = lesson.durationMinutes ? `${lesson.durationMinutes} min` : '';
                         const ordinal = ordinals[index] || (index + 1) + 'ª';
 

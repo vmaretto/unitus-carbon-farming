@@ -968,23 +968,41 @@ app.post('/api/teachers/documents/:id/sign', requireTeacher, async (req, res) =>
     const userAgent = req.headers['user-agent'];
 
     // signature_data stores a JSON with all signature details
-    const signatureData = JSON.stringify({ consentGiven, signatureImage, signatureMethod: signatureMethod || 'draw', signerName, signerSurname, userAgent });
+    const signaturePayload = JSON.stringify({
+      consentGiven,
+      signatureImage,
+      signatureMethod: signatureMethod || 'draw',
+      signerName,
+      signerSurname,
+      userAgent
+    });
 
-    await pool.query(`
-      INSERT INTO teacher_document_signatures
-        (document_id, faculty_id, signature_data, consent_given, signature_image, signature_method, signer_name, signer_surname, user_agent, ip_address, signed_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-      ON CONFLICT (document_id, faculty_id) DO UPDATE SET
-        signature_data = $3,
-        consent_given = $4,
-        signature_image = $5,
-        signature_method = $6,
-        signer_name = $7,
-        signer_surname = $8,
-        user_agent = $9,
-        ip_address = $10,
-        signed_at = NOW()
-    `, [documentId, req.teacher.id, signatureData, consentGiven, signatureImage, signatureMethod || 'draw', signerName, signerSurname, userAgent, ipAddress]);
+    const { rows: existing } = await pool.query(
+      'SELECT id FROM teacher_document_signatures WHERE document_id = $1 AND faculty_id = $2 LIMIT 1',
+      [documentId, req.teacher.id]
+    );
+
+    if (existing.length) {
+      await pool.query(`
+        UPDATE teacher_document_signatures
+        SET signature_data = $3,
+            consent_given = $4,
+            signature_image = $5,
+            signature_method = $6,
+            signer_name = $7,
+            signer_surname = $8,
+            user_agent = $9,
+            ip_address = $10,
+            signed_at = NOW()
+        WHERE document_id = $1 AND faculty_id = $2
+      `, [documentId, req.teacher.id, signaturePayload, consentGiven, signatureImage, signatureMethod || 'draw', signerName, signerSurname, userAgent, ipAddress]);
+    } else {
+      await pool.query(`
+        INSERT INTO teacher_document_signatures
+          (document_id, faculty_id, signature_data, consent_given, signature_image, signature_method, signer_name, signer_surname, user_agent, ip_address, signed_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+      `, [documentId, req.teacher.id, signaturePayload, consentGiven, signatureImage, signatureMethod || 'draw', signerName, signerSurname, userAgent, ipAddress]);
+    }
 
     res.json({ success: true });
   } catch (error) {

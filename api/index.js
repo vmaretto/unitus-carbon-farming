@@ -2571,17 +2571,18 @@ async function getLessonCompletionStatus(lessonId, userId, preloaded = {}) {
   const videoPercent = Number(progress?.progress_percent || 0);
   const videoOk = videoPercent >= 80;
 
-  const { rows: materialRows } = await pool.query(`
-    SELECT COUNT(DISTINCT r.id)::int AS "materialTotal",
-           COUNT(DISTINCT rv.resource_id)::int AS "materialViewed",
-           COALESCE(array_agg(DISTINCT rv.resource_id) FILTER (WHERE rv.resource_id IS NOT NULL), '{}') AS "viewedResourceIds"
-    FROM resources r
-    JOIN lessons les ON les.id = r.lesson_id
-    LEFT JOIN resource_views rv ON rv.resource_id = r.id AND rv.user_id = $2
-    WHERE les.module_id = $1
-      AND r.is_published = true
-      AND r.resource_type <> 'quiz'
-  `, [lesson.moduleId, userId]);
+  const { rows: materialRows } = lesson.calendarLessonId
+    ? await pool.query(`
+      SELECT COUNT(DISTINCT r.id)::int AS "materialTotal",
+             COUNT(DISTINCT rv.resource_id)::int AS "materialViewed",
+             COALESCE(array_agg(DISTINCT rv.resource_id) FILTER (WHERE rv.resource_id IS NOT NULL), '{}') AS "viewedResourceIds"
+      FROM resources r
+      LEFT JOIN resource_views rv ON rv.resource_id = r.id AND rv.user_id = $2
+      WHERE r.lesson_id = $1
+        AND r.is_published = true
+        AND r.resource_type <> 'quiz'
+    `, [lesson.calendarLessonId, userId])
+    : [{ rows: [{ materialTotal: 0, materialViewed: 0, viewedResourceIds: [] }] }][0];
   const materialTotal = Number(materialRows[0]?.materialTotal || 0);
   const materialViewed = Number(materialRows[0]?.materialViewed || 0);
   const viewedResourceIds = Array.isArray(materialRows[0]?.viewedResourceIds) ? materialRows[0].viewedResourceIds.filter(Boolean) : [];

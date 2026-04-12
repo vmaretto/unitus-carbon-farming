@@ -50,7 +50,8 @@
         .lesson-description { color: var(--gray-700); font-size: 0.95rem; margin-top: 12px; line-height: 1.6; }
 
         /* Progress indicator */
-        .progress-info { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+        .progress-label { font-size: 0.82rem; color: var(--gray-500); margin-top: 12px; }
+        .progress-info { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
         .progress-bar { background: var(--gray-200); border-radius: 999px; height: 6px; flex: 1; overflow: hidden; }
         .progress-fill { background: linear-gradient(90deg, var(--green-500), #4ade80); height: 100%; border-radius: 999px; transition: width 0.5s ease; }
         .progress-text { font-size: 0.8rem; color: var(--gray-500); white-space: nowrap; }
@@ -149,6 +150,7 @@
                         <h2 id="lesson-title">Caricamento...</h2>
                         <div class="lesson-meta" id="lesson-meta"></div>
                     </div>
+                    <div class="progress-label">Progresso video</div>
                     <div class="progress-info">
                         <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
                         <div class="progress-text" id="progress-text">0%</div>
@@ -594,9 +596,21 @@
             }).join('');
 
             container.querySelectorAll('[data-resource-id]').forEach(link => {
-                link.addEventListener('click', () => {
+                link.addEventListener('click', async (event) => {
                     const resourceId = link.dataset.resourceId;
-                    if (resourceId) trackResourceView(resourceId);
+                    if (!resourceId) return;
+
+                    event.preventDefault();
+                    await trackResourceView(resourceId);
+
+                    const href = link.getAttribute('href');
+                    const target = link.getAttribute('target');
+                    if (!href) return;
+                    if (target === '_blank') {
+                        window.open(href, '_blank', 'noopener');
+                    } else {
+                        window.location.href = href;
+                    }
                 });
             });
         }
@@ -614,8 +628,10 @@
                     }
                     updateCompletionUI();
                 }
+                return true;
             } catch (_error) {
                 // Silent by requirement
+                return false;
             }
         }
 

@@ -80,14 +80,6 @@
             </div>
         </div>
 
-        <!-- Materiali delle Lezioni -->
-        <div class="card" id="lesson-doc-section" style="display: none;">
-            <h2><span class="icon">🎓</span> Materiali delle Lezioni</h2>
-            <div class="resource-list" id="lesson-doc-list">
-                <div class="loading">Caricamento...</div>
-            </div>
-        </div>
-
         <!-- Quiz -->
         <div class="card" id="quiz-section" style="display: none;">
             <h2><span class="icon">📝</span> Quiz</h2>
@@ -158,7 +150,6 @@
                 const videos = allResources.filter(r => r.resourceType === 'video');
                 const allDocs = allResources.filter(r => ['pdf', 'document', 'audio', 'link'].includes(r.resourceType));
                 const generalDocs = allDocs.filter(r => !r.teacherId && !r.lessonId);
-                const lessonDocs = allDocs.filter(r => r.teacherId || r.lessonId);
                 const quizzes = allResources.filter(r => r.resourceType === 'quiz');
 
                 const videoList = document.getElementById('video-list');
@@ -174,14 +165,6 @@
                     docList.innerHTML = generalDocs.map(renderResource).join('');
                 } else {
                     docList.innerHTML = '<div class="empty">Nessun documento disponibile</div>';
-                }
-
-                // Lesson materials section
-                const lessonSection = document.getElementById('lesson-doc-section');
-                const lessonList = document.getElementById('lesson-doc-list');
-                if (lessonDocs.length > 0) {
-                    lessonSection.style.display = 'block';
-                    lessonList.innerHTML = lessonDocs.map(renderResource).join('');
                 }
 
                 // Quiz section

@@ -1109,6 +1109,69 @@ app.post('/api/teacher-documents', requireAdmin, async (req, res) => {
   }
 });
 
+// Admin: update teacher document
+app.put('/api/teacher-documents/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { id } = req.params;
+    const { title, content, documentType, status } = req.body;
+
+    const updates = [];
+    const values = [];
+    let idx = 1;
+
+    if (title !== undefined) { updates.push(`title = $${idx++}`); values.push(title); }
+    if (content !== undefined) { updates.push(`content = $${idx++}`); values.push(content); }
+    if (documentType !== undefined) { updates.push(`type = $${idx++}`); values.push(documentType); }
+    if (status !== undefined) { updates.push(`status = $${idx++}`); values.push(status); }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'Nessun campo da aggiornare' });
+    }
+
+    updates.push('updated_at = NOW()');
+    values.push(id);
+
+    const { rows } = await pool.query(
+      `UPDATE teacher_documents SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Documento non trovato' });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Update teacher document error:', error);
+    res.status(500).json({ error: 'Errore aggiornamento documento' });
+  }
+});
+
+// Admin: delete teacher document and its signatures
+app.delete('/api/teacher-documents/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { id } = req.params;
+
+    await pool.query('DELETE FROM teacher_document_signatures WHERE document_id = $1', [id]);
+
+    const { rows } = await pool.query(
+      'DELETE FROM teacher_documents WHERE id = $1 RETURNING id, title',
+      [id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Documento non trovato' });
+    }
+
+    res.json({ success: true, deleted: rows[0] });
+  } catch (error) {
+    console.error('Delete teacher document error:', error);
+    res.status(500).json({ error: 'Errore eliminazione documento' });
+  }
+});
+
 // Admin: list teacher documents with signature counts
 app.get('/api/teacher-documents', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;

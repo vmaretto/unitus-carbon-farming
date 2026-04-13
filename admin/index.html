@@ -1264,6 +1264,7 @@ Buono studio!</textarea>
                         <tr>
                             <th>Titolo</th>
                             <th>Tipo</th>
+                            <th>Stato</th>
                             <th>Firme</th>
                             <th>Consensi</th>
                             <th>Creato</th>
@@ -1272,7 +1273,7 @@ Buono studio!</textarea>
                     </thead>
                     <tbody id="teacher-docs-tbody">
                         <tr class="empty-state" data-empty-tdoc>
-                            <td colspan="6">Nessun documento creato.</td>
+                            <td colspan="7">Nessun documento creato.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -2400,10 +2401,15 @@ Buono studio!</textarea>
                     const tr = document.createElement('tr');
                     tr.innerHTML = '<td>' + d.title + '</td>' +
                         '<td>' + (d.document_type || 'liberatoria') + '</td>' +
+                        '<td><span class="badge ' + ((d.status || 'active') === 'active' ? 'badge-green' : 'badge-gray') + '">' + (d.status || 'active') + '</span></td>' +
                         '<td>' + (d.signature_count || 0) + '</td>' +
                         '<td>' + (d.consent_count || 0) + '</td>' +
                         '<td>' + (d.created_at ? new Date(d.created_at).toLocaleDateString('it-IT') : '') + '</td>' +
-                        '<td><button class="action" onclick="viewTeacherDocSigs(\'' + d.id + '\',\'' + d.title.replace(/'/g, "\\'") + '\')">Vedi firme</button></td>';
+                        '<td style="display:flex; gap:6px; flex-wrap:wrap;">' +
+                            '<button class="action" onclick="viewTeacherDocSigs(\'' + d.id + '\',\'' + d.title.replace(/'/g, "\\'") + '\')">Vedi firme</button>' +
+                            '<button class="action" onclick="editTeacherDoc(\'' + d.id + '\')">Modifica</button>' +
+                            '<button class="action danger" onclick="deleteTeacherDoc(\'' + d.id + '\', \'' + d.title.replace(/'/g, "\\'") + '\')">Elimina</button>' +
+                        '</td>';
                     tbody.appendChild(tr);
                 });
                 toggleEmptyState(tbody, docs.length > 0, '[data-empty-tdoc]');
@@ -2414,17 +2420,31 @@ Buono studio!</textarea>
 
         document.getElementById('teacher-doc-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const form = e.target;
             const title = document.getElementById('tdoc-title').value.trim();
             const content = document.getElementById('tdoc-content').value.trim();
             const documentType = document.getElementById('tdoc-type').value;
             if (!title || !content) { showToast('Compila titolo e contenuto', 'error'); return; }
             try {
-                await apiRequest('/api/teacher-documents', {
-                    method: 'POST',
-                    body: JSON.stringify({ title, content, documentType })
-                });
-                showToast('Documento creato');
-                document.getElementById('teacher-doc-form').reset();
+                if (form.dataset.editingId) {
+                    await apiRequest('/api/teacher-documents/' + form.dataset.editingId, {
+                        method: 'PUT',
+                        body: JSON.stringify({ title, content, documentType })
+                    });
+                    showToast('Documento aggiornato');
+                    delete form.dataset.editingId;
+                    const cancelBtn = document.getElementById('cancel-tdoc-edit');
+                    if (cancelBtn) cancelBtn.remove();
+                    const submitBtn = form.querySelector('button[type="submit"]');
+                    submitBtn.textContent = 'Crea documento';
+                } else {
+                    await apiRequest('/api/teacher-documents', {
+                        method: 'POST',
+                        body: JSON.stringify({ title, content, documentType })
+                    });
+                    showToast('Documento creato');
+                }
+                form.reset();
                 loadTeacherDocs();
             } catch (e) { /* handled */ }
         });
@@ -2466,6 +2486,58 @@ Buono studio!</textarea>
 
         function downloadTeacherSignaturePDF(signatureId) {
             window.open('/api/teacher-signatures/' + signatureId + '/pdf?token=' + adminToken, '_blank');
+        }
+
+        async function editTeacherDoc(docId) {
+            try {
+                const docs = await apiRequest('/api/teacher-documents');
+                const doc = docs.find(d => d.id === docId);
+                if (!doc) {
+                    showToast('Documento non trovato', 'error');
+                    return;
+                }
+
+                document.getElementById('tdoc-title').value = doc.title || '';
+                document.getElementById('tdoc-content').value = doc.content || '';
+                document.getElementById('tdoc-type').value = doc.document_type || 'liberatoria';
+
+                const form = document.getElementById('teacher-doc-form');
+                form.dataset.editingId = docId;
+                const submitBtn = form.querySelector('button[type="submit"]');
+                submitBtn.textContent = 'Aggiorna documento';
+
+                let cancelBtn = document.getElementById('cancel-tdoc-edit');
+                if (!cancelBtn) {
+                    cancelBtn = document.createElement('button');
+                    cancelBtn.type = 'button';
+                    cancelBtn.id = 'cancel-tdoc-edit';
+                    cancelBtn.className = 'secondary';
+                    cancelBtn.textContent = 'Annulla modifica';
+                    cancelBtn.style.marginLeft = '8px';
+                    cancelBtn.onclick = () => {
+                        delete form.dataset.editingId;
+                        form.reset();
+                        submitBtn.textContent = 'Crea documento';
+                        cancelBtn.remove();
+                    };
+                    submitBtn.parentNode.insertBefore(cancelBtn, submitBtn.nextSibling);
+                }
+
+                form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (e) {
+                showToast('Errore caricamento documento', 'error');
+            }
+        }
+
+        async function deleteTeacherDoc(docId, docTitle) {
+            if (!confirm(`Eliminare il documento "${docTitle}" e tutte le firme associate?\n\nQuesta azione non può essere annullata.`)) return;
+            try {
+                await apiRequest('/api/teacher-documents/' + docId, { method: 'DELETE' });
+                showToast('Documento eliminato');
+                loadTeacherDocs();
+            } catch (e) {
+                showToast('Errore eliminazione: ' + e.message, 'error');
+            }
         }
 
         // ============================================

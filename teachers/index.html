@@ -51,6 +51,30 @@
         .tab-badge { display: inline-block; background: var(--orange-500); color: white; font-size: 11px; padding: 1px 7px; border-radius: 10px; margin-left: 6px; font-weight: 700; }
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
+        .calendar-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 24px; border-bottom: 1px solid var(--gray-200); flex-wrap: wrap; }
+        .calendar-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .calendar-title { font-size: 1.1rem; font-weight: 700; color: var(--green-800); min-width: 220px; }
+        .calendar-select { padding: 8px 12px; border: 1px solid var(--gray-300); border-radius: 8px; background: white; font: inherit; color: var(--gray-800); }
+        .calendar-nav-btn { min-width: 42px; }
+        .calendar-grid-wrap { padding: 20px 24px 24px; }
+        .calendar-weekdays, .teacher-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+        .calendar-weekday { text-align: center; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); padding: 4px 0; }
+        .teacher-calendar-day { min-height: 148px; border: 1px solid var(--gray-200); border-radius: 12px; background: white; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .teacher-calendar-day.is-today { border-color: var(--green-500); box-shadow: 0 0 0 2px rgba(34,197,94,0.12); }
+        .teacher-calendar-day.is-outside { background: var(--gray-50); color: var(--gray-400); }
+        .teacher-day-number { font-size: 13px; font-weight: 700; color: var(--gray-700); }
+        .teacher-calendar-day.is-outside .teacher-day-number { color: var(--gray-400); }
+        .teacher-day-lessons { display: flex; flex-direction: column; gap: 8px; }
+        .teacher-lesson-card { border-radius: 10px; padding: 10px; color: white; font-size: 12px; line-height: 1.4; }
+        .teacher-lesson-card.status-completed { background: linear-gradient(135deg, var(--green-600), var(--green-700)); }
+        .teacher-lesson-card.status-scheduled { background: linear-gradient(135deg, var(--blue-500), var(--blue-700)); }
+        .teacher-lesson-card.status-cancelled { background: linear-gradient(135deg, var(--gray-400), var(--gray-600)); }
+        .teacher-lesson-time { font-weight: 700; margin-bottom: 4px; }
+        .teacher-lesson-title { font-weight: 700; margin-bottom: 4px; }
+        .teacher-lesson-meta { opacity: 0.92; }
+        .teacher-lesson-details { margin-top: 8px; background: rgba(255,255,255,0.12); border-radius: 8px; padding: 8px; }
+        .teacher-lesson-details summary { cursor: pointer; font-weight: 600; }
+        .teacher-lesson-detail-list { margin-top: 8px; display: grid; gap: 6px; }
 
         /* Section cards */
         .section-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid var(--gray-200); }
@@ -150,6 +174,9 @@
             .consent-choices { flex-direction: column; }
             .sig-name-row { grid-template-columns: 1fr; }
             .quiz-option-row { grid-template-columns: 1fr; }
+            .calendar-weekdays, .teacher-calendar-grid { grid-template-columns: 1fr; }
+            .calendar-weekday { display: none; }
+            .teacher-calendar-day { min-height: auto; }
         }
     </style>
 </head>
@@ -219,11 +246,33 @@
 
             <!-- Tabs -->
             <div class="tabs">
+                <div class="tab" data-tab="calendar">📅 Calendario</div>
                 <div class="tab active" data-tab="lessons">📅 Lezioni</div>
                 <div class="tab" data-tab="materials">📁 Materiali</div>
                 <div class="tab" data-tab="quizzes">🧠 Quiz</div>
                 <div class="tab" data-tab="questions">💬 Domande <span id="questions-tab-badge" class="tab-badge" style="display:none;">0</span></div>
                 <div class="tab" data-tab="documents">📝 Liberatorie <span id="docs-tab-badge" class="tab-badge" style="display:none;">0</span></div>
+            </div>
+
+            <div class="tab-panel" id="panel-calendar">
+                <div class="section-card">
+                    <div class="section-header"><h2>📅 Calendario lezioni</h2></div>
+                    <div class="calendar-toolbar">
+                        <div class="calendar-controls">
+                            <button type="button" class="btn-sm btn-gray calendar-nav-btn" id="teacher-calendar-prev">←</button>
+                            <div class="calendar-title" id="teacher-calendar-title">Calendario</div>
+                            <button type="button" class="btn-sm btn-gray calendar-nav-btn" id="teacher-calendar-next">→</button>
+                        </div>
+                        <div class="calendar-controls">
+                            <select id="teacher-calendar-month" class="calendar-select"></select>
+                            <select id="teacher-calendar-year" class="calendar-select"></select>
+                        </div>
+                    </div>
+                    <div class="calendar-grid-wrap">
+                        <div class="calendar-weekdays" id="teacher-calendar-weekdays"></div>
+                        <div class="teacher-calendar-grid" id="teacher-calendar-grid"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- TAB: Lezioni -->
@@ -393,11 +442,16 @@
         let consentValue = null;
         let signatureData = null;
         let signatureMethod = 'draw';
+        let teacherCalendarMonth = new Date().getMonth();
+        let teacherCalendarYear = new Date().getFullYear();
+        let teacherCalendarLessons = [];
         let editingQuizId = null;
         let editingQuizData = null;
         let editingQuizMeta = null;
         const teacherPendingDocs = new Map();
         let teacherQuestions = [];
+        const teacherMonthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+        const teacherDayNames = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 
         // === AUTH ===
         window.addEventListener('load', async () => {
@@ -469,6 +523,7 @@
 
             await Promise.all([
                 loadTeacherStats(),
+                loadTeacherCalendar(),
                 loadTeacherLessons(),
                 loadTeacherMaterials(),
                 loadTeacherQuizzes(),
@@ -511,8 +566,122 @@
                 document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
                 tab.classList.add('active');
                 document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+                if (tab.dataset.tab === 'calendar') loadTeacherCalendar();
             });
         });
+
+        function populateTeacherCalendarControls() {
+            const monthSelect = document.getElementById('teacher-calendar-month');
+            const yearSelect = document.getElementById('teacher-calendar-year');
+            if (!monthSelect || monthSelect.options.length) return;
+            monthSelect.innerHTML = teacherMonthNames.map((name, index) => `<option value="${index}">${name}</option>`).join('');
+            const currentYear = new Date().getFullYear();
+            const years = [];
+            for (let year = currentYear - 2; year <= currentYear + 2; year += 1) years.push(year);
+            yearSelect.innerHTML = years.map(year => `<option value="${year}">${year}</option>`).join('');
+            document.getElementById('teacher-calendar-weekdays').innerHTML = teacherDayNames.map(day => `<div class="calendar-weekday">${day}</div>`).join('');
+            monthSelect.addEventListener('change', () => {
+                teacherCalendarMonth = Number(monthSelect.value);
+                loadTeacherCalendar();
+            });
+            yearSelect.addEventListener('change', () => {
+                teacherCalendarYear = Number(yearSelect.value);
+                loadTeacherCalendar();
+            });
+            document.getElementById('teacher-calendar-prev').addEventListener('click', () => {
+                teacherCalendarMonth -= 1;
+                if (teacherCalendarMonth < 0) {
+                    teacherCalendarMonth = 11;
+                    teacherCalendarYear -= 1;
+                }
+                loadTeacherCalendar();
+            });
+            document.getElementById('teacher-calendar-next').addEventListener('click', () => {
+                teacherCalendarMonth += 1;
+                if (teacherCalendarMonth > 11) {
+                    teacherCalendarMonth = 0;
+                    teacherCalendarYear += 1;
+                }
+                loadTeacherCalendar();
+            });
+        }
+
+        function teacherLessonStatusClass(state) {
+            if (state === 'completed') return 'status-completed';
+            if (state === 'cancelled') return 'status-cancelled';
+            return 'status-scheduled';
+        }
+
+        function buildTeacherCalendarGrid(lessons) {
+            const grid = document.getElementById('teacher-calendar-grid');
+            const monthSelect = document.getElementById('teacher-calendar-month');
+            const yearSelect = document.getElementById('teacher-calendar-year');
+            document.getElementById('teacher-calendar-title').textContent = `${teacherMonthNames[teacherCalendarMonth]} ${teacherCalendarYear}`;
+            monthSelect.value = String(teacherCalendarMonth);
+            yearSelect.value = String(teacherCalendarYear);
+
+            const today = new Date();
+            const monthStart = new Date(teacherCalendarYear, teacherCalendarMonth, 1);
+            const monthEnd = new Date(teacherCalendarYear, teacherCalendarMonth + 1, 0);
+            const startOffset = (monthStart.getDay() + 6) % 7;
+            const gridStart = new Date(monthStart);
+            gridStart.setDate(monthStart.getDate() - startOffset);
+            const endOffset = 6 - ((monthEnd.getDay() + 6) % 7);
+            const gridEnd = new Date(monthEnd);
+            gridEnd.setDate(monthEnd.getDate() + endOffset);
+
+            const lessonsByDay = new Map();
+            lessons.forEach((lesson) => {
+                const date = new Date(lesson.start_datetime);
+                const key = date.toISOString().slice(0, 10);
+                if (!lessonsByDay.has(key)) lessonsByDay.set(key, []);
+                lessonsByDay.get(key).push(lesson);
+            });
+
+            const cells = [];
+            for (let cursor = new Date(gridStart); cursor <= gridEnd; cursor.setDate(cursor.getDate() + 1)) {
+                const key = cursor.toISOString().slice(0, 10);
+                const dayLessons = lessonsByDay.get(key) || [];
+                const isOutside = cursor.getMonth() !== teacherCalendarMonth;
+                const isToday = cursor.toDateString() === today.toDateString();
+                cells.push(`
+                    <div class="teacher-calendar-day ${isOutside ? 'is-outside' : ''} ${isToday ? 'is-today' : ''}">
+                        <div class="teacher-day-number">${cursor.getDate()}</div>
+                        <div class="teacher-day-lessons">
+                            ${dayLessons.length ? dayLessons.map((lesson) => `
+                                <div class="teacher-lesson-card ${teacherLessonStatusClass(lesson.lesson_state)}">
+                                    <div class="teacher-lesson-time">${new Date(lesson.start_datetime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</div>
+                                    <div class="teacher-lesson-title">${escapeHtml(lesson.title || 'Lezione')}</div>
+                                    <div class="teacher-lesson-meta">${escapeHtml(lesson.module_name || 'Modulo non assegnato')}</div>
+                                    <div class="teacher-lesson-meta">${Math.round((Number(lesson.duration_minutes) || 0) / 60 * 10) / 10}h · ${escapeHtml(lesson.location_physical || lesson.location_remote || 'Da definire')}</div>
+                                    <details class="teacher-lesson-details">
+                                        <summary>Dettagli</summary>
+                                        <div class="teacher-lesson-detail-list">
+                                            <div>Stato: <strong>${statusLabel(lesson.lesson_state)}</strong></div>
+                                            <div>Presenze registrate: <strong>${Number(lesson.attendance_count) || 0}</strong></div>
+                                            <div>Materiali caricati: <strong>${Number(lesson.materials_uploaded_count) || 0}</strong></div>
+                                        </div>
+                                    </details>
+                                </div>
+                            `).join('') : '<div class="item-meta">Nessuna lezione</div>'}
+                        </div>
+                    </div>
+                `);
+            }
+            grid.innerHTML = cells.join('');
+        }
+
+        async function loadTeacherCalendar() {
+            try {
+                populateTeacherCalendarControls();
+                teacherCalendarLessons = await apiCall(`/api/teachers/lessons?month=${teacherCalendarMonth + 1}&year=${teacherCalendarYear}&includeCancelled=true`);
+                buildTeacherCalendarGrid(teacherCalendarLessons);
+            } catch (e) {
+                console.error('Teacher calendar error:', e);
+                const grid = document.getElementById('teacher-calendar-grid');
+                if (grid) grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">Errore nel caricamento del calendario.</div>';
+            }
+        }
 
         // === LESSONS ===
         async function loadTeacherLessons() {

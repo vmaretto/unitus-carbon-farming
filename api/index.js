@@ -785,24 +785,52 @@ app.get('/api/teachers/lessons', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
 
   try {
+    const { month, year, includeCancelled } = req.query;
+    const values = [req.teacher.id];
+    const filters = ['l.teacher_id = $1'];
+
+    if (month) {
+      values.push(Number(month));
+      filters.push(`EXTRACT(MONTH FROM l.start_datetime) = $${values.length}`);
+    }
+
+    if (year) {
+      values.push(Number(year));
+      filters.push(`EXTRACT(YEAR FROM l.start_datetime) = $${values.length}`);
+    }
+
+    if (includeCancelled !== 'true') {
+      filters.push(`COALESCE(l.status, 'scheduled') != 'cancelled'`);
+    }
+
+    if (!month && !year) {
+      filters.push(`(l.start_datetime >= NOW() OR l.status = 'completed')`);
+    }
+
     const { rows: lessons } = await pool.query(
       `SELECT l.id, l.title, l.start_datetime, l.duration_minutes,
               l.location_physical, l.location_remote, l.status, l.notes,
               m.name AS module_name,
               CASE
+                WHEN COALESCE(l.status, 'scheduled') = 'cancelled' THEN 'cancelled'
                 WHEN l.status = 'completed' THEN 'completed'
                 ELSE 'planned'
-              END AS lesson_state
+              END AS lesson_state,
+              (
+                SELECT COUNT(*)::int
+                FROM attendance a
+                WHERE a.lesson_id = l.id
+              ) AS attendance_count,
+              (
+                SELECT COUNT(*)::int
+                FROM materials_pending mp
+                WHERE mp.lesson_id = l.id
+              ) AS materials_uploaded_count
        FROM lessons l
        LEFT JOIN modules m ON l.module_id = m.id
-       WHERE l.teacher_id = $1
-         AND COALESCE(l.status, 'scheduled') != 'cancelled'
-         AND (
-           l.start_datetime >= NOW()
-           OR l.status = 'completed'
-         )
+       WHERE ${filters.join(' AND ')}
        ORDER BY l.start_datetime ASC`,
-      [req.teacher.id]
+      values
     );
 
     res.json(lessons);

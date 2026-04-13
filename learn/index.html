@@ -16,7 +16,7 @@
         header h1 { font-size: 1.4rem; margin: 0; }
         .nav-links { display: flex; gap: 10px; flex-wrap: wrap; }
         .nav-links a { color: white; text-decoration: none; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.3); font-weight: 500; font-size: 0.9rem; transition: background 0.2s; }
-        .nav-links a:hover { background: rgba(255,255,255,0.15); }
+        .nav-links a:hover, .nav-links a.active { background: rgba(255,255,255,0.18); }
         main { max-width: 900px; margin: 24px auto; padding: 0 24px 40px; }
         .card { background: white; border-radius: 20px; padding: 28px; box-shadow: 0 8px 30px rgba(31,41,55,0.08); border: 1px solid rgba(36,90,61,0.08); margin-bottom: 24px; }
         .card h2 { font-size: 1.3rem; margin: 0 0 16px; color: var(--green-900); }
@@ -50,7 +50,8 @@
                 <p class="welcome" id="welcome-msg">Ciao!</p>
             </div>
             <div class="nav-links">
-                <a href="/learn/index.html">Dashboard</a>
+                <a href="/learn/index.html" class="active">Dashboard</a>
+                <a href="/learn/calendar.html">Calendario</a>
                 <a href="/learn/resources.html">Risorse</a>
                 <a href="/learn/checkin.html">Check-in</a>
                 <a href="/learn/documents.html">Documenti</a>
@@ -107,8 +108,10 @@
         const welcomeName = [userInfo.firstName, userInfo.lastName].filter(Boolean).join(' ') || userInfo.email || '';
         if (welcomeName) document.getElementById('welcome-msg').textContent = `Ciao, ${welcomeName}!`;
 
-        document.getElementById('logout-btn').addEventListener('click', (e) => {
+        document.getElementById('logout-btn')?.addEventListener('click', (e) => {
             e.preventDefault();
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
             localStorage.removeItem('learnToken');
             localStorage.removeItem('learnUser');
             window.location.href = '/learn/login.html';

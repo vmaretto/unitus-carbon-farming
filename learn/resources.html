@@ -53,8 +53,10 @@
             </div>
             <div class="nav-links">
                 <a href="/learn/index.html">Dashboard</a>
+                <a href="/learn/calendar.html">Calendario</a>
                 <a href="/learn/resources.html" class="active">Risorse</a>
                 <a href="/learn/checkin.html">Check-in</a>
+                <a href="/learn/documents.html">Documenti</a>
                 <a href="/learn/questions.html">Domande</a>
                 <a href="#" id="logout-btn">Esci</a>
             </div>
@@ -100,8 +102,10 @@
         const token = localStorage.getItem('learnToken');
         if (!token) { window.location.href = '/learn/login.html'; }
 
-        document.getElementById('logout-btn').addEventListener('click', (e) => {
+        document.getElementById('logout-btn')?.addEventListener('click', (e) => {
             e.preventDefault();
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
             localStorage.removeItem('learnToken');
             localStorage.removeItem('learnUser');
             window.location.href = '/learn/login.html';

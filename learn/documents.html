@@ -15,11 +15,12 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--gray-50); min-height: 100vh; }
         
-        .header { background: linear-gradient(135deg, var(--green-700) 0%, var(--green-600) 100%); color: white; padding: 16px 24px; }
-        .header-inner { max-width: 900px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
-        .header h1 { font-size: 1.25rem; font-weight: 600; }
-        .header a { color: white; text-decoration: none; opacity: 0.9; }
-        .header a:hover { opacity: 1; }
+        .header { background: linear-gradient(135deg, rgba(27,58,45,0.9), rgba(44,122,75,0.85)); color: white; padding: 24px; box-shadow: 0 10px 40px rgba(27,58,45,0.25); }
+        .header-inner { max-width: 900px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .header h1 { font-size: 1.4rem; font-weight: 600; }
+        .nav-links { display: flex; gap: 10px; flex-wrap: wrap; }
+        .nav-links a { color: white; text-decoration: none; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.3); font-weight: 500; font-size: 0.9rem; transition: background 0.2s; opacity: 1; }
+        .nav-links a:hover, .nav-links a.active { background: rgba(255,255,255,0.18); }
         
         .container { max-width: 900px; margin: 0 auto; padding: 24px; }
         
@@ -76,11 +77,15 @@
 <body>
     <div class="header">
         <div class="header-inner">
-            <h1>📄 Documenti</h1>
-            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <h1>Carbon Farming Master</h1>
+            <div class="nav-links">
                 <a href="/learn/index.html">Dashboard</a>
+                <a href="/learn/calendar.html">Calendario</a>
+                <a href="/learn/resources.html">Risorse</a>
+                <a href="/learn/checkin.html">Check-in</a>
+                <a href="/learn/documents.html" class="active">Documenti</a>
                 <a href="/learn/questions.html">Domande</a>
-                <a href="/learn/">← Torna alla dashboard</a>
+                <a href="#" id="logout-btn">Esci</a>
             </div>
         </div>
     </div>
@@ -92,10 +97,19 @@
     </div>
 
     <script>
-        const token = localStorage.getItem('learnToken');
+        const token = localStorage.getItem('learnToken') || localStorage.getItem('token');
         if (!token) {
             window.location.href = '/learn/login.html?redirect=' + encodeURIComponent(window.location.href);
         }
+
+        document.getElementById('logout-btn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            localStorage.removeItem('learnToken');
+            localStorage.removeItem('learnUser');
+            window.location.href = '/learn/login.html';
+        });
 
         let currentDocument = null;
         let signatureData = null;

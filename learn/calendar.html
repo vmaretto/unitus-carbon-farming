@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario - Carbon Farming Master</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --green-900:#1b3a2d; --green-700:#245a3d; --green-500:#2c7a4b; --green-100:#ecf6f0; --blue-100:#e0f2fe; --blue-600:#2563eb; --red-100:#fee2e2; --red-600:#dc2626; --gray-900:#1c1c1c; --gray-700:#3d3d3d; --gray-500:#6b6b6b; --gray-300:#cbd5e1; --gray-200:#d9d9d9; --gray-100:#f3f4f6; --gray-50:#f8fafc; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--gray-100); color: var(--gray-900); min-height: 100vh; }
+        header { background: linear-gradient(135deg, rgba(27,58,45,0.9), rgba(44,122,75,0.85)); color: white; padding: 24px; box-shadow: 0 10px 40px rgba(27,58,45,0.25); }
+        .header-content { max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        header h1 { font-size: 1.4rem; margin: 0; }
+        .nav-links { display: flex; gap: 10px; flex-wrap: wrap; }
+        .nav-links a { color: white; text-decoration: none; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.3); font-weight: 500; font-size: 0.9rem; transition: background 0.2s; }
+        .nav-links a:hover, .nav-links a.active { background: rgba(255,255,255,0.18); }
+        main { max-width: 1100px; margin: 24px auto; padding: 0 24px 40px; }
+        .card { background: white; border-radius: 20px; padding: 28px; box-shadow: 0 8px 30px rgba(31,41,55,0.08); border: 1px solid rgba(36,90,61,0.08); margin-bottom: 24px; }
+        .card h2 { margin: 0 0 16px; color: var(--green-900); font-size: 1.3rem; }
+        .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+        .toolbar-left, .toolbar-right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .month-label { font-weight: 700; color: var(--green-900); min-width: 180px; text-align: center; }
+        .btn { border: none; border-radius: 12px; padding: 10px 16px; font-weight: 600; cursor: pointer; }
+        .btn-primary { background: linear-gradient(135deg, var(--green-700), var(--green-500)); color: white; }
+        .btn-secondary { background: var(--gray-100); color: var(--gray-700); }
+        .btn.active { background: var(--green-100); color: var(--green-700); border: 1px solid rgba(44,122,75,0.18); }
+        select { border: 1px solid var(--gray-200); border-radius: 10px; padding: 10px 12px; font: inherit; background: white; }
+        .legend { display: flex; gap: 12px 18px; flex-wrap: wrap; color: var(--gray-700); font-size: 0.9rem; margin-bottom: 18px; }
+        .legend span { display: inline-flex; align-items: center; gap: 6px; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; }
+        .weekday { text-align: center; font-size: 0.82rem; color: var(--gray-500); font-weight: 700; text-transform: uppercase; }
+        .day-cell { min-height: 138px; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+        .day-cell.empty { background: transparent; border-color: transparent; }
+        .day-cell.today { border: 2px solid var(--green-500); }
+        .day-number { font-weight: 700; color: var(--green-900); }
+        .lesson-card { border-radius: 12px; padding: 10px; border: 1px solid transparent; font-size: 0.82rem; line-height: 1.45; }
+        .lesson-card.future { background: var(--blue-100); border-color: rgba(37,99,235,0.15); }
+        .lesson-card.attended { background: var(--green-100); border-color: rgba(44,122,75,0.15); }
+        .lesson-card.absent { background: var(--red-100); border-color: rgba(220,38,38,0.15); }
+        .lesson-card.clickable { cursor: pointer; }
+        .lesson-card.clickable:hover { box-shadow: 0 4px 14px rgba(31,41,55,0.12); }
+        .lesson-time { font-weight: 700; color: var(--green-900); }
+        .lesson-title { font-weight: 600; margin-top: 4px; }
+        .lesson-meta { color: var(--gray-500); margin-top: 4px; }
+        .status-row { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-top: 6px; }
+        .list-view { display: none; }
+        .list-view.active { display: block; }
+        .list-item { border: 1px solid var(--gray-200); border-radius: 16px; padding: 16px; margin-bottom: 12px; background: white; }
+        .list-item.attended { background: var(--green-100); }
+        .list-item.absent { background: var(--red-100); }
+        .list-item.future { background: var(--blue-100); }
+        .empty { color: var(--gray-500); text-align: center; padding: 32px; }
+        @media (max-width: 900px) {
+            .calendar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .weekday { display: none; }
+        }
+        @media (max-width: 640px) {
+            .header-content { flex-direction: column; align-items: flex-start; }
+            .calendar-grid { display: none; }
+            .list-view { display: block; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div><h1>Carbon Farming Master</h1></div>
+            <div class="nav-links">
+                <a href="/learn/index.html">Dashboard</a>
+                <a href="/learn/calendar.html" class="active">Calendario</a>
+                <a href="/learn/resources.html">Risorse</a>
+                <a href="/learn/checkin.html">Check-in</a>
+                <a href="/learn/documents.html">Documenti</a>
+                <a href="/learn/questions.html">Domande</a>
+                <a href="#" id="logout-btn">Esci</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="card">
+            <h2>Calendario lezioni</h2>
+            <div class="toolbar">
+                <div class="toolbar-left">
+                    <button class="btn btn-secondary" id="prev-month">←</button>
+                    <div class="month-label" id="month-label"></div>
+                    <button class="btn btn-secondary" id="next-month">→</button>
+                </div>
+                <div class="toolbar-right">
+                    <select id="month-select"></select>
+                    <select id="year-select"></select>
+                    <button class="btn btn-secondary active" id="grid-toggle">Griglia</button>
+                    <button class="btn btn-secondary" id="list-toggle">Lista</button>
+                </div>
+            </div>
+            <div class="legend">
+                <span>🏫 In presenza</span>
+                <span>💻 Remoto live</span>
+                <span>⏱️ Remoto parziale</span>
+                <span>📹 Async</span>
+                <span>❌ Assente</span>
+                <span>⬜ Futura</span>
+            </div>
+            <div class="calendar-grid" id="calendar-grid"></div>
+            <div class="list-view" id="list-view"></div>
+        </div>
+    </main>
+
+    <script>
+    (function() {
+        'use strict';
+
+        const token = localStorage.getItem('learnToken') || localStorage.getItem('token');
+        if (!token) { window.location.href = '/learn/login.html'; return; }
+
+        document.getElementById('logout-btn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            localStorage.removeItem('learnToken');
+            localStorage.removeItem('learnUser');
+            window.location.href = '/learn/login.html';
+        });
+
+        const monthNames = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+        const dayNames = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
+        const state = {
+            month: new Date().getMonth() + 1,
+            year: new Date().getFullYear(),
+            view: window.innerWidth <= 640 ? 'list' : 'grid',
+            courseIds: [],
+            moduleIds: new Set(),
+            lmsByCalendarLesson: new Map(),
+            progressByLmsLesson: new Map(),
+            lessons: []
+        };
+
+        function api(url, auth = true) {
+            return fetch(url, {
+                headers: auth ? { 'Authorization': 'Bearer ' + token } : {}
+            }).then(async (res) => {
+                if (res.status === 401) {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    localStorage.removeItem('learnToken');
+                    localStorage.removeItem('learnUser');
+                    window.location.href = '/learn/login.html';
+                    return null;
+                }
+                if (!res.ok) {
+                    const payload = await res.json().catch(() => ({ error: 'Errore richiesta' }));
+                    throw new Error(payload.error || 'Errore richiesta');
+                }
+                return res.json();
+            });
+        }
+
+        function pad(n) { return String(n).padStart(2, '0'); }
+        function fmtTime(dateStr) {
+            return new Date(dateStr).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+        }
+        function fmtHours(minutes) {
+            const hrs = Number(minutes || 0) / 60;
+            return `${hrs.toFixed(1).replace('.0', '')}h`;
+        }
+        function mondayIndex(date) {
+            const day = date.getDay();
+            return day === 0 ? 6 : day - 1;
+        }
+        function normalizeDate(dateStr) {
+            const date = new Date(dateStr);
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+        }
+
+        function getLessonStatus(lesson) {
+            const now = new Date();
+            const start = lesson.startDatetime ? new Date(lesson.startDatetime) : null;
+            const progress = lesson.lmsLessonId ? state.progressByLmsLesson.get(lesson.lmsLessonId) : null;
+            const attendanceType = progress?.attendanceType || null;
+            const completedAt = progress?.completedAt || null;
+
+            if (attendanceType === 'in_person') return { icon: '🏫', label: 'In presenza', bucket: 'attended' };
+            if (attendanceType === 'remote_live') return { icon: '💻', label: 'Remoto live', bucket: 'attended' };
+            if (attendanceType === 'remote_partial') return { icon: '⏱️', label: 'Remoto parziale', bucket: 'attended' };
+            if (!attendanceType && completedAt) return { icon: '📹', label: 'Async', bucket: 'attended' };
+            if (start && start < now) return { icon: '❌', label: 'Assente', bucket: 'absent' };
+            return { icon: '⬜', label: 'Futura', bucket: 'future' };
+        }
+
+        function buildLessonCard(lesson, compact = false) {
+            const status = getLessonStatus(lesson);
+            const location = lesson.locationPhysical || lesson.locationRemote || 'Da definire';
+            const clickable = lesson.lmsLessonId ? 'clickable' : '';
+            return `
+                <div class="${compact ? 'list-item' : 'lesson-card'} ${status.bucket} ${clickable}" ${lesson.lmsLessonId ? `data-lesson-id="${lesson.lmsLessonId}"` : ''}>
+                    <div class="lesson-time">${fmtTime(lesson.startDatetime)} · ${status.icon}</div>
+                    <div class="lesson-title">${lesson.title || 'Lezione'}</div>
+                    <div class="lesson-meta">${lesson.moduleName || 'Modulo'} · ${lesson.teacherName || lesson.externalTeacherName || 'Docente da definire'}</div>
+                    <div class="lesson-meta">${location} · ${fmtHours(lesson.durationMinutes)}</div>
+                    <div class="status-row">${status.icon} ${status.label}</div>
+                </div>
+            `;
+        }
+
+        function renderGrid() {
+            const container = document.getElementById('calendar-grid');
+            const todayKey = normalizeDate(new Date().toISOString());
+            const first = new Date(state.year, state.month - 1, 1);
+            const daysInMonth = new Date(state.year, state.month, 0).getDate();
+            const offset = mondayIndex(first);
+            const grouped = new Map();
+
+            state.lessons.forEach((lesson) => {
+                const key = normalizeDate(lesson.startDatetime);
+                const list = grouped.get(key) || [];
+                list.push(lesson);
+                grouped.set(key, list);
+            });
+
+            let html = dayNames.map((name) => `<div class="weekday">${name}</div>`).join('');
+            for (let i = 0; i < offset; i++) html += '<div class="day-cell empty"></div>';
+            for (let day = 1; day <= daysInMonth; day++) {
+                const key = `${state.year}-${pad(state.month)}-${pad(day)}`;
+                const lessons = grouped.get(key) || [];
+                html += `
+                    <div class="day-cell ${key === todayKey ? 'today' : ''}">
+                        <div class="day-number">${day}</div>
+                        ${lessons.map((lesson) => buildLessonCard(lesson)).join('')}
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+            bindLessonClicks(container);
+        }
+
+        function renderList() {
+            const container = document.getElementById('list-view');
+            const now = new Date();
+            const horizon = new Date(now);
+            horizon.setDate(horizon.getDate() + 30);
+            const items = state.lessons.filter((lesson) => {
+                const start = new Date(lesson.startDatetime);
+                return start >= now && start <= horizon;
+            });
+            if (!items.length) {
+                container.innerHTML = '<div class="empty">Nessuna lezione nei prossimi 30 giorni.</div>';
+                return;
+            }
+            container.innerHTML = items.map((lesson) => buildLessonCard(lesson, true)).join('');
+            bindLessonClicks(container);
+        }
+
+        function bindLessonClicks(scope) {
+            scope.querySelectorAll('[data-lesson-id]').forEach((node) => {
+                node.addEventListener('click', () => {
+                    window.location.href = `/learn/lesson.html?id=${node.dataset.lessonId}`;
+                });
+            });
+        }
+
+        async function loadCalendar() {
+            document.getElementById('month-label').textContent = `${monthNames[state.month - 1]} ${state.year}`;
+            const allLessons = await api(`/api/lessons?month=${state.month}&year=${state.year}`, false);
+            state.lessons = (allLessons || []).filter((lesson) => state.moduleIds.has(lesson.moduleId)).map((lesson) => {
+                const linked = state.lmsByCalendarLesson.get(lesson.id);
+                return { ...lesson, lmsLessonId: linked?.id || null };
+            });
+            renderGrid();
+            renderList();
+            document.getElementById('grid-toggle').classList.toggle('active', state.view === 'grid');
+            document.getElementById('list-toggle').classList.toggle('active', state.view === 'list');
+            document.getElementById('calendar-grid').style.display = state.view === 'grid' || window.innerWidth > 640 ? 'grid' : 'none';
+            document.getElementById('list-view').classList.toggle('active', state.view === 'list' || window.innerWidth <= 640);
+        }
+
+        async function bootstrap() {
+            const courses = await api('/api/lms/my-courses');
+            state.courseIds = (courses || []).map((course) => course.id);
+
+            const moduleLists = await Promise.all(state.courseIds.map((courseId) => api(`/api/lms/modules?courseId=${courseId}`, false)));
+            moduleLists.flat().forEach((module) => state.moduleIds.add(module.id));
+
+            const lmsLists = await Promise.all(state.courseIds.map((courseId) => api(`/api/lms/lessons?courseId=${courseId}`, false)));
+            lmsLists.flat().forEach((lesson) => {
+                if (lesson.calendarLessonId) state.lmsByCalendarLesson.set(lesson.calendarLessonId, lesson);
+            });
+
+            const progressLists = await Promise.all(state.courseIds.map((courseId) => api(`/api/lms/lessons/progress?courseId=${courseId}`)));
+            progressLists.flat().forEach((progress) => {
+                if (progress && progress.lessonId) state.progressByLmsLesson.set(progress.lessonId, progress);
+            });
+
+            await loadCalendar();
+        }
+
+        function initSelectors() {
+            const monthSelect = document.getElementById('month-select');
+            const yearSelect = document.getElementById('year-select');
+            monthNames.forEach((name, index) => {
+                const option = document.createElement('option');
+                option.value = String(index + 1);
+                option.textContent = name;
+                if (index + 1 === state.month) option.selected = true;
+                monthSelect.appendChild(option);
+            });
+            for (let year = 2025; year <= 2028; year++) {
+                const option = document.createElement('option');
+                option.value = String(year);
+                option.textContent = String(year);
+                if (year === state.year) option.selected = true;
+                yearSelect.appendChild(option);
+            }
+            monthSelect.addEventListener('change', async () => {
+                state.month = Number(monthSelect.value);
+                await loadCalendar();
+            });
+            yearSelect.addEventListener('change', async () => {
+                state.year = Number(yearSelect.value);
+                await loadCalendar();
+            });
+        }
+
+        document.getElementById('prev-month').addEventListener('click', async () => {
+            if (state.month === 1) {
+                state.month = 12;
+                state.year -= 1;
+            } else {
+                state.month -= 1;
+            }
+            document.getElementById('month-select').value = String(state.month);
+            document.getElementById('year-select').value = String(state.year);
+            await loadCalendar();
+        });
+
+        document.getElementById('next-month').addEventListener('click', async () => {
+            if (state.month === 12) {
+                state.month = 1;
+                state.year += 1;
+            } else {
+                state.month += 1;
+            }
+            document.getElementById('month-select').value = String(state.month);
+            document.getElementById('year-select').value = String(state.year);
+            await loadCalendar();
+        });
+
+        document.getElementById('grid-toggle').addEventListener('click', () => {
+            state.view = 'grid';
+            loadCalendar();
+        });
+
+        document.getElementById('list-toggle').addEventListener('click', () => {
+            state.view = 'list';
+            loadCalendar();
+        });
+
+        initSelectors();
+        bootstrap().catch((error) => {
+            document.getElementById('calendar-grid').innerHTML = `<div class="empty">${error.message || 'Errore nel caricamento calendario.'}</div>`;
+            document.getElementById('list-view').innerHTML = `<div class="empty">${error.message || 'Errore nel caricamento calendario.'}</div>`;
+        });
+    })();
+    </script>
+</body>
+</html>

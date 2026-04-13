@@ -110,8 +110,12 @@
         let userInfo = {};
         try { userInfo = JSON.parse(localStorage.getItem('learnUser') || '{}'); } catch(e) {}
 
-        const welcomeName = [userInfo.firstName, userInfo.lastName].filter(Boolean).join(' ') || userInfo.email || '';
-        if (welcomeName) document.getElementById('welcome-msg').textContent = `Ciao, ${welcomeName}!`;
+        function renderWelcome(user) {
+            const welcomeName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || '';
+            if (welcomeName) document.getElementById('welcome-msg').textContent = `Ciao, ${welcomeName}!`;
+        }
+
+        renderWelcome(userInfo);
 
         document.getElementById('logout-btn')?.addEventListener('click', (e) => {
             e.preventDefault();
@@ -131,6 +135,19 @@
             }
             if (!res.ok) throw new Error('API error');
             return res.json();
+        }
+
+        async function refreshCurrentUser() {
+            try {
+                const profile = await api('/api/students/me');
+                if (profile) {
+                    userInfo = profile;
+                    localStorage.setItem('learnUser', JSON.stringify(profile));
+                    renderWelcome(profile);
+                }
+            } catch (error) {
+                console.error('Error refreshing student profile', error);
+            }
         }
 
         async function loadDashboard() {
@@ -281,7 +298,7 @@
             } catch (e) { console.error(e); }
         }
 
-        loadDashboard();
+        refreshCurrentUser().then(loadDashboard);
     </script>
 </body>
 </html>

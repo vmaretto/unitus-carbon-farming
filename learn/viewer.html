@@ -615,6 +615,21 @@
             const stored = localStorage.getItem('learnUser');
             if (stored) currentUser = JSON.parse(stored);
         } catch(e) {}
+
+        async function refreshCurrentUser() {
+            try {
+                const res = await fetch('/api/students/me', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (res.ok) {
+                    const profile = await res.json();
+                    currentUser = profile || {};
+                    localStorage.setItem('learnUser', JSON.stringify(currentUser));
+                }
+            } catch (error) {
+                console.error('Error refreshing student profile', error);
+            }
+        }
         
         // === STATE ===
         let pdfDoc = null;
@@ -1102,7 +1117,7 @@
         }
         
         // === START ===
-        init();
+        refreshCurrentUser().finally(() => init());
     })();
     </script>
 </body>

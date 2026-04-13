@@ -251,6 +251,18 @@
             return res.json();
         }
 
+        async function refreshCurrentUser() {
+            try {
+                const profile = await api('/api/students/me');
+                if (profile) {
+                    currentUser = profile;
+                    localStorage.setItem('learnUser', JSON.stringify(profile));
+                }
+            } catch (error) {
+                console.error('Error refreshing student profile', error);
+            }
+        }
+
         // --- Segment tracking ---
         // Tracks unique 1-second segments that have been actually watched
         class SegmentTracker {
@@ -985,7 +997,7 @@
         // Periodically update completion UI
         setInterval(updateCompletionUI, 15000);
 
-        loadLesson();
+        refreshCurrentUser().finally(() => loadLesson());
     })();
     </script>
 </body>

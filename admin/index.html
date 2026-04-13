@@ -812,13 +812,14 @@
                             <th>Ruolo</th>
                             <th>Email / Login</th>
                             <th>Visibilità</th>
+                            <th>Materiali Master</th>
                             <th>Ordine</th>
                             <th style="width: 250px;">Azioni</th>
                         </tr>
                     </thead>
                     <tbody id="faculty-table-body">
                         <tr class="empty-state" data-empty-faculty>
-                            <td colspan="6">Non ci sono docenti configurati. Aggiungi il primo docente con il modulo qui sopra.</td>
+                            <td colspan="7">Non ci sono docenti configurati. Aggiungi il primo docente con il modulo qui sopra.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -3468,6 +3469,15 @@ Buono studio!</textarea>
                                 ${item.isVisible ? '👁️ Visibile' : '🔒 Nascosto'}
                             </span>
                         </td>
+                        <td>
+                            <label class="switch" style="display:inline-flex; align-items:center; gap:8px;">
+                                <input type="checkbox" data-toggle-all-materials="${item.id}" ${item.canViewAllMaterials ? 'checked' : ''}>
+                                <span class="slider"></span>
+                            </label>
+                            <div style="font-size:0.75rem; color:${item.canViewAllMaterials ? 'var(--green-700)' : 'var(--gray-500)'}; margin-top:6px; font-weight:600;">
+                                ${item.canViewAllMaterials ? 'Accesso completo attivo' : 'Accesso limitato'}
+                            </div>
+                        </td>
                         <td>${item.sortOrder || 0}</td>
                         <td>
                             ${loginActions}
@@ -3628,6 +3638,24 @@ Buono studio!</textarea>
                 } catch (error) {
                     // handled
                 }
+            }
+        });
+
+        document.getElementById('faculty-table-body').addEventListener('change', async (event) => {
+            const toggle = event.target.closest('input[data-toggle-all-materials]');
+            if (!toggle) return;
+            const id = toggle.dataset.toggleAllMaterials;
+            try {
+                await apiRequest(`/api/faculty/${id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ can_view_all_materials: toggle.checked })
+                });
+                const current = state.faculty.find((item) => item.id === id);
+                if (current) current.canViewAllMaterials = toggle.checked;
+                showToast(toggle.checked ? 'Accesso materiali completo attivato' : 'Accesso materiali completo disattivato');
+                loadFaculty();
+            } catch (error) {
+                toggle.checked = !toggle.checked;
             }
         });
 

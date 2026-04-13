@@ -753,7 +753,12 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
          AND (td.faculty_id IS NULL OR td.faculty_id = $1)
          AND NOT EXISTS (
          SELECT 1 FROM teacher_document_signatures tds WHERE tds.document_id = td.id AND tds.faculty_id = $1
-       )`,
+      )`,
+      [facultyId]
+    );
+
+    const { rows: facultyPermissionRows } = await pool.query(
+      'SELECT can_view_all_materials FROM faculty WHERE id = $1',
       [facultyId]
     );
 
@@ -772,7 +777,8 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
       completed_cfu: completedCfu,
       materials_published: parseInt(materialsCount[0].total),
       materials_pending: parseInt(pendingCount[0].total),
-      documents_pending: parseInt(docsCount[0].total)
+      documents_pending: parseInt(docsCount[0].total),
+      can_view_all_materials: Boolean(facultyPermissionRows[0]?.can_view_all_materials)
     });
   } catch (error) {
     console.error('Get teacher stats error:', error);
@@ -927,6 +933,51 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
   } catch (error) {
     console.error('Get teacher materials error:', error);
     res.status(500).json({ error: 'Errore nel recupero materiali' });
+  }
+});
+
+app.get('/api/teachers/all-materials', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  try {
+    const facultyId = req.teacher.id;
+    const { rows: permissionRows } = await pool.query(
+      'SELECT can_view_all_materials FROM faculty WHERE id = $1 LIMIT 1',
+      [facultyId]
+    );
+
+    if (!permissionRows[0]?.can_view_all_materials) {
+      return res.status(403).json({ error: 'Accesso non autorizzato' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT r.id,
+              r.title,
+              r.description,
+              r.url,
+              r.resource_type AS "resourceType",
+              r.created_at AS "createdAt",
+              COALESCE(m.name, 'Senza modulo') AS "moduleName",
+              m.id AS "moduleId",
+              ll.title AS "lessonTitle",
+              NULLIF(TRIM(COALESCE(f.first_name, '') || ' ' || COALESCE(f.last_name, '')), '') AS "uploadedBy"
+       FROM resources r
+       LEFT JOIN lms_lessons ll_direct ON ll_direct.id = r.lesson_id
+       LEFT JOIN lessons cal ON cal.id = r.lesson_id
+       LEFT JOIN lms_lessons ll_from_calendar ON ll_from_calendar.calendar_lesson_id = cal.id
+       LEFT JOIN lms_lessons ll ON ll.id = COALESCE(ll_direct.id, ll_from_calendar.id)
+       LEFT JOIN modules m ON m.id = ll.lms_module_id
+       LEFT JOIN faculty f ON f.id = r.teacher_id
+       WHERE r.is_published = true
+       ORDER BY COALESCE(m.name, 'Senza modulo') ASC,
+                COALESCE(ll.sort_order, 9999) ASC,
+                r.created_at ASC`
+    );
+
+    res.json(rows);
+  } catch (error) {
+    console.error('Get all teacher materials error:', error);
+    res.status(500).json({ error: 'Errore nel recupero dei materiali del Master' });
   }
 });
 
@@ -3148,7 +3199,7 @@ async function removeQuizFromLessonMaterials(quizId) {
 
 // Whitelist colonne aggiornabili per tabella (sicurezza)
 const ALLOWED_UPDATE_FIELDS = {
-  faculty: ['name', 'first_name', 'last_name', 'role', 'email', 'bio', 'photo_url', 'profile_link', 'sort_order', 'is_published', 'is_active'],
+  faculty: ['name', 'first_name', 'last_name', 'role', 'email', 'bio', 'photo_url', 'profile_link', 'sort_order', 'is_published', 'is_active', 'can_view_all_materials'],
   blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'is_published', 'published_at'],
   partners: ['name', 'logo_url', 'website_url', 'category', 'sort_order', 'is_visible'],
   modules: ['name', 'ssd', 'cfu', 'hours', 'description', 'sort_order', 'course_id', 'is_published'],
@@ -3196,7 +3247,7 @@ app.get('/api/faculty', async (req, res) => {
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const sql = `
-      SELECT id, name, role, email, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished"
+      SELECT id, name, role, email, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished", can_view_all_materials AS "canViewAllMaterials"
       FROM faculty
       ${where}
       ORDER BY sort_order NULLS LAST, created_at ASC
@@ -3215,7 +3266,7 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
     return;
   }
 
-  const { name, role, email, bio, photoUrl, profileLink, sortOrder, isPublished } = req.body;
+  const { name, role, email, bio, photoUrl, profileLink, sortOrder, isPublished, canViewAllMaterials } = req.body;
 
   if (!name) {
     return res.status(400).json({ error: 'Name is required' });
@@ -3227,9 +3278,9 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
   try {
     const id = uuidv4();
     const insert = `
-      INSERT INTO faculty (id, name, role, email, bio, photo_url, profile_link, sort_order, is_published)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING id, name, role, email, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished"
+      INSERT INTO faculty (id, name, role, email, bio, photo_url, profile_link, sort_order, is_published, can_view_all_materials)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id, name, role, email, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished", can_view_all_materials AS "canViewAllMaterials"
     `;
     const values = [
       id,
@@ -3240,7 +3291,8 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
       normalizedPhotoUrl || null,
       profileLink || null,
       typeof sortOrder === 'number' ? sortOrder : null,
-      Boolean(isPublished)
+      Boolean(isPublished),
+      Boolean(canViewAllMaterials)
     ];
 
     const { rows } = await pool.query(insert, values);
@@ -3257,7 +3309,7 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
   }
 
   const { id } = req.params;
-  const { name, role, email, bio, photoUrl, profileLink, sortOrder, isPublished } = req.body;
+  const { name, role, email, bio, photoUrl, profileLink, sortOrder, isPublished, canViewAllMaterials, can_view_all_materials } = req.body;
 
   // Normalizza URL della foto (converte GitHub blob in raw)
   const normalizedPhotoUrl = photoUrl !== undefined ? normalizeImageUrl(photoUrl) : undefined;
@@ -3271,7 +3323,10 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
       photo_url: normalizedPhotoUrl,
       profile_link: profileLink,
       sort_order: sortOrder,
-      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined,
+      can_view_all_materials: typeof canViewAllMaterials === 'boolean'
+        ? canViewAllMaterials
+        : (typeof can_view_all_materials === 'boolean' ? can_view_all_materials : undefined)
     };
 
     const { query, values } = buildUpdateQuery('faculty', updateFields, id);
@@ -3290,7 +3345,8 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
       photoUrl: row.photo_url,
       profileLink: row.profile_link,
       sortOrder: row.sort_order,
-      isPublished: row.is_published
+      isPublished: row.is_published,
+      canViewAllMaterials: row.can_view_all_materials
     });
   } catch (error) {
     console.error('Error updating faculty', error);

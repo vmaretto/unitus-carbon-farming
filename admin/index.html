@@ -221,6 +221,56 @@
             overflow-x: auto;
         }
 
+        .attendance-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .attendance-toolbar-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .attendance-toolbar-controls > * {
+            min-width: 0;
+        }
+
+        #att-filter-lesson {
+            width: min(100%, 560px);
+            max-width: 100%;
+            min-width: 240px;
+        }
+
+        #att-filter-type {
+            max-width: 100%;
+        }
+
+        @media (max-width: 900px) {
+            .attendance-toolbar-controls {
+                width: 100%;
+            }
+
+            #att-filter-lesson,
+            #att-filter-type,
+            #att-export-csv,
+            #att-refresh {
+                width: 100%;
+            }
+
+            #att-filter-lesson,
+            #att-filter-type {
+                min-width: 0;
+            }
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -1728,9 +1778,9 @@ Buono studio!</textarea>
                 </div>
 
                 <!-- Report presenze -->
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                <div class="attendance-toolbar">
                     <h3 style="font-size: 1.1rem; margin: 0; color: var(--green-700);">📊 Report presenze</h3>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <div class="attendance-toolbar-controls">
                         <select id="att-filter-lesson" style="font-size: 0.85rem; min-width: 200px;">
                             <option value="">📅 Tutte le lezioni</option>
                         </select>

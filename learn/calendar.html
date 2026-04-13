@@ -289,7 +289,9 @@
         async function loadCalendar() {
             document.getElementById('month-label').textContent = `${monthNames[state.month - 1]} ${state.year}`;
             const allLessons = await api(`/api/lessons?month=${state.month}&year=${state.year}`, false);
-            state.lessons = (allLessons || []).filter((lesson) => state.moduleIds.has(lesson.moduleId)).map((lesson) => {
+            state.lessons = (allLessons || []).filter((lesson) => {
+                return state.moduleIds.has(lesson.moduleId) || state.lmsByCalendarLesson.has(lesson.id);
+            }).map((lesson) => {
                 const linked = state.lmsByCalendarLesson.get(lesson.id);
                 return { ...lesson, lmsLessonId: linked?.id || null };
             });

@@ -5854,20 +5854,8 @@ Buono studio!</textarea>
             }
 
             try {
-                // Prendi il course_id dall'edizione
-                const editions = [];
-                for (const course of state.lmsCourses) {
-                    const eds = await apiRequest(`/api/lms/course-editions?courseId=${course.id}`);
-                    eds.forEach(ed => editions.push({ ...ed, courseId: course.id }));
-                }
-                const edition = editions.find(e => e.id === courseEditionId);
-                if (!edition) return;
-
-                // Lezioni del calendario
-                const lessons = await apiRequest('/api/lessons');
-                const filtered = lessons.filter(l => l.status !== 'cancelled');
-                filtered.sort((a, b) => new Date(b.startDatetime) - new Date(a.startDatetime));
-
+                const data = await apiRequest(`/api/attendance/lessons/${courseEditionId}`);
+                const filtered = data.lessons || [];
                 filtered.forEach(l => {
                     const date = new Date(l.startDatetime).toLocaleDateString('it-IT');
                     const label = `${date} — ${l.title}`;

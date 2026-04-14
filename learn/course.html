@@ -229,7 +229,9 @@
                 modules.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
                 let inPersonCount = 0;
-                let remoteCount = 0;
+                let remoteLiveCount = 0;
+                let remotePartialCount = 0;
+                let asyncCount = 0;
                 let absentCount = 0;
                 let heldLessonsCount = 0;
 
@@ -237,10 +239,19 @@
                     const status = getLessonStatus(progressMap[lesson.id], lesson);
                     if (status.key !== 'future') heldLessonsCount += 1;
                     if (status.key === 'in_person') inPersonCount += 1;
-                    if (status.key === 'remote_live' || status.key === 'remote_partial') remoteCount += 1;
+                    if (status.key === 'remote_live') remoteLiveCount += 1;
+                    if (status.key === 'remote_partial') remotePartialCount += 1;
+                    if (status.key === 'async') asyncCount += 1;
                     if (status.key === 'absent') absentCount += 1;
                 });
-                attendanceSummary.textContent = `${inPersonCount} presenze, ${remoteCount} parziali, ${absentCount} assenze su ${heldLessonsCount} lezioni svolte`;
+                const pctOfHeld = (count) => heldLessonsCount > 0 ? Math.round((count / heldLessonsCount) * 100) : 0;
+                attendanceSummary.textContent = [
+                    `${inPersonCount} in presenza (${pctOfHeld(inPersonCount)}%)`,
+                    `${remoteLiveCount} da remoto live (${pctOfHeld(remoteLiveCount)}%)`,
+                    `${remotePartialCount} da remoto parziale (${pctOfHeld(remotePartialCount)}%)`,
+                    `${asyncCount} async (${pctOfHeld(asyncCount)}%)`,
+                    `${absentCount} assenze (${pctOfHeld(absentCount)}%)`
+                ].join(', ') + ` su ${heldLessonsCount} lezioni svolte`;
 
                 const ordinals = ['Prima', 'Seconda', 'Terza', 'Quarta', 'Quinta', 'Sesta', 'Settima', 'Ottava', 'Nona', 'Decima', 'Undicesima', 'Dodicesima'];
 

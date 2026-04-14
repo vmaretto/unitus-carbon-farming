@@ -5149,6 +5149,35 @@ Buono studio!</textarea>
             }
         }
 
+        async function copyAdminEntityId(button, id, defaultLabel = '📋 ID') {
+            const originalText = button.textContent;
+
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(id);
+                } else {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = id;
+                    textarea.setAttribute('readonly', '');
+                    textarea.style.position = 'absolute';
+                    textarea.style.left = '-9999px';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    const copied = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    if (!copied) throw new Error('copy-failed');
+                }
+
+                button.textContent = '✅ Copiato!';
+                setTimeout(() => {
+                    button.textContent = defaultLabel;
+                }, 1500);
+            } catch (error) {
+                button.textContent = originalText || defaultLabel;
+                alert('Impossibile copiare l\'ID');
+            }
+        }
+
         function renderLmsModulesList() {
             const container = document.getElementById('lms-modules-list');
             container.innerHTML = '';
@@ -5174,6 +5203,7 @@ Buono studio!</textarea>
                             <span style="color: var(--gray-500); font-size: 0.85rem; margin-left: 8px;">Ordine: ${mod.sortOrder}</span>
                         </div>
                         <div class="actions" style="margin: 0;">
+                            <button type="button" class="secondary" data-copy-module-id="${mod.id}" title="${mod.id}">📋 ID</button>
                             <button type="button" class="secondary" data-edit-lms-mod="${mod.id}">Modifica</button>
                             <button type="button" class="secondary" data-toggle-lessons="${mod.id}">Lezioni</button>
                             <button type="button" class="danger" data-delete-lms-mod="${mod.id}">Elimina</button>
@@ -5210,9 +5240,15 @@ Buono studio!</textarea>
         document.getElementById('lms-mod-reset').addEventListener('click', resetLmsModuleForm);
 
         document.getElementById('lms-modules-list').addEventListener('click', async (e) => {
+            const copyModuleBtn = e.target.closest('[data-copy-module-id]');
             const editBtn = e.target.closest('[data-edit-lms-mod]');
             const deleteBtn = e.target.closest('[data-delete-lms-mod]');
             const toggleBtn = e.target.closest('[data-toggle-lessons]');
+
+            if (copyModuleBtn) {
+                await copyAdminEntityId(copyModuleBtn, copyModuleBtn.dataset.copyModuleId);
+                return;
+            }
 
             if (editBtn) {
                 const id = editBtn.dataset.editLmsMod;
@@ -5337,6 +5373,7 @@ Buono studio!</textarea>
                                 <span style="color: var(--gray-500); font-size: 0.85rem; margin-left: 8px;">${dur}</span>
                             </div>
                             <div class="actions" style="margin: 0;">
+                                <button type="button" class="secondary" data-copy-lesson-id="${l.id}" title="${l.id}">📋 ID</button>
                                 <button type="button" class="secondary" data-edit-lms-lesson="${l.id}" data-module-id="${moduleId}">Modifica</button>
                                 <button type="button" class="secondary" data-toggle-quiz="${l.id}">Quiz</button>
                                 <button type="button" class="danger" data-delete-lms-lesson="${l.id}" data-module-id="${moduleId}">Elimina</button>
@@ -5596,12 +5633,18 @@ Buono studio!</textarea>
                 panel.removeEventListener('click', panel._lmsLessonsClickHandler);
             }
             panel._lmsLessonsClickHandler = async (ev) => {
+                const copyLessonBtn = ev.target.closest('[data-copy-lesson-id]');
                 const editLessonBtn = ev.target.closest('[data-edit-lms-lesson]');
                 const deleteLessonBtn = ev.target.closest('[data-delete-lms-lesson]');
                 const toggleQuizBtn = ev.target.closest('[data-toggle-quiz]');
                 const deleteQuestionBtn = ev.target.closest('[data-delete-question]');
                 const deleteQuizBtn = ev.target.closest('[data-delete-quiz]');
                 const genModQuizBtn = ev.target.closest('[data-generate-mod-quiz]');
+
+                if (copyLessonBtn) {
+                    await copyAdminEntityId(copyLessonBtn, copyLessonBtn.dataset.copyLessonId);
+                    return;
+                }
 
                 if (genModQuizBtn) {
                     const mid = genModQuizBtn.dataset.generateModQuiz;

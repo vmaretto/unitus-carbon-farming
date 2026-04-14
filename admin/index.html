@@ -1312,7 +1312,7 @@ Buono studio!</textarea>
                             <th>Tipo</th>
                             <th>Collegamento</th>
                             <th>Docente</th>
-                            <th>Origine</th>
+                            <th>Origine record</th>
                             <th>Tag</th>
                             <th>Data</th>
                             <th>Stato</th>
@@ -3109,12 +3109,25 @@ Buono studio!</textarea>
         function buildResourceRow(item) {
             const typeIcons = { video: '🎬', pdf: '📄', document: '📝', audio: '🎧', link: '🔗', quiz: '🧠' };
             const sourceInfo = {
-                admin: { icon: '👤', label: 'Admin', color: '#6b7280' },
-                teacher: { icon: '🧑‍🏫', label: 'Docente', color: '#0369a1' },
-                calendar_lesson: { icon: '📅', label: 'Calendario', color: '#059669' },
-                ai_generated: { icon: '🤖', label: 'AI', color: '#7c3aed' }
+                admin: { icon: '👤', label: 'Admin', color: '#6b7280', help: 'Risorsa caricata direttamente in Gestione Risorse' },
+                teacher: { icon: '🧑‍🏫', label: 'Docente', color: '#0369a1', help: 'Risorsa caricata dal docente senza collegamento a lezione' },
+                calendar_lesson: { icon: '📅', label: 'Calendario', color: '#059669', help: 'Materiale collegato a una lezione del calendario' },
+                ai_generated: { icon: '🤖', label: 'AI', color: '#7c3aed', help: 'Risorsa generata automaticamente' }
             };
             const source = sourceInfo[item.source] || sourceInfo.admin;
+            const fileName = (() => {
+                try {
+                    if (!item.url) return '';
+                    if (String(item.url).startsWith('data:')) return '';
+                    const pathname = new URL(item.url).pathname || '';
+                    const base = pathname.split('/').pop() || '';
+                    return decodeURIComponent(base);
+                } catch (error) {
+                    const raw = String(item.url || '');
+                    const tail = raw.split('/').pop() || '';
+                    return decodeURIComponent(tail.split('?')[0] || '');
+                }
+            })();
 
             let linkBadge;
             if (item.lessonId && item.lessonTitle) {
@@ -3131,11 +3144,14 @@ Buono studio!</textarea>
             const row = document.createElement('tr');
             row.dataset.id = item.id;
             row.innerHTML = `
-                <td data-title><a href="${item.url}" target="_blank">${escapeHtml(item.title)}</a></td>
+                <td data-title>
+                    <a href="${item.url}" target="_blank">${escapeHtml(item.title)}</a>
+                    ${fileName ? `<div style="font-size: 0.78rem; color: var(--gray-500); margin-top: 4px;">📎 ${escapeHtml(fileName)}</div>` : ''}
+                </td>
                 <td data-type>${typeIcons[item.resourceType] || ''} ${escapeHtml(item.resourceType)}</td>
                 <td>${linkBadge}</td>
                 <td>${escapeHtml(item.teacherName || '—')}</td>
-                <td><span style="color: ${source.color}; font-size: 0.85rem;">${source.icon} ${source.label}</span></td>
+                <td><span style="color: ${source.color}; font-size: 0.85rem;" title="${escapeHtml(source.help)}">${source.icon} ${source.label}</span></td>
                 <td>${tags}</td>
                 <td style="font-size: 0.85rem; color: var(--gray-600);">${item.createdAt ? new Date(item.createdAt).toLocaleDateString('it-IT') : '—'}</td>
                 <td data-status><span class="status-pill" data-status="${item.isPublished ? 'published' : 'draft'}">${item.isPublished ? 'Visibile' : 'Bozza'}</span></td>

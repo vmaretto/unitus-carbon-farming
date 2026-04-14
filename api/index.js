@@ -112,6 +112,185 @@ async function sendEmail({ to, subject, html, bcc, from }) {
   
   throw new Error('Nessun provider email configurato');
 }
+
+function normalizeEmailList(input) {
+  const raw = Array.isArray(input) ? input : [input];
+  const seen = new Set();
+  const emails = [];
+
+  for (const value of raw) {
+    if (!value) continue;
+    const parts = String(value).split(',');
+    for (const part of parts) {
+      const email = part.trim().toLowerCase();
+      if (!email || seen.has(email)) continue;
+      seen.add(email);
+      emails.push(email);
+    }
+  }
+
+  return emails;
+}
+
+function buildStudentNotificationHtml(message, { isTest = false } = {}) {
+  const testBanner = isTest
+    ? `
+          <div style="background: #fef3c7; padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #f59e0b;">
+            <strong>⚠️ QUESTA È UN'EMAIL DI TEST</strong><br>
+            I placeholder {nome} e {cognome} sono stati sostituiti con "Mario Rossi"
+          </div>
+      `
+    : '';
+
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      ${testBanner}
+      <div style="background: linear-gradient(135deg, #166534 0%, #22c55e 100%); padding: 20px; border-radius: 12px 12px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 1.5rem;">🌱 Master Carbon Farming</h1>
+      </div>
+      <div style="background: #f9fafb; padding: 24px; border-radius: 0 0 12px 12px;">
+        <p style="white-space: pre-line; line-height: 1.6;">${message}</p>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+        <p style="color: #6b7280; font-size: 0.875rem;">
+          Università della Tuscia - Master di II livello in Carbon Farming
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+async function sendStudentNotificationsBatch({ students, subject, message, bccEmail }) {
+  let sent = 0;
+  const failed = [];
+  const delivered = [];
+  const BATCH_SIZE = 8;
+
+  for (let i = 0; i < students.length; i += BATCH_SIZE) {
+    const batch = students.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map(async (student) => {
+      const personalizedMessage = message
+        .replaceAll('{nome}', student.first_name || 'Studente')
+        .replaceAll('{cognome}', student.last_name || '');
+
+      await sendEmail({
+        to: student.email,
+        subject,
+        bcc: bccEmail,
+        html: buildStudentNotificationHtml(personalizedMessage)
+      });
+
+      return student.email;
+    }));
+
+    results.forEach((result, index) => {
+      const email = batch[index]?.email || null;
+      if (result.status === 'fulfilled') {
+        sent += 1;
+        if (email) delivered.push(email);
+        return;
+      }
+
+      failed.push({
+        email,
+        reason: result.reason?.message || 'Errore di invio sconosciuto'
+      });
+    });
+  }
+
+  return {
+    sent,
+    total: students.length,
+    delivered,
+    failed,
+    failedEmails: failed.map(item => item.email).filter(Boolean)
+  };
+}
+
+async function createNotificationBatchLog({ scope, subject, message, courseEditionId, bccEmail, recipients }) {
+  const batchId = uuidv4();
+  const requestedTotal = recipients.length;
+
+  await pool.query(
+    `INSERT INTO notification_batches (
+      id, scope, subject, message, course_edition_id, bcc_email, requested_total, status
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')`,
+    [batchId, scope, subject, message, courseEditionId || null, bccEmail || null, requestedTotal]
+  );
+
+  if (recipients.length > 0) {
+    const values = [];
+    const placeholders = recipients.map((recipient, index) => {
+      const base = index * 7;
+      values.push(
+        batchId,
+        recipient.email,
+        recipient.first_name || null,
+        recipient.last_name || null,
+        recipient.status || 'pending',
+        recipient.error_message || null,
+        recipient.provider || null
+      );
+      return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`;
+    }).join(', ');
+
+    await pool.query(
+      `INSERT INTO notification_batch_recipients (
+        batch_id, email, first_name, last_name, status, error_message, provider
+      ) VALUES ${placeholders}`,
+      values
+    );
+  }
+
+  return batchId;
+}
+
+async function updateNotificationRecipientLog(batchId, { email, status, reason, provider }) {
+  await pool.query(
+    `UPDATE notification_batch_recipients
+     SET status = $3,
+         error_message = $4,
+         provider = COALESCE($5, provider),
+         sent_at = CASE WHEN $3 = 'sent' THEN NOW() ELSE sent_at END,
+         updated_at = NOW()
+     WHERE batch_id = $1 AND LOWER(email) = LOWER($2)`,
+    [batchId, email, status, reason || null, provider || null]
+  );
+}
+
+async function finalizeNotificationBatchLog(batchId) {
+  const { rows } = await pool.query(
+    `SELECT
+       COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE status = 'sent')::int AS sent_count,
+       COUNT(*) FILTER (WHERE status IN ('failed', 'not_found'))::int AS failed_count
+     FROM notification_batch_recipients
+     WHERE batch_id = $1`,
+    [batchId]
+  );
+
+  const stats = rows[0] || { total: 0, sent_count: 0, failed_count: 0 };
+  const status = stats.failed_count === 0
+    ? 'completed'
+    : (stats.sent_count === 0 ? 'failed' : 'partial');
+
+  await pool.query(
+    `UPDATE notification_batches
+     SET requested_total = $2,
+         sent_count = $3,
+         failed_count = $4,
+         status = $5,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [batchId, stats.total, stats.sent_count, stats.failed_count, status]
+  );
+
+  return {
+    total: stats.total,
+    sent: stats.sent_count,
+    failedCount: stats.failed_count,
+    status
+  };
+}
 const JWT_SECRET = process.env.JWT_SECRET || (ADMIN_PASSWORD ? crypto.createHash('sha256').update('jwt-secret-' + ADMIN_PASSWORD).digest('hex') : null);
 
 function generateToken(payload) {
@@ -4479,24 +4658,7 @@ app.post('/api/resources/notify-test', requireAdmin, async (req, res) => {
       from: process.env.RESEND_FROM || 'Master Carbon Farming <noreply@carbonfarmingmaster.it>',
       to: testEmail,
       subject: `[TEST] ${subject}`,
-      html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: #fef3c7; padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #f59e0b;">
-            <strong>⚠️ QUESTA È UN'EMAIL DI TEST</strong><br>
-            I placeholder {nome} e {cognome} sono stati sostituiti con "Mario Rossi"
-          </div>
-          <div style="background: linear-gradient(135deg, #166534 0%, #22c55e 100%); padding: 20px; border-radius: 12px 12px 0 0;">
-            <h1 style="color: white; margin: 0; font-size: 1.5rem;">🌱 Master Carbon Farming</h1>
-          </div>
-          <div style="background: #f9fafb; padding: 24px; border-radius: 0 0 12px 12px;">
-            <p style="white-space: pre-line; line-height: 1.6;">${personalizedMessage}</p>
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-            <p style="color: #6b7280; font-size: 0.875rem;">
-              Università della Tuscia - Master di II livello in Carbon Farming
-            </p>
-          </div>
-        </div>
-      `
+      html: buildStudentNotificationHtml(personalizedMessage, { isTest: true })
     });
 
     res.json({ success: true, message: `Email di test inviata a ${testEmail}` });
@@ -4510,52 +4672,81 @@ app.post('/api/resources/notify-test', requireAdmin, async (req, res) => {
 app.post('/api/resources/notify-single', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   
-  const { subject, message, studentEmail, bccEmail } = req.body;
+  const { subject, message, studentEmail, studentEmails, bccEmail } = req.body;
   
-  if (!subject || !message || !studentEmail) {
+  const requestedEmails = normalizeEmailList(studentEmails && studentEmails.length ? studentEmails : studentEmail);
+
+  if (!subject || !message || requestedEmails.length === 0) {
     return res.status(400).json({ error: 'Oggetto, messaggio e email studente sono obbligatori' });
   }
 
   try {
-    // Trova lo studente nel DB per avere nome/cognome
+    // Trova gli studenti nel DB per avere nome/cognome e poter gestire invio batch / retry
     const { rows: students } = await pool.query(
-      'SELECT email, first_name, last_name FROM users WHERE LOWER(email) = LOWER($1)',
-      [studentEmail]
+      'SELECT email, first_name, last_name FROM users WHERE LOWER(email) = ANY($1::text[])',
+      [requestedEmails]
     );
-    
-    if (students.length === 0) {
-      return res.status(404).json({ error: 'Studente non trovato nel database' });
-    }
-    
-    const student = students[0];
-    
-    const personalizedMessage = message
-      .replace('{nome}', student.first_name || 'Studente')
-      .replace('{cognome}', student.last_name || '');
 
-    await sendEmail({
-      to: student.email,
-      bcc: bccEmail,
-      subject: subject,
-      html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: linear-gradient(135deg, #166534 0%, #22c55e 100%); padding: 20px; border-radius: 12px 12px 0 0;">
-            <h1 style="color: white; margin: 0; font-size: 1.5rem;">🌱 Master Carbon Farming</h1>
-          </div>
-          <div style="background: #f9fafb; padding: 24px; border-radius: 0 0 12px 12px;">
-            <p style="white-space: pre-line; line-height: 1.6;">${personalizedMessage}</p>
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-            <p style="color: #6b7280; font-size: 0.875rem;">
-              Università della Tuscia - Master di II livello in Carbon Farming
-            </p>
-          </div>
-        </div>
-      `
+    const foundEmailSet = new Set(students.map(student => String(student.email || '').trim().toLowerCase()));
+    const missingStudents = requestedEmails.filter(email => !foundEmailSet.has(email)).map(email => ({
+      email,
+      reason: 'Studente non trovato nel database'
+    }));
+
+    const batchId = await createNotificationBatchLog({
+      scope: 'manual',
+      subject,
+      message,
+      bccEmail,
+      recipients: [
+        ...students.map(student => ({
+          email: student.email,
+          first_name: student.first_name,
+          last_name: student.last_name,
+          status: 'pending'
+        })),
+        ...missingStudents.map(item => ({
+          email: item.email,
+          status: 'not_found',
+          error_message: item.reason
+        }))
+      ]
     });
 
-    res.json({ 
-      success: true, 
-      message: `Email inviata a ${student.first_name || ''} ${student.last_name || ''} (${student.email})`.trim()
+    const batchResult = students.length > 0
+      ? await sendStudentNotificationsBatch({ students, subject, message, bccEmail })
+      : { sent: 0, total: 0, delivered: [], failed: [], failedEmails: [] };
+
+    const failed = [...batchResult.failed, ...missingStudents];
+    for (const email of batchResult.delivered) {
+      await updateNotificationRecipientLog(batchId, { email, status: 'sent' });
+    }
+    for (const item of batchResult.failed) {
+      await updateNotificationRecipientLog(batchId, {
+        email: item.email,
+        status: 'failed',
+        reason: item.reason,
+        provider: item.provider
+      });
+    }
+    await finalizeNotificationBatchLog(batchId);
+
+    const failedEmails = failed.map(item => item.email).filter(Boolean);
+    const requestedCount = requestedEmails.length;
+    const statusCode = batchResult.sent === 0 && failed.length > 0 ? 404 : 200;
+
+    return res.status(statusCode).json({
+      batchId,
+      success: failed.length === 0,
+      sent: batchResult.sent,
+      total: requestedCount,
+      delivered: batchResult.delivered,
+      failed,
+      failedEmails,
+      missingStudents,
+      message: failed.length === 0
+        ? `Email inviate a ${batchResult.sent}/${requestedCount} destinatari`
+        : `Email inviate a ${batchResult.sent}/${requestedCount} destinatari. ${failed.length} mancanti/fallite.`
     });
   } catch (error) {
     console.error('Error sending single email:', error);
@@ -4588,55 +4779,89 @@ app.post('/api/resources/notify', requireAdmin, async (req, res) => {
       return res.json({ sent: 0, message: 'Nessuno studente iscritto trovato' });
     }
 
-    // Invia email a ciascuno studente
-    let sent = 0;
-    let errors = [];
+    const batchId = await createNotificationBatchLog({
+      scope: 'all',
+      subject,
+      message,
+      courseEditionId: editionId,
+      bccEmail,
+      recipients: students.map(student => ({
+        email: student.email,
+        first_name: student.first_name,
+        last_name: student.last_name,
+        status: 'pending'
+      }))
+    });
 
-    // Invio in batch paralleli da 5 per evitare timeout Vercel (60s)
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < students.length; i += BATCH_SIZE) {
-      const batch = students.slice(i, i + BATCH_SIZE);
-      const results = await Promise.allSettled(batch.map(async (student) => {
-        const personalizedMessage = message
-          .replace('{nome}', student.first_name || 'Studente')
-          .replace('{cognome}', student.last_name || '');
-
-        await sendEmail({
-          to: student.email,
-          subject: subject,
-          bcc: bccEmail,
-          html: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <div style="background: linear-gradient(135deg, #166534 0%, #22c55e 100%); padding: 20px; border-radius: 12px 12px 0 0;">
-                <h1 style="color: white; margin: 0; font-size: 1.5rem;">🌱 Master Carbon Farming</h1>
-              </div>
-              <div style="background: #f9fafb; padding: 24px; border-radius: 0 0 12px 12px;">
-                <p style="white-space: pre-line; line-height: 1.6;">${personalizedMessage}</p>
-                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-                <p style="color: #6b7280; font-size: 0.875rem;">
-                  Università della Tuscia - Master di II livello in Carbon Farming
-                </p>
-              </div>
-            </div>
-          `
-        });
-        return student.email;
-      }));
-      for (const r of results) {
-        if (r.status === 'fulfilled') sent++;
-        else errors.push(r.reason?.message || 'unknown');
-      }
+    const result = await sendStudentNotificationsBatch({ students, subject, message, bccEmail });
+    for (const email of result.delivered) {
+      await updateNotificationRecipientLog(batchId, { email, status: 'sent' });
     }
+    for (const item of result.failed) {
+      await updateNotificationRecipientLog(batchId, {
+        email: item.email,
+        status: 'failed',
+        reason: item.reason,
+        provider: item.provider
+      });
+    }
+    await finalizeNotificationBatchLog(batchId);
 
     res.json({ 
-      sent, 
-      total: students.length,
-      errors: errors.length > 0 ? errors : undefined,
-      message: `Email inviata a ${sent}/${students.length} studenti`
+      batchId,
+      sent: result.sent,
+      total: result.total,
+      delivered: result.delivered,
+      failed: result.failed.length > 0 ? result.failed : undefined,
+      failedEmails: result.failedEmails.length > 0 ? result.failedEmails : undefined,
+      message: result.failed.length === 0
+        ? `Email inviata a ${result.sent}/${result.total} studenti`
+        : `Email inviata a ${result.sent}/${result.total} studenti. ${result.failed.length} fallite.`
     });
   } catch (error) {
     console.error('Error notifying students:', error);
     res.status(500).json({ error: 'Errore durante l\'invio delle notifiche' });
+  }
+});
+
+app.get('/api/resources/notify-logs', requireAdmin, async (_req, res) => {
+  if (!ensurePool(res)) return;
+
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        b.id,
+        b.scope,
+        b.subject,
+        b.message,
+        b.bcc_email AS "bccEmail",
+        b.requested_total AS "requestedTotal",
+        b.sent_count AS "sentCount",
+        b.failed_count AS "failedCount",
+        b.status,
+        b.created_at AS "createdAt",
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'email', r.email,
+              'status', r.status,
+              'reason', r.error_message
+            )
+            ORDER BY r.created_at ASC
+          ) FILTER (WHERE r.status IN ('failed', 'not_found')),
+          '[]'::json
+        ) AS "failedRecipients"
+      FROM notification_batches b
+      LEFT JOIN notification_batch_recipients r ON r.batch_id = b.id
+      GROUP BY b.id
+      ORDER BY b.created_at DESC
+      LIMIT 20
+    `);
+
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching notification logs:', error);
+    res.status(500).json({ error: 'Errore durante il recupero dello storico notifiche' });
   }
 });
 

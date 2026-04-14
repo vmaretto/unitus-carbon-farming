@@ -1098,6 +1098,13 @@
                 <button type="button" id="notify-students-btn" class="secondary" style="background: var(--green-500); color: white;">
                     ✉️ Invia notifica a tutti gli studenti
                 </button>
+                <div style="margin-top: 16px; background: white; border: 1px solid var(--gray-200); border-radius: 10px; padding: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px;">
+                        <strong style="color: var(--green-700);">Storico invii</strong>
+                        <button type="button" id="refresh-notify-logs-btn" class="secondary" style="font-size: 0.8rem;">Aggiorna storico</button>
+                    </div>
+                    <div id="notify-logs-list" style="font-size: 0.9rem; color: var(--gray-600);">Caricamento...</div>
+                </div>
             </div>
 
             <!-- Modale notifica -->
@@ -1138,7 +1145,7 @@ Buono studio!</textarea>
                         <!-- Sezione INVIO SINGOLO -->
                         <div style="background: #e0f2fe; padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #0ea5e9;">
                             <label style="display: block; margin-bottom: 8px; font-weight: 600;">
-                                👤 Oppure invia a uno studente specifico
+                                👤 Oppure invia a studenti specifici
                             </label>
                             <div style="display: flex; gap: 8px;">
                                 <input type="text" id="notify-single-email" placeholder="email1@studente.com, email2@studente.com, ..." style="flex: 1;" list="students-list">
@@ -1146,6 +1153,15 @@ Buono studio!</textarea>
                                 <button type="button" id="notify-single-btn" class="secondary" style="white-space: nowrap; background: #0ea5e9; color: white;">Invia</button>
                             </div>
                             <p style="font-size: 0.75rem; color: #0369a1; margin: 6px 0 0;">Email reali separate da virgola (es: email1@x.com, email2@x.com)</p>
+                        </div>
+
+                        <div id="notify-results" style="display: none; background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #cbd5e1;">
+                            <div id="notify-results-summary" style="font-weight: 600; margin-bottom: 8px;"></div>
+                            <div id="notify-results-details" style="font-size: 0.85rem; color: var(--gray-700); line-height: 1.5;"></div>
+                            <div id="notify-results-actions" style="display: none; gap: 8px; margin-top: 10px;">
+                                <button type="button" id="notify-copy-failed-btn" class="secondary">Copia mancanti</button>
+                                <button type="button" id="notify-retry-failed-btn" class="secondary" style="background: #f59e0b; color: white;">Riprova mancanti</button>
+                            </div>
                         </div>
                         
                         <!-- BCC per verifica -->
@@ -2141,6 +2157,7 @@ Buono studio!</textarea>
                     () => typeof loadLessons === 'function' ? loadLessons() : Promise.resolve(),
                     () => typeof loadLmsCourses === 'function' ? loadLmsCourses() : Promise.resolve(),
                     () => typeof loadStudentsList === 'function' ? loadStudentsList() : Promise.resolve(),
+                    () => typeof loadNotificationLogs === 'function' ? loadNotificationLogs() : Promise.resolve(),
                     () => typeof loadTeacherDocs === 'function' ? loadTeacherDocs() : Promise.resolve(),
                     () => typeof loadTeacherPendingMaterials === 'function' ? loadTeacherPendingMaterials() : Promise.resolve(),
                     () => typeof loadStudentQuestions === 'function' ? loadStudentQuestions() : Promise.resolve()
@@ -3184,13 +3201,207 @@ Buono studio!</textarea>
 
         // Notifica studenti
         function openNotifyModal() {
+            resetNotifyResults();
+            lastNotifyContext = null;
             document.getElementById('notify-modal').style.display = 'flex';
         }
         function closeNotifyModal() {
+            resetNotifyResults();
+            lastNotifyContext = null;
             document.getElementById('notify-modal').style.display = 'none';
+        }
+
+        let lastNotifyFailedEmails = [];
+        let lastNotifyContext = null;
+
+        function getNotifyBccEmail() {
+            return document.getElementById('notify-bcc-enabled').checked
+                ? document.getElementById('notify-bcc-email').value.trim()
+                : null;
+        }
+
+        function parseNotifyEmailInput(raw) {
+            const seen = new Set();
+            return String(raw || '')
+                .split(',')
+                .map(email => email.trim().toLowerCase())
+                .filter(email => {
+                    if (!email || seen.has(email)) return false;
+                    seen.add(email);
+                    return true;
+                });
+        }
+
+        function resetNotifyResults() {
+            lastNotifyFailedEmails = [];
+            document.getElementById('notify-results').style.display = 'none';
+            document.getElementById('notify-results-summary').textContent = '';
+            document.getElementById('notify-results-details').innerHTML = '';
+            document.getElementById('notify-results-actions').style.display = 'none';
+        }
+
+        async function loadNotificationLogs() {
+            const container = document.getElementById('notify-logs-list');
+            if (!container) return;
+
+            container.innerHTML = '<div style="color: var(--gray-500);">Caricamento...</div>';
+
+            try {
+                const logs = await apiRequest('/api/resources/notify-logs', { suppressErrors: true });
+                if (!Array.isArray(logs) || logs.length === 0) {
+                    container.innerHTML = '<div style="color: var(--gray-500);">Nessun invio registrato.</div>';
+                    return;
+                }
+
+                container.innerHTML = logs.map(log => {
+                    const createdAt = log.createdAt ? new Date(log.createdAt).toLocaleString('it-IT') : 'N/D';
+                    const failedRecipients = Array.isArray(log.failedRecipients) ? log.failedRecipients : [];
+                    const failedEmails = failedRecipients.map(item => item.email).filter(Boolean);
+                    const failedHtml = failedRecipients.length
+                        ? `<div style="margin-top: 6px; color: #92400e;"><strong>Mancanti:</strong> ${escapeHtml(failedEmails.join(', '))}</div>`
+                        : '<div style="margin-top: 6px; color: #166534;">Nessun destinatario mancante.</div>';
+                    const copyButton = failedEmails.length
+                        ? `<button type="button" class="secondary notify-log-copy-btn" data-failed-emails="${escapeHtml(failedEmails.join(', '))}" style="font-size: 0.75rem; margin-top: 8px;">Copia mancanti</button>`
+                        : '';
+
+                    return `
+                        <div style="border-top: 1px solid var(--gray-200); padding: 10px 0;">
+                            <div style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline;">
+                                <strong>${escapeHtml(log.subject || 'Notifica')}</strong>
+                                <span style="color: var(--gray-500); font-size: 0.8rem;">${escapeHtml(createdAt)}</span>
+                            </div>
+                            <div style="margin-top: 4px; color: var(--gray-700);">
+                                Tipo: ${log.scope === 'manual' ? 'studenti specifici' : 'tutti gli studenti'} |
+                                Stato: ${escapeHtml(log.status || 'N/D')} |
+                                Inviate: ${Number(log.sentCount || 0)}/${Number(log.requestedTotal || 0)}
+                            </div>
+                            ${failedHtml}
+                            ${copyButton}
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading notification logs:', error);
+                container.innerHTML = '<div style="color: #b91c1c;">Errore nel caricamento dello storico notifiche.</div>';
+            }
+        }
+
+        function renderNotifyResults(result, { scopeLabel = 'destinatari' } = {}) {
+            const box = document.getElementById('notify-results');
+            const summary = document.getElementById('notify-results-summary');
+            const details = document.getElementById('notify-results-details');
+            const actions = document.getElementById('notify-results-actions');
+            const sent = Number(result?.sent || 0);
+            const total = Number(result?.total || 0);
+            const failed = Array.isArray(result?.failed) ? result.failed : [];
+            const failedEmails = Array.isArray(result?.failedEmails) ? result.failedEmails : failed.map(item => item.email).filter(Boolean);
+
+            lastNotifyFailedEmails = failedEmails;
+            box.style.display = 'block';
+            summary.textContent = failed.length === 0
+                ? `Invio completato: ${sent}/${total} ${scopeLabel}.`
+                : `Invio parziale: ${sent}/${total} ${scopeLabel}. ${failed.length} mancanti o fallite.`;
+
+            if (failed.length === 0) {
+                details.innerHTML = '<div style="color: #166534;">Tutti i destinatari sono stati processati correttamente.</div>';
+                actions.style.display = 'none';
+                return;
+            }
+
+            const failedList = failed.map(item => {
+                const email = escapeHtml(item.email || 'email non disponibile');
+                const reason = escapeHtml(item.reason || 'Errore sconosciuto');
+                return `<li><strong>${email}</strong> — ${reason}</li>`;
+            }).join('');
+
+            details.innerHTML = `
+                <div style="margin-bottom: 6px; color: #92400e;">Puoi copiare o rilanciare solo i mancanti.</div>
+                <ul style="margin: 0; padding-left: 18px;">${failedList}</ul>
+            `;
+            actions.style.display = failedEmails.length > 0 ? 'flex' : 'none';
+        }
+
+        async function copyFailedEmailsToClipboard() {
+            if (!lastNotifyFailedEmails.length) return;
+            await navigator.clipboard.writeText(lastNotifyFailedEmails.join(', '));
+            showToast(`Copiate ${lastNotifyFailedEmails.length} email mancanti`, 'success');
+        }
+
+        async function sendNotifyBatchToStudents(studentEmails) {
+            const payload = {
+                subject: document.getElementById('notify-subject').value,
+                message: document.getElementById('notify-message').value,
+                studentEmails
+            };
+
+            const bccEmail = getNotifyBccEmail();
+            if (bccEmail) payload.bccEmail = bccEmail;
+
+            try {
+                return await apiRequest('/api/resources/notify-single', {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    suppressErrors: true
+                });
+            } catch (error) {
+                if (error.status === 404) {
+                    return {
+                        sent: 0,
+                        total: studentEmails.length,
+                        failed: studentEmails.map(email => ({ email, reason: error.message || 'Studente non trovato nel database' })),
+                        failedEmails: [...studentEmails],
+                        message: error.message
+                    };
+                }
+                throw error;
+            }
         }
         
         document.getElementById('notify-students-btn').addEventListener('click', openNotifyModal);
+        document.getElementById('refresh-notify-logs-btn').addEventListener('click', loadNotificationLogs);
+        document.getElementById('notify-logs-list').addEventListener('click', async (event) => {
+            const button = event.target.closest('.notify-log-copy-btn');
+            if (!button) return;
+            const emails = button.dataset.failedEmails || '';
+            if (!emails) return;
+            try {
+                await navigator.clipboard.writeText(emails);
+                showToast('Email mancanti copiate dallo storico', 'success');
+            } catch (error) {
+                showToast('Impossibile copiare le email mancanti', 'error');
+            }
+        });
+        document.getElementById('notify-copy-failed-btn').addEventListener('click', async () => {
+            try {
+                await copyFailedEmailsToClipboard();
+            } catch (error) {
+                showToast('Impossibile copiare le email mancanti', 'error');
+            }
+        });
+        document.getElementById('notify-retry-failed-btn').addEventListener('click', async () => {
+            if (!lastNotifyFailedEmails.length) return;
+            if (!lastNotifyContext || lastNotifyContext.type !== 'manual') {
+                showToast('Il retry dei mancanti è disponibile per l\'invio a studenti specifici', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById('notify-single-btn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = `Riprovo ${lastNotifyFailedEmails.length}...`;
+
+            try {
+                const result = await sendNotifyBatchToStudents(lastNotifyFailedEmails);
+                renderNotifyResults(result, { scopeLabel: 'destinatari specifici' });
+                document.getElementById('notify-single-email').value = (result.failedEmails || []).join(', ');
+                showToast(result.failed && result.failed.length ? result.message : `✅ ${result.message}`, result.failed && result.failed.length ? 'warning' : 'success');
+            } catch (error) {
+                showToast('Errore: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        });
         
         // Carica lista studenti per autocomplete
         async function loadStudentsList() {
@@ -3214,8 +3425,7 @@ Buono studio!</textarea>
                 return;
             }
             
-            // Separa email per virgola e pulisce spazi
-            const emails = emailsInput.split(',').map(e => e.trim()).filter(e => e);
+            const emails = parseNotifyEmailInput(emailsInput);
             if (emails.length === 0) {
                 showToast('Inserisci email valide', 'error');
                 return;
@@ -3224,41 +3434,25 @@ Buono studio!</textarea>
             const btn = document.getElementById('notify-single-btn');
             btn.disabled = true;
             btn.textContent = `Invio a ${emails.length}...`;
-            
-            let sent = 0;
-            let errors = [];
-            
-            for (const email of emails) {
-                try {
-                    // Per bulk email, aggiungi BCC se abilitato
-                    const bccEmail = document.getElementById('notify-bcc-enabled').checked 
-                        ? document.getElementById('notify-bcc-email').value 
-                        : null;
-                    
-                    const result = await apiRequest('/api/resources/notify-single', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            subject: document.getElementById('notify-subject').value,
-                            message: document.getElementById('notify-message').value,
-                            studentEmail: email,
-                            bccEmail: bccEmail
-                        })
-                    });
-                    sent++;
-                } catch (error) {
-                    console.error(`Error sending to ${email}:`, error);
-                    errors.push(email);
+
+            try {
+                lastNotifyContext = { type: 'manual' };
+                const result = await sendNotifyBatchToStudents(emails);
+                renderNotifyResults(result, { scopeLabel: 'destinatari specifici' });
+                document.getElementById('notify-single-email').value = (result.failedEmails || []).join(', ');
+
+                if (result.failed && result.failed.length) {
+                    showToast(`⚠️ ${result.message}`, 'warning');
+                } else {
+                    showToast(`✅ ${result.message}`, 'success');
                 }
+                loadNotificationLogs();
+            } catch (error) {
+                showToast('Errore: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Invia';
             }
-            
-            if (sent === emails.length) {
-                showToast(`✅ Email inviate a ${sent}/${emails.length} destinatari`, 'success');
-            } else {
-                showToast(`⚠️ Inviate ${sent}/${emails.length}. Errori: ${errors.join(', ')}`, 'warning');
-            }
-            
-            btn.disabled = false;
-            btn.textContent = 'Invia';
         });
         
         // Pulsante invio email di test
@@ -3318,8 +3512,15 @@ Buono studio!</textarea>
                     method: 'POST',
                     body: JSON.stringify(payload)
                 });
-                showToast(`✅ ${result.message}`, 'success');
-                closeNotifyModal();
+                lastNotifyContext = { type: 'all' };
+                renderNotifyResults(result, { scopeLabel: 'studenti' });
+                if (result.failed && result.failed.length) {
+                    showToast(`⚠️ ${result.message}`, 'warning');
+                } else {
+                    showToast(`✅ ${result.message}`, 'success');
+                    closeNotifyModal();
+                }
+                loadNotificationLogs();
             } catch (error) {
                 showToast('Errore: ' + error.message, 'error');
             } finally {

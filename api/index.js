@@ -3774,20 +3774,43 @@ app.get('/api/resources', async (req, res) => {
       values.push(type);
     }
 
+    if (req.query.lessonId !== undefined) {
+      if (req.query.lessonId === 'null') {
+        filters.push('r.lesson_id IS NULL');
+      } else {
+        filters.push(`r.lesson_id = $${filters.length + 1}`);
+        values.push(req.query.lessonId);
+      }
+    }
+
+    if (req.query.teacherId !== undefined) {
+      filters.push(`r.teacher_id = $${filters.length + 1}`);
+      values.push(req.query.teacherId);
+    }
+
+    if (req.query.source !== undefined) {
+      filters.push(`r.source = $${filters.length + 1}`);
+      values.push(req.query.source);
+    }
+
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const sql = `
       SELECT r.id, r.title, r.description, r.resource_type AS "resourceType",
              r.url, r.thumbnail_url AS "thumbnailUrl", r.file_size_bytes AS "fileSizeBytes",
              r.sort_order AS "sortOrder", r.is_published AS "isPublished",
              r.teacher_id AS "teacherId", r.lesson_id AS "lessonId",
+             r.source, r.tags,
              r.extraction_status AS "extractionStatus", r.extracted_at AS "extractedAt",
              f.name AS "teacherName", l.title AS "lessonTitle",
+             l.start_datetime AS "lessonStartDatetime",
+             m.name AS "moduleName",
              r.created_at AS "createdAt", r.updated_at AS "updatedAt"
       FROM resources r
       LEFT JOIN faculty f ON f.id = r.teacher_id
       LEFT JOIN lessons l ON l.id = r.lesson_id
+      LEFT JOIN modules m ON m.id = l.module_id
       ${where}
-      ORDER BY r.sort_order NULLS LAST, r.created_at DESC
+      ORDER BY r.sort_order NULLS LAST, l.start_datetime NULLS LAST, r.created_at DESC
     `;
 
     const { rows } = await pool.query(sql, values);
@@ -3820,7 +3843,20 @@ app.get('/api/resources/:id', async (req, res) => {
 app.post('/api/resources', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
 
-  const { title, description, resourceType, url, thumbnailUrl, fileSizeBytes, sortOrder, isPublished, teacherId, lessonId } = req.body;
+  const {
+    title,
+    description,
+    resourceType,
+    url,
+    thumbnailUrl,
+    fileSizeBytes,
+    sortOrder,
+    isPublished,
+    teacherId,
+    lessonId,
+    source,
+    tags
+  } = req.body;
 
   if (!title || !resourceType || !url) {
     return res.status(400).json({ error: 'Title, resourceType, and url are required' });
@@ -3830,15 +3866,20 @@ app.post('/api/resources', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Invalid resource type' });
   }
 
+  if (source !== undefined && !['admin', 'teacher', 'calendar_lesson', 'ai_generated'].includes(source)) {
+    return res.status(400).json({ error: 'Invalid resource source' });
+  }
+
   try {
     const id = uuidv4();
     const insert = `
-      INSERT INTO resources (id, title, description, resource_type, url, thumbnail_url, file_size_bytes, sort_order, is_published, teacher_id, lesson_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO resources (id, title, description, resource_type, url, thumbnail_url, file_size_bytes, sort_order, is_published, teacher_id, lesson_id, source, tags)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING id, title, description, resource_type AS "resourceType",
                 url, thumbnail_url AS "thumbnailUrl", file_size_bytes AS "fileSizeBytes",
                 sort_order AS "sortOrder", is_published AS "isPublished",
                 teacher_id AS "teacherId", lesson_id AS "lessonId",
+                source, tags,
                 extraction_status AS "extractionStatus", extracted_at AS "extractedAt",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `;
@@ -3853,7 +3894,9 @@ app.post('/api/resources', requireAdmin, async (req, res) => {
       typeof sortOrder === 'number' ? sortOrder : null,
       Boolean(isPublished),
       teacherId || null,
-      lessonId || null
+      lessonId || null,
+      source || 'admin',
+      Array.isArray(tags) ? tags : []
     ];
 
     const { rows } = await pool.query(insert, values);
@@ -3873,7 +3916,24 @@ app.put('/api/resources/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
 
   const { id } = req.params;
-  const { title, description, resourceType, url, thumbnailUrl, fileSizeBytes, sortOrder, isPublished, teacherId, lessonId } = req.body;
+  const {
+    title,
+    description,
+    resourceType,
+    url,
+    thumbnailUrl,
+    fileSizeBytes,
+    sortOrder,
+    isPublished,
+    teacherId,
+    lessonId,
+    source,
+    tags
+  } = req.body;
+
+  if (source !== undefined && source !== null && !['admin', 'teacher', 'calendar_lesson', 'ai_generated'].includes(source)) {
+    return res.status(400).json({ error: 'Invalid resource source' });
+  }
 
   try {
     const update = `
@@ -3888,12 +3948,15 @@ app.put('/api/resources/:id', requireAdmin, async (req, res) => {
           is_published = COALESCE($9, is_published),
           teacher_id = $10,
           lesson_id = $11,
+          source = COALESCE($12, source),
+          tags = COALESCE($13, tags),
           updated_at = NOW()
       WHERE id = $1
       RETURNING id, title, description, resource_type AS "resourceType",
                 url, thumbnail_url AS "thumbnailUrl", file_size_bytes AS "fileSizeBytes",
                 sort_order AS "sortOrder", is_published AS "isPublished",
                 teacher_id AS "teacherId", lesson_id AS "lessonId",
+                source, tags,
                 extraction_status AS "extractionStatus", extracted_at AS "extractedAt",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `;
@@ -3908,7 +3971,9 @@ app.put('/api/resources/:id', requireAdmin, async (req, res) => {
       typeof sortOrder === 'number' ? sortOrder : null,
       typeof isPublished === 'boolean' ? isPublished : null,
       teacherId || null,
-      lessonId || null
+      lessonId || null,
+      source || null,
+      Array.isArray(tags) ? tags : null
     ];
 
     const { rows } = await pool.query(update, values);

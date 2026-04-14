@@ -1059,6 +1059,11 @@
                         Descrizione
                         <input type="text" id="resource-description" name="description" placeholder="Breve descrizione della risorsa">
                     </label>
+                    <label style="grid-column: 1 / -1;">
+                        Tag (separati da virgola)
+                        <input type="text" id="resource-tags" name="tags" placeholder="Es: bibliografia, slide, approfondimento, AI-generated">
+                        <small style="color: var(--gray-500);">I tag aiutano a organizzare i materiali. Esempi: "slide", "bibliografia", "video lezione", "esercitazione"</small>
+                    </label>
                     <label>
                         Docente
                         <select id="resource-teacher" name="teacherId">
@@ -1246,20 +1251,77 @@ Buono studio!</textarea>
                 <div id="preliminary-quiz-preview" style="margin-top: 12px; display: none;"></div>
             </div>
 
+            <div id="resources-toolbar" style="margin: 20px 0; padding: 16px; background: #f9fafb; border-radius: 12px; border: 1px solid var(--gray-200);">
+                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto; gap: 12px; align-items: end; margin-bottom: 12px;">
+                    <label style="margin: 0;">
+                        🔍 Cerca
+                        <input type="text" id="resources-filter-search" placeholder="Titolo, descrizione, tag..." style="width: 100%;">
+                    </label>
+                    <label style="margin: 0;">
+                        Lezione
+                        <select id="resources-filter-lesson" style="width: 100%;">
+                            <option value="">Tutte</option>
+                            <option value="__none__">🌐 Solo generali</option>
+                            <option value="__linked__">📅 Solo collegate</option>
+                        </select>
+                    </label>
+                    <label style="margin: 0;">
+                        Docente
+                        <select id="resources-filter-teacher" style="width: 100%;">
+                            <option value="">Tutti</option>
+                        </select>
+                    </label>
+                    <label style="margin: 0;">
+                        Tipo
+                        <select id="resources-filter-type" style="width: 100%;">
+                            <option value="">Tutti</option>
+                            <option value="video">🎬 Video</option>
+                            <option value="pdf">📄 PDF</option>
+                            <option value="document">📝 Documento</option>
+                            <option value="audio">🎧 Audio</option>
+                            <option value="link">🔗 Link</option>
+                            <option value="quiz">🧠 Quiz</option>
+                        </select>
+                    </label>
+                    <label style="margin: 0;">
+                        Origine
+                        <select id="resources-filter-source" style="width: 100%;">
+                            <option value="">Tutte</option>
+                            <option value="admin">👤 Admin</option>
+                            <option value="teacher">🧑‍🏫 Docente</option>
+                            <option value="calendar_lesson">📅 Calendario</option>
+                            <option value="ai_generated">🤖 AI</option>
+                        </select>
+                    </label>
+                    <button type="button" id="resources-reset-filters" class="secondary">Reset</button>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <div id="resources-counter" style="font-size: 0.9rem; color: var(--gray-600);"></div>
+                    <label class="checkbox-label" style="margin: 0;">
+                        <input type="checkbox" id="resources-group-by-lesson">
+                        Raggruppa per lezione
+                    </label>
+                </div>
+            </div>
+
             <div class="table-wrapper">
                 <table>
                     <thead>
                         <tr>
                             <th>Titolo</th>
                             <th>Tipo</th>
+                            <th>Collegamento</th>
                             <th>Docente</th>
-                            <th>Pubblicato</th>
+                            <th>Origine</th>
+                            <th>Tag</th>
+                            <th>Data</th>
+                            <th>Stato</th>
                             <th>Azioni</th>
                         </tr>
                     </thead>
                     <tbody id="resource-table-body">
                         <tr class="empty-state" data-empty-resource>
-                            <td colspan="5">Non ci sono risorse caricate. Aggiungi la prima risorsa con il modulo qui sopra.</td>
+                            <td colspan="9">Non ci sono risorse caricate. Aggiungi la prima risorsa con il modulo qui sopra.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -2361,6 +2423,7 @@ Buono studio!</textarea>
         function resetResourceForm() {
             const form = document.getElementById('resource-form');
             form.reset();
+            document.getElementById('resource-tags').value = '';
             document.getElementById('resource-published').checked = false;
             document.getElementById('resource-cancel-btn').style.display = 'none';
             state.editingResourceId = null;
@@ -2894,39 +2957,214 @@ Buono studio!</textarea>
             }
         });
 
-        async function loadResources() {
-            const tableBody = document.getElementById('resource-table-body');
-            tableBody.querySelectorAll('tr:not([data-empty-resource])').forEach((row) => row.remove());
+        let filteredResources = [];
 
+        async function loadResources() {
             try {
                 const items = await apiRequest('/api/resources');
                 state.resources = items;
-
-                const typeIcons = { video: '🎬', pdf: '📄', document: '📝', audio: '🎧', link: '🔗', quiz: '🧠' };
-
-                items.forEach((item) => {
-                    const row = document.createElement('tr');
-                    row.dataset.id = item.id;
-                    row.innerHTML = `
-                        <td data-title><a href="${item.url}" target="_blank">${item.title}</a></td>
-                        <td data-type>${typeIcons[item.resourceType] || ''} ${item.resourceType}</td>
-                        <td>${item.teacherName || '—'}</td>
-                        <td data-status><span class="status-pill" data-status="${item.isPublished ? 'published' : 'draft'}">${item.isPublished ? 'Visibile' : 'Bozza'}</span></td>
-                        <td>
-                            <button data-edit class="icon-btn" title="Modifica">✏️</button>
-                            ${item.resourceType === 'quiz' ? '<button data-request-review class="icon-btn" title="Invia revisione docente">🧑‍🏫</button>' : ''}
-                            <button data-delete class="icon-btn danger" title="Elimina">🗑️</button>
-                        </td>
-                    `;
-                    tableBody.appendChild(row);
-                });
-
-                toggleEmptyState(tableBody, items.length > 0, '[data-empty-resource]');
+                populateResourceFilters();
+                applyResourceFilters();
             } catch (error) {
                 state.resources = [];
-                toggleEmptyState(tableBody, false, '[data-empty-resource]');
+                filteredResources = [];
+                renderResourcesTable();
+                renderResourcesCounter();
             }
         }
+
+        function populateResourceFilters() {
+            const lessonSel = document.getElementById('resources-filter-lesson');
+            const prevLesson = lessonSel.value;
+            const lessons = new Map();
+
+            (state.resources || []).forEach((resource) => {
+                if (resource.lessonId && resource.lessonTitle) {
+                    lessons.set(resource.lessonId, {
+                        title: resource.lessonTitle,
+                        date: resource.lessonStartDatetime
+                    });
+                }
+            });
+
+            lessonSel.innerHTML = '<option value="">Tutte</option>' +
+                '<option value="__none__">🌐 Solo generali</option>' +
+                '<option value="__linked__">📅 Solo collegate</option>';
+
+            Array.from(lessons.entries())
+                .sort((a, b) => {
+                    const da = a[1].date ? new Date(a[1].date).getTime() : 0;
+                    const db = b[1].date ? new Date(b[1].date).getTime() : 0;
+                    return da - db;
+                })
+                .forEach(([id, info]) => {
+                    const dateStr = info.date ? new Date(info.date).toLocaleDateString('it-IT') : '';
+                    const opt = document.createElement('option');
+                    opt.value = id;
+                    opt.textContent = (dateStr ? dateStr + ' — ' : '') + info.title;
+                    lessonSel.appendChild(opt);
+                });
+
+            if (prevLesson) lessonSel.value = prevLesson;
+
+            const teacherSel = document.getElementById('resources-filter-teacher');
+            const prevTeacher = teacherSel.value;
+            teacherSel.innerHTML = '<option value="">Tutti</option>';
+            (state.faculty || []).forEach((faculty) => {
+                teacherSel.innerHTML += '<option value="' + faculty.id + '">' + escapeHtml(faculty.name || faculty.email || 'Docente') + '</option>';
+            });
+            if (prevTeacher) teacherSel.value = prevTeacher;
+        }
+
+        function applyResourceFilters() {
+            const search = (document.getElementById('resources-filter-search').value || '').toLowerCase().trim();
+            const lessonFilter = document.getElementById('resources-filter-lesson').value;
+            const teacherFilter = document.getElementById('resources-filter-teacher').value;
+            const typeFilter = document.getElementById('resources-filter-type').value;
+            const sourceFilter = document.getElementById('resources-filter-source').value;
+
+            filteredResources = (state.resources || []).filter((resource) => {
+                if (search) {
+                    const haystack = (
+                        (resource.title || '') + ' ' +
+                        (resource.description || '') + ' ' +
+                        (resource.tags || []).join(' ')
+                    ).toLowerCase();
+                    if (!haystack.includes(search)) return false;
+                }
+                if (lessonFilter === '__none__' && resource.lessonId) return false;
+                if (lessonFilter === '__linked__' && !resource.lessonId) return false;
+                if (lessonFilter && lessonFilter !== '__none__' && lessonFilter !== '__linked__' && resource.lessonId !== lessonFilter) return false;
+                if (teacherFilter && resource.teacherId !== teacherFilter) return false;
+                if (typeFilter && resource.resourceType !== typeFilter) return false;
+                if (sourceFilter && resource.source !== sourceFilter) return false;
+                return true;
+            });
+
+            renderResourcesTable();
+            renderResourcesCounter();
+        }
+
+        function renderResourcesCounter() {
+            const total = (state.resources || []).length;
+            const linked = (state.resources || []).filter((resource) => resource.lessonId).length;
+            const general = total - linked;
+            const shown = filteredResources.length;
+            document.getElementById('resources-counter').innerHTML =
+                `<strong>Totale:</strong> ${total} &nbsp;•&nbsp; ` +
+                `<span style="color: #0369a1;">📅 Collegate: ${linked}</span> &nbsp;•&nbsp; ` +
+                `<span style="color: #6b7280;">🌐 Generali: ${general}</span> &nbsp;•&nbsp; ` +
+                `<strong>Visualizzate:</strong> ${shown}`;
+        }
+
+        function renderResourcesTable() {
+            const tableBody = document.getElementById('resource-table-body');
+            tableBody.querySelectorAll('tr:not([data-empty-resource])').forEach((row) => row.remove());
+
+            if (document.getElementById('resources-group-by-lesson').checked) {
+                renderGroupedByLesson(tableBody);
+            } else {
+                filteredResources.forEach((item) => tableBody.appendChild(buildResourceRow(item)));
+            }
+
+            toggleEmptyState(tableBody, filteredResources.length > 0, '[data-empty-resource]');
+        }
+
+        function renderGroupedByLesson(tableBody) {
+            const groups = new Map();
+
+            filteredResources.forEach((resource) => {
+                const key = resource.lessonId || '__general__';
+                if (!groups.has(key)) {
+                    groups.set(key, {
+                        title: resource.lessonId
+                            ? (resource.lessonTitle + (resource.lessonStartDatetime ? ' — ' + new Date(resource.lessonStartDatetime).toLocaleDateString('it-IT') : ''))
+                            : '🌐 Materiali generali (non collegati a lezioni)',
+                        date: resource.lessonStartDatetime,
+                        items: []
+                    });
+                }
+                groups.get(key).items.push(resource);
+            });
+
+            Array.from(groups.entries())
+                .sort((a, b) => {
+                    if (a[0] === '__general__') return 1;
+                    if (b[0] === '__general__') return -1;
+                    const da = a[1].date ? new Date(a[1].date).getTime() : 0;
+                    const db = b[1].date ? new Date(b[1].date).getTime() : 0;
+                    return da - db;
+                })
+                .forEach(([, group]) => {
+                    const headerRow = document.createElement('tr');
+                    headerRow.style.background = '#f3f4f6';
+                    headerRow.innerHTML = `<td colspan="9" style="font-weight: 600; padding: 12px;">
+                        ${escapeHtml(group.title)} <span style="color: var(--gray-500); font-weight: 400;">(${group.items.length} ${group.items.length === 1 ? 'materiale' : 'materiali'})</span>
+                    </td>`;
+                    tableBody.appendChild(headerRow);
+                    group.items.forEach((item) => tableBody.appendChild(buildResourceRow(item)));
+                });
+        }
+
+        function buildResourceRow(item) {
+            const typeIcons = { video: '🎬', pdf: '📄', document: '📝', audio: '🎧', link: '🔗', quiz: '🧠' };
+            const sourceInfo = {
+                admin: { icon: '👤', label: 'Admin', color: '#6b7280' },
+                teacher: { icon: '🧑‍🏫', label: 'Docente', color: '#0369a1' },
+                calendar_lesson: { icon: '📅', label: 'Calendario', color: '#059669' },
+                ai_generated: { icon: '🤖', label: 'AI', color: '#7c3aed' }
+            };
+            const source = sourceInfo[item.source] || sourceInfo.admin;
+
+            let linkBadge;
+            if (item.lessonId && item.lessonTitle) {
+                const dateStr = item.lessonStartDatetime ? new Date(item.lessonStartDatetime).toLocaleDateString('it-IT') : '';
+                linkBadge = `<span style="display: inline-block; padding: 3px 8px; background: #dbeafe; color: #1e40af; border-radius: 6px; font-size: 0.8rem;">📅 ${escapeHtml(dateStr ? dateStr + ' — ' : '')}${escapeHtml(item.lessonTitle)}</span>`;
+            } else {
+                linkBadge = '<span style="display: inline-block; padding: 3px 8px; background: #f3f4f6; color: #6b7280; border-radius: 6px; font-size: 0.8rem;">🌐 Generale</span>';
+            }
+
+            const tags = (item.tags || []).map((tag) =>
+                `<span style="display: inline-block; padding: 2px 6px; background: #fef3c7; color: #92400e; border-radius: 4px; font-size: 0.75rem; margin: 1px;">${escapeHtml(tag)}</span>`
+            ).join(' ') || '<span style="color: var(--gray-400); font-size: 0.8rem;">—</span>';
+
+            const row = document.createElement('tr');
+            row.dataset.id = item.id;
+            row.innerHTML = `
+                <td data-title><a href="${item.url}" target="_blank">${escapeHtml(item.title)}</a></td>
+                <td data-type>${typeIcons[item.resourceType] || ''} ${escapeHtml(item.resourceType)}</td>
+                <td>${linkBadge}</td>
+                <td>${escapeHtml(item.teacherName || '—')}</td>
+                <td><span style="color: ${source.color}; font-size: 0.85rem;">${source.icon} ${source.label}</span></td>
+                <td>${tags}</td>
+                <td style="font-size: 0.85rem; color: var(--gray-600);">${item.createdAt ? new Date(item.createdAt).toLocaleDateString('it-IT') : '—'}</td>
+                <td data-status><span class="status-pill" data-status="${item.isPublished ? 'published' : 'draft'}">${item.isPublished ? 'Visibile' : 'Bozza'}</span></td>
+                <td>
+                    <button data-edit class="icon-btn" title="Modifica">✏️</button>
+                    ${item.resourceType === 'quiz' ? '<button data-request-review class="icon-btn" title="Invia revisione docente">🧑‍🏫</button>' : ''}
+                    <button data-delete class="icon-btn danger" title="Elimina">🗑️</button>
+                </td>
+            `;
+            return row;
+        }
+
+        ['resources-filter-search', 'resources-filter-lesson', 'resources-filter-teacher', 'resources-filter-type', 'resources-filter-source'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('input', applyResourceFilters);
+            el.addEventListener('change', applyResourceFilters);
+        });
+
+        document.getElementById('resources-group-by-lesson').addEventListener('change', renderResourcesTable);
+        document.getElementById('resources-reset-filters').addEventListener('click', () => {
+            document.getElementById('resources-filter-search').value = '';
+            document.getElementById('resources-filter-lesson').value = '';
+            document.getElementById('resources-filter-teacher').value = '';
+            document.getElementById('resources-filter-type').value = '';
+            document.getElementById('resources-filter-source').value = '';
+            document.getElementById('resources-group-by-lesson').checked = false;
+            applyResourceFilters();
+        });
 
         // Notifica studenti
         function openNotifyModal() {
@@ -3450,11 +3688,14 @@ Buono studio!</textarea>
 
         document.getElementById('resource-form').addEventListener('submit', async (event) => {
             event.preventDefault();
+            const tagsRaw = document.getElementById('resource-tags').value || '';
+            const tags = tagsRaw.split(',').map((tag) => tag.trim()).filter(Boolean);
             const payload = {
                 title: document.getElementById('resource-title').value.trim(),
                 resourceType: document.getElementById('resource-type').value,
                 url: document.getElementById('resource-url').value.trim(),
                 description: document.getElementById('resource-description').value.trim() || null,
+                tags,
                 sortOrder: document.getElementById('resource-sort-order').value === '' ? null : Number(document.getElementById('resource-sort-order').value),
                 isPublished: document.getElementById('resource-published').checked,
                 teacherId: document.getElementById('resource-teacher').value || null,
@@ -3503,6 +3744,7 @@ Buono studio!</textarea>
                 document.getElementById('resource-type').value = current.resourceType || '';
                 document.getElementById('resource-url').value = current.url || '';
                 document.getElementById('resource-description').value = current.description || '';
+                document.getElementById('resource-tags').value = (current.tags || []).join(', ');
                 document.getElementById('resource-sort-order').value = current.sortOrder ?? '';
                 document.getElementById('resource-published').checked = current.isPublished;
                 document.getElementById('resource-teacher').value = current.teacherId || '';
@@ -3614,10 +3856,12 @@ Buono studio!</textarea>
                 toggleEmptyState(tableBody, items.length > 0, '[data-empty-faculty]');
                 if (typeof updateTeacherSelect === 'function') updateTeacherSelect();
                 if (typeof updateResourceTeacherSelect === 'function') updateResourceTeacherSelect();
+                if (typeof populateResourceFilters === 'function') populateResourceFilters();
                 if (typeof fillTeacherMaterialsFilterOptions === 'function') fillTeacherMaterialsFilterOptions();
             } catch (error) {
                 state.faculty = [];
                 toggleEmptyState(tableBody, false, '[data-empty-faculty]');
+                if (typeof populateResourceFilters === 'function') populateResourceFilters();
                 if (typeof fillTeacherMaterialsFilterOptions === 'function') fillTeacherMaterialsFilterOptions();
             }
         }
@@ -5015,7 +5259,8 @@ Buono studio!</textarea>
                                 sortOrder: null,
                                 isPublished: true,
                                 teacherId: teacherId,
-                                lessonId: calendarLessonId
+                                lessonId: calendarLessonId,
+                                source: 'calendar_lesson'
                             })
                         });
                         statusEl.textContent = '✅ ' + finalName + ' — salvato nelle risorse';

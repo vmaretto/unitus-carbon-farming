@@ -27,6 +27,7 @@ Tabelle esistenti (create automaticamente in `initDatabase()` dentro server.js):
 - Token JWT generato tramite `POST /api/auth/login` con password da env var `ADMIN_PASSWORD`
 - Le API di lettura (GET) sono pubbliche (servono al sito)
 - Il middleware `requireAdmin` protegge le route di scrittura
+- In alternativa al JWT, le route protette da `requireAdmin` accettano anche un API key statico via env var `PIPELINE_API_KEY` — usato dalla pipeline post-produzione `cf-lesson-pipeline` per non dover rinnovare il JWT ogni 7 giorni. Il key passa nell'header `Authorization: Bearer <PIPELINE_API_KEY>`.
 
 ## Convenzioni
 - Database: snake_case per colonne, UUID come primary key

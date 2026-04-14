@@ -61,6 +61,7 @@ const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
 const RESEND_API_KEY = process.env.RESEND_API_KEY || null;
 const BREVO_API_KEY = process.env.BREVO_API_KEY || null;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
+const PIPELINE_API_KEY = process.env.PIPELINE_API_KEY || null;
 
 // Helper per invio email con fallback Resend -> Brevo
 async function sendEmail({ to, subject, html, bcc, from }) {
@@ -134,22 +135,26 @@ function verifyToken(token) {
 }
 
 function requireAdmin(req, res, next) {
-  // Se ADMIN_PASSWORD non è configurata, l'admin è disabilitato (503)
   if (!ADMIN_PASSWORD) {
     return res.status(503).json({ error: 'Admin authentication not configured. Set ADMIN_PASSWORD environment variable.' });
   }
-
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authentication required' });
   }
-
   const token = authHeader.slice(7);
+
+  // Machine-to-machine: pipeline API key (no expiry).
+  // Used by cf-lesson-pipeline scheduled task to publish lessons/materials.
+  if (PIPELINE_API_KEY && token === PIPELINE_API_KEY) {
+    req.admin = { role: 'admin', source: 'pipeline_api_key' };
+    return next();
+  }
+
   const payload = verifyToken(token);
   if (!payload || payload.role !== 'admin') {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
-
   req.admin = payload;
   next();
 }

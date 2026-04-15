@@ -3255,13 +3255,39 @@ Buono studio!</textarea>
 
                 container.innerHTML = logs.map(log => {
                     const createdAt = log.createdAt ? new Date(log.createdAt).toLocaleString('it-IT') : 'N/D';
+                    const allRecipients = Array.isArray(log.allRecipients) ? log.allRecipients : [];
                     const failedRecipients = Array.isArray(log.failedRecipients) ? log.failedRecipients : [];
                     const failedEmails = failedRecipients.map(item => item.email).filter(Boolean);
+                    const recipientsSummary = allRecipients.length
+                        ? allRecipients.map(item => {
+                            const email = escapeHtml(item.email || 'email non disponibile');
+                            const reason = item.reason ? ` — ${escapeHtml(item.reason)}` : '';
+                            const statusLabel = item.status === 'sent'
+                                ? 'inviata'
+                                : item.status === 'not_found'
+                                    ? 'non trovato'
+                                    : item.status === 'failed'
+                                        ? 'fallita'
+                                        : escapeHtml(item.status || 'N/D');
+                            return `<li><strong>${email}</strong> — ${statusLabel}${reason}</li>`;
+                        }).join('')
+                        : '';
                     const failedHtml = failedRecipients.length
                         ? `<div style="margin-top: 6px; color: #92400e;"><strong>Mancanti:</strong> ${escapeHtml(failedEmails.join(', '))}</div>`
                         : '<div style="margin-top: 6px; color: #166534;">Nessun destinatario mancante.</div>';
                     const copyButton = failedEmails.length
                         ? `<button type="button" class="secondary notify-log-copy-btn" data-failed-emails="${escapeHtml(failedEmails.join(', '))}" style="font-size: 0.75rem; margin-top: 8px;">Copia mancanti</button>`
+                        : '';
+                    const recipientsButton = allRecipients.length
+                        ? `<button type="button" class="secondary notify-log-toggle-btn" style="font-size: 0.75rem; margin-top: 8px;">Mostra destinatari (${allRecipients.length})</button>`
+                        : '';
+                    const recipientsHtml = allRecipients.length
+                        ? `
+                            <div class="notify-log-recipients" style="display: none; margin-top: 8px; padding: 8px; background: rgba(255,255,255,0.7); border: 1px solid var(--gray-200); border-radius: 8px;">
+                                <div style="margin-bottom: 6px; color: var(--gray-700); font-weight: 600;">Destinatari processati</div>
+                                <ul style="margin: 0; padding-left: 18px;">${recipientsSummary}</ul>
+                            </div>
+                        `
                         : '';
 
                     return `
@@ -3276,7 +3302,11 @@ Buono studio!</textarea>
                                 Inviate: ${Number(log.sentCount || 0)}/${Number(log.requestedTotal || 0)}
                             </div>
                             ${failedHtml}
-                            ${copyButton}
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                ${copyButton}
+                                ${recipientsButton}
+                            </div>
+                            ${recipientsHtml}
                         </div>
                     `;
                 }).join('');
@@ -3360,7 +3390,19 @@ Buono studio!</textarea>
         document.getElementById('notify-students-btn').addEventListener('click', openNotifyModal);
         document.getElementById('refresh-notify-logs-btn').addEventListener('click', loadNotificationLogs);
         document.getElementById('notify-logs-list').addEventListener('click', async (event) => {
+            const toggleButton = event.target.closest('.notify-log-toggle-btn');
             const button = event.target.closest('.notify-log-copy-btn');
+            if (toggleButton) {
+                const wrapper = toggleButton.closest('div[style*="border-top"]') || toggleButton.closest('div');
+                const panel = wrapper?.querySelector('.notify-log-recipients');
+                if (!panel) return;
+                const isOpen = panel.style.display !== 'none';
+                panel.style.display = isOpen ? 'none' : 'block';
+                toggleButton.textContent = isOpen
+                    ? toggleButton.textContent.replace('Nascondi', 'Mostra')
+                    : toggleButton.textContent.replace('Mostra', 'Nascondi');
+                return;
+            }
             if (!button) return;
             const emails = button.dataset.failedEmails || '';
             if (!emails) return;

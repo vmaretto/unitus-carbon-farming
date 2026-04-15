@@ -4831,7 +4831,18 @@ app.get('/api/resources/notify-logs', requireAdmin, async (_req, res) => {
             ORDER BY r.created_at ASC
           ) FILTER (WHERE r.status IN ('failed', 'not_found')),
           '[]'::json
-        ) AS "failedRecipients"
+        ) AS "failedRecipients",
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'email', r.email,
+              'status', r.status,
+              'reason', r.error_message
+            )
+            ORDER BY r.created_at ASC
+          ) FILTER (WHERE r.id IS NOT NULL),
+          '[]'::json
+        ) AS "allRecipients"
       FROM notification_batches b
       LEFT JOIN notification_batch_recipients r ON r.batch_id = b.id
       GROUP BY b.id

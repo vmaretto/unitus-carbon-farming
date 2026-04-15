@@ -4005,25 +4005,6 @@ app.get('/api/resources', async (req, res) => {
   }
 });
 
-// Get single resource by ID
-app.get('/api/resources/:id', async (req, res) => {
-  if (!ensurePool(res)) return;
-  try {
-    const { rows } = await pool.query(`
-      SELECT id, title, description, resource_type AS "resourceType",
-             url, thumbnail_url AS "thumbnailUrl", is_published AS "isPublished",
-             extracted_text AS "extractedText", extraction_status AS "extractionStatus",
-             extraction_metadata AS "extractionMetadata", extracted_at AS "extractedAt"
-      FROM resources WHERE id = $1
-    `, [req.params.id]);
-    if (!rows.length) return res.status(404).json({ error: 'Resource not found' });
-    res.json(rows[0]);
-  } catch (error) {
-    console.error('Error fetching resource', error);
-    res.status(500).json({ error: 'Unable to retrieve resource' });
-  }
-});
-
 app.post('/api/resources', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
 
@@ -4862,6 +4843,25 @@ app.get('/api/resources/notify-logs', requireAdmin, async (_req, res) => {
   } catch (error) {
     console.error('Error fetching notification logs:', error);
     res.status(500).json({ error: 'Errore durante il recupero dello storico notifiche' });
+  }
+});
+
+// Get single resource by ID
+app.get('/api/resources/:id', async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, title, description, resource_type AS "resourceType",
+             url, thumbnail_url AS "thumbnailUrl", is_published AS "isPublished",
+             extracted_text AS "extractedText", extraction_status AS "extractionStatus",
+             extraction_metadata AS "extractionMetadata", extracted_at AS "extractedAt"
+      FROM resources WHERE id = $1
+    `, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Resource not found' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching resource', error);
+    res.status(500).json({ error: 'Unable to retrieve resource' });
   }
 });
 

@@ -90,6 +90,7 @@
         </div>
     </main>
 
+    <script src="/learn/js/guest-guard.js"></script>
     <script>
         // Auth check
         const token = localStorage.getItem('learnToken');
@@ -109,6 +110,9 @@
         function renderResource(item) {
             // Quiz: link alla pagina quiz invece del URL diretto
             if (item.resourceType === 'quiz') {
+                if (window.__isGuest) {
+                    return '';
+                }
                 return `
                     <a href="/learn/quiz.html?resourceId=${item.id}" class="resource-item">
                         <div class="resource-icon quiz" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">📝</div>
@@ -171,7 +175,7 @@
                 // Quiz section
                 const quizSection = document.getElementById('quiz-section');
                 const quizList = document.getElementById('quiz-list');
-                if (quizzes.length > 0) {
+                if (!window.__isGuest && quizzes.length > 0) {
                     quizSection.style.display = 'block';
                     quizList.innerHTML = quizzes.map(renderResource).join('');
                 }

@@ -195,6 +195,7 @@
         </div>
     </main>
 
+    <script src="/learn/js/guest-guard.js"></script>
     <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
     <script>
@@ -257,10 +258,20 @@
                 if (profile) {
                     currentUser = profile;
                     localStorage.setItem('learnUser', JSON.stringify(profile));
+                    window.__isGuest = profile.role === 'guest';
+                    window.__skipProgressTracking = window.__isGuest;
                 }
             } catch (error) {
                 console.error('Error refreshing student profile', error);
             }
+        }
+
+        function applyGuestLessonMode() {
+            if (!window.__isGuest) return;
+            document.querySelector('.progress-label')?.style.setProperty('display', 'none');
+            document.querySelector('.progress-info')?.style.setProperty('display', 'none');
+            document.getElementById('quiz-section')?.style.setProperty('display', 'none');
+            document.getElementById('completion-section')?.style.setProperty('display', 'none');
         }
 
         // --- Segment tracking ---
@@ -544,12 +555,14 @@
                 }
             });
 
-            // Save progress every 10 seconds
-            saveInterval = setInterval(saveProgress, 10000);
+            if (!window.__isGuest) {
+                // Save progress every 10 seconds
+                saveInterval = setInterval(saveProgress, 10000);
 
-            // Save on pause and on page unload
-            plyrInstance.on('pause', saveProgress);
-            window.addEventListener('beforeunload', saveProgress);
+                // Save on pause and on page unload
+                plyrInstance.on('pause', saveProgress);
+                window.addEventListener('beforeunload', saveProgress);
+            }
         }
 
         function updateProgressUI(percent) {
@@ -558,6 +571,7 @@
         }
 
         async function saveProgress() {
+            if (window.__skipProgressTracking || window.__isGuest) return;
             if (!plyrInstance || !segmentTracker) return;
 
             const watchPercentage = segmentTracker.getPercentage();
@@ -635,6 +649,9 @@
         }
 
         async function trackResourceView(resourceId) {
+            if (window.__isGuest) {
+                return false;
+            }
             try {
                 await api(`/api/lms/resources/${resourceId}/view`, {
                     method: 'POST',
@@ -663,6 +680,10 @@
 
         // --- Quiz ---
         async function loadQuiz() {
+            if (window.__isGuest) {
+                document.getElementById('quiz-section').style.display = 'none';
+                return;
+            }
             try {
                 const quizzes = await api(`/api/lms/quizzes?lessonId=${lessonId}`);
                 if (!quizzes || !quizzes.length) {
@@ -762,6 +783,7 @@
         }
 
         async function submitQuiz() {
+            if (window.__isGuest) return;
             if (!currentQuiz) return;
             const answers = {};
 
@@ -906,6 +928,10 @@
 
         // --- Completion ---
         function updateCompletionUI() {
+            if (window.__isGuest) {
+                document.getElementById('completion-section').style.display = 'none';
+                return;
+            }
             const section = document.getElementById('completion-section');
             const criteriaDiv = document.getElementById('completion-criteria');
             const actionDiv = document.getElementById('completion-action');
@@ -963,6 +989,7 @@
         }
 
         async function completeLesson() {
+            if (window.__isGuest) return;
             try {
                 // Save progress one last time before completing
                 await saveProgress();
@@ -997,7 +1024,10 @@
         // Periodically update completion UI
         setInterval(updateCompletionUI, 15000);
 
-        refreshCurrentUser().finally(() => loadLesson());
+        refreshCurrentUser().finally(() => {
+            applyGuestLessonMode();
+            loadLesson();
+        });
     })();
     </script>
 </body>

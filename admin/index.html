@@ -1698,6 +1698,7 @@ Buono studio!</textarea>
                             Ruolo
                             <select id="lms-enroll-role" name="role">
                                 <option value="student">Studente</option>
+                                <option value="guest">👁️ Ospite (solo consultazione)</option>
                                 <option value="teacher">Docente</option>
                                 <option value="admin">Admin</option>
                             </select>
@@ -6230,6 +6231,9 @@ Buono studio!</textarea>
                 tr.dataset.id = en.id;
                 const statusMap = { active: 'Attivo', suspended: 'Sospeso', completed: 'Completato', cancelled: 'Cancellato' };
                 const statusClass = en.status === 'active' ? 'published' : 'draft';
+                const roleBadge = en.role === 'guest'
+                    ? '<span style="display: inline-block; padding: 2px 8px; background: #fef3c7; color: #92400e; border-radius: 4px; font-size: 0.75rem; margin-left: 6px;">👁️ Ospite</span>'
+                    : '';
                 const lastLogin = en.lastLoginAt 
                     ? new Date(en.lastLoginAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                     : '<span style="color: #b91c1c;">Mai</span>';
@@ -6239,7 +6243,7 @@ Buono studio!</textarea>
                      'background: #f3f4f6; color: #374151;') : '';
                 tr.innerHTML = `
                     <td>${en.email}</td>
-                    <td>${[en.firstName, en.lastName].filter(Boolean).join(' ') || '—'}</td>
+                    <td>${[en.firstName, en.lastName].filter(Boolean).join(' ') || '—'} ${roleBadge}</td>
                     <td><span style="padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; ${enrollTypeStyle}">${en.enrollmentType || '—'}</span></td>
                     <td>${en.partnerCompany || '—'}</td>
                     <td><span class="status-pill" data-status="${statusClass}">${statusMap[en.status] || en.status}</span></td>

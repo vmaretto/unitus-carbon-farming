@@ -103,6 +103,7 @@
         </div>
     </main>
 
+    <script src="/learn/js/guest-guard.js"></script>
     <script>
         const token = localStorage.getItem('learnToken');
         if (!token) { window.location.href = '/learn/login.html'; }
@@ -133,6 +134,8 @@
 
         async function loadCourse() {
             try {
+                const isGuest = window.__isGuest === true;
+
                 // Load course info from my-courses
                 const courses = await api('/api/lms/my-courses');
                 if (!courses) return;
@@ -151,9 +154,17 @@
 
                 document.getElementById('course-title').textContent = course.title;
                 document.getElementById('breadcrumb-title').textContent = course.title;
-                document.getElementById('course-meta').textContent = `${course.editionName} — ${attendedHoursText} ore su ${totalHoursText} frequentate (${pct}%)`;
+                document.getElementById('course-meta').textContent = isGuest
+                    ? `${course.editionName} — accesso in consultazione`
+                    : `${course.editionName} — ${attendedHoursText} ore su ${totalHoursText} frequentate (${pct}%)`;
                 document.getElementById('progress-fill').style.width = pct + '%';
                 document.title = `${course.title} - Carbon Farming Master`;
+
+                if (isGuest) {
+                    document.querySelector('.progress-bar')?.style.setProperty('display', 'none');
+                    document.querySelector('.attendance-legend')?.style.setProperty('display', 'none');
+                    document.getElementById('attendance-summary').style.display = 'none';
+                }
 
                 // Load modules for this course
                 const modulesRes = await fetch(`/api/lms/modules?courseId=${courseId}`);
@@ -165,15 +176,17 @@
 
                 // Load individual lesson progress for this student
                 let lessonProgressList = [];
-                try {
-                    const progressRes = await fetch(`/api/lms/lessons/progress?courseId=${courseId}`, {
-                        headers: { 'Authorization': 'Bearer ' + token }
-                    });
-                    if (progressRes.ok) {
-                        lessonProgressList = await progressRes.json();
+                if (!isGuest) {
+                    try {
+                        const progressRes = await fetch(`/api/lms/lessons/progress?courseId=${courseId}`, {
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+                        if (progressRes.ok) {
+                            lessonProgressList = await progressRes.json();
+                        }
+                    } catch (e) {
+                        console.warn('Could not load lesson progress', e);
                     }
-                } catch (e) {
-                    console.warn('Could not load lesson progress', e);
                 }
 
                 const progressMap = {};
@@ -182,6 +195,10 @@
                 }
 
                 function getLessonStatus(progress, lesson) {
+                    if (isGuest) {
+                        const isPast = lesson?.startDatetime ? new Date(lesson.startDatetime) <= new Date() : false;
+                        return { icon: isPast ? '📚' : '⬜', key: isPast ? 'guest_available' : 'future', isCompleted: false };
+                    }
                     const startDatetime = progress?.startDatetime || lesson?.startDatetime || null;
                     const isPast = startDatetime ? new Date(startDatetime) <= new Date() : false;
                     if (progress?.attendanceType === 'in_person') {

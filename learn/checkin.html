@@ -81,12 +81,14 @@
         </div>
     </main>
 
+    <script src="/learn/js/guest-guard.js"></script>
     <script>
     (function() {
         'use strict';
 
         const token = localStorage.getItem('learnToken');
         if (!token) { window.location.href = '/learn/login.html'; }
+        if (window.__isGuest) { window.location.href = '/learn/index.html'; }
 
         document.getElementById('logout-btn')?.addEventListener('click', (e) => {
             e.preventDefault();

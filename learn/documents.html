@@ -102,11 +102,13 @@
         </div>
     </div>
 
+    <script src="/learn/js/guest-guard.js"></script>
     <script>
         const token = localStorage.getItem('learnToken') || localStorage.getItem('token');
         if (!token) {
             window.location.href = '/learn/login.html?redirect=' + encodeURIComponent(window.location.href);
         }
+        if (window.__isGuest) { window.location.href = '/learn/index.html'; }
 
         document.getElementById('logout-btn')?.addEventListener('click', (e) => {
             e.preventDefault();

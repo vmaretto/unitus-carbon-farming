@@ -116,6 +116,7 @@
         </div>
     </main>
 
+    <script src="/learn/js/guest-guard.js"></script>
     <script>
     (function() {
         'use strict';
@@ -183,6 +184,11 @@
         }
 
         function getLessonStatus(lesson) {
+            if (window.__isGuest) {
+                const start = lesson.startDatetime ? new Date(lesson.startDatetime) : null;
+                const isPast = start && start < new Date();
+                return { icon: isPast ? '📚' : '⬜', label: isPast ? 'Materiali disponibili' : 'Futura', bucket: 'future' };
+            }
             const now = new Date();
             const start = lesson.startDatetime ? new Date(lesson.startDatetime) : null;
             const progress = lesson.lmsLessonId ? state.progressByLmsLesson.get(lesson.lmsLessonId) : null;
@@ -315,10 +321,12 @@
                 if (lesson.calendarLessonId) state.lmsByCalendarLesson.set(lesson.calendarLessonId, lesson);
             });
 
-            const progressLists = await Promise.all(state.courseIds.map((courseId) => api(`/api/lms/lessons/progress?courseId=${courseId}`)));
-            progressLists.flat().forEach((progress) => {
-                if (progress && progress.lessonId) state.progressByLmsLesson.set(progress.lessonId, progress);
-            });
+            if (!window.__isGuest) {
+                const progressLists = await Promise.all(state.courseIds.map((courseId) => api(`/api/lms/lessons/progress?courseId=${courseId}`)));
+                progressLists.flat().forEach((progress) => {
+                    if (progress && progress.lessonId) state.progressByLmsLesson.set(progress.lessonId, progress);
+                });
+            }
 
             await loadCalendar();
         }

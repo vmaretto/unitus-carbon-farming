@@ -346,11 +346,18 @@ function requireStudent(req, res, next) {
 
   const token = authHeader.slice(7);
   const payload = verifyToken(token);
-  if (!payload || !['student', 'teacher', 'admin'].includes(payload.role)) {
+  if (!payload || !['student', 'teacher', 'admin', 'guest'].includes(payload.role)) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
   req.user = payload;
+  next();
+}
+
+function requireNonGuest(req, res, next) {
+  if (req.user && req.user.role === 'guest') {
+    return res.status(403).json({ error: 'Questa funzionalità non è disponibile per gli ospiti' });
+  }
   next();
 }
 
@@ -5644,6 +5651,9 @@ app.get('/api/lms/lessons', async (req, res) => {
 // Progresso individuale per lezione (usato nella pagina corso) - DEVE essere prima di /lessons/:id
 app.get('/api/lms/lessons/progress', requireStudent, async (req, res) => {
   if (!ensurePool(res)) return;
+  if (req.user.role === 'guest') {
+    return res.json([]);
+  }
   try {
     const { courseId } = req.query;
     // Get all lms_lessons for this course (or all) with progress + attendance
@@ -5743,7 +5753,7 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
   }
 });
 
-app.post('/api/lms/resources/:id/view', requireStudent, async (req, res) => {
+app.post('/api/lms/resources/:id/view', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { rows: resources } = await pool.query(
@@ -6315,7 +6325,7 @@ app.get('/api/students/me', requireStudent, async (req, res) => {
     if (!rows.length) {
       return res.status(404).json({ error: 'Studente non trovato' });
     }
-    res.json(rows[0]);
+    res.json({ ...rows[0], role: req.user.role });
   } catch (error) {
     console.error('Get student profile error:', error);
     res.status(500).json({ error: 'Errore nel recupero profilo studente' });
@@ -6366,6 +6376,17 @@ app.get('/api/lms/my-courses', requireStudent, async (req, res) => {
 // Progresso complessivo studente
 app.get('/api/lms/my-progress', requireStudent, async (req, res) => {
   if (!ensurePool(res)) return;
+  if (req.user.role === 'guest') {
+    return res.json({
+      lessons: [],
+      completedCount: 0,
+      totalCount: 0,
+      overallPercent: 0,
+      courses: [],
+      totalAttendances: 0,
+      isGuest: true
+    });
+  }
   try {
     // Lezioni completate e totali per ogni corso
     const { rows: courseProgress } = await pool.query(`
@@ -6411,6 +6432,17 @@ app.get('/api/lms/my-progress', requireStudent, async (req, res) => {
 
 app.get('/api/lms/progress/summary', requireStudent, async (req, res) => {
   if (!ensurePool(res)) return;
+  if (req.user.role === 'guest') {
+    return res.json({
+      totalHours: 0,
+      completedHours: 0,
+      progressPercent: 0,
+      modulesProgress: [],
+      courses: [],
+      totalAttendances: 0,
+      isGuest: true
+    });
+  }
   try {
     const { rows: courseProgress } = await pool.query(`
       SELECT c.id AS "courseId", c.title AS "courseTitle",
@@ -6496,7 +6528,7 @@ app.get('/api/lms/questions', requireStudent, async (req, res) => {
   }
 });
 
-app.post('/api/lms/questions', requireStudent, async (req, res) => {
+app.post('/api/lms/questions', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   const { questionText, moduleId, lessonId } = req.body || {};
   if (!questionText || !String(questionText).trim()) {
@@ -6810,7 +6842,7 @@ app.post('/api/teachers/questions/:id/reply', requireTeacher, async (req, res) =
 });
 
 // Salva progresso video lezione
-app.post('/api/lms/lessons/:id/progress', requireStudent, async (req, res) => {
+app.post('/api/lms/lessons/:id/progress', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   const { lastPositionSec, watchPercentage, timeSpentSeconds, watchedSegments } = req.body;
   const lessonId = req.params.id;
@@ -7336,7 +7368,7 @@ app.delete('/api/lms/quiz-questions/:id', requireAdmin, async (req, res) => {
 // --- QUIZ SUBMIT & ATTEMPTS ---
 
 // Studente invia risposte quiz
-app.post('/api/lms/quizzes/:id/submit', requireStudent, async (req, res) => {
+app.post('/api/lms/quizzes/:id/submit', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   const { answers } = req.body;
   const quizId = req.params.id;
@@ -7433,7 +7465,7 @@ app.get('/api/lms/quizzes/:id/attempts', requireStudent, async (req, res) => {
 // --- COMPLETAMENTO LEZIONE ---
 
 // Verifica criteri e segna lezione come completata
-app.post('/api/lms/lessons/:id/complete', requireStudent, async (req, res) => {
+app.post('/api/lms/lessons/:id/complete', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   const lessonId = req.params.id;
   const userId = req.user.userId;
@@ -7598,7 +7630,7 @@ app.get('/api/attendance/active-code', async (req, res) => {
 });
 
 // Studente: check-in con PIN
-app.post('/api/attendance/checkin', requireStudent, async (req, res) => {
+app.post('/api/attendance/checkin', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   const { code } = req.body;
   if (!code) return res.status(400).json({ error: 'Code is required' });
@@ -8424,20 +8456,11 @@ app.get('/api/quiz-attempts', requireAdmin, async (req, res) => {
 });
 
 // Start a quiz attempt (student)
-app.post('/api/quiz-attempts/start', async (req, res) => {
+app.post('/api/quiz-attempts/start', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
-  
-  // Get user from Authorization header
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Non autenticato. Effettua il login.' });
-  }
-  const token = authHeader.split(' ')[1];
 
   try {
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const userId = decoded.userId;
+    const userId = req.user.userId;
 
     const { quizId, resourceId } = req.body;
     if (!quizId && !resourceId) {
@@ -8469,19 +8492,11 @@ app.post('/api/quiz-attempts/start', async (req, res) => {
 });
 
 // Submit quiz answers (student)
-app.post('/api/quiz-attempts/:id/submit', async (req, res) => {
+app.post('/api/quiz-attempts/:id/submit', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
-  
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Non autenticato' });
-  }
-  const token = authHeader.split(' ')[1];
 
   try {
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const userId = decoded.userId;
+    const userId = req.user.userId;
     const attemptId = req.params.id;
     const { answers } = req.body; // [{questionIndex, selectedAnswer}]
 
@@ -8578,19 +8593,11 @@ app.post('/api/quiz-attempts/:id/submit', async (req, res) => {
 });
 
 // Get student's own attempts
-app.get('/api/quiz-attempts/my', async (req, res) => {
+app.get('/api/quiz-attempts/my', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
-  
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Non autenticato' });
-  }
-  const token = authHeader.split(' ')[1];
 
   try {
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const userId = decoded.userId;
+    const userId = req.user.userId;
 
     const { rows } = await pool.query(`
       SELECT qa.*, q.title AS "quizTitle", r.title AS "resourceTitle"
@@ -8779,7 +8786,7 @@ app.get('/api/documents/pending', requireStudent, async (req, res) => {
 });
 
 // Firma un documento
-app.post('/api/documents/:id/sign', requireStudent, async (req, res) => {
+app.post('/api/documents/:id/sign', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const userId = req.user.userId;

@@ -1,5 +1,6 @@
 const mammoth = require('mammoth');
 const cheerio = require('cheerio');
+const JSZip = require('jszip');
 
 const ITALIAN_MONTHS = {
   gennaio: 0,
@@ -33,6 +34,15 @@ function stripHtml(value = '') {
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
   );
+}
+
+function decodeXmlEntities(value = '') {
+  return String(value)
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
 }
 
 function slugify(value = '') {
@@ -308,6 +318,111 @@ function extractArticleBlocks($) {
   });
 }
 
+function parseRawDocxTextToLines(xml = '') {
+  const normalizedXml = String(xml)
+    .replace(/<w:tab\/>/gi, '\t')
+    .replace(/<w:br[^>]*\/>/gi, '\n')
+    .replace(/<\/w:tr>/gi, '\n')
+    .replace(/<\/w:p>/gi, '\n');
+
+  const lines = [];
+  let currentLine = '';
+  const tokenPattern = /<w:t[^>]*>([\s\S]*?)<\/w:t>|<[^>]+>|\n/g;
+  let match;
+
+  while ((match = tokenPattern.exec(normalizedXml))) {
+    if (match[0] === '\n') {
+      const line = normalizeWhitespace(decodeXmlEntities(currentLine));
+      if (line) lines.push(line);
+      currentLine = '';
+      continue;
+    }
+
+    if (match[1] !== undefined) {
+      currentLine += decodeXmlEntities(match[1]);
+    }
+  }
+
+  const tail = normalizeWhitespace(decodeXmlEntities(currentLine));
+  if (tail) lines.push(tail);
+  return lines;
+}
+
+function blockTextLines(lines = []) {
+  const indexes = [];
+  lines.forEach((line, index) => {
+    if (/^articolo\s+\d+\s*\/\s*\d+$/i.test(normalizeWhitespace(line))) {
+      indexes.push(index);
+    }
+  });
+
+  return indexes.map((start, index) => {
+    const end = indexes[index + 1] ?? lines.length;
+    return lines.slice(start, end);
+  });
+}
+
+function parseArticleFromRawLines(lines = [], index, fallbackDate = new Date()) {
+  const marker = normalizeWhitespace(lines[0] || '');
+  const title = normalizeWhitespace(lines[1] || '');
+  if (!marker || !title) return null;
+
+  const sections = {
+    metadata: [],
+    abstract: [],
+    body: [],
+    media: [],
+    sources: []
+  };
+
+  let currentSection = 'metadata';
+  for (const line of lines.slice(2)) {
+    const section = detectSectionHeading(line);
+    if (section) {
+      currentSection = section;
+      continue;
+    }
+    if (!normalizeWhitespace(line)) continue;
+    sections[currentSection].push(line);
+  }
+
+  const metadata = readKeyValueLines(sections.metadata);
+  const mediaMetadata = readKeyValueLines(sections.media);
+  const tagsRaw = findMetadataValue(metadata, ['tag']);
+  const publicationDateRaw = findMetadataValue(metadata, ['data pubblicazione', 'pubblicazione']);
+  const sourceModule = findMetadataValue(metadata, ['modulo del master collegato', 'modulo']);
+  const author = findMetadataValue(metadata, ['autore']) || 'Redazione Master Carbon Farming';
+  const coverImagePrompt = findMetadataValue(mediaMetadata, ['prompt ai']) || null;
+  const coverImageUrl = findMetadataValue(mediaMetadata, ['immagine di copertina']) || null;
+
+  return {
+    title,
+    author,
+    sourceModule,
+    publishedAt: publicationDateRaw ? parseItalianDateToIso(publicationDateRaw, fallbackDate) : null,
+    tags: tagsRaw ? tagsRaw.split(',').map((tag) => normalizeWhitespace(tag)).filter(Boolean) : [],
+    coverImagePrompt,
+    coverImageUrl: /^https?:\/\//i.test(coverImageUrl || '') ? coverImageUrl : null,
+    excerpt: normalizeWhitespace(sections.abstract.join(' ')) || null,
+    content: sections.body.map((line) => `<p>${line}</p>`).join('\n') || null
+  };
+}
+
+async function parseFallbackDocxData(buffer, options = {}) {
+  const zip = await JSZip.loadAsync(buffer);
+  const documentXmlFile = zip.file('word/document.xml');
+  if (!documentXmlFile) {
+    return [];
+  }
+
+  const documentXml = await documentXmlFile.async('string');
+  const lines = parseRawDocxTextToLines(documentXml);
+  const blocks = blockTextLines(lines);
+  return blocks
+    .map((block, index) => parseArticleFromRawLines(block, index, options.now || new Date()))
+    .filter(Boolean);
+}
+
 function buildArticleFromBlock($, nodes, index, fallbackDate = new Date()) {
   const warnings = [];
   const label = normalizeWhitespace($(nodes[0]).text()) || `ARTICOLO ${index + 1}`;
@@ -438,9 +553,52 @@ function parseBlogPostsFromHtml(html, options = {}) {
 
 async function parseBlogPostsFromDocxBuffer(buffer, options = {}) {
   const result = await mammoth.convertToHtml({ buffer });
-  const parsed = parseBlogPostsFromHtml(result.value, options);
+  const fallbackPosts = await parseFallbackDocxData(buffer, options);
+  let parsed;
+
+  try {
+    parsed = parseBlogPostsFromHtml(result.value, options);
+  } catch (error) {
+    if (!fallbackPosts.length) {
+      throw error;
+    }
+    parsed = { posts: [], warnings: [error.message] };
+  }
+
+  const posts = parsed.posts.map((post, index) => {
+    const fallback = fallbackPosts[index];
+    if (!fallback) return post;
+    return {
+      ...post,
+      author: post.author || fallback.author || post.author,
+      sourceModule: post.sourceModule || fallback.sourceModule || null,
+      publishedAt: post.publishedAt || fallback.publishedAt || post.publishedAt,
+      tags: Array.isArray(post.tags) && post.tags.length ? post.tags : (fallback.tags || []),
+      coverImagePrompt: post.coverImagePrompt || fallback.coverImagePrompt || null,
+      coverImageUrl: post.coverImageUrl || fallback.coverImageUrl || null,
+      excerpt: post.excerpt || fallback.excerpt || post.excerpt,
+      content: post.content || fallback.content || post.content
+    };
+  });
+
+  const finalPosts = posts.length ? posts : fallbackPosts.map((post) => ({
+    title: post.title,
+    slug: slugify(post.title),
+    excerpt: post.excerpt || '',
+    content: post.content || '',
+    tags: post.tags || [],
+    author: post.author || 'Redazione Master Carbon Farming',
+    sourceModule: post.sourceModule || null,
+    publishedAt: post.publishedAt || new Date(options.now || new Date()).toISOString(),
+    coverImageUrl: post.coverImageUrl || null,
+    coverImagePrompt: post.coverImagePrompt || null,
+    sources: [],
+    published: false
+  }));
+
   return {
-    ...parsed,
+    posts: finalPosts,
+    warnings: parsed.warnings,
     conversionMessages: result.messages || [],
     html: result.value
   };

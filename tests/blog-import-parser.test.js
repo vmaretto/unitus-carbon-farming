@@ -61,3 +61,39 @@ test('parseBlogPostsFromHtml gestisce metadati e prompt AI compattati nella stes
   assert.equal(result.posts[0].sourceModule, 'M2 - Policy');
   assert.equal(result.posts[0].coverImagePrompt, 'paesaggio agricolo con dati climatici');
 });
+
+test('parseBlogPostsFromDocxBuffer usa il fallback raw docx quando metadata e prompt non emergono bene dall HTML', async () => {
+  const JSZip = require('jszip');
+  const zip = new JSZip();
+  zip.file(
+    'word/document.xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:body>
+        <w:p><w:r><w:t>ARTICOLO 1/1</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Articolo fallback</w:t></w:r></w:p>
+        <w:p><w:r><w:t>METADATI ARTICOLO</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Data pubblicazione: 19 aprile 2026</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Tag: carbon farming, policy</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Modulo del master collegato: M2 - Policy</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Abstract (per card lista blog)</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Estratto breve.</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Corpo articolo</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Contenuto body.</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Media suggeriti (immagini &amp; video)</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Prompt AI: paesaggio agricolo editoriale</w:t></w:r></w:p>
+        <w:sectPr/>
+      </w:body>
+    </w:document>`
+  );
+
+  const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+  const result = await parseBlogPostsFromDocxBuffer(buffer, {
+    now: new Date('2026-04-19T08:00:00.000Z')
+  });
+
+  assert.equal(result.posts.length, 1);
+  assert.deepEqual(result.posts[0].tags, ['carbon farming', 'policy']);
+  assert.equal(result.posts[0].sourceModule, 'M2 - Policy');
+  assert.equal(result.posts[0].coverImagePrompt, 'paesaggio agricolo editoriale');
+});

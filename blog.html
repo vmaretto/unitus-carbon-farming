@@ -28,7 +28,7 @@
             background: transparent;
             color: #333;
             text-align: center;
-            padding: 100px 0 40px;
+            padding: 100px 0 72px;
             position: relative;
         }
 
@@ -280,10 +280,11 @@
             max-width: 700px;
             margin: 0 auto;
             opacity: 0.95;
+            line-height: 1.75;
         }
 
         main {
-            margin-top: -50px;
+            margin-top: -12px;
             position: relative;
             z-index: 2;
         }
@@ -550,13 +551,17 @@
             }
 
             header {
-                padding-top: 120px;
+                padding: 120px 0 56px;
+            }
+
+            main {
+                margin-top: 0;
             }
         }
 
         @media (max-width: 768px) {
             header {
-                padding: 60px 0 70px;
+                padding: 72px 0 56px;
             }
 
             header h1 {
@@ -573,6 +578,10 @@
         }
 
         @media (max-width: 520px) {
+            header {
+                padding: 72px 0 44px;
+            }
+
             header h1 {
                 font-size: 1.9rem;
             }

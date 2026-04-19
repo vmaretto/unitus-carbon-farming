@@ -2771,6 +2771,29 @@ Buono studio!</textarea>
             return result;
         }
 
+        async function generateBlogCoverWithFeedback(postId, button, { silent = false } = {}) {
+            const hadButton = Boolean(button);
+            const originalLabel = hadButton ? button.textContent : '';
+
+            if (hadButton) {
+                button.disabled = true;
+                button.textContent = 'Generazione...';
+            }
+
+            if (!silent) {
+                showToast('Generazione cover AI in corso...');
+            }
+
+            try {
+                return await generateBlogCover(postId, { silent });
+            } finally {
+                if (hadButton && document.body.contains(button)) {
+                    button.disabled = false;
+                    button.textContent = originalLabel;
+                }
+            }
+        }
+
         async function refreshImportedBlogPosts() {
             if (!state.importedBlogPosts.length) return;
             const allPosts = await apiRequest('/api/blog-posts');
@@ -4693,7 +4716,7 @@ Buono studio!</textarea>
 
             if (generateCoverButton) {
                 try {
-                    await generateBlogCover(id);
+                    await generateBlogCoverWithFeedback(id, generateCoverButton);
                 } catch (error) {
                     // handled
                 }
@@ -4798,8 +4821,9 @@ Buono studio!</textarea>
             }
 
             if (event.target.closest('button[data-generate-cover]')) {
+                const generateCoverButton = event.target.closest('button[data-generate-cover]');
                 try {
-                    await generateBlogCover(id);
+                    await generateBlogCoverWithFeedback(id, generateCoverButton);
                 } catch (error) {
                     // handled
                 }

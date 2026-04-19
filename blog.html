@@ -417,6 +417,50 @@
             margin-bottom: 10px;
         }
 
+        .article-content {
+            color: #555;
+        }
+
+        .article-content h2,
+        .article-content h3,
+        .article-content h4 {
+            color: #2d5016;
+            margin: 28px 0 14px;
+            line-height: 1.25;
+        }
+
+        .article-content p,
+        .article-content li {
+            color: #555;
+            font-size: 1.02rem;
+        }
+
+        .article-content a {
+            color: #4a7c59;
+            font-weight: 600;
+        }
+
+        .article-actions {
+            margin-top: 18px;
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .back-to-list {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #4a7c59;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .back-to-list::before {
+            content: "←";
+        }
+
         .cta-box {
             background: #7AB928;
             color: white;
@@ -642,6 +686,157 @@
             if (!blogList) {
                 return;
             }
+            let cachedPosts = [];
+
+            const renderPublishedDate = (publishedAt) => {
+                if (!publishedAt) return 'In attesa di data di pubblicazione';
+                const publishedDate = new Date(publishedAt);
+                return `Pubblicato il ${publishedDate.toLocaleDateString('it-IT', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                })}`;
+            };
+
+            const buildArticleShell = (post) => {
+                const article = document.createElement('article');
+                if (post.slug) {
+                    article.id = post.slug;
+                }
+
+                if (post.coverImageUrl) {
+                    const cover = document.createElement('img');
+                    cover.src = post.coverImageUrl;
+                    cover.alt = `Immagine di copertina per ${post.title}`;
+                    cover.className = 'article-cover';
+                    article.appendChild(cover);
+                }
+
+                const title = document.createElement('h2');
+                title.textContent = post.title || 'Articolo senza titolo';
+                article.appendChild(title);
+
+                const meta = document.createElement('div');
+                meta.className = 'article-meta';
+                meta.textContent = renderPublishedDate(post.publishedAt);
+                article.appendChild(meta);
+
+                return article;
+            };
+
+            const renderListView = (posts) => {
+                const fragment = document.createDocumentFragment();
+
+                posts.forEach((post) => {
+                    const article = buildArticleShell(post);
+
+                    if (post.excerpt) {
+                        const excerpt = document.createElement('p');
+                        excerpt.textContent = post.excerpt;
+                        article.appendChild(excerpt);
+                    }
+
+                    const actions = document.createElement('div');
+                    actions.className = 'article-actions';
+
+                    if (post.slug) {
+                        const readMore = document.createElement('a');
+                        readMore.href = `blog.html#${post.slug}`;
+                        readMore.className = 'blog-readmore';
+                        readMore.textContent = 'Leggi articolo';
+                        actions.appendChild(readMore);
+
+                        const anchorLink = document.createElement('a');
+                        anchorLink.href = `#${post.slug}`;
+                        anchorLink.className = 'blog-readmore';
+                        anchorLink.textContent = 'Copia il link a questo articolo';
+                        anchorLink.addEventListener('click', async (event) => {
+                            event.preventDefault();
+                            const targetUrl = `${window.location.origin}${window.location.pathname}#${post.slug}`;
+                            try {
+                                await navigator.clipboard.writeText(targetUrl);
+                                anchorLink.textContent = 'Link copiato';
+                                setTimeout(() => {
+                                    anchorLink.textContent = 'Copia il link a questo articolo';
+                                }, 1800);
+                            } catch (_error) {
+                                window.location.hash = post.slug;
+                            }
+                        });
+                        actions.appendChild(anchorLink);
+                    }
+
+                    article.appendChild(actions);
+                    fragment.appendChild(article);
+                });
+
+                blogList.replaceChildren(fragment);
+            };
+
+            const renderDetailView = (post) => {
+                const article = buildArticleShell(post);
+
+                const content = document.createElement('div');
+                content.className = 'article-content';
+                if (post.content) {
+                    content.innerHTML = post.content;
+                } else if (post.excerpt) {
+                    const fallback = document.createElement('p');
+                    fallback.textContent = post.excerpt;
+                    content.appendChild(fallback);
+                }
+                article.appendChild(content);
+
+                const actions = document.createElement('div');
+                actions.className = 'article-actions';
+
+                const backLink = document.createElement('a');
+                backLink.href = 'blog.html';
+                backLink.className = 'back-to-list';
+                backLink.textContent = 'Torna a tutti gli articoli';
+                actions.appendChild(backLink);
+
+                if (post.slug) {
+                    const copyLink = document.createElement('a');
+                    copyLink.href = `#${post.slug}`;
+                    copyLink.className = 'blog-readmore';
+                    copyLink.textContent = 'Copia il link a questo articolo';
+                    copyLink.addEventListener('click', async (event) => {
+                        event.preventDefault();
+                        const targetUrl = `${window.location.origin}${window.location.pathname}#${post.slug}`;
+                        try {
+                            await navigator.clipboard.writeText(targetUrl);
+                            copyLink.textContent = 'Link copiato';
+                            setTimeout(() => {
+                                copyLink.textContent = 'Copia il link a questo articolo';
+                            }, 1800);
+                        } catch (_error) {
+                            window.location.hash = post.slug;
+                        }
+                    });
+                    actions.appendChild(copyLink);
+                }
+
+                article.appendChild(actions);
+                blogList.replaceChildren(article);
+            };
+
+            const renderCurrentView = () => {
+                if (!cachedPosts.length) {
+                    blogList.replaceChildren(emptyMessage);
+                    return;
+                }
+                const currentSlug = window.location.hash ? window.location.hash.slice(1) : '';
+                const selectedPost = currentSlug
+                    ? cachedPosts.find((post) => post.slug === currentSlug)
+                    : null;
+
+                if (selectedPost) {
+                    renderDetailView(selectedPost);
+                } else {
+                    renderListView(cachedPosts);
+                }
+            };
 
             const emptyMessage = document.createElement('div');
             emptyMessage.className = 'blog-empty-message';
@@ -663,64 +858,17 @@
                     return;
                 }
 
-                const fragment = document.createDocumentFragment();
-
-                posts.forEach((post) => {
-                    const article = document.createElement('article');
-                    if (post.slug) {
-                        article.id = post.slug;
-                    }
-
-                    if (post.coverImageUrl) {
-                        const cover = document.createElement('img');
-                        cover.src = post.coverImageUrl;
-                        cover.alt = `Immagine di copertina per ${post.title}`;
-                        cover.className = 'article-cover';
-                        article.appendChild(cover);
-                    }
-
-                    const title = document.createElement('h2');
-                    title.textContent = post.title || 'Articolo senza titolo';
-                    article.appendChild(title);
-
-                    const meta = document.createElement('div');
-                    meta.className = 'article-meta';
-
-                    if (post.publishedAt) {
-                        const publishedDate = new Date(post.publishedAt);
-                        meta.textContent = `Pubblicato il ${publishedDate.toLocaleDateString('it-IT', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                        })}`;
-                    } else {
-                        meta.textContent = 'In attesa di data di pubblicazione';
-                    }
-                    article.appendChild(meta);
-
-                    if (post.excerpt) {
-                        const excerpt = document.createElement('p');
-                        excerpt.textContent = post.excerpt;
-                        article.appendChild(excerpt);
-                    }
-
-                    if (post.slug) {
-                        const anchorLink = document.createElement('a');
-                        anchorLink.href = `#${post.slug}`;
-                        anchorLink.className = 'blog-readmore';
-                        anchorLink.textContent = 'Copia il link a questo articolo';
-                        article.appendChild(anchorLink);
-                    }
-
-                    fragment.appendChild(article);
-                });
-
-                blogList.replaceChildren(fragment);
+                cachedPosts = posts;
+                renderCurrentView();
             } catch (error) {
                 console.error('Errore durante il caricamento degli articoli del blog', error);
                 emptyMessage.textContent = 'Impossibile caricare gli articoli in questo momento. Riprova più tardi.';
                 blogList.replaceChildren(emptyMessage);
             }
+
+            window.addEventListener('hashchange', () => {
+                renderCurrentView();
+            });
         });
     </script>
 </body>

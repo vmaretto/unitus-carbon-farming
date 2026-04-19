@@ -88,9 +88,47 @@ DATABASE_SSL=true
 - `PUT /api/faculty/:id` · `DELETE /api/faculty/:id`
 - `GET /api/blog-posts?published=true&limit=3` → feed per homepage e pagina blog
 - `POST /api/blog-posts` → crea un articolo (richiede `title`)
+- `POST /api/blog-posts/import-docx` → importa articoli da un file Word `.docx` e crea bozze
+- `POST /api/blog-posts/:id/generate-cover` → genera la cover AI di un articolo partendo dal prompt salvato
 - `PUT /api/blog-posts/:id` · `DELETE /api/blog-posts/:id`
 
 La dashboard amministrativa disponibile su `/admin/` usa queste API per gestire contenuti e pubblicazione.
+
+### Blog Import da Word
+
+L'admin ora include una sezione **Import Word** dentro `/admin/` per trasformare un documento `.docx` in una serie di bozze blog.
+
+#### Come preparare il Word
+
+- Usa un file `.docx` con blocchi introdotti da `ARTICOLO N/M`.
+- Subito dopo il marker inserisci il titolo come **Heading 1**.
+- Aggiungi una tabella **METADATI ARTICOLO** con almeno `Data pubblicazione`, `Autore`, `Tag`, `Modulo del master collegato`.
+- Inserisci le sezioni `Abstract (per card lista blog)`, `Corpo articolo`, `Media suggeriti`, `Fonti da linkare nell'articolo`.
+- Nel repository trovi un fixture minimale ma completo in [tests/fixtures/blog_sample.docx](/Users/vmaretto/Projects/unitus-carbon-farming/tests/fixtures/blog_sample.docx), utile come riferimento strutturale per il template editoriale.
+
+#### Workflow operativo
+
+1. Apri `/admin/` e autentìcati.
+2. Vai alla sezione **Gestione blog** e usa il pannello **Import Word**.
+3. Trascina il `.docx` oppure selezionalo dal file picker.
+4. Clicca **Analizza e crea bozze**.
+5. Al termine vedrai la tabella delle bozze create con azioni rapide per `Genera cover AI`, `Modifica` e `Pubblica`.
+
+#### Cover AI
+
+- Se il documento contiene un `Prompt AI`, il backend lo salva nel campo `cover_image_prompt`.
+- L'endpoint `POST /api/blog-posts/:id/generate-cover` usa OpenAI Images (`gpt-image-1`) per generare una cover orizzontale.
+- Se `CLOUDINARY_URL` è configurata, l'immagine viene caricata su Cloudinary.
+- Se `CLOUDINARY_URL` non è presente, la cover viene salvata localmente in `api/uploads/blog-covers/` ed esposta come asset statico.
+
+#### Variabili d'ambiente aggiuntive
+
+```env
+OPENAI_API_KEY=<chiave-api-openai-per-cover-ai>
+
+# opzionale: se assente le cover vengono salvate localmente
+CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>
+```
 
 ### Autenticazione Admin
 

@@ -8,6 +8,9 @@ const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const { put } = require('@vercel/blob');
 const JSZip = require('jszip');
+const { OpenAI } = require('openai');
+const { v2: cloudinary } = require('cloudinary');
+const { parseBlogPostsFromDocxBuffer, slugify } = require('./blog-import');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -40,6 +43,19 @@ const uploadMaterials = multer({
     } else {
       cb(new Error('Tipo file non supportato'));
     }
+  }
+});
+
+const uploadBlogDocx = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (ext === '.docx') {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Carica un file .docx valido'));
   }
 });
 const BUILD_VERSION = '2026-04-10-v25-QUIZ-CONTENT-EXTRACTION'; // Per debug deploy
@@ -2196,6 +2212,15 @@ async function initDatabase() {
   `);
 
   await pool.query(`
+    ALTER TABLE blog_posts
+    ADD COLUMN IF NOT EXISTS author VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS source_module VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS cover_image_prompt TEXT,
+    ADD COLUMN IF NOT EXISTS sources JSONB DEFAULT '[]'::jsonb,
+    ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb;
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS partners (
       id UUID PRIMARY KEY,
       name TEXT NOT NULL,
@@ -2510,6 +2535,202 @@ async function getTableColumns(tableName) {
     [tableName]
   );
   return new Set(rows.map(row => row.column_name));
+}
+
+function normalizeBoolean(value, fallback = false) {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function buildBlogPostPayload(row, columns = null) {
+  const has = (column) => !columns || columns.has(column);
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    excerpt: row.excerpt,
+    content: row.content,
+    coverImageUrl: row.cover_image_url,
+    publishedAt: row.published_at,
+    isPublished: row.is_published,
+    ...(has('author') ? { author: row.author } : {}),
+    ...(has('source_module') ? { sourceModule: row.source_module } : {}),
+    ...(has('cover_image_prompt') ? { coverImagePrompt: row.cover_image_prompt } : {}),
+    ...(has('sources') ? { sources: Array.isArray(row.sources) ? row.sources : [] } : {}),
+    ...(has('tags') ? { tags: Array.isArray(row.tags) ? row.tags : [] } : {})
+  };
+}
+
+function pickBlogInsertColumns(columns, post) {
+  const mappings = [
+    ['id', post.id],
+    ['title', post.title],
+    ['slug', post.slug || null],
+    ['excerpt', post.excerpt || null],
+    ['content', post.content || null],
+    ['cover_image_url', post.coverImageUrl || null],
+    ['published_at', post.publishedAt ? new Date(post.publishedAt) : null],
+    ['is_published', normalizeBoolean(post.isPublished, false)]
+  ];
+
+  if (columns.has('author')) mappings.push(['author', post.author || null]);
+  if (columns.has('source_module')) mappings.push(['source_module', post.sourceModule || null]);
+  if (columns.has('cover_image_prompt')) mappings.push(['cover_image_prompt', post.coverImagePrompt || null]);
+  if (columns.has('sources')) mappings.push(['sources', JSON.stringify(Array.isArray(post.sources) ? post.sources : [])]);
+  if (columns.has('tags')) mappings.push(['tags', JSON.stringify(Array.isArray(post.tags) ? post.tags : [])]);
+
+  const insertColumns = mappings.map(([column]) => column);
+  const placeholders = mappings.map((_, index) => `$${index + 1}`);
+  const values = mappings.map(([, value]) => value);
+  return { insertColumns, placeholders, values };
+}
+
+function createPublicUploadsPath(...parts) {
+  return path.join(__dirname, ...parts);
+}
+
+async function saveBlogCoverToStorage(buffer, postId) {
+  const fileName = `${postId}-${Date.now()}.png`;
+
+  if (process.env.CLOUDINARY_URL) {
+    const uploadResult = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'blog-covers',
+          public_id: `${postId}-${Date.now()}`,
+          resource_type: 'image'
+        },
+        (error, result) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve(result);
+        }
+      );
+      stream.end(buffer);
+    });
+
+    return uploadResult.secure_url || uploadResult.url;
+  }
+
+  const uploadDir = createPublicUploadsPath('uploads', 'blog-covers');
+  await fs.promises.mkdir(uploadDir, { recursive: true });
+  const filePath = path.join(uploadDir, fileName);
+  await fs.promises.writeFile(filePath, buffer);
+  return `/uploads/blog-covers/${fileName}`;
+}
+
+async function generateBlogCoverImage(prompt) {
+  if (process.env.MOCK_OPENAI_IMAGE_BASE64) {
+    return Buffer.from(process.env.MOCK_OPENAI_IMAGE_BASE64, 'base64');
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY non configurata');
+  }
+
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const response = await client.images.generate({
+    model: 'gpt-image-1',
+    prompt,
+    size: '1536x1024'
+  });
+
+  const image = response.data && response.data[0];
+  if (!image) {
+    throw new Error('Il servizio immagini non ha restituito un risultato');
+  }
+
+  if (image.b64_json) {
+    return Buffer.from(image.b64_json, 'base64');
+  }
+
+  if (image.url) {
+    const imageResponse = await fetch(image.url);
+    if (!imageResponse.ok) {
+      throw new Error('Impossibile scaricare l\'immagine generata');
+    }
+    return Buffer.from(await imageResponse.arrayBuffer());
+  }
+
+  throw new Error('Formato immagine generata non supportato');
+}
+
+async function importBlogPostsFromDocxBufferIntoDatabase(buffer, options = {}) {
+  const parsed = await parseBlogPostsFromDocxBuffer(buffer, { now: options.now || new Date() });
+  const blogColumns = await getTableColumns('blog_posts');
+  const createdPosts = [];
+
+  for (const post of parsed.posts) {
+    const id = uuidv4();
+    const { insertColumns, placeholders, values } = pickBlogInsertColumns(blogColumns, {
+      id,
+      title: post.title,
+      slug: post.slug,
+      excerpt: post.excerpt,
+      content: post.content,
+      coverImageUrl: post.coverImageUrl,
+      publishedAt: post.publishedAt,
+      isPublished: false,
+      author: post.author,
+      sourceModule: post.sourceModule,
+      coverImagePrompt: post.coverImagePrompt,
+      sources: post.sources,
+      tags: post.tags
+    });
+
+    const insertQuery = `
+      INSERT INTO blog_posts (${insertColumns.join(', ')})
+      VALUES (${placeholders.join(', ')})
+      RETURNING *
+    `;
+    const { rows } = await pool.query(insertQuery, values);
+    createdPosts.push(buildBlogPostPayload(rows[0], blogColumns));
+  }
+
+  return {
+    imported: createdPosts.length,
+    warnings: parsed.warnings,
+    posts: createdPosts
+  };
+}
+
+async function generateCoverForBlogPost(postId) {
+  const blogColumns = await getTableColumns('blog_posts');
+  if (!blogColumns.has('cover_image_prompt')) {
+    throw new Error('La colonna cover_image_prompt non è disponibile. Applica la migration del blog import.');
+  }
+
+  const { rows } = await pool.query(
+    'SELECT * FROM blog_posts WHERE id = $1 LIMIT 1',
+    [postId]
+  );
+
+  if (!rows.length) {
+    const error = new Error('Blog post not found');
+    error.status = 404;
+    throw error;
+  }
+
+  const post = rows[0];
+  if (post.cover_image_url) {
+    return { coverImageUrl: post.cover_image_url, reused: true };
+  }
+  if (!post.cover_image_prompt) {
+    const error = new Error('Nessun prompt cover salvato per questo articolo');
+    error.status = 400;
+    throw error;
+  }
+
+  const imageBuffer = await generateBlogCoverImage(post.cover_image_prompt);
+  const coverImageUrl = await saveBlogCoverToStorage(imageBuffer, post.id);
+
+  await pool.query(
+    'UPDATE blog_posts SET cover_image_url = $2, updated_at = NOW() WHERE id = $1',
+    [post.id, coverImageUrl]
+  );
+
+  return { coverImageUrl, reused: false };
 }
 
 function decodeXmlEntities(text = '') {
@@ -3454,7 +3675,7 @@ async function removeQuizFromLessonMaterials(quizId) {
 // Whitelist colonne aggiornabili per tabella (sicurezza)
 const ALLOWED_UPDATE_FIELDS = {
   faculty: ['name', 'first_name', 'last_name', 'role', 'email', 'bio', 'photo_url', 'profile_link', 'sort_order', 'is_published', 'is_active', 'can_view_all_materials'],
-  blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'is_published', 'published_at'],
+  blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'source_module', 'cover_image_prompt', 'sources', 'tags', 'is_published', 'published_at'],
   partners: ['name', 'logo_url', 'website_url', 'category', 'sort_order', 'is_visible'],
   modules: ['name', 'ssd', 'cfu', 'hours', 'description', 'sort_order', 'course_id', 'is_published'],
   lessons: ['title', 'module_id', 'teacher_id', 'external_teacher_name', 'start_datetime', 'duration_minutes', 'location_physical', 'location_remote', 'status', 'notes', 'materials'],
@@ -3632,6 +3853,7 @@ app.get('/api/blog-posts', async (req, res) => {
   }
 
   try {
+    const blogColumns = await getTableColumns('blog_posts');
     const { published, limit } = req.query;
     const filters = [];
     const values = [];
@@ -3645,8 +3867,7 @@ app.get('/api/blog-posts', async (req, res) => {
     const limitClause = limit ? `LIMIT ${Number(limit)}` : '';
 
     const sql = `
-      SELECT id, title, slug, excerpt, content, cover_image_url AS "coverImageUrl",
-             published_at AS "publishedAt", is_published AS "isPublished"
+      SELECT *
       FROM blog_posts
       ${where}
       ORDER BY published_at DESC NULLS LAST, created_at DESC
@@ -3654,7 +3875,7 @@ app.get('/api/blog-posts', async (req, res) => {
     `;
 
     const { rows } = await pool.query(sql, values);
-    res.json(rows);
+    res.json(rows.map((row) => buildBlogPostPayload(row, blogColumns)));
   } catch (error) {
     console.error('Error fetching blog posts', error);
     res.status(500).json({ error: 'Unable to retrieve blog posts' });
@@ -3666,34 +3887,38 @@ app.post('/api/blog-posts', requireAdmin, async (req, res) => {
     return;
   }
 
-  const { title, slug, excerpt, content, coverImageUrl, publishedAt, isPublished } = req.body;
+  const { title, slug, excerpt, content, coverImageUrl, publishedAt, isPublished, author, sourceModule, coverImagePrompt, sources, tags } = req.body;
 
   if (!title) {
     return res.status(400).json({ error: 'Title is required' });
   }
 
   try {
+    const blogColumns = await getTableColumns('blog_posts');
     const id = uuidv4();
-    const insert = `
-      INSERT INTO blog_posts (id, title, slug, excerpt, content, cover_image_url, published_at, is_published)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id, title, slug, excerpt, content, cover_image_url AS "coverImageUrl",
-                published_at AS "publishedAt", is_published AS "isPublished"
-    `;
-
-    const values = [
+    const { insertColumns, placeholders, values } = pickBlogInsertColumns(blogColumns, {
       id,
       title,
-      slug || null,
-      excerpt || null,
-      content || null,
-      coverImageUrl || null,
-      publishedAt ? new Date(publishedAt) : null,
-      Boolean(isPublished)
-    ];
+      slug: slug || slugify(title),
+      excerpt,
+      content,
+      coverImageUrl,
+      publishedAt,
+      isPublished,
+      author,
+      sourceModule,
+      coverImagePrompt,
+      sources,
+      tags
+    });
+    const insert = `
+      INSERT INTO blog_posts (${insertColumns.join(', ')})
+      VALUES (${placeholders.join(', ')})
+      RETURNING *
+    `;
 
     const { rows } = await pool.query(insert, values);
-    res.status(201).json(rows[0]);
+    res.status(201).json(buildBlogPostPayload(rows[0], blogColumns));
   } catch (error) {
     console.error('Error creating blog post', error);
     if (error.code === '23505') {
@@ -3710,7 +3935,7 @@ app.put('/api/blog-posts/:id', requireAdmin, async (req, res) => {
   }
 
   const { id } = req.params;
-  const { title, slug, excerpt, content, coverImageUrl, publishedAt, isPublished } = req.body;
+  const { title, slug, excerpt, content, coverImageUrl, publishedAt, isPublished, author, sourceModule, coverImagePrompt, sources, tags } = req.body;
 
   try {
     const updateFields = {
@@ -3719,11 +3944,17 @@ app.put('/api/blog-posts/:id', requireAdmin, async (req, res) => {
       excerpt,
       content,
       cover_image_url: coverImageUrl,
+      author,
+      source_module: sourceModule,
+      cover_image_prompt: coverImagePrompt,
+      sources: Array.isArray(sources) ? JSON.stringify(sources) : undefined,
+      tags: Array.isArray(tags) ? JSON.stringify(tags) : undefined,
       published_at:
         publishedAt === undefined ? undefined : publishedAt ? new Date(publishedAt) : null,
       is_published: typeof isPublished === 'boolean' ? isPublished : undefined
     };
 
+    const blogColumns = await getTableColumns('blog_posts');
     const { query, values } = buildUpdateQuery('blog_posts', updateFields, id);
     const { rows } = await pool.query(query, values);
 
@@ -3731,17 +3962,7 @@ app.put('/api/blog-posts/:id', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Blog post not found' });
     }
 
-    const row = rows[0];
-    res.json({
-      id: row.id,
-      title: row.title,
-      slug: row.slug,
-      excerpt: row.excerpt,
-      content: row.content,
-      coverImageUrl: row.cover_image_url,
-      publishedAt: row.published_at,
-      isPublished: row.is_published
-    });
+    res.json(buildBlogPostPayload(rows[0], blogColumns));
   } catch (error) {
     console.error('Error updating blog post', error);
     if (error.code === '23505') {
@@ -3767,6 +3988,54 @@ app.delete('/api/blog-posts/:id', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error deleting blog post', error);
     res.status(500).json({ error: 'Unable to delete blog post' });
+  }
+});
+
+app.post('/api/blog-posts/import-docx', requireAdmin, uploadBlogDocx.single('docx'), async (req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).json({ error: 'Carica un file Word .docx' });
+  }
+
+  try {
+    const result = await importBlogPostsFromDocxBufferIntoDatabase(req.file.buffer, { now: new Date() });
+
+    res.status(201).json({
+      imported: result.imported,
+      warnings: result.warnings,
+      posts: result.posts.map((post) => ({
+        id: post.id,
+        title: post.title,
+        slug: post.slug,
+        publishedAt: post.publishedAt,
+        coverImageUrl: post.coverImageUrl || null,
+        isPublished: post.isPublished
+      }))
+    });
+  } catch (error) {
+    console.error('Error importing blog posts from docx', error);
+    if (error.code === '23505') {
+      res.status(409).json({ error: 'Uno degli slug generati esiste già. Modifica il titolo o lo slug del post duplicato.' });
+      return;
+    }
+    res.status(400).json({ error: error.message || 'Impossibile importare il file Word' });
+  }
+});
+
+app.post('/api/blog-posts/:id/generate-cover', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  try {
+    const result = await generateCoverForBlogPost(req.params.id);
+    res.json(result);
+  } catch (error) {
+    console.error('Error generating blog cover', error);
+    res.status(error.status || 500).json({ error: error.message || 'Impossibile generare la cover AI' });
   }
 });
 
@@ -9093,3 +9362,10 @@ if (require.main === module) {
 
 module.exports = handler;
 module.exports.app = app;
+module.exports.__setPool = (nextPool) => {
+  pool = nextPool;
+};
+module.exports.__getPool = () => pool;
+module.exports.__generateToken = generateToken;
+module.exports.__importBlogPostsFromDocxBufferIntoDatabase = importBlogPostsFromDocxBufferIntoDatabase;
+module.exports.__generateCoverForBlogPost = generateCoverForBlogPost;

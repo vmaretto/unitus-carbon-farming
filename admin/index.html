@@ -221,6 +221,130 @@
             overflow-x: auto;
         }
 
+        .subsection-card {
+            margin-top: 24px;
+            padding: 24px;
+            border-radius: 20px;
+            border: 1px solid rgba(36, 90, 61, 0.12);
+            background: linear-gradient(180deg, rgba(236, 246, 240, 0.9), rgba(255, 255, 255, 1));
+        }
+
+        .subsection-card h3 {
+            margin: 0 0 8px;
+            font-size: 1.15rem;
+        }
+
+        .subsection-card p {
+            margin: 0;
+            color: var(--gray-500);
+        }
+
+        .dropzone {
+            margin-top: 18px;
+            border: 2px dashed rgba(36, 90, 61, 0.28);
+            border-radius: 18px;
+            padding: 26px 22px;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: flex-start;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+
+        .dropzone.dragover {
+            border-color: var(--green-500);
+            box-shadow: 0 0 0 4px rgba(44, 122, 75, 0.14);
+            transform: translateY(-1px);
+        }
+
+        .dropzone strong {
+            font-size: 1rem;
+            color: var(--green-900);
+        }
+
+        .dropzone input[type="file"] {
+            display: none;
+        }
+
+        .inline-status {
+            margin-top: 16px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            color: var(--green-700);
+            font-weight: 600;
+        }
+
+        .inline-status.visible {
+            display: flex;
+        }
+
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 3px solid rgba(44, 122, 75, 0.15);
+            border-top-color: var(--green-500);
+            animation: spin 0.8s linear infinite;
+        }
+
+        .progress-track {
+            margin-top: 14px;
+            width: 100%;
+            height: 10px;
+            background: rgba(36, 90, 61, 0.08);
+            border-radius: 999px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-track.visible {
+            display: block;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(120deg, #2c7a4b, #58b07b);
+            transition: width 0.25s ease;
+        }
+
+        .import-toolbar {
+            margin-top: 22px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .helper-text {
+            font-size: 0.92rem;
+            color: var(--gray-500);
+        }
+
+        .import-summary {
+            margin-top: 14px;
+            color: var(--gray-700);
+            font-size: 0.94rem;
+        }
+
+        .cover-flag {
+            font-weight: 700;
+            color: var(--green-700);
+        }
+
+        .cover-flag.missing {
+            color: #b45309;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
         .attendance-toolbar {
             display: flex;
             justify-content: space-between;
@@ -924,6 +1048,53 @@
                     <button class="secondary" type="button" id="blog-reset" hidden>Annulla modifica</button>
                 </div>
             </form>
+
+            <div class="subsection-card" id="blog-import-panel">
+                <h3>Import Word</h3>
+                <p>Carica un file `.docx` con uno o più articoli strutturati sul template editoriale. Ogni articolo viene salvato come bozza non pubblicata.</p>
+
+                <label class="dropzone" id="blog-import-dropzone" for="blog-import-file">
+                    <strong>Trascina qui il file Word oppure selezionalo dal computer</strong>
+                    <span class="helper-text" id="blog-import-filename">Nessun file selezionato. Formato supportato: `.docx`, massimo 10 MB.</span>
+                    <input type="file" id="blog-import-file" accept=".docx">
+                    <span class="secondary-button">Scegli file</span>
+                </label>
+
+                <div class="actions">
+                    <button class="primary" type="button" id="blog-import-submit">Analizza e crea bozze</button>
+                </div>
+
+                <div class="inline-status" id="blog-import-status">
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span id="blog-import-status-text">Caricamento in corso...</span>
+                </div>
+                <div class="progress-track" id="blog-import-progress-track">
+                    <div class="progress-bar" id="blog-import-progress-bar"></div>
+                </div>
+                <div class="import-summary" id="blog-import-summary" hidden></div>
+
+                <div class="table-wrapper" id="blog-import-results" hidden>
+                    <div class="import-toolbar">
+                        <strong>Bozze create dall'ultimo import</strong>
+                        <button class="secondary" type="button" id="blog-generate-all-covers">Genera cover per tutti quelli senza immagine</button>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Titolo</th>
+                                <th>Data</th>
+                                <th>Ha immagine?</th>
+                                <th style="width: 260px;">Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody id="blog-import-table-body">
+                            <tr class="empty-state" data-empty-blog-import>
+                                <td colspan="4">Nessuna bozza importata in questa sessione.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
             <div class="table-wrapper">
                 <table>
@@ -2048,6 +2219,21 @@ Buono studio!</textarea>
         </tr>
     </template>
 
+    <template id="blog-import-row-template">
+        <tr>
+            <td data-title></td>
+            <td data-date></td>
+            <td data-cover></td>
+            <td>
+                <div class="actions">
+                    <button type="button" class="secondary" data-generate-cover>Genera cover AI</button>
+                    <button type="button" class="secondary" data-edit>Modifica</button>
+                    <button type="button" class="primary" data-publish>Pubblica</button>
+                </div>
+            </td>
+        </tr>
+    </template>
+
     <template id="partner-row-template">
         <tr>
             <td data-name></td>
@@ -2297,6 +2483,7 @@ Buono studio!</textarea>
             editingLessonId: null,
             faculty: [],
             blogPosts: [],
+            importedBlogPosts: [],
             partners: [],
             resources: [],
             modules: [],
@@ -2306,7 +2493,9 @@ Buono studio!</textarea>
             questionsFilter: '',
             calendarYear: new Date().getFullYear(),
             calendarMonth: new Date().getMonth(),
-            calendarView: 'calendar' // 'calendar' or 'list'
+            calendarView: 'calendar', // 'calendar' or 'list'
+            selectedBlogImportFile: null,
+            blogImportProgressTimer: null
         };
 
         function formatDate(dateString) {
@@ -2355,8 +2544,9 @@ Buono studio!</textarea>
                     throw authError;
                 }
                 for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                    const isFormData = options.body instanceof FormData;
                     const headers = {
-                        'Content-Type': 'application/json',
+                        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
                         ...(options.headers || {})
                     };
                     if (adminToken) {
@@ -2426,6 +2616,135 @@ Buono studio!</textarea>
             state.editingPostId = null;
             const button = form.querySelector('button.primary');
             button.textContent = button.dataset.defaultText || 'Salva articolo';
+        }
+
+        function setSelectedBlogImportFile(file) {
+            state.selectedBlogImportFile = file || null;
+            const label = document.getElementById('blog-import-filename');
+            if (!file) {
+                label.textContent = 'Nessun file selezionato. Formato supportato: `.docx`, massimo 10 MB.';
+                return;
+            }
+            const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+            label.textContent = `${file.name} · ${sizeMb} MB`;
+        }
+
+        function setBlogImportLoading(isLoading, message = 'Caricamento in corso...') {
+            const status = document.getElementById('blog-import-status');
+            const statusText = document.getElementById('blog-import-status-text');
+            const progressTrack = document.getElementById('blog-import-progress-track');
+            const progressBar = document.getElementById('blog-import-progress-bar');
+            const importButton = document.getElementById('blog-import-submit');
+            const generateAllButton = document.getElementById('blog-generate-all-covers');
+
+            statusText.textContent = message;
+            status.classList.toggle('visible', isLoading);
+            progressTrack.classList.toggle('visible', isLoading);
+            importButton.disabled = isLoading;
+            generateAllButton.disabled = isLoading;
+
+            if (state.blogImportProgressTimer) {
+                clearInterval(state.blogImportProgressTimer);
+                state.blogImportProgressTimer = null;
+            }
+
+            if (isLoading) {
+                let progress = 12;
+                progressBar.style.width = `${progress}%`;
+                state.blogImportProgressTimer = setInterval(() => {
+                    progress = Math.min(progress + 7, 88);
+                    progressBar.style.width = `${progress}%`;
+                }, 450);
+            } else {
+                progressBar.style.width = '100%';
+                setTimeout(() => {
+                    progressTrack.classList.remove('visible');
+                    progressBar.style.width = '0%';
+                }, 280);
+            }
+        }
+
+        function renderImportedBlogPosts() {
+            const wrapper = document.getElementById('blog-import-results');
+            const tableBody = document.getElementById('blog-import-table-body');
+            const template = document.getElementById('blog-import-row-template');
+            tableBody.querySelectorAll('tr:not([data-empty-blog-import])').forEach((row) => row.remove());
+
+            state.importedBlogPosts.forEach((post) => {
+                const clone = template.content.firstElementChild.cloneNode(true);
+                clone.dataset.id = post.id;
+                clone.querySelector('[data-title]').textContent = post.title;
+                clone.querySelector('[data-date]').textContent = formatDate(post.publishedAt);
+
+                const coverCell = clone.querySelector('[data-cover]');
+                const hasCover = Boolean(post.coverImageUrl);
+                coverCell.innerHTML = `<span class="cover-flag ${hasCover ? '' : 'missing'}">${hasCover ? 'Sì' : 'No'}</span>`;
+
+                const generateButton = clone.querySelector('[data-generate-cover]');
+                generateButton.disabled = hasCover;
+                generateButton.textContent = hasCover ? 'Cover presente' : 'Genera cover AI';
+
+                const publishButton = clone.querySelector('[data-publish]');
+                publishButton.disabled = Boolean(post.isPublished);
+                publishButton.textContent = post.isPublished ? 'Pubblicato' : 'Pubblica';
+
+                tableBody.appendChild(clone);
+            });
+
+            wrapper.hidden = false;
+            toggleEmptyState(tableBody, state.importedBlogPosts.length > 0, '[data-empty-blog-import]');
+        }
+
+        function populateBlogForm(postId) {
+            const current = state.blogPosts.find((post) => post.id === postId) || state.importedBlogPosts.find((post) => post.id === postId);
+            if (!current) {
+                showToast('Articolo non trovato', 'error');
+                return false;
+            }
+
+            document.getElementById('blog-title').value = current.title || '';
+            document.getElementById('blog-slug').value = current.slug || '';
+            document.getElementById('blog-excerpt').value = current.excerpt || '';
+            document.getElementById('blog-content').value = current.content || '';
+            document.getElementById('blog-cover').value = current.coverImageUrl || '';
+            document.getElementById('blog-published').checked = Boolean(current.isPublished);
+            document.getElementById('blog-published-at').value = current.publishedAt
+                ? new Date(current.publishedAt).toISOString().slice(0, 16)
+                : '';
+            document.getElementById('blog-reset').hidden = false;
+            document.getElementById('blog-form').querySelector('button.primary').textContent = 'Aggiorna articolo';
+            state.editingPostId = current.id;
+            document.getElementById('blog-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return true;
+        }
+
+        async function publishBlogPost(postId) {
+            await apiRequest(`/api/blog-posts/${postId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ isPublished: true })
+            });
+            showToast('Articolo pubblicato');
+            await Promise.all([loadBlogPosts(), refreshImportedBlogPosts()]);
+        }
+
+        async function generateBlogCover(postId, { silent = false } = {}) {
+            const result = await apiRequest(`/api/blog-posts/${postId}/generate-cover`, {
+                method: 'POST'
+            });
+            if (!silent) {
+                showToast(result.reused ? 'Cover già presente' : 'Cover generata con successo');
+            }
+            await Promise.all([loadBlogPosts(), refreshImportedBlogPosts()]);
+            return result;
+        }
+
+        async function refreshImportedBlogPosts() {
+            if (!state.importedBlogPosts.length) return;
+            const allPosts = await apiRequest('/api/blog-posts');
+            state.blogPosts = allPosts;
+            const importedIds = new Set(state.importedBlogPosts.map((post) => post.id));
+            state.importedBlogPosts = allPosts.filter((post) => importedIds.has(post.id));
+            renderImportedBlogPosts();
         }
 
         function resetPartnerForm() {
@@ -4314,7 +4633,7 @@ Buono studio!</textarea>
                 });
                 showToast('Articolo salvato con successo');
                 resetBlogForm();
-                loadBlogPosts();
+                await Promise.all([loadBlogPosts(), refreshImportedBlogPosts()]);
             } catch (error) {
                 // handled
             }
@@ -4328,24 +4647,7 @@ Buono studio!</textarea>
             const id = row.dataset.id;
 
             if (editButton) {
-                const current = state.blogPosts.find((post) => post.id === id);
-                if (!current) {
-                    showToast('Articolo non trovato', 'error');
-                    return;
-                }
-
-                document.getElementById('blog-title').value = current.title || '';
-                document.getElementById('blog-slug').value = current.slug || '';
-                document.getElementById('blog-excerpt').value = current.excerpt || '';
-                document.getElementById('blog-content').value = current.content || '';
-                document.getElementById('blog-cover').value = current.coverImageUrl || '';
-                document.getElementById('blog-published').checked = Boolean(current.isPublished);
-                document.getElementById('blog-published-at').value = current.publishedAt
-                    ? new Date(current.publishedAt).toISOString().slice(0, 16)
-                    : '';
-                document.getElementById('blog-reset').hidden = false;
-                document.getElementById('blog-form').querySelector('button.primary').textContent = 'Aggiorna articolo';
-                state.editingPostId = id;
+                populateBlogForm(id);
             }
 
             if (deleteButton) {
@@ -4355,7 +4657,7 @@ Buono studio!</textarea>
                 try {
                     await apiRequest(`/api/blog-posts/${id}`, { method: 'DELETE' });
                     showToast('Articolo eliminato');
-                    loadBlogPosts();
+                    await Promise.all([loadBlogPosts(), refreshImportedBlogPosts()]);
                 } catch (error) {
                     // handled
                 }
@@ -4363,6 +4665,112 @@ Buono studio!</textarea>
         });
 
         document.getElementById('blog-reset').addEventListener('click', resetBlogForm);
+
+        document.getElementById('blog-import-file').addEventListener('change', (event) => {
+            setSelectedBlogImportFile(event.target.files && event.target.files[0] ? event.target.files[0] : null);
+        });
+
+        const blogImportDropzone = document.getElementById('blog-import-dropzone');
+        ['dragenter', 'dragover'].forEach((eventName) => {
+            blogImportDropzone.addEventListener(eventName, (event) => {
+                event.preventDefault();
+                blogImportDropzone.classList.add('dragover');
+            });
+        });
+        ['dragleave', 'drop'].forEach((eventName) => {
+            blogImportDropzone.addEventListener(eventName, (event) => {
+                event.preventDefault();
+                blogImportDropzone.classList.remove('dragover');
+            });
+        });
+        blogImportDropzone.addEventListener('drop', (event) => {
+            const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0] ? event.dataTransfer.files[0] : null;
+            if (!file) return;
+            setSelectedBlogImportFile(file);
+        });
+
+        document.getElementById('blog-import-submit').addEventListener('click', async () => {
+            const file = state.selectedBlogImportFile;
+            if (!file) {
+                showToast('Seleziona un file Word prima di avviare l\'import', 'error');
+                return;
+            }
+            if (!/\.docx$/i.test(file.name)) {
+                showToast('Il file deve essere in formato .docx', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('docx', file);
+
+            try {
+                setBlogImportLoading(true, 'Analisi del documento Word e creazione bozze...');
+                const result = await apiRequest('/api/blog-posts/import-docx', {
+                    method: 'POST',
+                    body: formData
+                });
+                state.importedBlogPosts = result.posts || [];
+                renderImportedBlogPosts();
+                document.getElementById('blog-import-summary').hidden = false;
+                document.getElementById('blog-import-summary').textContent = result.warnings && result.warnings.length
+                    ? `Import completato: ${result.imported} bozze create. Avvisi: ${result.warnings.join(' · ')}`
+                    : `Import completato: ${result.imported} bozze create.`;
+                showToast(`${result.imported} bozze create con successo`);
+                await loadBlogPosts();
+            } catch (error) {
+                // handled in apiRequest
+            } finally {
+                setBlogImportLoading(false);
+            }
+        });
+
+        document.getElementById('blog-import-table-body').addEventListener('click', async (event) => {
+            const row = event.target.closest('tr[data-id]');
+            if (!row) return;
+            const id = row.dataset.id;
+
+            if (event.target.closest('button[data-edit]')) {
+                populateBlogForm(id);
+                return;
+            }
+
+            if (event.target.closest('button[data-publish]')) {
+                try {
+                    await publishBlogPost(id);
+                } catch (error) {
+                    // handled
+                }
+                return;
+            }
+
+            if (event.target.closest('button[data-generate-cover]')) {
+                try {
+                    await generateBlogCover(id);
+                } catch (error) {
+                    // handled
+                }
+            }
+        });
+
+        document.getElementById('blog-generate-all-covers').addEventListener('click', async () => {
+            const missing = state.importedBlogPosts.filter((post) => !post.coverImageUrl);
+            if (!missing.length) {
+                showToast('Tutte le bozze importate hanno già una cover');
+                return;
+            }
+
+            try {
+                setBlogImportLoading(true, 'Generazione cover AI in corso...');
+                for (const post of missing) {
+                    await generateBlogCover(post.id, { silent: true });
+                }
+                showToast(`Generate ${missing.length} cover AI`);
+            } catch (error) {
+                // handled
+            } finally {
+                setBlogImportLoading(false);
+            }
+        });
 
         document.getElementById('partner-form').addEventListener('submit', async (event) => {
             event.preventDefault();

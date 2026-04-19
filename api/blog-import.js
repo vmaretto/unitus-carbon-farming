@@ -93,7 +93,17 @@ function extractLinesFromNode($, node) {
 
   if (node.name === 'table') {
     $(node).find('tr').each((_, row) => {
-      const cellTexts = $(row).find('th, td').map((__, cell) => normalizeWhitespace($(cell).text())).get().filter(Boolean);
+      const cellTexts = $(row).find('th, td').map((__, cell) => {
+        const html = ($(cell).html() || '').replace(/<br\s*\/?>/gi, '\n');
+        const directLines = html
+          .split('\n')
+          .map((line) => stripHtml(line))
+          .filter(Boolean);
+        if (directLines.length) {
+          return directLines.join('\n');
+        }
+        return normalizeWhitespace($(cell).text());
+      }).get().filter(Boolean);
       if (!cellTexts.length) return;
       lines.push(cellTexts.join(' '));
     });
@@ -118,11 +128,41 @@ function extractLinesFromNode($, node) {
 
 function readKeyValueLines(lines = []) {
   const metadata = new Map();
+  const knownLabels = [
+    'Data pubblicazione',
+    'Autore',
+    'Tag',
+    'Modulo del master collegato',
+    'Fonte primaria',
+    'Prompt AI',
+    'Immagine di copertina (AI)',
+    'Immagine di copertina',
+    'Video embed'
+  ];
 
   for (const line of lines) {
-    const match = line.match(/^([^:]+):\s*(.+)$/);
-    if (!match) continue;
-    metadata.set(normalizeSectionHeading(match[1]), normalizeWhitespace(match[2]));
+    let normalizedLine = normalizeWhitespace(line);
+    if (!normalizedLine.includes(':')) continue;
+
+    for (const label of knownLabels) {
+      const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const boundaryPattern = new RegExp(`\\s+(${escapedLabel}:)`, 'gi');
+      normalizedLine = normalizedLine.replace(boundaryPattern, '\n$1');
+    }
+
+    normalizedLine
+      .split('\n')
+      .map((part) => normalizeWhitespace(part))
+      .filter(Boolean)
+      .forEach((part) => {
+        const match = part.match(/^([^:]+):\s*(.+)$/);
+        if (!match) return;
+        const key = normalizeSectionHeading(match[1]);
+        const value = normalizeWhitespace(match[2]);
+        if (key && value) {
+          metadata.set(key, value);
+        }
+      });
   }
 
   return metadata;
@@ -195,6 +235,15 @@ function extractMediaData($, nodes = []) {
 
   let context = null;
   const lines = nodes.flatMap((node) => extractLinesFromNode($, node));
+  const mediaMetadata = readKeyValueLines(lines);
+  const promptFromMetadata = findMetadataValue(mediaMetadata, ['prompt ai']);
+  if (promptFromMetadata) {
+    media.coverImagePrompt = promptFromMetadata;
+  }
+  const coverValue = findMetadataValue(mediaMetadata, ['immagine di copertina']);
+  if (coverValue && /^https?:\/\//i.test(coverValue)) {
+    media.coverImageUrl = coverValue;
+  }
 
   for (const line of lines) {
     const normalized = normalizeWhitespace(line);
@@ -205,6 +254,10 @@ function extractMediaData($, nodes = []) {
       const match = normalized.match(/^immagine di copertina(?:\s*\(ai\))?\s*:\s*(.+)$/i);
       if (match && /^https?:\/\//i.test(match[1])) {
         media.coverImageUrl = match[1];
+      }
+      const inlinePromptMatch = normalized.match(/prompt ai:\s*(.+)$/i);
+      if (inlinePromptMatch && !media.coverImagePrompt) {
+        media.coverImagePrompt = normalizeWhitespace(inlinePromptMatch[1]);
       }
       continue;
     }
@@ -217,6 +270,16 @@ function extractMediaData($, nodes = []) {
     if (/^prompt ai:/i.test(normalized)) {
       media.coverImagePrompt = normalized.replace(/^prompt ai:\s*/i, '').trim();
       continue;
+    }
+
+    const promptMatch = normalized.match(/prompt ai:\s*(.+?)(?:\s+(?:video embed|immagine di copertina)\s*:|$)/i);
+    if (promptMatch && !media.coverImagePrompt) {
+      media.coverImagePrompt = normalizeWhitespace(promptMatch[1]);
+    }
+
+    const coverUrlMatch = normalized.match(/immagine di copertina(?:\s*\(ai\))?\s*:\s*(https?:\/\/\S+)/i);
+    if (coverUrlMatch && !media.coverImageUrl) {
+      media.coverImageUrl = coverUrlMatch[1];
     }
 
     const arrowMatch = normalized.match(/^→\s*(https?:\/\/\S+)/i);

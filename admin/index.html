@@ -4452,9 +4452,13 @@ Buono studio!</textarea>
             try {
                 const posts = await apiRequest('/api/blog-posts');
                 state.blogPosts = posts;
+                const importedIds = new Set((state.importedBlogPosts || []).map((post) => post.id));
+                const visiblePosts = importedIds.size
+                    ? posts.filter((post) => !importedIds.has(post.id))
+                    : posts;
                 const template = document.getElementById('blog-row-template');
 
-                posts.forEach((post) => {
+                visiblePosts.forEach((post) => {
                     const clone = template.content.firstElementChild.cloneNode(true);
                     clone.dataset.id = post.id;
                     clone.querySelector('[data-title]').textContent = post.title;
@@ -4469,7 +4473,7 @@ Buono studio!</textarea>
                     tableBody.appendChild(clone);
                 });
 
-                toggleEmptyState(tableBody, posts.length > 0, '[data-empty-blog]');
+                toggleEmptyState(tableBody, visiblePosts.length > 0, '[data-empty-blog]');
             } catch (error) {
                 state.blogPosts = [];
                 toggleEmptyState(tableBody, false, '[data-empty-blog]');

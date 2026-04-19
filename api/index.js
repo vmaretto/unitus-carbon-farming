@@ -2616,6 +2616,20 @@ async function saveBlogCoverToStorage(buffer, postId) {
     return uploadResult.secure_url || uploadResult.url;
   }
 
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const blob = await put(`blog-covers/${fileName}`, buffer, {
+      access: 'public',
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+      addRandomSuffix: false,
+      contentType: 'image/png'
+    });
+    return blob.url;
+  }
+
+  if (process.env.VERCEL) {
+    throw new Error('Storage cover non configurato su Vercel. Imposta CLOUDINARY_URL oppure BLOB_READ_WRITE_TOKEN.');
+  }
+
   const uploadDir = createPublicUploadsPath('uploads', 'blog-covers');
   await fs.promises.mkdir(uploadDir, { recursive: true });
   const filePath = path.join(uploadDir, fileName);

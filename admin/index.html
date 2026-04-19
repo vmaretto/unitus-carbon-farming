@@ -2221,6 +2221,7 @@ Buono studio!</textarea>
             <td data-status></td>
             <td>
                 <div class="actions">
+                    <button type="button" class="secondary" data-generate-cover>Genera cover AI</button>
                     <button type="button" class="secondary" data-edit>Modifica</button>
                     <button type="button" class="danger" data-delete>Elimina</button>
                 </div>
@@ -4498,6 +4499,9 @@ Buono studio!</textarea>
                     clone.querySelector('[data-title]').textContent = post.title;
                     clone.querySelector('[data-date]').textContent = formatDate(post.publishedAt);
                     clone.querySelector('[data-reviewer]').textContent = getFacultyDisplayNameById(post.reviewerTeacherId);
+                    const generateButton = clone.querySelector('[data-generate-cover]');
+                    generateButton.disabled = Boolean(post.coverImageUrl);
+                    generateButton.textContent = post.coverImageUrl ? 'Cover presente' : 'Genera cover AI';
                     const status = clone.querySelector('[data-status]');
                     const pill = document.createElement('span');
                     pill.className = 'status-pill';
@@ -4682,9 +4686,19 @@ Buono studio!</textarea>
         document.getElementById('blog-table-body').addEventListener('click', async (event) => {
             const editButton = event.target.closest('button[data-edit]');
             const deleteButton = event.target.closest('button[data-delete]');
+            const generateCoverButton = event.target.closest('button[data-generate-cover]');
             const row = event.target.closest('tr[data-id]');
             if (!row) return;
             const id = row.dataset.id;
+
+            if (generateCoverButton) {
+                try {
+                    await generateBlogCover(id);
+                } catch (error) {
+                    // handled
+                }
+                return;
+            }
 
             if (editButton) {
                 populateBlogForm(id);

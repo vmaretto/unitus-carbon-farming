@@ -15,6 +15,7 @@ class FakeBlogPool {
       'author',
       'source_module',
       'cover_image_prompt',
+      'reviewer_teacher_id',
       'sources',
       'tags'
     ]);

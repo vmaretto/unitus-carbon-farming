@@ -2216,6 +2216,7 @@ async function initDatabase() {
     ADD COLUMN IF NOT EXISTS author VARCHAR(255),
     ADD COLUMN IF NOT EXISTS source_module VARCHAR(100),
     ADD COLUMN IF NOT EXISTS cover_image_prompt TEXT,
+    ADD COLUMN IF NOT EXISTS reviewer_teacher_id UUID REFERENCES faculty(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS sources JSONB DEFAULT '[]'::jsonb,
     ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb;
   `);
@@ -2555,6 +2556,7 @@ function buildBlogPostPayload(row, columns = null) {
     ...(has('author') ? { author: row.author } : {}),
     ...(has('source_module') ? { sourceModule: row.source_module } : {}),
     ...(has('cover_image_prompt') ? { coverImagePrompt: row.cover_image_prompt } : {}),
+    ...(has('reviewer_teacher_id') ? { reviewerTeacherId: row.reviewer_teacher_id } : {}),
     ...(has('sources') ? { sources: Array.isArray(row.sources) ? row.sources : [] } : {}),
     ...(has('tags') ? { tags: Array.isArray(row.tags) ? row.tags : [] } : {})
   };
@@ -2575,6 +2577,7 @@ function pickBlogInsertColumns(columns, post) {
   if (columns.has('author')) mappings.push(['author', post.author || null]);
   if (columns.has('source_module')) mappings.push(['source_module', post.sourceModule || null]);
   if (columns.has('cover_image_prompt')) mappings.push(['cover_image_prompt', post.coverImagePrompt || null]);
+  if (columns.has('reviewer_teacher_id')) mappings.push(['reviewer_teacher_id', post.reviewerTeacherId || null]);
   if (columns.has('sources')) mappings.push(['sources', JSON.stringify(Array.isArray(post.sources) ? post.sources : [])]);
   if (columns.has('tags')) mappings.push(['tags', JSON.stringify(Array.isArray(post.tags) ? post.tags : [])]);
 
@@ -3675,7 +3678,7 @@ async function removeQuizFromLessonMaterials(quizId) {
 // Whitelist colonne aggiornabili per tabella (sicurezza)
 const ALLOWED_UPDATE_FIELDS = {
   faculty: ['name', 'first_name', 'last_name', 'role', 'email', 'bio', 'photo_url', 'profile_link', 'sort_order', 'is_published', 'is_active', 'can_view_all_materials'],
-  blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'source_module', 'cover_image_prompt', 'sources', 'tags', 'is_published', 'published_at'],
+  blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'source_module', 'cover_image_prompt', 'reviewer_teacher_id', 'sources', 'tags', 'is_published', 'published_at'],
   partners: ['name', 'logo_url', 'website_url', 'category', 'sort_order', 'is_visible'],
   modules: ['name', 'ssd', 'cfu', 'hours', 'description', 'sort_order', 'course_id', 'is_published'],
   lessons: ['title', 'module_id', 'teacher_id', 'external_teacher_name', 'start_datetime', 'duration_minutes', 'location_physical', 'location_remote', 'status', 'notes', 'materials'],
@@ -3887,7 +3890,7 @@ app.post('/api/blog-posts', requireAdmin, async (req, res) => {
     return;
   }
 
-  const { title, slug, excerpt, content, coverImageUrl, publishedAt, isPublished, author, sourceModule, coverImagePrompt, sources, tags } = req.body;
+  const { title, slug, excerpt, content, coverImageUrl, publishedAt, isPublished, author, sourceModule, coverImagePrompt, reviewerTeacherId, sources, tags } = req.body;
 
   if (!title) {
     return res.status(400).json({ error: 'Title is required' });
@@ -3908,6 +3911,7 @@ app.post('/api/blog-posts', requireAdmin, async (req, res) => {
       author,
       sourceModule,
       coverImagePrompt,
+      reviewerTeacherId,
       sources,
       tags
     });
@@ -3935,7 +3939,7 @@ app.put('/api/blog-posts/:id', requireAdmin, async (req, res) => {
   }
 
   const { id } = req.params;
-  const { title, slug, excerpt, content, coverImageUrl, publishedAt, isPublished, author, sourceModule, coverImagePrompt, sources, tags } = req.body;
+  const { title, slug, excerpt, content, coverImageUrl, publishedAt, isPublished, author, sourceModule, coverImagePrompt, reviewerTeacherId, sources, tags } = req.body;
 
   try {
     const updateFields = {
@@ -3947,6 +3951,7 @@ app.put('/api/blog-posts/:id', requireAdmin, async (req, res) => {
       author,
       source_module: sourceModule,
       cover_image_prompt: coverImagePrompt,
+      reviewer_teacher_id: reviewerTeacherId,
       sources: Array.isArray(sources) ? JSON.stringify(sources) : undefined,
       tags: Array.isArray(tags) ? JSON.stringify(tags) : undefined,
       published_at:

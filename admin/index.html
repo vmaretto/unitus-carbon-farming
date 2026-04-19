@@ -1026,6 +1026,12 @@
                         Immagine di copertina (URL)
                         <input type="url" id="blog-cover" name="coverImageUrl" placeholder="https://...">
                     </label>
+                    <label>
+                        Docente revisore
+                        <select id="blog-reviewer" name="reviewerTeacherId">
+                            <option value="">Nessun docente assegnato</option>
+                        </select>
+                    </label>
                 </div>
 
                 <label style="margin-top: 18px;">
@@ -1083,13 +1089,14 @@
                             <tr>
                                 <th>Titolo</th>
                                 <th>Data</th>
+                                <th>Revisore</th>
                                 <th>Ha immagine?</th>
                                 <th style="width: 260px;">Azioni</th>
                             </tr>
                         </thead>
                         <tbody id="blog-import-table-body">
                             <tr class="empty-state" data-empty-blog-import>
-                                <td colspan="4">Nessuna bozza importata in questa sessione.</td>
+                                <td colspan="5">Nessuna bozza importata in questa sessione.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1102,13 +1109,14 @@
                         <tr>
                             <th>Titolo</th>
                             <th>Pubblicazione</th>
+                            <th>Revisore</th>
                             <th>Stato</th>
                             <th style="width: 180px;">Azioni</th>
                         </tr>
                     </thead>
                     <tbody id="blog-table-body">
                         <tr class="empty-state" data-empty-blog>
-                            <td colspan="4">Non ci sono articoli pubblicati o in bozza. Usa il modulo per crearne uno nuovo.</td>
+                            <td colspan="5">Non ci sono articoli pubblicati o in bozza. Usa il modulo per crearne uno nuovo.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -2209,6 +2217,7 @@ Buono studio!</textarea>
         <tr>
             <td data-title></td>
             <td data-date></td>
+            <td data-reviewer></td>
             <td data-status></td>
             <td>
                 <div class="actions">
@@ -2223,6 +2232,7 @@ Buono studio!</textarea>
         <tr>
             <td data-title></td>
             <td data-date></td>
+            <td data-reviewer></td>
             <td data-cover></td>
             <td>
                 <div class="actions">
@@ -2664,6 +2674,26 @@ Buono studio!</textarea>
             }
         }
 
+        function getFacultyDisplayNameById(facultyId) {
+            if (!facultyId) return '—';
+            const current = (state.faculty || []).find((item) => item.id === facultyId);
+            return current?.name || current?.email || 'Docente assegnato';
+        }
+
+        function updateBlogReviewerSelect() {
+            const select = document.getElementById('blog-reviewer');
+            if (!select) return;
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">Nessun docente assegnato</option>';
+            (state.faculty || []).forEach((faculty) => {
+                const label = faculty.name || faculty.email || 'Docente';
+                select.innerHTML += `<option value="${faculty.id}">${escapeHtml(label)}</option>`;
+            });
+            if (currentValue) {
+                select.value = currentValue;
+            }
+        }
+
         function renderImportedBlogPosts() {
             const wrapper = document.getElementById('blog-import-results');
             const tableBody = document.getElementById('blog-import-table-body');
@@ -2675,6 +2705,7 @@ Buono studio!</textarea>
                 clone.dataset.id = post.id;
                 clone.querySelector('[data-title]').textContent = post.title;
                 clone.querySelector('[data-date]').textContent = formatDate(post.publishedAt);
+                clone.querySelector('[data-reviewer]').textContent = getFacultyDisplayNameById(post.reviewerTeacherId);
 
                 const coverCell = clone.querySelector('[data-cover]');
                 const hasCover = Boolean(post.coverImageUrl);
@@ -2707,6 +2738,7 @@ Buono studio!</textarea>
             document.getElementById('blog-excerpt').value = current.excerpt || '';
             document.getElementById('blog-content').value = current.content || '';
             document.getElementById('blog-cover').value = current.coverImageUrl || '';
+            document.getElementById('blog-reviewer').value = current.reviewerTeacherId || '';
             document.getElementById('blog-published').checked = Boolean(current.isPublished);
             document.getElementById('blog-published-at').value = current.publishedAt
                 ? new Date(current.publishedAt).toISOString().slice(0, 16)
@@ -4433,12 +4465,14 @@ Buono studio!</textarea>
                 });
 
                 toggleEmptyState(tableBody, items.length > 0, '[data-empty-faculty]');
+                updateBlogReviewerSelect();
                 if (typeof updateTeacherSelect === 'function') updateTeacherSelect();
                 if (typeof updateResourceTeacherSelect === 'function') updateResourceTeacherSelect();
                 if (typeof populateResourceFilters === 'function') populateResourceFilters();
                 if (typeof fillTeacherMaterialsFilterOptions === 'function') fillTeacherMaterialsFilterOptions();
             } catch (error) {
                 state.faculty = [];
+                updateBlogReviewerSelect();
                 toggleEmptyState(tableBody, false, '[data-empty-faculty]');
                 if (typeof populateResourceFilters === 'function') populateResourceFilters();
                 if (typeof fillTeacherMaterialsFilterOptions === 'function') fillTeacherMaterialsFilterOptions();
@@ -4463,6 +4497,7 @@ Buono studio!</textarea>
                     clone.dataset.id = post.id;
                     clone.querySelector('[data-title]').textContent = post.title;
                     clone.querySelector('[data-date]').textContent = formatDate(post.publishedAt);
+                    clone.querySelector('[data-reviewer]').textContent = getFacultyDisplayNameById(post.reviewerTeacherId);
                     const status = clone.querySelector('[data-status]');
                     const pill = document.createElement('span');
                     pill.className = 'status-pill';
@@ -4619,6 +4654,7 @@ Buono studio!</textarea>
                 excerpt: document.getElementById('blog-excerpt').value.trim() || null,
                 content: document.getElementById('blog-content').value.trim() || null,
                 coverImageUrl: document.getElementById('blog-cover').value.trim() || null,
+                reviewerTeacherId: document.getElementById('blog-reviewer').value || null,
                 publishedAt: publishedAtInput ? new Date(publishedAtInput).toISOString() : null,
                 isPublished: document.getElementById('blog-published').checked
             };

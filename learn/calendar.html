@@ -49,6 +49,20 @@
         .lesson-title { font-weight: 600; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
         .lesson-meta { color: var(--gray-500); margin-top: 4px; }
         .status-row { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-top: 6px; }
+        .lesson-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+        .lesson-calendar-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(36, 90, 61, 0.12);
+            color: var(--green-700);
+            text-decoration: none;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .lesson-calendar-link:hover { background: rgba(36, 90, 61, 0.18); }
         .list-view { display: none; }
         .list-view.active { display: block; }
         .list-day-group { margin-bottom: 16px; }
@@ -102,9 +116,9 @@
                     <button class="btn btn-secondary active" id="grid-toggle">Griglia</button>
                     <button class="btn btn-secondary" id="list-toggle">Lista</button>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <a href="/api/calendar/feed.ics" download="master-carbon-farming.ics"
+                        <a href="/api/calendar/feed.ics"
                            style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--green-500); color: white; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 500;">
-                            📥 Esporta .ics
+                            📡 Calendario completo (.ics)
                         </a>
                         <a href="https://calendar.google.com/calendar/r?cid=webcal://unitus.carbonfarmingmaster.it/api/calendar/feed.ics"
                            target="_blank" rel="noopener"
@@ -218,12 +232,16 @@
             const status = getLessonStatus(lesson);
             const location = lesson.locationPhysical || lesson.locationRemote || 'Da definire';
             const clickable = lesson.lmsLessonId ? 'clickable' : '';
+            const isFuture = lesson.startDatetime ? new Date(lesson.startDatetime) >= new Date() : false;
             const metaLine = compact
                 ? `${lesson.moduleName || 'Modulo'} · ${lesson.teacherName || lesson.externalTeacherName || 'Docente da definire'}`
                 : `${lesson.moduleName || 'Modulo'} · ${fmtHours(lesson.durationMinutes)}`;
             const extraLine = compact
                 ? `${location} · ${fmtHours(lesson.durationMinutes)}`
                 : `${status.icon} ${status.label}`;
+            const calendarLink = isFuture
+                ? `<div class="lesson-actions"><a class="lesson-calendar-link" href="/api/calendar/lessons/${lesson.id}.ics" download="lezione-${lesson.id}.ics">📅 Aggiungi al calendario</a></div>`
+                : '';
             return `
                 <div class="${compact ? 'list-item' : 'lesson-card'} ${status.bucket} ${clickable}" ${lesson.lmsLessonId ? `data-lesson-id="${lesson.lmsLessonId}"` : ''}>
                     <div class="lesson-time">${fmtTime(lesson.startDatetime)}${compact ? ` · ${status.icon}` : ''}</div>
@@ -232,6 +250,7 @@
                     <div class="lesson-meta">${extraLine}</div>
                     ${compact ? '' : `<div class="lesson-meta">${location}</div>`}
                     ${compact ? `<div class="status-row">${status.icon} ${status.label}</div>` : ''}
+                    ${calendarLink}
                 </div>
             `;
         }
@@ -297,7 +316,8 @@
 
         function bindLessonClicks(scope) {
             scope.querySelectorAll('[data-lesson-id]').forEach((node) => {
-                node.addEventListener('click', () => {
+                node.addEventListener('click', (event) => {
+                    if (event.target.closest('.lesson-calendar-link')) return;
                     window.location.href = `/learn/lesson.html?id=${node.dataset.lessonId}`;
                 });
             });

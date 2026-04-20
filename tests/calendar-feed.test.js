@@ -7,10 +7,28 @@ const { buildCalendarFeed } = require('../api/calendar-ics');
 const apiModule = require('../api/index.js');
 
 class FakeCalendarPool {
-  async query(sql) {
+  async query(sql, params = []) {
     const normalized = String(sql).replace(/\s+/g, ' ').trim();
 
-    if (normalized.includes('FROM lessons l LEFT JOIN faculty f ON f.id = l.teacher_id')) {
+    if (normalized.includes('FROM lessons l LEFT JOIN faculty f ON f.id = l.teacher_id') && normalized.includes("COALESCE(l.status, 'scheduled') = 'confirmed'")) {
+      return {
+        rows: [
+          {
+            id: 'lesson-1',
+            title: 'Seminario introduttivo',
+            description: 'Panoramica del modulo',
+            startDatetime: '2026-04-17T12:00:00.000Z',
+            endDatetime: '2026-04-17T17:00:00.000Z',
+            durationMinutes: 300,
+            locationPhysical: 'Via IV Novembre 144',
+            teacherName: 'Mario Rossi',
+            status: 'confirmed'
+          }
+        ]
+      };
+    }
+
+    if (normalized.includes('WHERE l.id = $1') && params[0] === 'lesson-1') {
       return {
         rows: [
           {
@@ -97,13 +115,55 @@ test('GET /api/calendar/feed.ics risponde con text/calendar e almeno un VEVENT',
   assert.match(res.body, /SUMMARY:Seminario introduttivo/);
 });
 
+test('GET /api/calendar/lessons/:id.ics risponde con il file del singolo evento', async () => {
+  apiModule.__setPool(new FakeCalendarPool());
+
+  const layer = apiModule.app._router.stack.find((entry) => {
+    return entry?.route?.path === '/api/calendar/lessons/:id.ics' && entry.route.methods.get;
+  });
+
+  assert.ok(layer, 'route /api/calendar/lessons/:id.ics non trovata');
+
+  const req = { method: 'GET', url: '/api/calendar/lessons/lesson-1.ics', params: { id: 'lesson-1' }, headers: {} };
+  const res = {
+    statusCode: 200,
+    headers: {},
+    body: '',
+    setHeader(name, value) {
+      this.headers[name.toLowerCase()] = value;
+    },
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload) {
+      this.setHeader('content-type', 'application/json');
+      this.body = JSON.stringify(payload);
+      return this;
+    },
+    send(payload) {
+      this.body = String(payload);
+      return this;
+    }
+  };
+
+  await layer.route.stack[0].handle(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.match(res.headers['content-type'] || '', /^text\/calendar; charset=utf-8/i);
+  assert.match(res.headers['content-disposition'] || '', /lesson-lesson-1\.ics/);
+  assert.match(res.body, /UID:lesson-1@carbonfarmingmaster\.it/);
+  assert.match(res.body, /SUMMARY:Seminario introduttivo/);
+});
+
 test('i pulsanti ICS e Google Calendar sono presenti nei calendari studente e docente', () => {
   const studentCalendar = fs.readFileSync(path.join(__dirname, '..', 'learn', 'calendar.html'), 'utf8');
   const teacherCalendar = fs.readFileSync(path.join(__dirname, '..', 'teachers', 'index.html'), 'utf8');
   const googleUrl = 'https://calendar.google.com/calendar/r?cid=webcal://unitus.carbonfarmingmaster.it/api/calendar/feed.ics';
 
   assert.match(studentCalendar, /\/api\/calendar\/feed\.ics/);
-  assert.match(studentCalendar, /📥 Esporta \.ics/);
+  assert.match(studentCalendar, /Calendario completo \(\.ics\)/);
+  assert.match(studentCalendar, /\/api\/calendar\/lessons\/\$\{lesson\.id\}\.ics/);
   assert.ok(studentCalendar.includes(googleUrl));
 
   assert.match(teacherCalendar, /\/api\/calendar\/feed\.ics/);

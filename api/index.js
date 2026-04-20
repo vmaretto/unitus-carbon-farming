@@ -5508,6 +5508,7 @@ app.get('/api/calendar/feed.ics', async (req, res) => {
       FROM lessons l
       LEFT JOIN faculty f ON f.id = l.teacher_id
       WHERE COALESCE(l.status, 'scheduled') = 'confirmed'
+        AND l.start_datetime >= NOW()
       ORDER BY l.start_datetime ASC
     `);
 
@@ -5521,6 +5522,41 @@ app.get('/api/calendar/feed.ics', async (req, res) => {
   } catch (error) {
     console.error('Error generating ICS feed', error);
     res.status(500).json({ error: 'Unable to generate calendar feed' });
+  }
+});
+
+app.get('/api/calendar/lessons/:id.ics', async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  try {
+    const { rows } = await pool.query(`
+      SELECT l.id, l.title, l.description, l.start_datetime AS "startDatetime",
+             l.end_datetime AS "endDatetime", l.duration_minutes AS "durationMinutes",
+             l.location_physical AS "locationPhysical",
+             COALESCE(f.name, l.external_teacher_name) AS "teacherName",
+             COALESCE(l.status, 'confirmed') AS status
+      FROM lessons l
+      LEFT JOIN faculty f ON f.id = l.teacher_id
+      WHERE l.id = $1
+        AND COALESCE(l.status, 'scheduled') <> 'cancelled'
+      LIMIT 1
+    `, [req.params.id]);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+
+    const ics = buildCalendarFeed(rows, {
+      calendarName: 'Master Carbon Farming - Evento'
+    });
+
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Content-Disposition', `attachment; filename="lesson-${req.params.id}.ics"`);
+    res.send(ics);
+  } catch (error) {
+    console.error('Error generating single lesson ICS', error);
+    res.status(500).json({ error: 'Unable to generate lesson calendar event' });
   }
 });
 

@@ -73,6 +73,26 @@
         header .nav-links {
             margin-top: 8px;
             display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .nav-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .nav-group-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.78);
+        }
+
+        .nav-group-links {
+            display: flex;
             flex-wrap: wrap;
             gap: 12px;
         }
@@ -89,6 +109,13 @@
 
         header .nav-links a:hover {
             background: rgba(255, 255, 255, 0.15);
+        }
+
+        .nav-utility-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding-top: 4px;
         }
 
         main {
@@ -667,22 +694,33 @@
             <h1>Pannello di amministrazione</h1>
             <p>Gestisci la faculty del Master, programma la pubblicazione degli articoli del blog e controlla la visibilità dei contenuti online.</p>
             <div class="nav-links">
-                <a href="/index.html">&larr; Torna al sito</a>
-                <a href="#calendar">Calendario</a>
-                <a href="#faculty">Gestione docenti</a>
-
-                <a href="#blog">Gestione blog</a>
-                <a href="#partners">Gestione partner</a>
-                <a href="#resources">Risorse</a>
-                <a href="#teacher-materials">Materiali Docenti</a>
-                <a href="#teacher-docs">Liberatorie Docenti</a>
-                <a href="#questions">💬 Domande <span id="questions-nav-badge" style="display:none; background:#f97316; color:white; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:700;">0</span></a>
-                <a href="#lms-courses">Percorsi Formativi</a>
-                <a href="#lms-modules">Moduli e Lezioni</a>
-                <a href="#lms-enrollments">Iscrizioni</a>
-                <a href="#attendance">Presenze</a>
-                <a href="#workflow">Produzione</a>
-                <a href="#" id="logout-btn" onclick="adminLogout(); return false;" style="background: rgba(255,255,255,0.15);">Esci</a>
+                <div class="nav-group">
+                    <div class="nav-group-title">Area riservata / Piattaforma</div>
+                    <div class="nav-group-links">
+                        <a href="#calendar">Calendario</a>
+                        <a href="#faculty">Gestione docenti</a>
+                        <a href="#resources">Risorse</a>
+                        <a href="#teacher-materials">Materiali Docenti</a>
+                        <a href="#teacher-docs">Liberatorie Docenti</a>
+                        <a href="#questions">💬 Domande <span id="questions-nav-badge" style="display:none; background:#f97316; color:white; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:700;">0</span></a>
+                        <a href="#lms-courses">Percorsi Formativi</a>
+                        <a href="#lms-modules">Moduli e Lezioni</a>
+                        <a href="#lms-enrollments">Iscrizioni</a>
+                        <a href="#attendance">Presenze</a>
+                        <a href="#workflow">Produzione</a>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <div class="nav-group-title">Sito pubblico</div>
+                    <div class="nav-group-links">
+                        <a href="#blog">Gestione blog</a>
+                        <a href="#partners">Gestione partner</a>
+                    </div>
+                </div>
+                <div class="nav-utility-links">
+                    <a href="/index.html">&larr; Torna al sito</a>
+                    <a href="#" id="logout-btn" onclick="adminLogout(); return false;" style="background: rgba(255,255,255,0.15);">Esci</a>
+                </div>
             </div>
         </div>
     </header>

@@ -101,6 +101,17 @@
                     <select id="year-select"></select>
                     <button class="btn btn-secondary active" id="grid-toggle">Griglia</button>
                     <button class="btn btn-secondary" id="list-toggle">Lista</button>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <a href="/api/calendar/feed.ics" download="master-carbon-farming.ics"
+                           style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--green-500); color: white; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 500;">
+                            📥 Esporta .ics
+                        </a>
+                        <a href="https://calendar.google.com/calendar/r?cid=webcal://unitus.carbonfarmingmaster.it/api/calendar/feed.ics"
+                           target="_blank" rel="noopener"
+                           style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: #4285f4; color: white; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 500;">
+                            📅 Aggiungi a Google Calendar
+                        </a>
+                    </div>
                 </div>
             </div>
             <div class="legend">

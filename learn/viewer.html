@@ -275,13 +275,13 @@
         
         .watermark-text {
             position: absolute;
-            font-size: 18px;
-            font-weight: 500;
+            font-size: 14px;
+            font-weight: 400;
             color: rgba(128, 128, 128, 0.15);
             white-space: nowrap;
             transform: rotate(-35deg);
             user-select: none;
-            letter-spacing: 2px;
+            letter-spacing: 3px;
         }
         
         /* === SIDEBAR (Moodle-style thumbnails) === */
@@ -872,14 +872,17 @@
             const date = new Date().toLocaleDateString('it-IT');
             const text = `${userName} • ${date} • Master Carbon Farming`;
             
-            // Create multiple watermark instances for coverage
-            const positions = [
-                { x: '20%', y: '25%' },
-                { x: '60%', y: '25%' },
-                { x: '40%', y: '50%' },
-                { x: '20%', y: '75%' },
-                { x: '60%', y: '75%' }
-            ];
+            const isNarrow = wrapper.clientWidth < 600;
+            const positions = isNarrow
+                ? [
+                    { x: '20%', y: '30%' },
+                    { x: '20%', y: '70%' }
+                ]
+                : [
+                    { x: '15%', y: '20%' },
+                    { x: '50%', y: '50%' },
+                    { x: '15%', y: '80%' }
+                ];
             
             positions.forEach(pos => {
                 const wm = document.createElement('div');

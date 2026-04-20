@@ -41,9 +41,47 @@
         .zoom-btn.active:hover { background: rgba(255,255,255,0.35); }
         .zoom-btn.disabled { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); cursor: not-allowed; }
         .empty { color: var(--gray-500); text-align: center; padding: 32px; }
+        .course-goal { margin-top: 8px; font-size: 0.85rem; font-weight: 600; color: var(--green-700); }
+        .course-goal.reached { color: var(--green-500); }
+        .upcoming-lessons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .upcoming-lesson-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid rgba(36,90,61,0.12);
+            box-shadow: 0 6px 20px rgba(31,41,55,0.06);
+        }
+        .upcoming-lesson-date {
+            font-size: 2.2rem;
+            line-height: 1;
+            font-weight: 700;
+            color: var(--green-500);
+            letter-spacing: -0.04em;
+            margin-bottom: 8px;
+        }
+        .upcoming-lesson-date small {
+            display: block;
+            margin-top: 6px;
+            font-size: 0.82rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--green-700);
+        }
+        .upcoming-lesson-title { font-size: 1rem; font-weight: 600; color: var(--green-900); line-height: 1.4; }
+        .upcoming-lesson-meta { margin-top: 8px; font-size: 0.85rem; color: var(--gray-500); }
+        .upcoming-lesson-placeholder {
+            grid-column: 1 / -1;
+            background: var(--gray-100);
+            border: 1px dashed var(--gray-200);
+            color: var(--gray-500);
+            text-align: center;
+        }
         @media (max-width: 980px) {
             .header-content { flex-direction: column; align-items: flex-start; }
             .nav-links { width: 100%; gap: 16px; flex-wrap: wrap; }
+        }
+        @media (max-width: 720px) {
+            .upcoming-lessons { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -80,6 +118,7 @@
     </main>
 
     <script src="/learn/js/guest-guard.js"></script>
+    <script src="/learn/js/dashboard-utils.js"></script>
     <script>
         // Auth check
         function getToken() {
@@ -111,9 +150,13 @@
         let userInfo = {};
         try { userInfo = JSON.parse(localStorage.getItem('learnUser') || '{}'); } catch(e) {}
 
-        function renderWelcome(user) {
-            const welcomeName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || '';
-            if (welcomeName) document.getElementById('welcome-msg').textContent = `Ciao, ${welcomeName}!`;
+        function getSelectedCourseId() {
+            return localStorage.getItem('learnSelectedCourseId') || userInfo.selectedCourseId || userInfo.currentMasterId || '';
+        }
+
+        function renderWelcome(user, courses = []) {
+            const selectedMasterName = DashboardUtils.resolveSelectedMasterName(user, courses, getSelectedCourseId());
+            document.getElementById('welcome-msg').textContent = DashboardUtils.formatDashboardGreeting(user, selectedMasterName);
         }
 
         renderWelcome(userInfo);
@@ -151,6 +194,60 @@
             }
         }
 
+        function formatUpcomingLessonDate(startDatetime) {
+            const start = new Date(startDatetime);
+            return {
+                day: start.toLocaleDateString('it-IT', { day: '2-digit' }),
+                month: start.toLocaleDateString('it-IT', { month: 'short' }).replace('.', ''),
+                label: start.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })
+            };
+        }
+
+        function renderUpcomingLessons(lessons) {
+            const liveSection = document.getElementById('live-section');
+            if (!Array.isArray(lessons) || !lessons.length) {
+                liveSection.innerHTML = `
+                    <div class="card">
+                        <h2>Prossime lezioni</h2>
+                        <div class="upcoming-lessons">
+                            <div class="upcoming-lesson-card upcoming-lesson-placeholder">Nessuna lezione in programma</div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            liveSection.innerHTML = `
+                <div class="card">
+                    <h2>Prossime lezioni</h2>
+                    <div class="upcoming-lessons">
+                        ${lessons.map((lesson) => {
+                            const dateParts = formatUpcomingLessonDate(lesson.startDatetime);
+                            const startTime = new Date(lesson.startDatetime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                            return `
+                                <article class="upcoming-lesson-card">
+                                    <div class="upcoming-lesson-date">
+                                        ${dateParts.day}
+                                        <small>${dateParts.month}</small>
+                                    </div>
+                                    <div class="upcoming-lesson-title">${dateParts.label} — ${lesson.title || 'Lezione'}</div>
+                                    <div class="upcoming-lesson-meta">${startTime}${lesson.locationPhysical ? ' · ' + lesson.locationPhysical : ''}</div>
+                                </article>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadUpcomingLessons() {
+            const params = new URLSearchParams({ limit: '2' });
+            const selectedCourseId = getSelectedCourseId();
+            if (selectedCourseId) params.set('courseId', selectedCourseId);
+            const lessons = await api('/api/lms/my-upcoming-lessons?' + params.toString());
+            renderUpcomingLessons(lessons || []);
+        }
+
         async function loadDashboard() {
             const stored = localStorage.getItem('learnUser');
             const user = stored ? JSON.parse(stored) : {};
@@ -164,6 +261,7 @@
             try {
                 const courses = await api('/api/lms/my-courses');
                 if (!courses) return;
+                renderWelcome(userInfo, courses);
 
                 const coursesList = document.getElementById('courses-list');
                 if (!courses.length) {
@@ -178,6 +276,8 @@
                     const pct = totalHours > 0 ? Math.round((attendedHours / totalHours) * 100) : 0;
                     const attendedHoursText = attendedHours.toFixed(1).replace('.0', '');
                     const totalHoursText = totalHours.toFixed(1).replace('.0', '');
+                    const goalMessage = DashboardUtils.formatAttendanceGoalMessage(c);
+                    const goalData = DashboardUtils.getAttendanceGoalData(c);
 
                     const div = document.createElement('div');
                     div.className = 'course-card';
@@ -185,6 +285,7 @@
                         <div class="course-card-content">
                             <h3>${c.title}</h3>
                             <div class="course-meta">${c.editionName} &bull; ${attendedHoursText} ore su ${totalHoursText} frequentate (${pct}%)</div>
+                            <div class="course-goal ${goalData.missingHours <= 0 ? 'reached' : ''}">${goalMessage}</div>
                             <div class="progress-bar"><div class="progress-fill" style="width: ${pct}%"></div></div>
                         </div>
                     `;
@@ -280,30 +381,11 @@
                         });
                         
                         liveSection.innerHTML = `<h4 style="margin: 0 0 12px; color: var(--green-700);">Lezioni di oggi</h4>${bannersHtml}`;
-                    } else if (relevantLessons.length > 0) {
-                        // Mostra prossima lezione futura
-                        const next = relevantLessons[0];
-                        const startTime = new Date(next.startDatetime);
-                        const thirtyMinBefore = new Date(startTime.getTime() - 30 * 60000);
-                        const dt = startTime.toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
-                        
-                        // Pulsante Zoom disabilitato con orario attivazione
-                        let zoomHtml = '';
-                        if (next.locationRemote) {
-                            const activeTime = thirtyMinBefore.toLocaleString('it-IT', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-                            zoomHtml = `<div style="text-align: right;"><span class="zoom-btn disabled">Collegati</span><br><small style="opacity:0.6;">Link attivo da ${activeTime}</small></div>`;
-                        }
-                        
-                        liveSection.innerHTML = `
-                            <div class="live-banner">
-                                <div>
-                                    <h3>Prossima lezione: ${next.title}</h3>
-                                    <p>${dt}${next.locationPhysical ? ' &bull; ' + next.locationPhysical : ''}</p>
-                                </div>
-                                ${zoomHtml}
-                            </div>
-                        `;
+                    } else {
+                        await loadUpcomingLessons();
                     }
+                } else {
+                    await loadUpcomingLessons();
                 }
             } catch (e) { console.error(e); }
         }

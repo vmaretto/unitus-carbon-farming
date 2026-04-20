@@ -23,6 +23,20 @@
         .card { background: white; border-radius: 20px; padding: 36px; box-shadow: 0 8px 30px rgba(31,41,55,0.08); border: 1px solid rgba(36,90,61,0.08); text-align: center; }
         .card h2 { font-size: 1.4rem; margin: 0 0 8px; color: var(--green-900); }
         .card p { color: var(--gray-500); font-size: 0.95rem; margin: 0 0 28px; }
+        .info-alert {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            text-align: left;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 20px;
+            color: #1d4ed8;
+        }
+        .info-alert strong { display: block; margin-bottom: 4px; color: #1e3a8a; }
+        .info-alert span { font-size: 0.9rem; line-height: 1.5; }
         .pin-inputs { display: flex; gap: 8px; justify-content: center; margin-bottom: 24px; }
         .pin-inputs input {
             width: 52px; height: 64px; text-align: center; font-size: 1.8rem; font-weight: 700;
@@ -65,6 +79,14 @@
         <div class="card">
             <h2>Check-in Presenza</h2>
             <p>Inserisci il codice PIN mostrato dal docente per registrare la tua presenza.</p>
+
+            <div class="info-alert" role="note" aria-live="polite">
+                <div aria-hidden="true">ℹ️</div>
+                <div>
+                    <strong>Informazione importante</strong>
+                    <span>Il check-in va effettuato SOLO da chi partecipa in presenza fisica. Per i partecipanti da remoto, le presenze vengono registrate automaticamente tramite Zoom.</span>
+                </div>
+            </div>
 
             <div class="pin-inputs" id="pin-inputs">
                 <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" data-index="0" autofocus>

@@ -11,6 +11,7 @@ const JSZip = require('jszip');
 const { OpenAI } = require('openai');
 const { v2: cloudinary } = require('cloudinary');
 const { parseBlogPostsFromDocxBuffer, slugify } = require('./blog-import');
+const { buildCalendarFeed } = require('./calendar-ics');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -5474,6 +5475,35 @@ app.get('/api/lessons/:id', async (req, res) => {
   }
 });
 
+app.get('/api/calendar/feed.ics', async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  try {
+    const { rows } = await pool.query(`
+      SELECT l.id, l.title, l.description, l.start_datetime AS "startDatetime",
+             l.end_datetime AS "endDatetime", l.duration_minutes AS "durationMinutes",
+             l.location_physical AS "locationPhysical",
+             COALESCE(f.name, l.external_teacher_name) AS "teacherName",
+             COALESCE(l.status, 'confirmed') AS status
+      FROM lessons l
+      LEFT JOIN faculty f ON f.id = l.teacher_id
+      WHERE COALESCE(l.status, 'scheduled') = 'confirmed'
+      ORDER BY l.start_datetime ASC
+    `);
+
+    const ics = buildCalendarFeed(rows, {
+      calendarName: 'Master Carbon Farming - Calendario Lezioni'
+    });
+
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(ics);
+  } catch (error) {
+    console.error('Error generating ICS feed', error);
+    res.status(500).json({ error: 'Unable to generate calendar feed' });
+  }
+});
+
 app.post('/api/lessons', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
 
@@ -5711,6 +5741,8 @@ app.get('/api/lms/course-editions', async (req, res) => {
       SELECT id, course_id AS "courseId", edition_name AS "editionName",
              start_date AS "startDate", end_date AS "endDate",
              max_students AS "maxStudents", is_active AS "isActive",
+             COALESCE(total_planned_hours, 432) AS "totalPlannedHours",
+             COALESCE(minimum_in_person_attendance_ratio, 0.7) AS "minimumInPersonAttendanceRatio",
              created_at AS "createdAt", updated_at AS "updatedAt"
       FROM course_editions ${where}
       ORDER BY start_date DESC NULLS LAST, created_at DESC
@@ -5729,6 +5761,8 @@ app.get('/api/lms/course-editions/:id', async (req, res) => {
       SELECT id, course_id AS "courseId", edition_name AS "editionName",
              start_date AS "startDate", end_date AS "endDate",
              max_students AS "maxStudents", is_active AS "isActive",
+             COALESCE(total_planned_hours, 432) AS "totalPlannedHours",
+             COALESCE(minimum_in_person_attendance_ratio, 0.7) AS "minimumInPersonAttendanceRatio",
              created_at AS "createdAt", updated_at AS "updatedAt"
       FROM course_editions WHERE id = $1
     `, [req.params.id]);
@@ -5742,18 +5776,42 @@ app.get('/api/lms/course-editions/:id', async (req, res) => {
 
 app.post('/api/lms/course-editions', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
-  const { courseId, editionName, startDate, endDate, maxStudents, isActive } = req.body;
+  const {
+    courseId,
+    editionName,
+    startDate,
+    endDate,
+    maxStudents,
+    isActive,
+    totalPlannedHours,
+    minimumInPersonAttendanceRatio
+  } = req.body;
   if (!courseId || !editionName) return res.status(400).json({ error: 'courseId and editionName are required' });
   try {
     const id = uuidv4();
     const { rows } = await pool.query(`
-      INSERT INTO course_editions (id, course_id, edition_name, start_date, end_date, max_students, is_active)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO course_editions (
+        id, course_id, edition_name, start_date, end_date, max_students, is_active,
+        total_planned_hours, minimum_in_person_attendance_ratio
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id, course_id AS "courseId", edition_name AS "editionName",
                 start_date AS "startDate", end_date AS "endDate",
                 max_students AS "maxStudents", is_active AS "isActive",
+                COALESCE(total_planned_hours, 432) AS "totalPlannedHours",
+                COALESCE(minimum_in_person_attendance_ratio, 0.7) AS "minimumInPersonAttendanceRatio",
                 created_at AS "createdAt", updated_at AS "updatedAt"
-    `, [id, courseId, editionName, startDate || null, endDate || null, maxStudents || null, isActive !== false]);
+    `, [
+      id,
+      courseId,
+      editionName,
+      startDate || null,
+      endDate || null,
+      maxStudents || null,
+      isActive !== false,
+      totalPlannedHours || 432,
+      minimumInPersonAttendanceRatio || 0.7
+    ]);
     res.status(201).json(rows[0]);
   } catch (error) {
     console.error('Error creating course edition', error);
@@ -5763,13 +5821,24 @@ app.post('/api/lms/course-editions', requireAdmin, async (req, res) => {
 
 app.put('/api/lms/course-editions/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
-  const { courseId, editionName, startDate, endDate, maxStudents, isActive } = req.body;
+  const {
+    courseId,
+    editionName,
+    startDate,
+    endDate,
+    maxStudents,
+    isActive,
+    totalPlannedHours,
+    minimumInPersonAttendanceRatio
+  } = req.body;
   try {
     const { query, values } = buildUpdateQuery('course_editions', {
       course_id: courseId, edition_name: editionName,
       start_date: startDate, end_date: endDate,
       max_students: maxStudents,
-      is_active: typeof isActive === 'boolean' ? isActive : undefined
+      is_active: typeof isActive === 'boolean' ? isActive : undefined,
+      total_planned_hours: totalPlannedHours,
+      minimum_in_person_attendance_ratio: minimumInPersonAttendanceRatio
     }, req.params.id);
     const { rows } = await pool.query(query, values);
     if (!rows.length) return res.status(404).json({ error: 'Course edition not found' });
@@ -5778,6 +5847,8 @@ app.put('/api/lms/course-editions/:id', requireAdmin, async (req, res) => {
       id: r.id, courseId: r.course_id, editionName: r.edition_name,
       startDate: r.start_date, endDate: r.end_date,
       maxStudents: r.max_students, isActive: r.is_active,
+      totalPlannedHours: r.total_planned_hours,
+      minimumInPersonAttendanceRatio: r.minimum_in_person_attendance_ratio,
       createdAt: r.created_at, updatedAt: r.updated_at
     });
   } catch (error) {
@@ -6628,6 +6699,7 @@ app.get('/api/lms/my-courses', requireStudent, async (req, res) => {
       SELECT c.id, c.title, c.slug, c.description, c.cover_image_url AS "coverImageUrl",
              ce.id AS "editionId", ce.edition_name AS "editionName",
              COALESCE(ce.total_planned_hours, 432) AS "totalPlannedHours",
+             COALESCE(ce.minimum_in_person_attendance_ratio, 0.7) AS "minimumInPersonAttendanceRatio",
              e.status AS "enrollmentStatus", e.enrolled_at AS "enrolledAt",
              (SELECT COUNT(*)::int FROM modules m WHERE m.course_id = c.id) AS "totalModules",
              (SELECT COUNT(*)::int FROM lms_lessons ll
@@ -6641,6 +6713,14 @@ app.get('/api/lms/my-courses', requireStudent, async (req, res) => {
                 AND m_att.course_id = c.id
                 AND a.attendance_type IN ('in_person', 'remote_live', 'remote_partial')
              ) AS "attendedHours",
+             (SELECT COALESCE(SUM(COALESCE(les.duration_minutes, 0)), 0) / 60.0
+              FROM attendance a
+              JOIN lessons les ON les.id = a.lesson_id
+              JOIN modules m_att ON m_att.id = les.module_id
+              WHERE a.user_id = $1
+                AND m_att.course_id = c.id
+                AND a.attendance_type = 'in_person'
+             ) AS "inPersonHours",
              (SELECT COUNT(DISTINCT ll2.id)::int FROM lms_lessons ll2
               JOIN modules m3 ON m3.id = ll2.lms_module_id
               WHERE m3.course_id = c.id AND (
@@ -6658,6 +6738,52 @@ app.get('/api/lms/my-courses', requireStudent, async (req, res) => {
   } catch (error) {
     console.error('Error fetching student courses', error);
     res.status(500).json({ error: 'Unable to retrieve courses' });
+  }
+});
+
+app.get('/api/lms/my-upcoming-lessons', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const requestedLimit = parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 10) : 2;
+    const values = [req.user.userId];
+    let courseFilter = '';
+
+    if (req.query.courseId) {
+      values.push(req.query.courseId);
+      courseFilter = ` AND c.id = $${values.length}`;
+    }
+
+    values.push(limit);
+
+    const { rows } = await pool.query(`
+      SELECT l.id, l.title, l.description, l.start_datetime AS "startDatetime",
+             l.end_datetime AS "endDatetime", l.duration_minutes AS "durationMinutes",
+             l.location_physical AS "locationPhysical", l.location_remote AS "locationRemote",
+             l.status, l.module_id AS "moduleId", m.name AS "moduleName",
+             c.id AS "courseId", c.title AS "courseTitle",
+             ce.id AS "editionId", ce.edition_name AS "editionName",
+             l.teacher_id AS "teacherId", f.name AS "teacherName",
+             l.external_teacher_name AS "externalTeacherName"
+      FROM enrollments e
+      JOIN course_editions ce ON ce.id = e.course_edition_id
+      JOIN courses c ON c.id = ce.course_id
+      JOIN modules m ON m.course_id = c.id
+      JOIN lessons l ON l.module_id = m.id
+      LEFT JOIN faculty f ON f.id = l.teacher_id
+      WHERE e.user_id = $1
+        AND e.status = 'active'
+        AND COALESCE(l.status, 'scheduled') <> 'cancelled'
+        AND l.start_datetime >= NOW()
+        ${courseFilter}
+      ORDER BY l.start_datetime ASC
+      LIMIT $${values.length}
+    `, values);
+
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching upcoming lessons for student', error);
+    res.status(500).json({ error: 'Unable to retrieve upcoming lessons' });
   }
 });
 

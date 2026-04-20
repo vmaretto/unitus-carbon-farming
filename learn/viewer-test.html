@@ -107,10 +107,10 @@
             pointer-events: none; z-index: 10; overflow: hidden;
         }
         .watermark-text {
-            position: absolute; font-size: 16px; font-weight: 500;
+            position: absolute; font-size: 14px; font-weight: 400;
             color: rgba(128, 128, 128, 0.12);
             white-space: nowrap; transform: rotate(-35deg);
-            user-select: none; letter-spacing: 2px;
+            user-select: none; letter-spacing: 3px;
         }
         
         .loading { text-align: center; padding: 60px; color: white; }
@@ -273,7 +273,11 @@
             overlay.className = 'watermark-overlay';
             const text = `${currentUser.firstName} ${currentUser.lastName} • ${new Date().toLocaleDateString('it-IT')} • Master Carbon Farming`;
             
-            [{ x: '15%', y: '20%' }, { x: '55%', y: '20%' }, { x: '35%', y: '50%' }, { x: '15%', y: '80%' }, { x: '55%', y: '80%' }].forEach(pos => {
+            const positions = wrapper.clientWidth < 600
+                ? [{ x: '20%', y: '30%' }, { x: '20%', y: '70%' }]
+                : [{ x: '15%', y: '20%' }, { x: '50%', y: '50%' }, { x: '15%', y: '80%' }];
+
+            positions.forEach(pos => {
                 const wm = document.createElement('div');
                 wm.className = 'watermark-text';
                 wm.textContent = text;

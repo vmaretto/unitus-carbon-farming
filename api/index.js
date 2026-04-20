@@ -2539,6 +2539,26 @@ async function getTableColumns(tableName) {
   return new Set(rows.map(row => row.column_name));
 }
 
+async function getCourseEditionSchemaConfig() {
+  const columns = await getTableColumns('course_editions');
+  return {
+    hasTotalPlannedHours: columns.has('total_planned_hours'),
+    hasMinimumInPersonAttendanceRatio: columns.has('minimum_in_person_attendance_ratio')
+  };
+}
+
+function buildCourseEditionSelectFragments(config, alias = '') {
+  const prefix = alias ? `${alias}.` : '';
+  return {
+    totalPlannedHours: config.hasTotalPlannedHours
+      ? `COALESCE(${prefix}total_planned_hours, 432) AS "totalPlannedHours"`
+      : `432 AS "totalPlannedHours"`,
+    minimumInPersonAttendanceRatio: config.hasMinimumInPersonAttendanceRatio
+      ? `COALESCE(${prefix}minimum_in_person_attendance_ratio, 0.7) AS "minimumInPersonAttendanceRatio"`
+      : `0.7 AS "minimumInPersonAttendanceRatio"`
+  };
+}
+
 function normalizeBoolean(value, fallback = false) {
   return typeof value === 'boolean' ? value : fallback;
 }
@@ -5729,6 +5749,8 @@ app.delete('/api/lms/courses/:id', requireAdmin, async (req, res) => {
 app.get('/api/lms/course-editions', async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const schema = await getCourseEditionSchemaConfig();
+    const fragments = buildCourseEditionSelectFragments(schema);
     const { courseId } = req.query;
     const filters = [];
     const values = [];
@@ -5741,8 +5763,8 @@ app.get('/api/lms/course-editions', async (req, res) => {
       SELECT id, course_id AS "courseId", edition_name AS "editionName",
              start_date AS "startDate", end_date AS "endDate",
              max_students AS "maxStudents", is_active AS "isActive",
-             COALESCE(total_planned_hours, 432) AS "totalPlannedHours",
-             COALESCE(minimum_in_person_attendance_ratio, 0.7) AS "minimumInPersonAttendanceRatio",
+             ${fragments.totalPlannedHours},
+             ${fragments.minimumInPersonAttendanceRatio},
              created_at AS "createdAt", updated_at AS "updatedAt"
       FROM course_editions ${where}
       ORDER BY start_date DESC NULLS LAST, created_at DESC
@@ -5757,12 +5779,14 @@ app.get('/api/lms/course-editions', async (req, res) => {
 app.get('/api/lms/course-editions/:id', async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const schema = await getCourseEditionSchemaConfig();
+    const fragments = buildCourseEditionSelectFragments(schema);
     const { rows } = await pool.query(`
       SELECT id, course_id AS "courseId", edition_name AS "editionName",
              start_date AS "startDate", end_date AS "endDate",
              max_students AS "maxStudents", is_active AS "isActive",
-             COALESCE(total_planned_hours, 432) AS "totalPlannedHours",
-             COALESCE(minimum_in_person_attendance_ratio, 0.7) AS "minimumInPersonAttendanceRatio",
+             ${fragments.totalPlannedHours},
+             ${fragments.minimumInPersonAttendanceRatio},
              created_at AS "createdAt", updated_at AS "updatedAt"
       FROM course_editions WHERE id = $1
     `, [req.params.id]);
@@ -5776,6 +5800,7 @@ app.get('/api/lms/course-editions/:id', async (req, res) => {
 
 app.post('/api/lms/course-editions', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
+  const schema = await getCourseEditionSchemaConfig();
   const {
     courseId,
     editionName,
@@ -5789,29 +5814,32 @@ app.post('/api/lms/course-editions', requireAdmin, async (req, res) => {
   if (!courseId || !editionName) return res.status(400).json({ error: 'courseId and editionName are required' });
   try {
     const id = uuidv4();
+    const insertColumns = ['id', 'course_id', 'edition_name', 'start_date', 'end_date', 'max_students', 'is_active'];
+    const insertValues = [id, courseId, editionName, startDate || null, endDate || null, maxStudents || null, isActive !== false];
+
+    if (schema.hasTotalPlannedHours) {
+      insertColumns.push('total_planned_hours');
+      insertValues.push(totalPlannedHours || 432);
+    }
+    if (schema.hasMinimumInPersonAttendanceRatio) {
+      insertColumns.push('minimum_in_person_attendance_ratio');
+      insertValues.push(minimumInPersonAttendanceRatio || 0.7);
+    }
+
+    const placeholders = insertValues.map((_, index) => `$${index + 1}`).join(', ');
+    const fragments = buildCourseEditionSelectFragments(schema);
     const { rows } = await pool.query(`
       INSERT INTO course_editions (
-        id, course_id, edition_name, start_date, end_date, max_students, is_active,
-        total_planned_hours, minimum_in_person_attendance_ratio
+        ${insertColumns.join(', ')}
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES (${placeholders})
       RETURNING id, course_id AS "courseId", edition_name AS "editionName",
                 start_date AS "startDate", end_date AS "endDate",
                 max_students AS "maxStudents", is_active AS "isActive",
-                COALESCE(total_planned_hours, 432) AS "totalPlannedHours",
-                COALESCE(minimum_in_person_attendance_ratio, 0.7) AS "minimumInPersonAttendanceRatio",
+                ${fragments.totalPlannedHours},
+                ${fragments.minimumInPersonAttendanceRatio},
                 created_at AS "createdAt", updated_at AS "updatedAt"
-    `, [
-      id,
-      courseId,
-      editionName,
-      startDate || null,
-      endDate || null,
-      maxStudents || null,
-      isActive !== false,
-      totalPlannedHours || 432,
-      minimumInPersonAttendanceRatio || 0.7
-    ]);
+    `, insertValues);
     res.status(201).json(rows[0]);
   } catch (error) {
     console.error('Error creating course edition', error);
@@ -5821,6 +5849,7 @@ app.post('/api/lms/course-editions', requireAdmin, async (req, res) => {
 
 app.put('/api/lms/course-editions/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
+  const schema = await getCourseEditionSchemaConfig();
   const {
     courseId,
     editionName,
@@ -5832,14 +5861,21 @@ app.put('/api/lms/course-editions/:id', requireAdmin, async (req, res) => {
     minimumInPersonAttendanceRatio
   } = req.body;
   try {
-    const { query, values } = buildUpdateQuery('course_editions', {
+    const updateFields = {
       course_id: courseId, edition_name: editionName,
       start_date: startDate, end_date: endDate,
       max_students: maxStudents,
-      is_active: typeof isActive === 'boolean' ? isActive : undefined,
-      total_planned_hours: totalPlannedHours,
-      minimum_in_person_attendance_ratio: minimumInPersonAttendanceRatio
-    }, req.params.id);
+      is_active: typeof isActive === 'boolean' ? isActive : undefined
+    };
+
+    if (schema.hasTotalPlannedHours) {
+      updateFields.total_planned_hours = totalPlannedHours;
+    }
+    if (schema.hasMinimumInPersonAttendanceRatio) {
+      updateFields.minimum_in_person_attendance_ratio = minimumInPersonAttendanceRatio;
+    }
+
+    const { query, values } = buildUpdateQuery('course_editions', updateFields, req.params.id);
     const { rows } = await pool.query(query, values);
     if (!rows.length) return res.status(404).json({ error: 'Course edition not found' });
     const r = rows[0];
@@ -5847,8 +5883,8 @@ app.put('/api/lms/course-editions/:id', requireAdmin, async (req, res) => {
       id: r.id, courseId: r.course_id, editionName: r.edition_name,
       startDate: r.start_date, endDate: r.end_date,
       maxStudents: r.max_students, isActive: r.is_active,
-      totalPlannedHours: r.total_planned_hours,
-      minimumInPersonAttendanceRatio: r.minimum_in_person_attendance_ratio,
+      totalPlannedHours: schema.hasTotalPlannedHours ? r.total_planned_hours : 432,
+      minimumInPersonAttendanceRatio: schema.hasMinimumInPersonAttendanceRatio ? r.minimum_in_person_attendance_ratio : 0.7,
       createdAt: r.created_at, updatedAt: r.updated_at
     });
   } catch (error) {
@@ -6695,11 +6731,13 @@ app.get('/api/students/me', requireStudent, async (req, res) => {
 app.get('/api/lms/my-courses', requireStudent, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const schema = await getCourseEditionSchemaConfig();
+    const fragments = buildCourseEditionSelectFragments(schema, 'ce');
     const { rows } = await pool.query(`
       SELECT c.id, c.title, c.slug, c.description, c.cover_image_url AS "coverImageUrl",
              ce.id AS "editionId", ce.edition_name AS "editionName",
-             COALESCE(ce.total_planned_hours, 432) AS "totalPlannedHours",
-             COALESCE(ce.minimum_in_person_attendance_ratio, 0.7) AS "minimumInPersonAttendanceRatio",
+             ${fragments.totalPlannedHours},
+             ${fragments.minimumInPersonAttendanceRatio},
              e.status AS "enrollmentStatus", e.enrolled_at AS "enrolledAt",
              (SELECT COUNT(*)::int FROM modules m WHERE m.course_id = c.id) AS "totalModules",
              (SELECT COUNT(*)::int FROM lms_lessons ll

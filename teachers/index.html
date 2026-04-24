@@ -772,14 +772,17 @@
                 c.innerHTML = items.map(m => {
                     const statusMap = { pending: ['In attesa','badge-orange'], approved: ['Approvato','badge-green'], rejected: ['Rifiutato','badge-red'] };
                     const [label, cls] = statusMap[m.status] || [m.status, 'badge-gray'];
+                    const materialTitle = m.title || m.file_name || 'Materiale docente';
+                    const fileLabel = m.file_name || materialTitle;
                     return `
                     <div class="list-item">
                         <div class="item-info">
-                            <div class="item-title">${m.title}</div>
+                            <div class="item-title">${materialTitle}</div>
                             <div class="item-meta">
-                                📄 ${m.file_name || 'File'} ${m.file_size ? '(' + (m.file_size/1024/1024).toFixed(1) + 'MB)' : ''}
+                                📄 ${fileLabel} ${m.file_size ? '(' + (m.file_size/1024/1024).toFixed(1) + 'MB)' : ''}
                                 — ${fmtDate(m.created_at)}
                             </div>
+                            ${m.description ? `<div class="item-meta">${escapeHtml(m.description)}</div>` : ''}
                         </div>
                         <div class="item-actions">
                             <span class="badge ${cls}">${label}</span>

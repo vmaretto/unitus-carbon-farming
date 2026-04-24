@@ -12,6 +12,11 @@ const { OpenAI } = require('openai');
 const { v2: cloudinary } = require('cloudinary');
 const { parseBlogPostsFromDocxBuffer, slugify } = require('./blog-import');
 const { buildCalendarFeed } = require('./calendar-ics');
+const {
+  buildTeacherLessonAccessQuery,
+  buildMaterialsPendingInsertPayload,
+  getTeacherMaterialResourceTitle
+} = require('./teacher-materials');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -1066,13 +1071,22 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
   }
   
   try {
+    console.log('Upload attempt:', { teacherFacultyId: req.teacher.id, lessonId: lesson_id });
+
     // Verify teacher has access to this lesson
-    const { rows: teacherLessons } = await pool.query(
-      'SELECT id FROM lessons WHERE teacher_id = $1 AND id = $2',
-      [req.teacher.id, lesson_id]
-    );
+    const accessQuery = buildTeacherLessonAccessQuery(req.teacher.id, lesson_id);
+    const { rows: teacherLessons } = await pool.query(accessQuery.text, accessQuery.values);
 
     if (teacherLessons.length === 0) {
+      const { rows: lessonRows } = await pool.query(
+        `SELECT l.id, l.teacher_id AS "teacherId", f.email AS "lessonTeacherEmail"
+         FROM lessons l
+         LEFT JOIN faculty f ON f.id = l.teacher_id
+         WHERE l.id = $1
+         LIMIT 1`,
+        [lesson_id]
+      );
+      console.log('403 - No matching lesson. Teacher faculty_id:', req.teacher.id, 'Lesson data:', lessonRows[0] || null);
       return res.status(403).json({ error: 'Non hai accesso a questa lezione' });
     }
     
@@ -1083,19 +1097,16 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
     });
     
     // Save to materials_pending
-    const { rows: materials } = await pool.query(
-      `INSERT INTO materials_pending
-       (faculty_id, lesson_id, file_url, file_name, file_type, status)
-       VALUES ($1, $2, $3, $4, $5, 'pending')
-       RETURNING id`,
-      [
-        req.teacher.id,
-        lesson_id,
-        url,
-        file.originalname,
-        file.mimetype
-      ]
-    );
+    const insertPayload = buildMaterialsPendingInsertPayload({
+      teacherFacultyId: req.teacher.id,
+      lessonId: lesson_id,
+      url,
+      fileOriginalName: file.originalname,
+      fileMimeType: file.mimetype,
+      title,
+      description
+    });
+    const { rows: materials } = await pool.query(insertPayload.text, insertPayload.values);
     
     res.json({
       id: materials[0].id,
@@ -1118,8 +1129,11 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
 
     // Materials uploaded by teacher (pending approval)
     const { rows: pending } = await pool.query(
-      `SELECT id, file_url, file_name, file_type, status, created_at, 'upload' AS source
-       FROM materials_pending WHERE faculty_id = $1 ORDER BY created_at DESC`,
+      `SELECT id, title, description, file_url, file_name, file_type, status, notes, created_at, 'upload' AS source
+       FROM materials_pending
+       WHERE faculty_id = $1
+         AND status != 'approved'
+       ORDER BY created_at DESC`,
       [facultyId]
     );
 
@@ -1962,7 +1976,7 @@ app.get('/api/admin/teacher-materials', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT mp.id, mp.faculty_id AS "facultyId", mp.lesson_id AS "lessonId",
               mp.file_url AS "fileUrl", mp.file_name AS "fileName", mp.file_type AS "fileType",
-              mp.status, mp.notes, mp.created_at AS "createdAt", mp.updated_at AS "updatedAt",
+              mp.title, mp.description, mp.status, mp.notes, mp.created_at AS "createdAt", mp.updated_at AS "updatedAt",
               f.first_name AS "teacherFirstName", f.last_name AS "teacherLastName", f.email AS "teacherEmail",
               l.title AS "lessonTitle", l.start_datetime AS "lessonStartDateTime"
        FROM materials_pending mp
@@ -2006,7 +2020,7 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
          WHERE id = $3
          RETURNING id, faculty_id AS "facultyId", lesson_id AS "lessonId",
                    file_url AS "fileUrl", file_name AS "fileName", file_type AS "fileType",
-                   status, notes, updated_at AS "updatedAt"`,
+                   title, description, status, notes, updated_at AS "updatedAt"`,
         [newStatus, reviewNotes, id]
       );
 
@@ -2026,7 +2040,7 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
           return 'document';
         };
         const resourceType = resourceTypeFromFile(item.fileType || item.fileName);
-        const resourceTitle = item.fileName || 'Materiale docente';
+        const resourceTitle = getTeacherMaterialResourceTitle(item);
         const normalizedFacultyId = await resolveValidFacultyId(item.facultyId, item.lessonId);
 
         if (normalizedFacultyId !== item.facultyId) {
@@ -2052,19 +2066,25 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
         if (existing.length) {
           await pool.query(
             `UPDATE resources
-             SET is_published = true, updated_at = NOW()
+             SET title = $2,
+                 description = $3,
+                 resource_type = $4,
+                 teacher_id = $5,
+                 lesson_id = $6,
+                 is_published = true,
+                 updated_at = NOW()
              WHERE id = $1`,
-            [existing[0].id]
+            [existing[0].id, resourceTitle, item.description || null, resourceType, normalizedFacultyId || null, item.lessonId || null]
           );
           approvedResourceId = existing[0].id;
         } else {
           approvedResourceId = uuidv4();
           await pool.query(
             `INSERT INTO resources
-               (id, title, resource_type, url, is_published, teacher_id, lesson_id, created_at, updated_at)
+               (id, title, description, resource_type, url, is_published, teacher_id, lesson_id, created_at, updated_at)
              VALUES
-               ($1, $2, $3, $4, true, $5, $6, NOW(), NOW())`,
-            [approvedResourceId, resourceTitle, resourceType, item.fileUrl, normalizedFacultyId || null, item.lessonId || null]
+               ($1, $2, $3, $4, $5, true, $6, $7, NOW(), NOW())`,
+            [approvedResourceId, resourceTitle, item.description || null, resourceType, item.fileUrl, normalizedFacultyId || null, item.lessonId || null]
           );
         }
         await pool.query('COMMIT');

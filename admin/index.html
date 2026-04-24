@@ -3140,11 +3140,11 @@ Buono studio!</textarea>
                     const lessonInfo = item.lessonTitle
                         ? `${item.lessonTitle}${item.lessonStartDateTime ? ' (' + new Date(item.lessonStartDateTime).toLocaleDateString('it-IT') + ')' : ''}`
                         : '—';
-                    const fileLabel = item.fileName || 'File';
+                    const fileLabel = item.title || item.fileName || 'File';
                     tr.innerHTML = `
                         <td>${teacherName}</td>
                         <td>${lessonInfo}</td>
-                        <td><a href="${item.fileUrl}" target="_blank">${fileLabel}</a></td>
+                        <td><a href="${item.fileUrl}" target="_blank">${fileLabel}</a>${item.fileName && item.title ? `<div style="color: var(--gray-500); font-size: 0.8rem; margin-top: 4px;">${item.fileName}</div>` : ''}</td>
                         <td><span class="status-pill" data-status="${teacherMaterialStatusClass(item.status)}">${teacherMaterialStatusLabel(item.status)}</span></td>
                         <td>${item.notes || '—'}</td>
                         <td>${item.createdAt ? new Date(item.createdAt).toLocaleString('it-IT') : '—'}</td>

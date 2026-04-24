@@ -1,0 +1,3 @@
+ALTER TABLE materials_pending
+  ADD COLUMN IF NOT EXISTS title TEXT,
+  ADD COLUMN IF NOT EXISTS description TEXT;

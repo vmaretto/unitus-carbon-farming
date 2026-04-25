@@ -2517,6 +2517,8 @@ Buono studio!</textarea>
             lessons: [],
             teacherPendingMaterials: [],
             studentQuestions: [],
+            lmsLessonsByModule: {},
+            lmsModulesRequestSeq: 0,
             questionsFilter: '',
             calendarYear: new Date().getFullYear(),
             calendarMonth: new Date().getMonth(),
@@ -2544,6 +2546,27 @@ Buono studio!</textarea>
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
+        }
+
+        function replaceSelectOptions(selectEl, items, { placeholder, getValue, getLabel, selectedValue = '' }) {
+            if (!selectEl) return;
+            const fragment = document.createDocumentFragment();
+            const placeholderOption = document.createElement('option');
+            placeholderOption.value = '';
+            placeholderOption.textContent = placeholder;
+            fragment.appendChild(placeholderOption);
+
+            items.forEach((item) => {
+                const option = document.createElement('option');
+                option.value = getValue(item);
+                option.textContent = getLabel(item);
+                fragment.appendChild(option);
+            });
+
+            selectEl.replaceChildren(fragment);
+            if (selectedValue) {
+                selectEl.value = selectedValue;
+            }
         }
 
         function showToast(message, type = 'success') {
@@ -5424,7 +5447,6 @@ Buono studio!</textarea>
         state.selectedEditionCourseId = null;
         // LMS Modules & Lessons
         state.lmsModules = [];
-        state.lmsLessons = [];
 
         state.editingLmsModuleId = null;
         state.editingLmsLessonId = null;
@@ -5493,11 +5515,12 @@ Buono studio!</textarea>
             // Module page course select
             const modSelect = document.getElementById('lms-mod-course-select');
             const curMod = modSelect.value;
-            modSelect.innerHTML = '<option value="">-- Seleziona un corso --</option>';
-            state.lmsCourses.forEach(c => {
-                modSelect.innerHTML += `<option value="${c.id}">${c.title}</option>`;
+            replaceSelectOptions(modSelect, state.lmsCourses, {
+                placeholder: '-- Seleziona un corso --',
+                getValue: (course) => course.id,
+                getLabel: (course) => course.title,
+                selectedValue: curMod
             });
-            if (curMod) modSelect.value = curMod;
 
             // Enrollment edition select needs courses+editions
             updateEnrollEditionSelect();
@@ -5676,6 +5699,7 @@ Buono studio!</textarea>
             const courseId = e.target.value;
             state.selectedLmsCourseId = courseId || null;
             state.selectedLmsModuleId = null;
+            state.lmsLessonsByModule = {};
             if (courseId) {
                 document.getElementById('lms-mod-panel').style.display = '';
                 loadLmsModules(courseId);
@@ -5685,12 +5709,16 @@ Buono studio!</textarea>
         });
 
         async function loadLmsModules(courseId) {
+            const requestSeq = ++state.lmsModulesRequestSeq;
             try {
                 const modules = await apiRequest(`/api/lms/modules?courseId=${courseId}`);
+                if (requestSeq !== state.lmsModulesRequestSeq || state.selectedLmsCourseId !== courseId) return;
                 state.lmsModules = modules;
                 renderLmsModulesList();
             } catch (error) {
+                if (requestSeq !== state.lmsModulesRequestSeq) return;
                 state.lmsModules = [];
+                renderLmsModulesList();
             }
         }
 
@@ -5744,7 +5772,7 @@ Buono studio!</textarea>
                 div.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                         <div>
-                            <strong>${mod.title}</strong> ${statusPill}
+                            <strong>${escapeHtml(mod.title)}</strong> ${statusPill}
                             <span style="color: var(--gray-500); font-size: 0.85rem; margin-left: 8px;">Ordine: ${mod.sortOrder}</span>
                         </div>
                         <div class="actions" style="margin: 0;">
@@ -5754,7 +5782,7 @@ Buono studio!</textarea>
                             <button type="button" class="danger" data-delete-lms-mod="${mod.id}">Elimina</button>
                         </div>
                     </div>
-                    ${mod.description ? `<p style="color: var(--gray-500); font-size: 0.9rem; margin: 0;">${mod.description}</p>` : ''}
+                    ${mod.description ? `<p style="color: var(--gray-500); font-size: 0.9rem; margin: 0;">${escapeHtml(mod.description)}</p>` : ''}
                     <div class="lms-lessons-panel" data-lessons-for="${mod.id}" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--gray-200);"></div>
                 `;
                 container.appendChild(div);
@@ -5825,6 +5853,7 @@ Buono studio!</textarea>
                 if (panel.style.display === 'none') {
                     panel.style.display = '';
                     state.selectedLmsModuleId = modId;
+                    panel.innerHTML = '<div class="empty-state">Caricamento lezioni...</div>';
                     loadLmsLessons(modId, panel);
                 } else {
                     panel.style.display = 'none';
@@ -5833,16 +5862,21 @@ Buono studio!</textarea>
         });
 
         async function loadLmsLessons(moduleId, panel) {
+            const requestId = (panel._requestId || 0) + 1;
+            panel._requestId = requestId;
             try {
                 const lessons = await apiRequest(`/api/lms/lessons?moduleId=${moduleId}`);
-                state.lmsLessons = lessons;
+                if (panel._requestId !== requestId) return;
+                state.lmsLessonsByModule[moduleId] = lessons;
                 renderLmsLessonsPanel(moduleId, lessons, panel);
             } catch (error) {
+                if (panel._requestId !== requestId) return;
                 panel.innerHTML = '<p style="color: #b91c1c;">Errore nel caricamento lezioni.</p>';
             }
         }
 
         function renderLmsLessonsPanel(moduleId, lessons, panel) {
+            panel._lessons = Array.isArray(lessons) ? lessons : [];
             let html = `
                 <h4 style="margin: 0 0 12px; color: var(--green-700);">Lezioni del modulo</h4>
                 <div data-editing-lesson-title style="display: none; margin-bottom: 12px; padding: 10px 14px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; font-weight: 600; color: #92400e;">✏️ Modifica: <span></span></div>
@@ -5914,7 +5948,7 @@ Buono studio!</textarea>
                     html += `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--gray-200);" data-lesson-id="${l.id}">
                             <div>
-                                <strong>${l.title}</strong> ${pub}
+                                <strong>${escapeHtml(l.title)}</strong> ${pub}
                                 <span style="color: var(--gray-500); font-size: 0.85rem; margin-left: 8px;">${dur}</span>
                             </div>
                             <div class="actions" style="margin: 0;">
@@ -6000,7 +6034,6 @@ Buono studio!</textarea>
                 const formData = new FormData();
                 formData.append('file', file);
                 try {
-                    console.log('🔥 CHIAMANDO: /api/materials/upload per materiale lezione');
                     const res = await fetch('/api/materials/upload', {
                         method: 'POST',
                         headers: { 'Authorization': 'Bearer ' + (adminToken || localStorage.getItem('adminToken')) },
@@ -6125,7 +6158,6 @@ Buono studio!</textarea>
 
             form.addEventListener('submit', async (ev) => {
                 ev.preventDefault();
-                console.log('🐛 DEBUG: currentMaterials =', currentMaterials);
                 const payload = {
                     moduleId: moduleId,
                     title: form.querySelector('[data-field="title"]')?.value?.trim() || '',
@@ -6139,14 +6171,6 @@ Buono studio!</textarea>
                     materials: currentMaterials,
                     calendarLessonId: form.querySelector('[data-field="calendarLessonId"]')?.value || null
                 };
-                console.log('🐛 DEBUG: payload =', payload);
-                console.log('🐛 DEBUG: form elements check:', {
-                    titleEl: !!form.querySelector('[data-field="title"]'),
-                    descEl: !!form.querySelector('[data-field="description"]'), 
-                    videoEl: !!form.querySelector('[data-field="videoUrl"]'),
-                    isFreeEl: !!form.querySelector('[data-field="isFree"]'),
-                    isPublishedEl: !!form.querySelector('[data-field="isPublished"]')
-                });
                 if (!payload.title) { showToast('Inserisci il titolo', 'error'); return; }
                 try {
                     const method = editingId ? 'PUT' : 'POST';
@@ -6256,7 +6280,7 @@ Buono studio!</textarea>
 
                 if (editLessonBtn) {
                     const lid = editLessonBtn.dataset.editLmsLesson;
-                    const lesson = state.lmsLessons.find(l => l.id === lid);
+                    const lesson = (panel._lessons || []).find(l => l.id === lid);
                     if (!lesson) return;
                     form.querySelector('[data-field="title"]').value = lesson.title || '';
                     form.querySelector('[data-field="description"]').value = lesson.description || '';
@@ -6770,9 +6794,7 @@ Buono studio!</textarea>
             const id = row.dataset.id;
 
             if (e.target.closest('[data-edit-enroll]')) {
-                console.log('Edit clicked, id:', id);
                 const en = state.lmsEnrollments.find(x => x.id === id);
-                console.log('Found enrollment:', en);
                 if (!en) return;
                 document.getElementById('lms-enroll-email').value = en.email || '';
                 document.getElementById('lms-enroll-firstname').value = en.firstName || '';

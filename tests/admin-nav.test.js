@@ -13,3 +13,10 @@ test('il menu admin separa Area riservata / Piattaforma e Sito pubblico', () => 
   assert.match(html, /href="#blog">Gestione blog</);
   assert.match(html, /href="#partners">Gestione partner</);
 });
+
+test('la sezione LMS admin non contiene debug temporanei e usa cache lezioni per modulo', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'admin', 'index.html'), 'utf8');
+
+  assert.match(html, /lmsLessonsByModule/);
+  assert.doesNotMatch(html, /🐛 DEBUG|CHIAMANDO: \/api\/materials\/upload|Edit clicked, id:|Found enrollment:/);
+});

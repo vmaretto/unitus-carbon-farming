@@ -1139,35 +1139,47 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
   try {
     const facultyId = req.teacher.id;
     const pendingSchema = await getMaterialsPendingSchemaConfig();
-    const pendingFragments = buildMaterialsPendingSelectFragments(pendingSchema);
     const resourcesSchema = await getResourcesSchemaConfig();
-    const resourceFragments = buildTeacherResourcesSelectFragments(resourcesSchema);
 
     // Materials uploaded by teacher (pending approval)
-    const { rows: pending } = await pool.query(
-      `SELECT id, ${pendingFragments.title}, ${pendingFragments.description}, file_url, file_name, file_type, status, ${pendingFragments.notes}, created_at, 'upload' AS source
-       FROM materials_pending
-       WHERE faculty_id = $1
-         AND status != 'approved'
-       ORDER BY created_at DESC`,
-      [facultyId]
-    );
+    let pending = [];
+    if (pendingSchema.hasTable) {
+      const pendingFragments = buildMaterialsPendingSelectFragments(pendingSchema);
+      try {
+        const result = await pool.query(
+          `SELECT id, ${pendingFragments.title}, ${pendingFragments.description}, file_url, file_name, file_type, status, ${pendingFragments.notes}, created_at, 'upload' AS source
+           FROM materials_pending
+           WHERE faculty_id = $1
+             AND status != 'approved'
+           ORDER BY created_at DESC`,
+          [facultyId]
+        );
+        pending = result.rows;
+      } catch (error) {
+        console.warn('Skipping teacher pending materials query:', error.message);
+      }
+    }
 
     // Resources assigned to this teacher by admin
     let resources = [];
-    if (resourcesSchema.hasTeacherId) {
+    if (resourcesSchema.hasTable && resourcesSchema.hasTeacherId) {
+      const resourceFragments = buildTeacherResourcesSelectFragments(resourcesSchema);
       const resourceTypeFilter = resourcesSchema.hasResourceType ? `AND resource_type <> 'quiz'` : '';
-      const result = await pool.query(
-        `SELECT id, title, ${resourceFragments.description}, url AS file_url, NULL AS file_name, ${resourceFragments.fileSize},
-                ${resourceFragments.fileType}, ${resourceFragments.status},
-                created_at, 'admin' AS source
-         FROM resources
-         WHERE teacher_id = $1
-         ${resourceTypeFilter}
-         ORDER BY created_at DESC`,
-        [facultyId]
-      );
-      resources = result.rows;
+      try {
+        const result = await pool.query(
+          `SELECT id, title, ${resourceFragments.description}, url AS file_url, NULL AS file_name, ${resourceFragments.fileSize},
+                  ${resourceFragments.fileType}, ${resourceFragments.status},
+                  created_at, 'admin' AS source
+           FROM resources
+           WHERE teacher_id = $1
+           ${resourceTypeFilter}
+           ORDER BY created_at DESC`,
+          [facultyId]
+        );
+        resources = result.rows;
+      } catch (error) {
+        console.warn('Skipping teacher resources query:', error.message);
+      }
     }
 
     // Merge and sort by date
@@ -1977,6 +1989,9 @@ app.get('/api/admin/teacher-materials', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const schema = await getMaterialsPendingSchemaConfig();
+    if (!schema.hasTable) {
+      return res.json([]);
+    }
     const fragments = buildMaterialsPendingSelectFragments(schema);
     const { status, facultyId, lessonId } = req.query;
     const values = [];
@@ -2587,6 +2602,7 @@ async function getTableColumns(tableName) {
 async function getCourseEditionSchemaConfig() {
   const columns = await getTableColumns('course_editions');
   return {
+    hasTable: columns.size > 0,
     hasTotalPlannedHours: columns.has('total_planned_hours'),
     hasMinimumInPersonAttendanceRatio: columns.has('minimum_in_person_attendance_ratio')
   };
@@ -2607,6 +2623,7 @@ function buildCourseEditionSelectFragments(config, alias = '') {
 async function getMaterialsPendingSchemaConfig() {
   const columns = await getTableColumns('materials_pending');
   return {
+    hasTable: columns.size > 0,
     hasTitle: columns.has('title'),
     hasDescription: columns.has('description'),
     hasNotes: columns.has('notes'),
@@ -2627,6 +2644,7 @@ function buildMaterialsPendingSelectFragments(config, alias = 'mp') {
 async function getResourcesSchemaConfig() {
   const columns = await getTableColumns('resources');
   return {
+    hasTable: columns.size > 0,
     hasDescription: columns.has('description'),
     hasFileSizeBytes: columns.has('file_size_bytes'),
     hasResourceType: columns.has('resource_type'),

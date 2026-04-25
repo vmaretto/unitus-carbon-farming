@@ -201,6 +201,33 @@ class LegacyTeacherMaterialsPool extends FakeTeacherMaterialsPool {
   }
 }
 
+class MissingMaterialsPendingPool extends FakeTeacherMaterialsPool {
+  async query(sql, values = []) {
+    const normalized = String(sql).replace(/\s+/g, ' ').trim();
+
+    if (normalized.includes('FROM information_schema.columns')) {
+      const tableName = values[0];
+      if (tableName === 'materials_pending') {
+        return { rows: [] };
+      }
+
+      if (tableName === 'resources') {
+        return {
+          rows: [
+            { column_name: 'description' },
+            { column_name: 'file_size_bytes' },
+            { column_name: 'resource_type' },
+            { column_name: 'is_published' },
+            { column_name: 'teacher_id' }
+          ]
+        };
+      }
+    }
+
+    return super.query(sql, values);
+  }
+}
+
 test('buildTeacherLessonAccessQuery permette il match per email del docente', () => {
   const query = buildTeacherLessonAccessQuery('fac-1', 'lesson-1');
 
@@ -286,4 +313,17 @@ test('GET /api/teachers/materials tollera schema legacy di resources senza teach
   assert.equal(res.body.length, 1);
   assert.equal(res.body[0].file_name, 'legacy.pdf');
   assert.equal(res.body[0].title, null);
+});
+
+test('GET /api/teachers/materials non fallisce se materials_pending manca del tutto', async () => {
+  apiModule.__setPool(new MissingMaterialsPendingPool());
+  const handler = findRouteHandler('/api/teachers/materials', 'get');
+  const req = { teacher: { id: 'fac-1' } };
+  const res = createMockRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.length, 1);
+  assert.equal(res.body[0].title, 'Materiale approvato');
 });

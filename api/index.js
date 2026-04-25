@@ -1072,6 +1072,7 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
   
   try {
     console.log('Upload attempt:', { teacherFacultyId: req.teacher.id, lessonId: lesson_id });
+    const schema = await getMaterialsPendingSchemaConfig();
 
     // Verify teacher has access to this lesson
     const accessQuery = buildTeacherLessonAccessQuery(req.teacher.id, lesson_id);
@@ -1097,16 +1098,27 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
     });
     
     // Save to materials_pending
-    const insertPayload = buildMaterialsPendingInsertPayload({
-      teacherFacultyId: req.teacher.id,
-      lessonId: lesson_id,
-      url,
-      fileOriginalName: file.originalname,
-      fileMimeType: file.mimetype,
-      title,
-      description
-    });
-    const { rows: materials } = await pool.query(insertPayload.text, insertPayload.values);
+    let materials;
+    if (schema.hasTitle && schema.hasDescription) {
+      const insertPayload = buildMaterialsPendingInsertPayload({
+        teacherFacultyId: req.teacher.id,
+        lessonId: lesson_id,
+        url,
+        fileOriginalName: file.originalname,
+        fileMimeType: file.mimetype,
+        title,
+        description
+      });
+      ({ rows: materials } = await pool.query(insertPayload.text, insertPayload.values));
+    } else {
+      ({ rows: materials } = await pool.query(
+        `INSERT INTO materials_pending
+         (faculty_id, lesson_id, file_url, file_name, file_type, status)
+         VALUES ($1, $2, $3, $4, $5, 'pending')
+         RETURNING id`,
+        [req.teacher.id, lesson_id, url, file.originalname, file.mimetype]
+      ));
+    }
     
     res.json({
       id: materials[0].id,
@@ -1126,10 +1138,12 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const facultyId = req.teacher.id;
+    const schema = await getMaterialsPendingSchemaConfig();
+    const fragments = buildMaterialsPendingSelectFragments(schema);
 
     // Materials uploaded by teacher (pending approval)
     const { rows: pending } = await pool.query(
-      `SELECT id, title, description, file_url, file_name, file_type, status, notes, created_at, 'upload' AS source
+      `SELECT id, ${fragments.title}, ${fragments.description}, file_url, file_name, file_type, status, ${fragments.notes}, created_at, 'upload' AS source
        FROM materials_pending
        WHERE faculty_id = $1
          AND status != 'approved'
@@ -1955,6 +1969,8 @@ app.delete('/api/admin/teachers/:id', requireAdmin, async (req, res) => {
 app.get('/api/admin/teacher-materials', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const schema = await getMaterialsPendingSchemaConfig();
+    const fragments = buildMaterialsPendingSelectFragments(schema);
     const { status, facultyId, lessonId } = req.query;
     const values = [];
     let idx = 1;
@@ -1976,7 +1992,7 @@ app.get('/api/admin/teacher-materials', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT mp.id, mp.faculty_id AS "facultyId", mp.lesson_id AS "lessonId",
               mp.file_url AS "fileUrl", mp.file_name AS "fileName", mp.file_type AS "fileType",
-              mp.title, mp.description, mp.status, mp.notes, mp.created_at AS "createdAt", mp.updated_at AS "updatedAt",
+              ${fragments.title}, ${fragments.description}, mp.status, ${fragments.notes}, mp.created_at AS "createdAt", ${fragments.updatedAt},
               f.first_name AS "teacherFirstName", f.last_name AS "teacherLastName", f.email AS "teacherEmail",
               l.title AS "lessonTitle", l.start_datetime AS "lessonStartDateTime"
        FROM materials_pending mp
@@ -2008,10 +2024,12 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
   }
 
   try {
+    const schema = await getMaterialsPendingSchemaConfig();
     const newStatus = action === 'approve' ? 'approved' : 'rejected';
     const reviewNotes = action === 'reject' ? String(notes).trim() : null;
     await pool.query('BEGIN');
     try {
+      const returningFragments = buildMaterialsPendingSelectFragments(schema);
       const { rows } = await pool.query(
         `UPDATE materials_pending
          SET status = $1::varchar,
@@ -2020,7 +2038,7 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
          WHERE id = $3
          RETURNING id, faculty_id AS "facultyId", lesson_id AS "lessonId",
                    file_url AS "fileUrl", file_name AS "fileName", file_type AS "fileType",
-                   title, description, status, notes, updated_at AS "updatedAt"`,
+                   ${returningFragments.title}, ${returningFragments.description}, status, ${returningFragments.notes}, ${returningFragments.updatedAt}`,
         [newStatus, reviewNotes, id]
       );
 
@@ -2576,6 +2594,26 @@ function buildCourseEditionSelectFragments(config, alias = '') {
     minimumInPersonAttendanceRatio: config.hasMinimumInPersonAttendanceRatio
       ? `COALESCE(${prefix}minimum_in_person_attendance_ratio, 0.7) AS "minimumInPersonAttendanceRatio"`
       : `0.7 AS "minimumInPersonAttendanceRatio"`
+  };
+}
+
+async function getMaterialsPendingSchemaConfig() {
+  const columns = await getTableColumns('materials_pending');
+  return {
+    hasTitle: columns.has('title'),
+    hasDescription: columns.has('description'),
+    hasNotes: columns.has('notes'),
+    hasUpdatedAt: columns.has('updated_at')
+  };
+}
+
+function buildMaterialsPendingSelectFragments(config, alias = 'mp') {
+  const prefix = alias ? `${alias}.` : '';
+  return {
+    title: config.hasTitle ? `${prefix}title AS title` : `NULL::text AS title`,
+    description: config.hasDescription ? `${prefix}description AS description` : `NULL::text AS description`,
+    notes: config.hasNotes ? `${prefix}notes AS notes` : `NULL::text AS notes`,
+    updatedAt: config.hasUpdatedAt ? `${prefix}updated_at AS "updatedAt"` : `${prefix}created_at AS "updatedAt"`
   };
 }
 

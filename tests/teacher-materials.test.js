@@ -105,6 +105,17 @@ class FakeTeacherMaterialsPool {
   async query(sql) {
     const normalized = String(sql).replace(/\s+/g, ' ').trim();
 
+    if (normalized.includes('FROM information_schema.columns')) {
+      return {
+        rows: [
+          { column_name: 'title' },
+          { column_name: 'description' },
+          { column_name: 'notes' },
+          { column_name: 'updated_at' }
+        ]
+      };
+    }
+
     if (normalized.includes("FROM materials_pending WHERE faculty_id = $1 AND status != 'approved'")) {
       return { rows: this.pendingRows.map((row) => ({ ...row })) };
     }

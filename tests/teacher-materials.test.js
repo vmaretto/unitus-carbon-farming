@@ -102,17 +102,36 @@ class FakeTeacherMaterialsPool {
     ];
   }
 
-  async query(sql) {
+  async query(sql, values = []) {
     const normalized = String(sql).replace(/\s+/g, ' ').trim();
 
     if (normalized.includes('FROM information_schema.columns')) {
+      const tableName = values[0];
+      if (tableName === 'materials_pending') {
+        return {
+          rows: [
+            { column_name: 'title' },
+            { column_name: 'description' },
+            { column_name: 'notes' },
+            { column_name: 'updated_at' }
+          ]
+        };
+      }
+
+      if (tableName === 'resources') {
+        return {
+          rows: [
+            { column_name: 'description' },
+            { column_name: 'file_size_bytes' },
+            { column_name: 'resource_type' },
+            { column_name: 'is_published' },
+            { column_name: 'teacher_id' }
+          ]
+        };
+      }
+
       return {
-        rows: [
-          { column_name: 'title' },
-          { column_name: 'description' },
-          { column_name: 'notes' },
-          { column_name: 'updated_at' }
-        ]
+        rows: []
       };
     }
 
@@ -129,6 +148,56 @@ class FakeTeacherMaterialsPool {
     }
 
     throw new Error(`Unsupported query in FakeTeacherMaterialsPool: ${normalized}`);
+  }
+}
+
+class LegacyTeacherMaterialsPool extends FakeTeacherMaterialsPool {
+  async query(sql, values = []) {
+    const normalized = String(sql).replace(/\s+/g, ' ').trim();
+
+    if (normalized.includes('FROM information_schema.columns')) {
+      const tableName = values[0];
+      if (tableName === 'materials_pending') {
+        return {
+          rows: [
+            { column_name: 'notes' },
+            { column_name: 'updated_at' }
+          ]
+        };
+      }
+
+      if (tableName === 'resources') {
+        return {
+          rows: [
+            { column_name: 'description' },
+            { column_name: 'file_size_bytes' },
+            { column_name: 'resource_type' },
+            { column_name: 'is_published' }
+          ]
+        };
+      }
+    }
+
+    if (normalized.includes("FROM materials_pending WHERE faculty_id = $1 AND status != 'approved'")) {
+      return {
+        rows: [
+          {
+            id: 'legacy-pending-1',
+            title: null,
+            description: null,
+            file_url: 'https://cdn.example.com/legacy.pdf',
+            file_name: 'legacy.pdf',
+            file_type: 'application/pdf',
+            status: 'pending',
+            notes: null,
+            created_at: '2026-04-24T08:00:00.000Z',
+            source: 'upload'
+          }
+        ]
+      };
+    }
+
+    return super.query(sql, values);
   }
 }
 
@@ -203,4 +272,18 @@ test('GET /api/admin/teacher-materials restituisce il title del materiale pendin
   assert.equal(res.statusCode, 200);
   assert.equal(res.body[0].title, 'Slide seminario');
   assert.equal(res.body[0].fileName, 'slide-seminario.pdf');
+});
+
+test('GET /api/teachers/materials tollera schema legacy di resources senza teacher_id', async () => {
+  apiModule.__setPool(new LegacyTeacherMaterialsPool());
+  const handler = findRouteHandler('/api/teachers/materials', 'get');
+  const req = { teacher: { id: 'fac-1' } };
+  const res = createMockRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.length, 1);
+  assert.equal(res.body[0].file_name, 'legacy.pdf');
+  assert.equal(res.body[0].title, null);
 });

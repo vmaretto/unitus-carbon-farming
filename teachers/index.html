@@ -560,19 +560,23 @@
             currentTeacher = teacher;
             document.getElementById('user-name').textContent = `${teacher.first_name} ${teacher.last_name}`;
 
-            await Promise.all([
-                loadTeacherStats(),
-                loadTeacherCalendar(),
-                loadTeacherLessons(),
-                loadTeacherMaterials(),
-                loadTeacherQuizzes(),
-                loadTeacherQuestions(),
-                loadPendingDocs(),
-                loadSignedDocs()
-            ]);
-
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('dashboard').style.display = 'block';
+
+            [
+                loadTeacherStats,
+                loadTeacherCalendar,
+                loadTeacherLessons,
+                loadTeacherMaterials,
+                loadTeacherQuizzes,
+                loadTeacherQuestions,
+                loadPendingDocs,
+                loadSignedDocs
+            ].forEach((loader) => {
+                Promise.resolve()
+                    .then(() => loader())
+                    .catch((error) => console.error('Dashboard bootstrap error:', error));
+            });
         }
 
         // === STATS ===

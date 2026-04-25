@@ -1138,12 +1138,14 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const facultyId = req.teacher.id;
-    const schema = await getMaterialsPendingSchemaConfig();
-    const fragments = buildMaterialsPendingSelectFragments(schema);
+    const pendingSchema = await getMaterialsPendingSchemaConfig();
+    const pendingFragments = buildMaterialsPendingSelectFragments(pendingSchema);
+    const resourcesSchema = await getResourcesSchemaConfig();
+    const resourceFragments = buildTeacherResourcesSelectFragments(resourcesSchema);
 
     // Materials uploaded by teacher (pending approval)
     const { rows: pending } = await pool.query(
-      `SELECT id, ${fragments.title}, ${fragments.description}, file_url, file_name, file_type, status, ${fragments.notes}, created_at, 'upload' AS source
+      `SELECT id, ${pendingFragments.title}, ${pendingFragments.description}, file_url, file_name, file_type, status, ${pendingFragments.notes}, created_at, 'upload' AS source
        FROM materials_pending
        WHERE faculty_id = $1
          AND status != 'approved'
@@ -1152,16 +1154,21 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
     );
 
     // Resources assigned to this teacher by admin
-    const { rows: resources } = await pool.query(
-      `SELECT id, title, description, url AS file_url, NULL AS file_name, file_size_bytes AS file_size,
-              resource_type AS file_type, CASE WHEN is_published THEN 'approved' ELSE 'pending' END AS status,
-              created_at, 'admin' AS source
-       FROM resources
-       WHERE teacher_id = $1
-         AND resource_type <> 'quiz'
-       ORDER BY created_at DESC`,
-      [facultyId]
-    );
+    let resources = [];
+    if (resourcesSchema.hasTeacherId) {
+      const resourceTypeFilter = resourcesSchema.hasResourceType ? `AND resource_type <> 'quiz'` : '';
+      const result = await pool.query(
+        `SELECT id, title, ${resourceFragments.description}, url AS file_url, NULL AS file_name, ${resourceFragments.fileSize},
+                ${resourceFragments.fileType}, ${resourceFragments.status},
+                created_at, 'admin' AS source
+         FROM resources
+         WHERE teacher_id = $1
+         ${resourceTypeFilter}
+         ORDER BY created_at DESC`,
+        [facultyId]
+      );
+      resources = result.rows;
+    }
 
     // Merge and sort by date
     const all = [...pending, ...resources].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -2614,6 +2621,29 @@ function buildMaterialsPendingSelectFragments(config, alias = 'mp') {
     description: config.hasDescription ? `${prefix}description AS description` : `NULL::text AS description`,
     notes: config.hasNotes ? `${prefix}notes AS notes` : `NULL::text AS notes`,
     updatedAt: config.hasUpdatedAt ? `${prefix}updated_at AS "updatedAt"` : `${prefix}created_at AS "updatedAt"`
+  };
+}
+
+async function getResourcesSchemaConfig() {
+  const columns = await getTableColumns('resources');
+  return {
+    hasDescription: columns.has('description'),
+    hasFileSizeBytes: columns.has('file_size_bytes'),
+    hasResourceType: columns.has('resource_type'),
+    hasIsPublished: columns.has('is_published'),
+    hasTeacherId: columns.has('teacher_id')
+  };
+}
+
+function buildTeacherResourcesSelectFragments(config, alias = 'r') {
+  const prefix = alias ? `${alias}.` : '';
+  return {
+    description: config.hasDescription ? `${prefix}description AS description` : `NULL::text AS description`,
+    fileSize: config.hasFileSizeBytes ? `${prefix}file_size_bytes AS file_size` : `NULL::bigint AS file_size`,
+    fileType: config.hasResourceType ? `${prefix}resource_type AS file_type` : `NULL::text AS file_type`,
+    status: config.hasIsPublished
+      ? `CASE WHEN ${prefix}is_published THEN 'approved' ELSE 'pending' END AS status`
+      : `'approved'::text AS status`
   };
 }
 

@@ -474,6 +474,35 @@
     </div>
 
     <script>
+        function isExternalExtensionError(details = {}) {
+            const filename = String(details.filename || '');
+            const message = String(details.message || details.reason?.message || '');
+            const stack = String(details.error?.stack || details.reason?.stack || '');
+            return (
+                filename.includes('chrome-extension://') ||
+                filename.includes('safari-web-extension://') ||
+                message.includes('chrome-extension') ||
+                message.includes('safari-web-extension') ||
+                message.includes('net::ERR_FILE_NOT_FOUND') ||
+                message.includes('strURL is not defined') ||
+                stack.includes('chrome-extension://') ||
+                stack.includes('safari-web-extension://')
+            );
+        }
+
+        window.addEventListener('error', (e) => {
+            if (isExternalExtensionError(e)) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+            }
+        }, true);
+
+        window.addEventListener('unhandledrejection', (e) => {
+            if (isExternalExtensionError(e)) {
+                e.preventDefault();
+            }
+        });
+
         let teacherToken = null;
         let currentTeacher = null;
         let signingDocId = null;

@@ -3895,6 +3895,21 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
   const normalizedPhotoUrl = normalizeImageUrl(photoUrl);
 
   try {
+    if (email) {
+      const { rows: existingFaculty } = await pool.query(
+        'SELECT id, name FROM faculty WHERE LOWER(email) = LOWER($1) LIMIT 1',
+        [email]
+      );
+
+      if (existingFaculty.length) {
+        return res.status(409).json({
+          error: 'Email gia associata a un altro docente',
+          facultyId: existingFaculty[0].id,
+          facultyName: existingFaculty[0].name
+        });
+      }
+    }
+
     const id = uuidv4();
     const insert = `
       INSERT INTO faculty (id, name, role, email, bio, photo_url, profile_link, sort_order, is_published, can_view_all_materials)
@@ -3917,6 +3932,10 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(insert, values);
     res.status(201).json(rows[0]);
   } catch (error) {
+    if (error.code === '23505' && error.constraint === 'idx_faculty_email') {
+      return res.status(409).json({ error: 'Email gia associata a un altro docente' });
+    }
+
     console.error('Error creating faculty', error);
     res.status(500).json({ error: 'Unable to create faculty member' });
   }
@@ -3934,6 +3953,21 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
   const normalizedPhotoUrl = photoUrl !== undefined ? normalizeImageUrl(photoUrl) : undefined;
 
   try {
+    if (email) {
+      const { rows: existingFaculty } = await pool.query(
+        'SELECT id, name FROM faculty WHERE LOWER(email) = LOWER($1) AND id <> $2 LIMIT 1',
+        [email, id]
+      );
+
+      if (existingFaculty.length) {
+        return res.status(409).json({
+          error: 'Email gia associata a un altro docente',
+          facultyId: existingFaculty[0].id,
+          facultyName: existingFaculty[0].name
+        });
+      }
+    }
+
     const updateFields = {
       name,
       role,
@@ -3960,6 +3994,7 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
       id: row.id,
       name: row.name,
       role: row.role,
+      email: row.email,
       bio: row.bio,
       photoUrl: row.photo_url,
       profileLink: row.profile_link,
@@ -3968,6 +4003,10 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
       canViewAllMaterials: row.can_view_all_materials
     });
   } catch (error) {
+    if (error.code === '23505' && error.constraint === 'idx_faculty_email') {
+      return res.status(409).json({ error: 'Email gia associata a un altro docente' });
+    }
+
     console.error('Error updating faculty', error);
     res.status(500).json({ error: 'Unable to update faculty member' });
   }

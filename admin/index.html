@@ -248,6 +248,150 @@
             overflow-x: auto;
         }
 
+        .admin-resource-course-view {
+            margin-top: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 26px;
+        }
+
+        .admin-resource-module {
+            background: white;
+            border-radius: 20px;
+            padding: 22px 28px;
+            box-shadow: 0 8px 30px rgba(31, 41, 55, 0.08);
+            border: 1px solid rgba(36, 90, 61, 0.08);
+        }
+
+        .admin-resource-module-title {
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: var(--green-900);
+            padding: 0 0 12px;
+            border-bottom: 2px solid var(--green-100);
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .admin-resource-module-title .badge {
+            font-size: 0.75rem;
+            background: var(--green-100);
+            color: var(--green-700);
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .admin-resource-lesson {
+            border: 1px solid transparent;
+            border-radius: 14px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+
+        .admin-resource-lesson-header {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border: 0;
+            border-radius: 14px;
+            background: transparent;
+            color: var(--gray-900);
+            text-align: left;
+            box-shadow: none;
+        }
+
+        .admin-resource-lesson-header:hover {
+            background: var(--green-100);
+            box-shadow: none;
+            transform: none;
+        }
+
+        .admin-resource-lesson-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            background: var(--green-100);
+            color: var(--green-700);
+        }
+
+        .admin-resource-lesson-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .admin-resource-lesson-title {
+            font-weight: 600;
+            font-size: 0.96rem;
+        }
+
+        .admin-resource-lesson-meta {
+            color: var(--gray-500);
+            font-size: 0.8rem;
+            margin-top: 2px;
+        }
+
+        .admin-resource-lesson-count {
+            color: var(--gray-500);
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+
+        .admin-resource-items {
+            display: none;
+            padding: 0 16px 12px 66px;
+        }
+
+        .admin-resource-lesson.is-open .admin-resource-items {
+            display: block;
+        }
+
+        .admin-resource-item {
+            display: grid;
+            grid-template-columns: minmax(220px, 1fr) auto auto;
+            gap: 12px;
+            align-items: center;
+            padding: 10px 0;
+            border-top: 1px solid var(--gray-200);
+        }
+
+        .admin-resource-item-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .admin-resource-item-meta {
+            color: var(--gray-500);
+            font-size: 0.76rem;
+            margin-top: 3px;
+            word-break: break-all;
+        }
+
+        .admin-resource-actions {
+            display: flex;
+            gap: 6px;
+            justify-content: flex-end;
+        }
+
+        @media (max-width: 900px) {
+            .admin-resource-item {
+                grid-template-columns: 1fr;
+            }
+            .admin-resource-actions {
+                justify-content: flex-start;
+            }
+        }
+
         .subsection-card {
             margin-top: 24px;
             padding: 24px;
@@ -1142,7 +1286,8 @@
             </div>
 
             <div class="table-wrapper">
-                <table>
+                <div id="resource-course-view" class="admin-resource-course-view" style="display: none;"></div>
+                <table id="resource-table">
                     <thead>
                         <tr>
                             <th>Titolo</th>
@@ -3490,58 +3635,148 @@ Buono studio!</textarea>
         }
 
         function renderResourcesTable() {
+            const courseView = document.getElementById('resource-course-view');
+            const table = document.getElementById('resource-table');
             const tableBody = document.getElementById('resource-table-body');
             tableBody.querySelectorAll('tr:not([data-empty-resource])').forEach((row) => row.remove());
 
             if (document.getElementById('resources-group-by-lesson').checked) {
-                renderGroupedByLesson(tableBody);
+                table.style.display = 'none';
+                courseView.style.display = '';
+                renderResourceCourseView(courseView);
             } else {
+                courseView.style.display = 'none';
+                courseView.innerHTML = '';
+                table.style.display = '';
                 filteredResources.forEach((item) => tableBody.appendChild(buildResourceRow(item)));
+                toggleEmptyState(tableBody, filteredResources.length > 0, '[data-empty-resource]');
             }
-
-            toggleEmptyState(tableBody, filteredResources.length > 0, '[data-empty-resource]');
         }
 
-        function renderGroupedByLesson(tableBody) {
-            const groups = new Map();
+        function renderResourceCourseView(container) {
+            if (!filteredResources.length) {
+                container.innerHTML = '<div class="empty-state" style="padding: 24px; text-align: center;">Nessuna risorsa con i filtri attuali.</div>';
+                return;
+            }
+
+            const modules = new Map();
 
             filteredResources.forEach((resource) => {
-                const key = resource.lessonId || '__general__';
-                if (!groups.has(key)) {
-                    groups.set(key, {
-                        title: resource.lessonId
-                            ? (resource.lessonTitle + (resource.lessonStartDatetime ? ' — ' + new Date(resource.lessonStartDatetime).toLocaleDateString('it-IT') : ''))
-                            : '🌐 Materiali generali (non collegati a lezioni)',
+                const moduleKey = resource.moduleName || (resource.lessonId ? 'Modulo non indicato' : 'Materiali generali');
+                if (!modules.has(moduleKey)) {
+                    modules.set(moduleKey, {
+                        title: moduleKey,
+                        date: resource.lessonStartDatetime,
+                        lessons: new Map(),
+                        count: 0
+                    });
+                }
+                const module = modules.get(moduleKey);
+                module.count += 1;
+                if (!module.date || (resource.lessonStartDatetime && new Date(resource.lessonStartDatetime) < new Date(module.date))) {
+                    module.date = resource.lessonStartDatetime;
+                }
+
+                const lessonKey = resource.lessonId || '__general__';
+                if (!module.lessons.has(lessonKey)) {
+                    module.lessons.set(lessonKey, {
+                        title: resource.lessonTitle || 'Materiali generali (non collegati a lezioni)',
                         date: resource.lessonStartDatetime,
                         items: []
                     });
                 }
-                groups.get(key).items.push(resource);
+                module.lessons.get(lessonKey).items.push(resource);
             });
 
-            Array.from(groups.entries())
+            const typeIcons = { video: '🎬', pdf: '📄', document: '📝', audio: '🎧', link: '🔗', quiz: '🧠' };
+            const modulesHtml = Array.from(modules.entries())
                 .sort((a, b) => {
-                    if (a[0] === '__general__') return 1;
-                    if (b[0] === '__general__') return -1;
-                    const da = a[1].date ? new Date(a[1].date).getTime() : 0;
-                    const db = b[1].date ? new Date(b[1].date).getTime() : 0;
+                    if (a[0] === 'Materiali generali') return 1;
+                    if (b[0] === 'Materiali generali') return -1;
+                    const da = a[1].date ? new Date(a[1].date).getTime() : Number.MAX_SAFE_INTEGER;
+                    const db = b[1].date ? new Date(b[1].date).getTime() : Number.MAX_SAFE_INTEGER;
                     return da - db;
                 })
-                .forEach(([groupKey, group]) => {
-                    const headerRow = document.createElement('tr');
-                    headerRow.style.background = '#f3f4f6';
-                    headerRow.dataset.resourceGroupHeader = groupKey;
-                    headerRow.innerHTML = `<td colspan="9" style="font-weight: 600; padding: 12px;">
-                        <button type="button" class="secondary resource-group-toggle" data-resource-group="${escapeHtml(groupKey)}" aria-expanded="true" style="font-size: 0.78rem; padding: 4px 8px; margin-right: 8px;">Nascondi</button>
-                        ${escapeHtml(group.title)} <span style="color: var(--gray-500); font-weight: 400;">(${group.items.length} ${group.items.length === 1 ? 'materiale' : 'materiali'})</span>
-                    </td>`;
-                    tableBody.appendChild(headerRow);
-                    group.items.forEach((item) => {
-                        const row = buildResourceRow(item);
-                        row.dataset.resourceGroup = groupKey;
-                        tableBody.appendChild(row);
-                    });
-                });
+                .map(([, module]) => {
+                    const lessonsHtml = Array.from(module.lessons.entries())
+                        .sort((a, b) => {
+                            if (a[0] === '__general__') return 1;
+                            if (b[0] === '__general__') return -1;
+                            const da = a[1].date ? new Date(a[1].date).getTime() : Number.MAX_SAFE_INTEGER;
+                            const db = b[1].date ? new Date(b[1].date).getTime() : Number.MAX_SAFE_INTEGER;
+                            return da - db;
+                        })
+                        .map(([lessonKey, lesson], index) => {
+                            const dateStr = lesson.date ? new Date(lesson.date).toLocaleDateString('it-IT') : '';
+                            const resourcesHtml = lesson.items.map((item) => {
+                                const status = item.isPublished ? 'Visibile' : 'Bozza';
+                                const fileName = getResourceFileName(item.url);
+                                return `
+                                    <div class="admin-resource-item" data-id="${escapeHtml(item.id)}">
+                                        <div>
+                                            <div class="admin-resource-item-title">
+                                                ${typeIcons[item.resourceType] || '📎'} ${escapeHtml(item.title)}
+                                            </div>
+                                            <div class="admin-resource-item-meta">ID: ${escapeHtml(item.id)}</div>
+                                            ${fileName ? `<div class="admin-resource-item-meta">File: ${escapeHtml(fileName)}</div>` : ''}
+                                            <div class="admin-resource-item-meta">
+                                                ${escapeHtml(item.teacherName || 'Nessun docente')} · ${escapeHtml(item.source || 'admin')} · ${escapeHtml(status)}
+                                            </div>
+                                        </div>
+                                        <span class="status-pill" data-status="${item.isPublished ? 'published' : 'draft'}">${status}</span>
+                                        <div class="admin-resource-actions">
+                                            <button data-edit class="icon-btn" title="Modifica">✏️</button>
+                                            ${item.resourceType === 'quiz' ? '<button data-request-review class="icon-btn" title="Invia revisione docente">🧑‍🏫</button>' : ''}
+                                            <button data-delete class="icon-btn danger" title="Elimina">🗑️</button>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('');
+                            const ordinal = lessonKey === '__general__'
+                                ? ''
+                                : ((['Prima', 'Seconda', 'Terza', 'Quarta', 'Quinta', 'Sesta', 'Settima', 'Ottava', 'Nona', 'Decima'][index] || `${index + 1}ª`) + ' lezione: ');
+
+                            return `
+                                <div class="admin-resource-lesson is-open">
+                                    <button type="button" class="admin-resource-lesson-header" data-resource-lesson-toggle>
+                                        <div class="admin-resource-lesson-icon">📚</div>
+                                        <div class="admin-resource-lesson-info">
+                                            <div class="admin-resource-lesson-title">${escapeHtml(ordinal + lesson.title)}</div>
+                                            <div class="admin-resource-lesson-meta">${escapeHtml(dateStr || 'Senza data')} · ${lesson.items.length} ${lesson.items.length === 1 ? 'risorsa' : 'risorse'}</div>
+                                        </div>
+                                        <div class="admin-resource-lesson-count">Nascondi</div>
+                                    </button>
+                                    <div class="admin-resource-items">${resourcesHtml}</div>
+                                </div>
+                            `;
+                        }).join('');
+
+                    return `
+                        <div class="admin-resource-module">
+                            <div class="admin-resource-module-title">
+                                <span>${escapeHtml(module.title)}</span>
+                                <span class="badge">${module.count} ${module.count === 1 ? 'risorsa' : 'risorse'}</span>
+                            </div>
+                            ${lessonsHtml}
+                        </div>
+                    `;
+                }).join('');
+
+            container.innerHTML = modulesHtml;
+        }
+
+        function getResourceFileName(url) {
+            try {
+                if (!url) return '';
+                if (String(url).startsWith('data:')) return '';
+                const pathname = new URL(url).pathname || '';
+                const base = pathname.split('/').pop() || '';
+                return decodeURIComponent(base);
+            } catch (error) {
+                const raw = String(url || '');
+                const tail = raw.split('/').pop() || '';
+                return decodeURIComponent(tail.split('?')[0] || '');
+            }
         }
 
         function buildResourceRow(item) {
@@ -3553,19 +3788,7 @@ Buono studio!</textarea>
                 ai_generated: { icon: '🤖', label: 'AI', color: '#7c3aed', help: 'Risorsa generata automaticamente' }
             };
             const source = sourceInfo[item.source] || sourceInfo.admin;
-            const fileName = (() => {
-                try {
-                    if (!item.url) return '';
-                    if (String(item.url).startsWith('data:')) return '';
-                    const pathname = new URL(item.url).pathname || '';
-                    const base = pathname.split('/').pop() || '';
-                    return decodeURIComponent(base);
-                } catch (error) {
-                    const raw = String(item.url || '');
-                    const tail = raw.split('/').pop() || '';
-                    return decodeURIComponent(tail.split('?')[0] || '');
-                }
-            })();
+            const fileName = getResourceFileName(item.url);
 
             let linkBadge;
             if (item.lessonId && item.lessonTitle) {
@@ -3635,6 +3858,16 @@ Buono studio!</textarea>
             });
             toggle.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
             toggle.textContent = isExpanded ? 'Mostra' : 'Nascondi';
+        });
+
+        document.getElementById('resource-course-view').addEventListener('click', (event) => {
+            const toggle = event.target.closest('[data-resource-lesson-toggle]');
+            if (!toggle) return;
+            const lesson = toggle.closest('.admin-resource-lesson');
+            const label = toggle.querySelector('.admin-resource-lesson-count');
+            if (!lesson || !label) return;
+            const isOpen = lesson.classList.toggle('is-open');
+            label.textContent = isOpen ? 'Nascondi' : 'Mostra';
         });
 
         // Notifica studenti
@@ -4433,13 +4666,13 @@ Buono studio!</textarea>
             }
         });
 
-        document.getElementById('resource-table-body').addEventListener('click', async (event) => {
+        async function handleResourceActionClick(event) {
             const editButton = event.target.closest('button[data-edit]');
             const deleteButton = event.target.closest('button[data-delete]');
             const requestReviewButton = event.target.closest('button[data-request-review]');
-            const row = event.target.closest('tr[data-id]');
-            if (!row) return;
-            const id = row.dataset.id;
+            const resourceEl = event.target.closest('[data-id]');
+            if (!resourceEl || (!editButton && !deleteButton && !requestReviewButton)) return;
+            const id = resourceEl.dataset.id;
 
             if (editButton) {
                 const current = state.resources.find((item) => item.id === id);
@@ -4490,7 +4723,10 @@ Buono studio!</textarea>
                     showToast(error.message || 'Errore invio revisione quiz', 'error');
                 }
             }
-        });
+        }
+
+        document.getElementById('resource-table-body').addEventListener('click', handleResourceActionClick);
+        document.getElementById('resource-course-view').addEventListener('click', handleResourceActionClick);
 
         async function loadFaculty() {
             const tableBody = document.getElementById('faculty-table-body');

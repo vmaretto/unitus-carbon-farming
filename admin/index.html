@@ -3578,6 +3578,9 @@ Buono studio!</textarea>
             row.innerHTML = `
                 <td data-title>
                     <a href="${item.url}" target="_blank">${escapeHtml(item.title)}</a>
+                    <div style="font-size: 0.72rem; color: var(--gray-500); margin-top: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+                        ID: ${escapeHtml(item.id)}
+                    </div>
                     ${fileName ? `<div style="font-size: 0.78rem; color: var(--gray-500); margin-top: 4px;">📎 ${escapeHtml(fileName)}</div>` : ''}
                 </td>
                 <td data-type>${typeIcons[item.resourceType] || ''} ${escapeHtml(item.resourceType)}</td>

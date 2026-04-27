@@ -1531,7 +1531,7 @@ Buono studio!</textarea>
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                     <div id="resources-counter" style="font-size: 0.9rem; color: var(--gray-600);"></div>
                     <label class="checkbox-label" style="margin: 0;">
-                        <input type="checkbox" id="resources-group-by-lesson">
+                        <input type="checkbox" id="resources-group-by-lesson" checked>
                         Raggruppa per lezione
                     </label>
                 </div>
@@ -3527,14 +3527,20 @@ Buono studio!</textarea>
                     const db = b[1].date ? new Date(b[1].date).getTime() : 0;
                     return da - db;
                 })
-                .forEach(([, group]) => {
+                .forEach(([groupKey, group]) => {
                     const headerRow = document.createElement('tr');
                     headerRow.style.background = '#f3f4f6';
+                    headerRow.dataset.resourceGroupHeader = groupKey;
                     headerRow.innerHTML = `<td colspan="9" style="font-weight: 600; padding: 12px;">
+                        <button type="button" class="secondary resource-group-toggle" data-resource-group="${escapeHtml(groupKey)}" aria-expanded="true" style="font-size: 0.78rem; padding: 4px 8px; margin-right: 8px;">Nascondi</button>
                         ${escapeHtml(group.title)} <span style="color: var(--gray-500); font-weight: 400;">(${group.items.length} ${group.items.length === 1 ? 'materiale' : 'materiali'})</span>
                     </td>`;
                     tableBody.appendChild(headerRow);
-                    group.items.forEach((item) => tableBody.appendChild(buildResourceRow(item)));
+                    group.items.forEach((item) => {
+                        const row = buildResourceRow(item);
+                        row.dataset.resourceGroup = groupKey;
+                        tableBody.appendChild(row);
+                    });
                 });
         }
 
@@ -3613,8 +3619,22 @@ Buono studio!</textarea>
             document.getElementById('resources-filter-teacher').value = '';
             document.getElementById('resources-filter-type').value = '';
             document.getElementById('resources-filter-source').value = '';
-            document.getElementById('resources-group-by-lesson').checked = false;
+            document.getElementById('resources-group-by-lesson').checked = true;
             applyResourceFilters();
+        });
+
+        document.getElementById('resource-table-body').addEventListener('click', (event) => {
+            const toggle = event.target.closest('.resource-group-toggle');
+            if (!toggle) return;
+            const groupKey = toggle.dataset.resourceGroup;
+            const rows = Array.from(document.querySelectorAll('#resource-table-body tr[data-resource-group]'))
+                .filter((row) => row.dataset.resourceGroup === groupKey);
+            const isExpanded = toggle.getAttribute('aria-expanded') !== 'false';
+            rows.forEach((row) => {
+                row.style.display = isExpanded ? 'none' : '';
+            });
+            toggle.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+            toggle.textContent = isExpanded ? 'Mostra' : 'Nascondi';
         });
 
         // Notifica studenti
@@ -3708,16 +3728,23 @@ Buono studio!</textarea>
                         `
                         : '';
 
+                    const sentCount = Number(log.sentCount || 0);
+                    const requestedTotal = Number(log.requestedTotal || 0);
+                    const statusColor = failedRecipients.length ? '#92400e' : '#166534';
+
                     return `
-                        <div style="border-top: 1px solid var(--gray-200); padding: 10px 0;">
-                            <div style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline;">
-                                <strong>${escapeHtml(log.subject || 'Notifica')}</strong>
-                                <span style="color: var(--gray-500); font-size: 0.8rem;">${escapeHtml(createdAt)}</span>
-                            </div>
-                            <div style="margin-top: 4px; color: var(--gray-700);">
+                        <details class="notify-log-entry" style="border-top: 1px solid var(--gray-200); padding: 10px 0;">
+                            <summary style="cursor: pointer; display: flex; justify-content: space-between; gap: 12px; align-items: center; list-style: none;">
+                                <span>
+                                    <strong>${escapeHtml(log.subject || 'Notifica')}</strong>
+                                    <span style="display: inline-block; margin-left: 8px; color: ${statusColor}; font-size: 0.82rem;">${sentCount}/${requestedTotal} inviate</span>
+                                    ${failedRecipients.length ? `<span style="display: inline-block; margin-left: 6px; color: #92400e; font-size: 0.82rem;">${failedRecipients.length} mancanti/fallite</span>` : ''}
+                                </span>
+                                <span style="color: var(--gray-500); font-size: 0.8rem; white-space: nowrap;">${escapeHtml(createdAt)}</span>
+                            </summary>
+                            <div style="margin-top: 8px; color: var(--gray-700);">
                                 Tipo: ${log.scope === 'manual' ? 'studenti specifici' : 'tutti gli studenti'} |
-                                Stato: ${escapeHtml(log.status || 'N/D')} |
-                                Inviate: ${Number(log.sentCount || 0)}/${Number(log.requestedTotal || 0)}
+                                Stato: ${escapeHtml(log.status || 'N/D')}
                             </div>
                             ${failedHtml}
                             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -3725,7 +3752,7 @@ Buono studio!</textarea>
                                 ${recipientsButton}
                             </div>
                             ${recipientsHtml}
-                        </div>
+                        </details>
                     `;
                 }).join('');
             } catch (error) {
@@ -3811,7 +3838,7 @@ Buono studio!</textarea>
             const toggleButton = event.target.closest('.notify-log-toggle-btn');
             const button = event.target.closest('.notify-log-copy-btn');
             if (toggleButton) {
-                const wrapper = toggleButton.closest('div[style*="border-top"]') || toggleButton.closest('div');
+                const wrapper = toggleButton.closest('.notify-log-entry') || toggleButton.closest('div');
                 const panel = wrapper?.querySelector('.notify-log-recipients');
                 if (!panel) return;
                 const isOpen = panel.style.display !== 'none';

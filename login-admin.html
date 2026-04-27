@@ -87,6 +87,9 @@
             <input type="password" id="pwd" placeholder="Password Admin" required autocomplete="current-password">
             <button type="submit" id="login-btn">ACCEDI</button>
         </form>
+        <button type="button" id="clear-session-btn" style="margin-top: 12px; background: #e5e7eb; color: #374151;">
+            Cancella sessione salvata
+        </button>
         
     </div>
 
@@ -141,16 +144,14 @@
             btn.disabled = false;
             btn.textContent = 'ACCEDI';
         });
-        
-        // Test if already logged in
-        const existingToken = localStorage.getItem('adminToken');
-        if (existingToken) {
-            document.getElementById('success-message').textContent = '🔄 Hai già un token salvato. Reindirizzamento...';
+
+        document.getElementById('clear-session-btn').addEventListener('click', () => {
+            localStorage.removeItem('adminToken');
+            document.getElementById('success-message').textContent = 'Sessione salvata cancellata. Inserisci la password per accedere.';
             document.getElementById('success-message').style.display = 'block';
-            setTimeout(() => {
-                window.location.href = '/admin/';
-            }, 1500);
-        }
+            document.getElementById('error-message').style.display = 'none';
+            document.getElementById('pwd').focus();
+        });
     </script>
 </body>
 </html>

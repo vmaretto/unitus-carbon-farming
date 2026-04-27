@@ -34,12 +34,12 @@
         .legend span { display: inline-flex; align-items: center; gap: 6px; }
         .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; }
         .weekday { text-align: center; font-size: 0.82rem; color: var(--gray-500); font-weight: 700; text-transform: uppercase; }
-        .day-cell { min-height: 186px; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+        .day-cell { min-height: 186px; min-width: 0; overflow: hidden; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
         .day-cell.empty { background: transparent; border-color: transparent; }
         .day-cell.today { border: 2px solid var(--green-500); }
         .day-number { font-weight: 700; color: var(--green-900); }
-        .day-lessons { display: grid; gap: 8px; }
-        .lesson-card { border-radius: 12px; padding: 10px; border: 1px solid transparent; font-size: 0.8rem; line-height: 1.35; }
+        .day-lessons { display: grid; gap: 8px; min-width: 0; }
+        .lesson-card { width: 100%; min-width: 0; overflow: hidden; overflow-wrap: anywhere; border-radius: 12px; padding: 10px; border: 1px solid transparent; font-size: 0.8rem; line-height: 1.35; }
         .lesson-card.future { background: var(--blue-100); border-color: rgba(37,99,235,0.15); }
         .lesson-card.attended { background: var(--green-100); border-color: rgba(44,122,75,0.15); }
         .lesson-card.absent { background: var(--red-100); border-color: rgba(220,38,38,0.15); }
@@ -47,7 +47,7 @@
         .lesson-card.clickable:hover { box-shadow: 0 4px 14px rgba(31,41,55,0.12); }
         .lesson-time { font-weight: 700; color: var(--green-900); }
         .lesson-title { font-weight: 600; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-        .lesson-meta { color: var(--gray-500); margin-top: 4px; }
+        .lesson-meta { color: var(--gray-500); margin-top: 4px; overflow-wrap: anywhere; }
         .status-row { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-top: 6px; }
         .lesson-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
         .lesson-calendar-link {

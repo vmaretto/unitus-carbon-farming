@@ -3787,7 +3787,7 @@ const ALLOWED_UPDATE_FIELDS = {
   lessons: ['title', 'module_id', 'teacher_id', 'external_teacher_name', 'start_datetime', 'duration_minutes', 'location_physical', 'location_remote', 'status', 'notes', 'materials'],
   courses: ['title', 'slug', 'description', 'cover_image_url', 'is_published'],
   course_editions: ['edition_name', 'course_id', 'start_date', 'end_date', 'max_students', 'is_active'],
-  lms_lessons: ['title', 'description', 'video_url', 'duration_minutes', 'sort_order', 'is_published', 'calendar_lesson_id'],
+  lms_lessons: ['lms_module_id', 'title', 'description', 'video_url', 'video_provider', 'duration_seconds', 'sort_order', 'is_free', 'is_published', 'materials', 'calendar_lesson_id'],
   quizzes: ['title', 'description', 'passing_score', 'max_attempts', 'time_limit_minutes', 'is_active'],
 };
 

@@ -3726,7 +3726,7 @@ Buono studio!</textarea>
                                         <span class="status-pill" data-status="${item.isPublished ? 'published' : 'draft'}">${status}</span>
                                         <div class="admin-resource-actions">
                                             <button data-edit class="icon-btn" title="Modifica">✏️</button>
-                                            ${item.resourceType === 'quiz' ? '<button data-request-review class="icon-btn" title="Invia revisione docente">🧑‍🏫</button>' : ''}
+                                            <button data-request-review class="icon-btn" title="Invia revisione docente">🧑‍🏫</button>
                                             <button data-delete class="icon-btn danger" title="Elimina">🗑️</button>
                                         </div>
                                     </div>
@@ -3821,7 +3821,7 @@ Buono studio!</textarea>
                 <td data-status><span class="status-pill" data-status="${item.isPublished ? 'published' : 'draft'}">${item.isPublished ? 'Visibile' : 'Bozza'}</span></td>
                 <td>
                     <button data-edit class="icon-btn" title="Modifica">✏️</button>
-                    ${item.resourceType === 'quiz' ? '<button data-request-review class="icon-btn" title="Invia revisione docente">🧑‍🏫</button>' : ''}
+                    <button data-request-review class="icon-btn" title="Invia revisione docente">🧑‍🏫</button>
                     <button data-delete class="icon-btn danger" title="Elimina">🗑️</button>
                 </td>
             `;
@@ -4757,7 +4757,7 @@ Buono studio!</textarea>
                 if (!current) return;
                 const teacherId = current.teacherId || document.getElementById('resource-teacher').value;
                 if (!teacherId) {
-                    showToast('Assegna un docente alla risorsa quiz prima di inviarla in revisione', 'error');
+                    showToast('Assegna un docente alla risorsa prima di inviarla in revisione', 'error');
                     return;
                 }
                 try {
@@ -4765,10 +4765,10 @@ Buono studio!</textarea>
                         method: 'PUT',
                         body: JSON.stringify({ teacherId })
                     });
-                    showToast('Quiz inviato al docente per approvazione');
+                    showToast('Risorsa inviata al docente per revisione');
                     loadResources();
                 } catch (error) {
-                    showToast(error.message || 'Errore invio revisione quiz', 'error');
+                    showToast(error.message || 'Errore invio revisione risorsa', 'error');
                 }
             }
         }

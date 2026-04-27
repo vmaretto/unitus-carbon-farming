@@ -9,6 +9,12 @@ function findGetRoute(path) {
   });
 }
 
+function findRoute(path, method) {
+  return apiModule.app._router.stack.find((entry) => {
+    return entry?.route?.path === path && entry.route.methods[method];
+  });
+}
+
 function createJsonRes() {
   return {
     statusCode: 200,
@@ -150,4 +156,60 @@ test('GET /api/teachers/quizzes deduplica quiz identici prima del rendering', as
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.length, 1);
   assert.equal(res.body[0].id, 'resource-1');
+});
+
+test('PUT /api/resources/:id/request-review invia anche un materiale non quiz al docente', async () => {
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      if (statement.includes('SELECT id FROM faculty WHERE id = $1 LIMIT 1')) {
+        assert.deepEqual(params, ['teacher-1']);
+        return { rows: [{ id: 'teacher-1' }] };
+      }
+      if (statement.includes('FROM information_schema.columns')) {
+        assert.deepEqual(params, ['resources']);
+        return {
+          rows: [
+            { column_name: 'teacher_id' },
+            { column_name: 'review_status' },
+            { column_name: 'teacher_review_notes' },
+            { column_name: 'teacher_reviewed_at' }
+          ]
+        };
+      }
+
+      assert.match(statement, /UPDATE resources/);
+      assert.doesNotMatch(statement, /resource_type = 'quiz'/);
+      assert.match(statement, /is_published = false/);
+      assert.deepEqual(params, ['teacher-1', 'resource-1']);
+      return {
+        rows: [{
+          id: 'resource-1',
+          title: 'Materiale assegnato',
+          resourceType: 'pdf',
+          teacherId: 'teacher-1',
+          isPublished: false,
+          reviewStatus: 'pending_teacher_approval'
+        }]
+      };
+    }
+  });
+
+  const layer = findRoute('/api/resources/:id/request-review', 'put');
+  assert.ok(layer, 'route PUT /api/resources/:id/request-review non trovata');
+
+  const req = {
+    method: 'PUT',
+    url: '/api/resources/resource-1/request-review',
+    params: { id: 'resource-1' },
+    body: { teacherId: 'teacher-1' },
+    headers: {}
+  };
+  const res = createJsonRes();
+
+  await layer.route.stack[layer.route.stack.length - 1].handle(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.reviewStatus, 'pending_teacher_approval');
+  assert.equal(res.body.isPublished, false);
 });

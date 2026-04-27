@@ -75,6 +75,9 @@ class FakeTeacherMaterialsPool {
         file_size: 2048,
         file_type: 'pdf',
         status: 'approved',
+        reviewStatus: 'teacher_approved',
+        reviewNotes: null,
+        reviewedAt: '2026-04-23T10:00:00.000Z',
         created_at: '2026-04-23T10:00:00.000Z',
         source: 'admin'
       }
@@ -125,7 +128,10 @@ class FakeTeacherMaterialsPool {
             { column_name: 'file_size_bytes' },
             { column_name: 'resource_type' },
             { column_name: 'is_published' },
-            { column_name: 'teacher_id' }
+            { column_name: 'teacher_id' },
+            { column_name: 'review_status' },
+            { column_name: 'teacher_review_notes' },
+            { column_name: 'teacher_reviewed_at' }
           ]
         };
       }
@@ -326,4 +332,57 @@ test('GET /api/teachers/materials non fallisce se materials_pending manca del tu
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.length, 1);
   assert.equal(res.body[0].title, 'Materiale approvato');
+});
+
+class TeacherMaterialReviewPool extends FakeTeacherMaterialsPool {
+  async query(sql, values = []) {
+    const normalized = String(sql).replace(/\s+/g, ' ').trim();
+
+    if (normalized.includes('FROM information_schema.columns')) {
+      const tableName = values[0];
+      if (tableName === 'resources') {
+        return {
+          rows: [
+            { column_name: 'teacher_id' },
+            { column_name: 'review_status' },
+            { column_name: 'teacher_review_notes' },
+            { column_name: 'teacher_reviewed_at' }
+          ]
+        };
+      }
+    }
+
+    if (normalized.startsWith('UPDATE resources')) {
+      assert.match(normalized, /AND teacher_id = \$5/);
+      assert.match(normalized, /AND resource_type <> 'quiz'/);
+      assert.deepEqual(values, ['material-1', true, 'teacher_approved', null, 'fac-1']);
+      return {
+        rows: [{
+          id: 'material-1',
+          title: 'Materiale approvato',
+          resourceType: 'pdf',
+          teacherId: 'fac-1',
+          isPublished: true,
+          reviewStatus: 'teacher_approved',
+          reviewNotes: null,
+          reviewedAt: '2026-04-27T10:00:00.000Z'
+        }]
+      };
+    }
+
+    return super.query(sql, values);
+  }
+}
+
+test('PUT /api/teachers/materials/:id/review approva un materiale assegnato', async () => {
+  apiModule.__setPool(new TeacherMaterialReviewPool());
+  const handler = findRouteHandler('/api/teachers/materials/:id/review', 'put');
+  const req = { params: { id: 'material-1' }, body: { action: 'approve' }, teacher: { id: 'fac-1' } };
+  const res = createMockRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.reviewStatus, 'teacher_approved');
+  assert.equal(res.body.isPublished, true);
 });

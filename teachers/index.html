@@ -781,10 +781,23 @@
                 const c = document.getElementById('materials-container');
                 if (!items.length) { c.innerHTML = '<div class="empty-state">Nessun materiale caricato.</div>'; return; }
                 c.innerHTML = items.map(m => {
+                    const reviewStatusMap = {
+                        pending_teacher_approval: ['In revisione', 'badge-orange'],
+                        teacher_approved: ['Approvato', 'badge-green'],
+                        teacher_rejected: ['Rifiutato', 'badge-red']
+                    };
                     const statusMap = { pending: ['In attesa','badge-orange'], approved: ['Approvato','badge-green'], rejected: ['Rifiutato','badge-red'] };
-                    const [label, cls] = statusMap[m.status] || [m.status, 'badge-gray'];
+                    const [label, cls] = reviewStatusMap[m.reviewStatus] || statusMap[m.status] || [m.status, 'badge-gray'];
+                    const canReview = m.reviewStatus === 'pending_teacher_approval' || m.reviewStatus === 'teacher_rejected';
                     const materialTitle = m.title || m.file_name || 'Materiale docente';
                     const fileLabel = m.file_name || materialTitle;
+                    const reviewSummary = m.reviewStatus === 'teacher_rejected'
+                        ? (m.reviewNotes || 'Rifiutato dal docente')
+                        : m.reviewStatus === 'teacher_approved'
+                            ? 'Approvato dal docente'
+                            : m.reviewStatus === 'pending_teacher_approval'
+                                ? 'In attesa di revisione docente'
+                                : (m.description || '');
                     return `
                     <div class="list-item">
                         <div class="item-info">
@@ -793,11 +806,13 @@
                                 📄 ${fileLabel} ${m.file_size ? '(' + (m.file_size/1024/1024).toFixed(1) + 'MB)' : ''}
                                 — ${fmtDate(m.created_at)}
                             </div>
-                            ${m.description ? `<div class="item-meta">${escapeHtml(m.description)}</div>` : ''}
+                            ${reviewSummary ? `<div class="item-meta">${escapeHtml(reviewSummary)}</div>` : ''}
                         </div>
                         <div class="item-actions">
                             <span class="badge ${cls}">${label}</span>
                             ${m.file_url ? '<a href="'+m.file_url+'" target="_blank" class="btn-sm btn-gray">Scarica</a>' : ''}
+                            ${canReview ? `<button class="btn-sm btn-green" data-material-review="${m.id}" data-material-action="approve">Approva</button>
+                                           <button class="btn-sm btn-gray" data-material-review="${m.id}" data-material-action="reject">Rifiuta</button>` : ''}
                         </div>
                     </div>`;
                 }).join('');
@@ -880,6 +895,40 @@
                 document.getElementById('all-materials-container').innerHTML = `<div class="empty-state">${escapeHtml(e.message || 'Errore nel caricamento dei materiali del Master.')}</div>`;
             }
         }
+
+        document.getElementById('materials-container').addEventListener('click', async (event) => {
+            const button = event.target.closest('button[data-material-review]');
+            if (!button) return;
+
+            const materialId = button.dataset.materialReview;
+            const action = button.dataset.materialAction;
+
+            try {
+                let notes = null;
+                if (action === 'reject') {
+                    notes = prompt('Inserisci una nota per il rifiuto:');
+                    if (!notes || !notes.trim()) {
+                        showToast('Nota obbligatoria per rifiutare', 'error');
+                        return;
+                    }
+                }
+
+                await apiCall(`/api/teachers/materials/${materialId}/review`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ action, notes })
+                });
+
+                showToast(
+                    action === 'approve'
+                        ? 'Materiale approvato e pubblicato'
+                        : 'Materiale rifiutato',
+                    'success'
+                );
+                await loadTeacherMaterials();
+            } catch (e) {
+                showToast(e.message || 'Errore nella revisione del materiale', 'error');
+            }
+        });
 
         // === QUIZZES ===
         async function loadTeacherQuizzes() {

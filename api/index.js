@@ -1146,6 +1146,7 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
         const result = await pool.query(
           `SELECT id, title, ${resourceFragments.description}, url AS file_url, NULL AS file_name, ${resourceFragments.fileSize},
                   ${resourceFragments.fileType}, ${resourceFragments.status},
+                  ${resourceFragments.reviewStatus}, ${resourceFragments.reviewNotes}, ${resourceFragments.reviewedAt},
                   created_at, 'admin' AS source
            FROM resources
            WHERE teacher_id = $1
@@ -1165,6 +1166,67 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
   } catch (error) {
     console.error('Get teacher materials error:', error);
     res.status(500).json({ error: 'Errore nel recupero materiali' });
+  }
+});
+
+app.put('/api/teachers/materials/:id/review', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { id } = req.params;
+  const { action, notes } = req.body || {};
+
+  if (!['approve', 'reject'].includes(action)) {
+    return res.status(400).json({ error: 'action must be approve or reject' });
+  }
+  if (action === 'reject' && (!notes || !String(notes).trim())) {
+    return res.status(400).json({ error: 'notes are required when rejecting' });
+  }
+
+  try {
+    const resourceColumns = await getTableColumns('resources');
+    if (!resourceColumns.has('teacher_id')) {
+      return res.status(500).json({ error: 'Resources schema missing teacher_id column' });
+    }
+
+    const hasReviewStatus = resourceColumns.has('review_status');
+    const hasReviewNotes = resourceColumns.has('teacher_review_notes');
+    const hasReviewedAt = resourceColumns.has('teacher_reviewed_at');
+    const reviewStatus = action === 'approve' ? 'teacher_approved' : 'teacher_rejected';
+    const isPublished = action === 'approve';
+    const reviewNotes = action === 'reject' ? String(notes).trim() : null;
+    const setClauses = ['is_published = $2', 'updated_at = NOW()'];
+    if (hasReviewStatus) setClauses.push('review_status = $3');
+    if (hasReviewNotes) setClauses.push('teacher_review_notes = $4');
+    if (hasReviewedAt) setClauses.push('teacher_reviewed_at = NOW()');
+
+    const returningClauses = [
+      'id',
+      'title',
+      'resource_type AS "resourceType"',
+      'teacher_id AS "teacherId"',
+      'is_published AS "isPublished"',
+      hasReviewStatus ? 'review_status AS "reviewStatus"' : `$3 AS "reviewStatus"`,
+      hasReviewNotes ? 'teacher_review_notes AS "reviewNotes"' : '$4::text AS "reviewNotes"',
+      hasReviewedAt ? 'teacher_reviewed_at AS "reviewedAt"' : 'NOW() AS "reviewedAt"'
+    ];
+
+    const { rows } = await pool.query(
+      `UPDATE resources
+       SET ${setClauses.join(', ')}
+       WHERE id = $1
+         AND teacher_id = $5
+         AND resource_type <> 'quiz'
+       RETURNING ${returningClauses.join(', ')}`,
+      [id, isPublished, reviewStatus, reviewNotes, req.teacher.id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Material not found for this teacher' });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error reviewing teacher material', error);
+    res.status(500).json({ error: 'Unable to review material' });
   }
 });
 
@@ -2626,7 +2688,10 @@ async function getResourcesSchemaConfig() {
     hasFileSizeBytes: columns.has('file_size_bytes'),
     hasResourceType: columns.has('resource_type'),
     hasIsPublished: columns.has('is_published'),
-    hasTeacherId: columns.has('teacher_id')
+    hasTeacherId: columns.has('teacher_id'),
+    hasReviewStatus: columns.has('review_status'),
+    hasReviewNotes: columns.has('teacher_review_notes'),
+    hasReviewedAt: columns.has('teacher_reviewed_at')
   };
 }
 
@@ -2638,7 +2703,16 @@ function buildTeacherResourcesSelectFragments(config, alias = 'r') {
     fileType: config.hasResourceType ? `${prefix}resource_type AS file_type` : `NULL::text AS file_type`,
     status: config.hasIsPublished
       ? `CASE WHEN ${prefix}is_published THEN 'approved' ELSE 'pending' END AS status`
-      : `'approved'::text AS status`
+      : `'approved'::text AS status`,
+    reviewStatus: config.hasReviewStatus
+      ? `${prefix}review_status AS "reviewStatus"`
+      : `NULL::text AS "reviewStatus"`,
+    reviewNotes: config.hasReviewNotes
+      ? `${prefix}teacher_review_notes AS "reviewNotes"`
+      : `NULL::text AS "reviewNotes"`,
+    reviewedAt: config.hasReviewedAt
+      ? `${prefix}teacher_reviewed_at AS "reviewedAt"`
+      : `NULL::timestamptz AS "reviewedAt"`
   };
 }
 
@@ -4658,7 +4732,7 @@ app.put('/api/resources/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// Admin: send quiz to teacher review
+// Admin: send resource to teacher review
 app.put('/api/resources/:id/request-review', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   const { id } = req.params;
@@ -4685,7 +4759,7 @@ app.put('/api/resources/:id/request-review', requireAdmin, async (req, res) => {
       return res.status(500).json({ error: 'Resources schema missing teacher_id column' });
     }
 
-    const setClauses = ['teacher_id = $1', 'updated_at = NOW()'];
+    const setClauses = ['teacher_id = $1', 'is_published = false', 'updated_at = NOW()'];
     const returningClauses = [
       'id',
       'title',
@@ -4707,14 +4781,14 @@ app.put('/api/resources/:id/request-review', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE resources
        SET ${setClauses.join(', ')}
-       WHERE id = $2 AND resource_type = 'quiz'
+       WHERE id = $2
        RETURNING ${returningClauses.join(', ')}`,
       [teacherId, id]
     );
-    if (!rows.length) return res.status(404).json({ error: 'Quiz resource not found' });
+    if (!rows.length) return res.status(404).json({ error: 'Resource not found' });
     res.json(rows[0]);
   } catch (error) {
-    console.error('Error requesting quiz teacher review', error);
+    console.error('Error requesting teacher review', error);
     res.status(500).json({ error: 'Unable to request teacher review' });
   }
 });

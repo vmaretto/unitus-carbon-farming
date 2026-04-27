@@ -6262,15 +6262,16 @@ Buono studio!</textarea>
                 html += '<div class="empty-state" style="margin-top: 16px;">Nessuna lezione in questo modulo.</div>';
             } else {
                 html += '<div style="margin-top: 16px;">';
-                lessons.forEach(l => {
+                lessons.forEach((l, idx) => {
                     const pub = l.isPublished
                         ? '<span class="status-pill" data-status="published">Pubblicata</span>'
                         : '<span class="status-pill" data-status="draft">Bozza</span>';
                     const dur = l.durationSeconds ? `${Math.floor(l.durationSeconds / 60)} min` : '';
+                    const ordinal = (['Prima', 'Seconda', 'Terza', 'Quarta', 'Quinta', 'Sesta', 'Settima', 'Ottava', 'Nona', 'Decima'][idx] || `${idx + 1}ª`) + ' lezione: ';
                     html += `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--gray-200);" data-lesson-id="${l.id}">
                             <div>
-                                <strong>${escapeHtml(l.title)}</strong> ${pub}
+                                <strong><span style="color: var(--green-700);">${ordinal}</span>${escapeHtml(l.title)}</strong> ${pub}
                                 <span style="color: var(--gray-500); font-size: 0.85rem; margin-left: 8px;">${dur}</span>
                             </div>
                             <div class="actions" style="margin: 0;">

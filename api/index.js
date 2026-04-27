@@ -372,6 +372,21 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function getOptionalAdmin(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = authHeader.slice(7);
+  if (PIPELINE_API_KEY && token === PIPELINE_API_KEY) {
+    return { role: 'admin', source: 'pipeline_api_key' };
+  }
+
+  const payload = verifyToken(token);
+  return payload && payload.role === 'admin' ? payload : null;
+}
+
 function requireStudent(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -4370,10 +4385,13 @@ app.get('/api/resources', async (req, res) => {
 
   try {
     const { published, type } = req.query;
+    const isAdmin = Boolean(getOptionalAdmin(req));
     const filters = [];
     const values = [];
 
-    if (published !== undefined) {
+    if (!isAdmin) {
+      filters.push('r.is_published = true');
+    } else if (published !== undefined) {
       filters.push(`r.is_published = $${filters.length + 1}`);
       values.push(published === 'true');
     }
@@ -5286,12 +5304,18 @@ app.get('/api/resources/notify-logs', requireAdmin, async (_req, res) => {
 app.get('/api/resources/:id', async (req, res) => {
   if (!ensurePool(res)) return;
   try {
-    const { rows } = await pool.query(`
-      SELECT id, title, description, resource_type AS "resourceType",
+    const isAdmin = Boolean(getOptionalAdmin(req));
+    const selectFields = isAdmin
+      ? `id, title, description, resource_type AS "resourceType",
              url, thumbnail_url AS "thumbnailUrl", is_published AS "isPublished",
              extracted_text AS "extractedText", extraction_status AS "extractionStatus",
-             extraction_metadata AS "extractionMetadata", extracted_at AS "extractedAt"
-      FROM resources WHERE id = $1
+             extraction_metadata AS "extractionMetadata", extracted_at AS "extractedAt"`
+      : `id, title, description, resource_type AS "resourceType",
+             url, thumbnail_url AS "thumbnailUrl", is_published AS "isPublished"`;
+    const where = isAdmin ? 'id = $1' : 'id = $1 AND is_published = true';
+    const { rows } = await pool.query(`
+      SELECT ${selectFields}
+      FROM resources WHERE ${where}
     `, [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Resource not found' });
     res.json(rows[0]);

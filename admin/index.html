@@ -1286,8 +1286,7 @@
             </div>
 
             <div class="table-wrapper">
-                <div id="resource-course-view" class="admin-resource-course-view" style="display: none;"></div>
-                <table id="resource-table">
+                <table>
                     <thead>
                         <tr>
                             <th>Titolo</th>
@@ -1683,7 +1682,8 @@ Buono studio!</textarea>
             </div>
 
             <div class="table-wrapper">
-                <table>
+                <div id="resource-course-view" class="admin-resource-course-view" style="display: none;"></div>
+                <table id="resource-table">
                     <thead>
                         <tr>
                             <th>Titolo</th>
@@ -3924,7 +3924,7 @@ Buono studio!</textarea>
                     return;
                 }
 
-                container.innerHTML = logs.map(log => {
+                const renderLogDetails = (log) => {
                     const createdAt = log.createdAt ? new Date(log.createdAt).toLocaleString('it-IT') : 'N/D';
                     const allRecipients = Array.isArray(log.allRecipients) ? log.allRecipients : [];
                     const failedRecipients = Array.isArray(log.failedRecipients) ? log.failedRecipients : [];
@@ -3985,6 +3985,54 @@ Buono studio!</textarea>
                                 ${recipientsButton}
                             </div>
                             ${recipientsHtml}
+                        </details>
+                    `;
+                };
+
+                const grouped = new Map();
+                logs.forEach((log) => {
+                    const dateKey = log.createdAt ? new Date(log.createdAt).toLocaleDateString('it-IT') : 'Senza data';
+                    const key = `${log.subject || 'Notifica'}|${dateKey}|${log.scope || ''}`;
+                    if (!grouped.has(key)) {
+                        grouped.set(key, {
+                            subject: log.subject || 'Notifica',
+                            dateKey,
+                            scope: log.scope,
+                            logs: [],
+                            sent: 0,
+                            requested: 0,
+                            failed: 0,
+                            latest: log.createdAt || null
+                        });
+                    }
+                    const group = grouped.get(key);
+                    group.logs.push(log);
+                    group.sent += Number(log.sentCount || 0);
+                    group.requested += Number(log.requestedTotal || 0);
+                    group.failed += Array.isArray(log.failedRecipients) ? log.failedRecipients.length : 0;
+                    if (log.createdAt && (!group.latest || new Date(log.createdAt) > new Date(group.latest))) {
+                        group.latest = log.createdAt;
+                    }
+                });
+
+                container.innerHTML = Array.from(grouped.values()).map((group) => {
+                    const latest = group.latest ? new Date(group.latest).toLocaleString('it-IT') : group.dateKey;
+                    const statusColor = group.failed ? '#92400e' : '#166534';
+                    const details = group.logs.map(renderLogDetails).join('');
+                    return `
+                        <details class="notify-log-entry" style="border-top: 1px solid var(--gray-200); padding: 10px 0;">
+                            <summary style="cursor: pointer; display: flex; justify-content: space-between; gap: 12px; align-items: center; list-style: none;">
+                                <span>
+                                    <strong>${escapeHtml(group.subject)}</strong>
+                                    <span style="display: inline-block; margin-left: 8px; color: ${statusColor}; font-size: 0.82rem;">${group.sent}/${group.requested} inviate</span>
+                                    <span style="display: inline-block; margin-left: 6px; color: var(--gray-500); font-size: 0.82rem;">${group.logs.length} invii accorpati</span>
+                                    ${group.failed ? `<span style="display: inline-block; margin-left: 6px; color: #92400e; font-size: 0.82rem;">${group.failed} mancanti/fallite</span>` : ''}
+                                </span>
+                                <span style="color: var(--gray-500); font-size: 0.8rem; white-space: nowrap;">Ultimo: ${escapeHtml(latest)}</span>
+                            </summary>
+                            <div style="margin-top: 8px; padding-left: 12px; border-left: 3px solid var(--green-100);">
+                                ${details}
+                            </div>
                         </details>
                     `;
                 }).join('');

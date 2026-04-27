@@ -257,7 +257,7 @@
 
         function renderGrid() {
             const container = document.getElementById('calendar-grid');
-            const todayKey = normalizeDate(new Date().toISOString());
+            const todayKey = normalizeDate(new Date());
             const first = new Date(state.year, state.month - 1, 1);
             const daysInMonth = new Date(state.year, state.month, 0).getDate();
             const offset = mondayIndex(first);

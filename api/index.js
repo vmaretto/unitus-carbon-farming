@@ -154,6 +154,18 @@ function normalizeEmailList(input) {
   return emails;
 }
 
+function normalizeEmail(value) {
+  const email = String(value || '').trim().toLowerCase();
+  return email || null;
+}
+
+function isFacultyEmailUniqueViolation(error) {
+  return error?.code === '23505' && (
+    error.constraint === 'idx_faculty_email' ||
+    error.constraint === 'idx_faculty_email_lower'
+  );
+}
+
 function buildStudentNotificationHtml(message, { isTest = false } = {}) {
   const testBanner = isTest
     ? `
@@ -716,59 +728,9 @@ function requireTeacher(req, res, next) {
 
 // Teachers login
 app.post('/api/teachers/login', async (req, res) => {
-  if (!ensurePool(res)) return;
-  
-  const { email, password } = req.body;
-  
-  if (!email) {
-    return res.status(400).json({ error: 'Email richiesta' });
-  }
-
-  try {
-    // Find teacher by email
-    const { rows: teachers } = await pool.query(
-      'SELECT * FROM faculty WHERE LOWER(email) = LOWER($1) AND is_active = true',
-      [email]
-    );
-    
-    if (teachers.length === 0) {
-      return res.status(401).json({ error: 'Docente non trovato o non attivo' });
-    }
-    
-    const teacher = teachers[0];
-    
-    // For now, allow login with any password (magic link style)
-    // TODO: Implement proper password or magic link system
-    
-    // Update last login
-    await pool.query(
-      'UPDATE faculty SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1',
-      [teacher.id]
-    );
-    
-    // Generate JWT token
-    const token = generateToken({ 
-      id: teacher.id, 
-      email: teacher.email, 
-      role: 'teacher',
-      name: `${teacher.first_name} ${teacher.last_name}`
-    });
-    
-    res.json({ 
-      token,
-      teacher: {
-        id: teacher.id,
-        email: teacher.email,
-        first_name: teacher.first_name,
-        last_name: teacher.last_name,
-        role: teacher.role
-      }
-    });
-    
-  } catch (error) {
-    console.error('Teacher login error:', error);
-    res.status(500).json({ error: 'Errore durante il login' });
-  }
+  res.status(410).json({
+    error: 'Accesso con password disabilitato. Richiedi un link di accesso via email.'
+  });
 });
 
 // Self-service magic link request (public, no auth required)
@@ -776,7 +738,7 @@ app.post('/api/teachers/request-magic-link', async (req, res) => {
   if (!ensurePool(res)) return;
   const safeMsg = 'Se la tua email è registrata, riceverai un link di accesso.';
 
-  const { email } = req.body;
+  const email = normalizeEmail(req.body?.email);
   if (!email) return res.json({ message: safeMsg });
 
   try {
@@ -3886,6 +3848,7 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
   }
 
   const { name, role, email, bio, photoUrl, profileLink, sortOrder, isPublished, canViewAllMaterials } = req.body;
+  const normalizedEmail = normalizeEmail(email);
 
   if (!name) {
     return res.status(400).json({ error: 'Name is required' });
@@ -3895,10 +3858,10 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
   const normalizedPhotoUrl = normalizeImageUrl(photoUrl);
 
   try {
-    if (email) {
+    if (normalizedEmail) {
       const { rows: existingFaculty } = await pool.query(
         'SELECT id, name FROM faculty WHERE LOWER(email) = LOWER($1) LIMIT 1',
-        [email]
+        [normalizedEmail]
       );
 
       if (existingFaculty.length) {
@@ -3920,7 +3883,7 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
       id,
       name,
       role || null,
-      email || null,
+      normalizedEmail,
       bio || null,
       normalizedPhotoUrl || null,
       profileLink || null,
@@ -3932,7 +3895,7 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(insert, values);
     res.status(201).json(rows[0]);
   } catch (error) {
-    if (error.code === '23505' && error.constraint === 'idx_faculty_email') {
+    if (isFacultyEmailUniqueViolation(error)) {
       return res.status(409).json({ error: 'Email gia associata a un altro docente' });
     }
 
@@ -3948,15 +3911,16 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
 
   const { id } = req.params;
   const { name, role, email, bio, photoUrl, profileLink, sortOrder, isPublished, canViewAllMaterials, can_view_all_materials } = req.body;
+  const normalizedEmail = email === undefined ? undefined : normalizeEmail(email);
 
   // Normalizza URL della foto (converte GitHub blob in raw)
   const normalizedPhotoUrl = photoUrl !== undefined ? normalizeImageUrl(photoUrl) : undefined;
 
   try {
-    if (email) {
+    if (normalizedEmail) {
       const { rows: existingFaculty } = await pool.query(
         'SELECT id, name FROM faculty WHERE LOWER(email) = LOWER($1) AND id <> $2 LIMIT 1',
-        [email, id]
+        [normalizedEmail, id]
       );
 
       if (existingFaculty.length) {
@@ -3971,7 +3935,7 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
     const updateFields = {
       name,
       role,
-      email,
+      email: normalizedEmail,
       bio,
       photo_url: normalizedPhotoUrl,
       profile_link: profileLink,
@@ -4003,7 +3967,7 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
       canViewAllMaterials: row.can_view_all_materials
     });
   } catch (error) {
-    if (error.code === '23505' && error.constraint === 'idx_faculty_email') {
+    if (isFacultyEmailUniqueViolation(error)) {
       return res.status(409).json({ error: 'Email gia associata a un altro docente' });
     }
 

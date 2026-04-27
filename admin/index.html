@@ -5110,7 +5110,7 @@ Buono studio!</textarea>
             const daysInMonth = lastDay.getDate();
 
             const today = new Date();
-            const todayStr = today.toISOString().split('T')[0];
+            const todayStr = toLocalDateKey(today);
 
             // Previous month days
             const prevMonth = new Date(state.calendarYear, state.calendarMonth, 0);
@@ -5125,7 +5125,7 @@ Buono studio!</textarea>
                 const dateStr = `${state.calendarYear}-${String(state.calendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isToday = dateStr === todayStr;
                 const dayLessons = state.lessons.filter((l) => {
-                    const lessonDate = new Date(l.startDatetime).toISOString().split('T')[0];
+                    const lessonDate = toLocalDateKey(l.startDatetime);
                     return lessonDate === dateStr;
                 });
                 const cell = createDayCell(day, false, dayLessons, isToday, dateStr);
@@ -5187,6 +5187,14 @@ Buono studio!</textarea>
             const hours = String(d.getHours()).padStart(2, '0');
             const minutes = String(d.getMinutes()).padStart(2, '0');
             return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        function toLocalDateKey(dateInput) {
+            const d = new Date(dateInput);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
         }
 
         function editLesson(lessonId) {

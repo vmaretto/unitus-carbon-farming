@@ -94,3 +94,60 @@ test('GET /api/resources/:id pubblico non espone testo estratto', async () => {
   assert.equal(Object.hasOwn(res.body, 'extractedText'), false);
   assert.equal(Object.hasOwn(res.body, 'extractionMetadata'), false);
 });
+
+test('GET /api/teachers/quizzes deduplica quiz identici prima del rendering', async () => {
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      if (statement.includes('FROM information_schema.columns')) {
+        const tableName = params[0];
+        if (tableName === 'resources') {
+          return { rows: [{ column_name: 'teacher_id' }, { column_name: 'lesson_id' }, { column_name: 'review_status' }, { column_name: 'teacher_review_notes' }, { column_name: 'teacher_reviewed_at' }] };
+        }
+        if (tableName === 'quizzes') {
+          return { rows: [{ column_name: 'generation_report' }] };
+        }
+        return { rows: [] };
+      }
+
+      assert.match(statement, /SELECT DISTINCT ON \(/);
+      assert.match(statement, /ORDER BY LOWER\(r\.title\)/);
+      assert.deepEqual(params, ['teacher-1']);
+      return {
+        rows: [{
+          id: 'resource-1',
+          title: 'Quiz duplicato',
+          description: 'Descrizione',
+          url: 'data:application/json,{}',
+          reviewStatus: 'pending_teacher_approval',
+          reviewNotes: null,
+          reviewedAt: null,
+          isPublished: false,
+          createdAt: '2026-04-27T08:00:00.000Z',
+          updatedAt: '2026-04-27T08:00:00.000Z',
+          generationReport: null,
+          lessonId: 'lesson-1',
+          lessonTitle: 'Lezione 1'
+        }]
+      };
+    }
+  });
+
+  const layer = findGetRoute('/api/teachers/quizzes');
+  assert.ok(layer, 'route /api/teachers/quizzes non trovata');
+
+  const req = {
+    method: 'GET',
+    url: '/api/teachers/quizzes',
+    query: {},
+    headers: {},
+    teacher: { id: 'teacher-1' }
+  };
+  const res = createJsonRes();
+
+  await layer.route.stack[layer.route.stack.length - 1].handle(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.length, 1);
+  assert.equal(res.body[0].id, 'resource-1');
+});

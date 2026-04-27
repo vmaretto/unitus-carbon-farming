@@ -4479,6 +4479,64 @@ app.post('/api/resources', requireAdmin, async (req, res) => {
   }
 
   try {
+    const normalizedUrl = String(url || '').trim();
+    const isQuizPayload = resourceType === 'quiz' && normalizedUrl.startsWith('data:application/json,');
+
+    if (isQuizPayload) {
+      const { rows: existingRows } = await pool.query(
+        `SELECT id
+         FROM resources
+         WHERE title = $1
+           AND resource_type = 'quiz'
+           AND url = $2
+           AND COALESCE(teacher_id::text, '') = COALESCE($3::text, '')
+           AND COALESCE(lesson_id::text, '') = COALESCE($4::text, '')
+         ORDER BY updated_at DESC
+         LIMIT 1`,
+        [title, normalizedUrl, teacherId || null, lessonId || null]
+      );
+
+      if (existingRows.length) {
+        const existingId = existingRows[0].id;
+        const { rows } = await pool.query(
+          `UPDATE resources
+           SET description = $2,
+               thumbnail_url = $3,
+               file_size_bytes = $4,
+               sort_order = $5,
+               is_published = $6,
+               source = $7,
+               tags = $8,
+               updated_at = NOW()
+           WHERE id = $1
+          RETURNING id, title, description, resource_type AS "resourceType",
+                     url, thumbnail_url AS "thumbnailUrl", file_size_bytes AS "fileSizeBytes",
+                     sort_order AS "sortOrder", is_published AS "isPublished",
+                     teacher_id AS "teacherId", lesson_id AS "lessonId",
+                     source, tags,
+                     extraction_status AS "extractionStatus", extracted_at AS "extractedAt",
+                     created_at AS "createdAt", updated_at AS "updatedAt"`
+          ,
+          [
+            existingId,
+            description || null,
+            thumbnailUrl || null,
+            fileSizeBytes || null,
+            typeof sortOrder === 'number' ? sortOrder : null,
+            Boolean(isPublished),
+            source || 'admin',
+            Array.isArray(tags) ? tags : []
+          ]
+        );
+        try {
+          await extractAndPersistResourceContent(existingId, { force: true });
+        } catch (extractionError) {
+          console.error('Resource extraction failed on duplicate quiz update', extractionError);
+        }
+        return res.status(200).json(rows[0]);
+      }
+    }
+
     const id = uuidv4();
     const insert = `
       INSERT INTO resources (id, title, description, resource_type, url, thumbnail_url, file_size_bytes, sort_order, is_published, teacher_id, lesson_id, source, tags)
@@ -4709,11 +4767,21 @@ app.get('/api/teachers/quizzes', requireTeacher, async (req, res) => {
     `;
 
     const { rows } = await pool.query(
-      `SELECT ${selectClauses.join(', ')}
+      `SELECT DISTINCT ON (
+          LOWER(r.title),
+          COALESCE(r.teacher_id::text, ''),
+          COALESCE(r.lesson_id::text, ''),
+          COALESCE(r.url, '')
+        ) ${selectClauses.join(', ')}
        FROM resources r
        ${joinLessonClause}
        ${where}
-       ORDER BY r.updated_at DESC`,
+       ORDER BY
+         LOWER(r.title),
+         COALESCE(r.teacher_id::text, ''),
+         COALESCE(r.lesson_id::text, ''),
+         COALESCE(r.url, ''),
+         r.updated_at DESC`,
       values
     );
     res.json(rows);

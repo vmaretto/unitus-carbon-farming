@@ -6404,7 +6404,7 @@ Buono studio!</textarea>
                     }
 
                     try {
-                        await apiRequest('/api/resources', {
+                        const createdResource = await apiRequest('/api/resources', {
                             method: 'POST',
                             body: JSON.stringify({
                                 title: finalName,
@@ -6412,15 +6412,28 @@ Buono studio!</textarea>
                                 url: data.url,
                                 description: null,
                                 sortOrder: null,
-                                isPublished: true,
+                                isPublished: false,
                                 teacherId: teacherId,
                                 lessonId: calendarLessonId,
                                 source: 'calendar_lesson'
                             })
                         });
-                        statusEl.textContent = '✅ ' + finalName + ' — salvato nelle risorse';
+                        if (teacherId) {
+                            try {
+                                await apiRequest(`/api/resources/${createdResource.id}/request-review`, {
+                                    method: 'PUT',
+                                    body: JSON.stringify({ teacherId })
+                                });
+                                statusEl.textContent = '✅ ' + finalName + ' — salvato nelle risorse come bozza e inviato al docente';
+                            } catch (reviewError) {
+                                console.warn('Resource review request failed after lesson upload:', reviewError);
+                                statusEl.textContent = '⚠️ ' + finalName + ' — salvato nelle risorse come bozza, ma non inviato al docente';
+                            }
+                        } else {
+                            statusEl.textContent = '✅ ' + finalName + ' — salvato nelle risorse come bozza';
+                        }
                         statusEl.style.color = 'var(--green-500)';
-                        showToast('Materiale caricato e salvato nelle risorse!', 'success');
+                        showToast('Materiale caricato e salvato nelle risorse come bozza!', 'success');
                     } catch (resourceError) {
                         console.error('Errore creazione risorsa:', resourceError);
                         statusEl.textContent = '⚠️ File caricato ma non salvato come risorsa. Aggiungilo manualmente in Gestione Risorse.';

@@ -144,11 +144,11 @@ class FakeTeacherMaterialsPool {
       };
     }
 
-    if (normalized.includes("FROM materials_pending WHERE faculty_id = $1 AND status != 'approved'")) {
+    if (normalized.includes("FROM materials_pending mp WHERE mp.faculty_id = $1 AND status != 'approved'")) {
       return { rows: this.pendingRows.map((row) => ({ ...row })) };
     }
 
-    if (normalized.includes('FROM resources') && normalized.includes('r.resource_type <> \'quiz\'')) {
+    if (normalized.includes('FROM resources r') && normalized.includes('r.resource_type <> \'quiz\'')) {
       return { rows: this.resourceRows.map((row) => ({ ...row })) };
     }
 
@@ -187,7 +187,7 @@ class LegacyTeacherMaterialsPool extends FakeTeacherMaterialsPool {
       }
     }
 
-    if (normalized.includes("FROM materials_pending WHERE faculty_id = $1 AND status != 'approved'")) {
+    if (normalized.includes("FROM materials_pending mp WHERE mp.faculty_id = $1 AND status != 'approved'")) {
       return {
         rows: [
           {

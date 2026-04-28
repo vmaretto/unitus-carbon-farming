@@ -1125,10 +1125,10 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
       try {
         const result = await pool.query(
           `SELECT id, ${pendingFragments.title}, ${pendingFragments.description}, file_url, file_name, file_type, status, ${pendingFragments.notes}, created_at, 'upload' AS source
-           FROM materials_pending
-           WHERE faculty_id = $1
+           FROM materials_pending mp
+           WHERE mp.faculty_id = $1
              AND status != 'approved'
-           ORDER BY created_at DESC`,
+           ORDER BY mp.created_at DESC`,
           [facultyId]
         );
         pending = result.rows;
@@ -1152,7 +1152,7 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
                   ${resourceFragments.fileType}, ${resourceFragments.status},
                   ${resourceFragments.reviewStatus}, ${resourceFragments.reviewNotes}, ${resourceFragments.reviewedAt},
                   r.created_at, 'admin' AS source
-           FROM resources
+           FROM resources r
            ${lessonJoin}
            ${accessClause}
            ${resourceTypeFilter}

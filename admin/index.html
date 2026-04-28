@@ -6221,7 +6221,10 @@ Buono studio!</textarea>
                     </div>
                     <label style="margin-top: 12px;">Descrizione <textarea data-field="description" rows="2" placeholder="Descrizione lezione"></textarea></label>
                     <div style="margin-top: 12px; padding: 12px; background: var(--gray-100); border-radius: 8px;">
-                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">📎 Materiali della lezione</label>
+                        <label style="font-weight: 600; margin-bottom: 4px; display: block;">📎 Materiali della lezione</label>
+                        <div style="font-size: 0.82rem; color: var(--gray-500); margin-bottom: 8px;">
+                            Questa lista resta nella lezione LMS. Quando carichi un file, il sistema crea anche una risorsa globale in <strong>bozza</strong>.
+                        </div>
                         <div data-materials-list style="margin-bottom: 8px;"></div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
                             <select data-material-type style="min-width: 120px;">
@@ -6238,7 +6241,7 @@ Buono studio!</textarea>
                                 📁
                                 <input type="file" data-material-file style="display: none;" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.srt,.vtt,.mp3,.mp4,.m4a,.jpg,.jpeg,.png,.gif">
                             </label>
-                            <button type="button" class="secondary" data-add-material>+ Aggiungi</button>
+                            <button type="button" class="secondary" data-add-material>+ Aggiungi alla lezione</button>
                         </div>
                         <small data-material-upload-status style="color: var(--gray-500); margin-top: 4px; display: block;"></small>
                     </div>

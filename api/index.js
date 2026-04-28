@@ -1142,6 +1142,10 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
     if (resourcesSchema.hasTable && resourcesSchema.hasTeacherId) {
       const resourceFragments = buildTeacherResourcesSelectFragments(resourcesSchema);
       const resourceTypeFilter = resourcesSchema.hasResourceType ? `AND resource_type <> 'quiz'` : '';
+      const lessonJoin = resourcesSchema.hasLessonId ? 'LEFT JOIN lessons l ON l.id = r.lesson_id' : '';
+      const accessClause = resourcesSchema.hasLessonId
+        ? 'WHERE (r.teacher_id = $1 OR l.teacher_id = $1)'
+        : 'WHERE r.teacher_id = $1';
       try {
         const result = await pool.query(
           `SELECT id, title, ${resourceFragments.description}, url AS file_url, NULL AS file_name, ${resourceFragments.fileSize},
@@ -1149,7 +1153,8 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
                   ${resourceFragments.reviewStatus}, ${resourceFragments.reviewNotes}, ${resourceFragments.reviewedAt},
                   created_at, 'admin' AS source
            FROM resources
-           WHERE teacher_id = $1
+           ${lessonJoin}
+           ${accessClause}
            ${resourceTypeFilter}
            ORDER BY created_at DESC`,
           [facultyId]
@@ -1190,6 +1195,7 @@ app.put('/api/teachers/materials/:id/review', requireTeacher, async (req, res) =
     const hasReviewStatus = resourceColumns.has('review_status');
     const hasReviewNotes = resourceColumns.has('teacher_review_notes');
     const hasReviewedAt = resourceColumns.has('teacher_reviewed_at');
+    const hasLessonId = resourceColumns.has('lesson_id');
     const reviewStatus = action === 'approve' ? 'teacher_approved' : 'teacher_rejected';
     const isPublished = action === 'approve';
     const reviewNotes = action === 'reject' ? String(notes).trim() : null;
@@ -1213,7 +1219,7 @@ app.put('/api/teachers/materials/:id/review', requireTeacher, async (req, res) =
       `UPDATE resources
        SET ${setClauses.join(', ')}
        WHERE id = $1
-         AND teacher_id = $5
+         AND (${hasLessonId ? '(teacher_id = $5 OR lesson_id IN (SELECT id FROM lessons WHERE teacher_id = $5))' : 'teacher_id = $5'})
          AND resource_type <> 'quiz'
        RETURNING ${returningClauses.join(', ')}`,
       [id, isPublished, reviewStatus, reviewNotes, req.teacher.id]
@@ -2689,6 +2695,7 @@ async function getResourcesSchemaConfig() {
     hasResourceType: columns.has('resource_type'),
     hasIsPublished: columns.has('is_published'),
     hasTeacherId: columns.has('teacher_id'),
+    hasLessonId: columns.has('lesson_id'),
     hasReviewStatus: columns.has('review_status'),
     hasReviewNotes: columns.has('teacher_review_notes'),
     hasReviewedAt: columns.has('teacher_reviewed_at')

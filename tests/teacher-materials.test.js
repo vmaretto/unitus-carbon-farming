@@ -75,6 +75,8 @@ class FakeTeacherMaterialsPool {
         file_size: 2048,
         file_type: 'pdf',
         status: 'approved',
+        lesson_id: 'lesson-1',
+        teacher_id: 'fac-1',
         reviewStatus: 'teacher_approved',
         reviewNotes: null,
         reviewedAt: '2026-04-23T10:00:00.000Z',
@@ -129,6 +131,7 @@ class FakeTeacherMaterialsPool {
             { column_name: 'resource_type' },
             { column_name: 'is_published' },
             { column_name: 'teacher_id' },
+            { column_name: 'lesson_id' },
             { column_name: 'review_status' },
             { column_name: 'teacher_review_notes' },
             { column_name: 'teacher_reviewed_at' }
@@ -145,7 +148,7 @@ class FakeTeacherMaterialsPool {
       return { rows: this.pendingRows.map((row) => ({ ...row })) };
     }
 
-    if (normalized.includes("FROM resources") && normalized.includes("WHERE teacher_id = $1")) {
+    if (normalized.includes('FROM resources') && normalized.includes('resource_type <> \'quiz\'')) {
       return { rows: this.resourceRows.map((row) => ({ ...row })) };
     }
 
@@ -353,7 +356,7 @@ class TeacherMaterialReviewPool extends FakeTeacherMaterialsPool {
     }
 
     if (normalized.startsWith('UPDATE resources')) {
-      assert.match(normalized, /AND teacher_id = \$5/);
+      assert.match(normalized, /AND \(teacher_id = \$5/);
       assert.match(normalized, /AND resource_type <> 'quiz'/);
       assert.deepEqual(values, ['material-1', true, 'teacher_approved', null, 'fac-1']);
       return {

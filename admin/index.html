@@ -1654,6 +1654,16 @@ Buono studio!</textarea>
                         <label>Numero domande <input type="number" id="manual-preliminary-quiz-count" min="1" value="1" readonly></label>
                         <label>Punteggio minimo (%) <input type="number" id="manual-preliminary-quiz-passing-score" min="0" max="100" value="70"></label>
                         <label>Max tentativi (0=illimitati) <input type="number" id="manual-preliminary-quiz-max-attempts" min="0" value="0"></label>
+                        <label>Docente
+                            <select id="manual-preliminary-quiz-teacher">
+                                <option value="">-- Nessun docente --</option>
+                            </select>
+                        </label>
+                        <label>Lezione
+                            <select id="manual-preliminary-quiz-lesson">
+                                <option value="">-- Nessuna lezione --</option>
+                            </select>
+                        </label>
                     </div>
                     <div class="actions" style="margin-top: 12px;">
                         <button type="button" id="manual-preliminary-quiz-add-question" class="secondary" style="background: var(--green-100); color: var(--green-700);">+ Aggiungi domanda</button>
@@ -4660,8 +4670,51 @@ Buono studio!</textarea>
             title: document.getElementById('manual-preliminary-quiz-title')?.value?.trim() || 'Quiz Preliminare - Master Carbon Farming',
             passingScore: Number(document.getElementById('manual-preliminary-quiz-passing-score')?.value) || 70,
             maxAttempts: Number(document.getElementById('manual-preliminary-quiz-max-attempts')?.value) || 0,
+            teacherId: document.getElementById('manual-preliminary-quiz-teacher')?.value || '',
+            lessonId: document.getElementById('manual-preliminary-quiz-lesson')?.value || '',
             questions: [buildManualPreliminaryQuizQuestion()]
         };
+
+        function updateManualPreliminaryQuizTeacherSelect() {
+            const select = document.getElementById('manual-preliminary-quiz-teacher');
+            if (!select) return;
+            const currentValue = manualPreliminaryQuizDraft.teacherId || select.value || '';
+            select.innerHTML = '<option value="">-- Nessun docente --</option>';
+            (state.faculty || []).forEach((teacher) => {
+                const option = document.createElement('option');
+                option.value = teacher.id;
+                option.textContent = teacher.name;
+                select.appendChild(option);
+            });
+            if (currentValue) select.value = currentValue;
+        }
+
+        async function updateManualPreliminaryQuizLessonSelect() {
+            const select = document.getElementById('manual-preliminary-quiz-lesson');
+            if (!select) return;
+            const currentValue = manualPreliminaryQuizDraft.lessonId || select.value || '';
+            const teacherId = document.getElementById('manual-preliminary-quiz-teacher')?.value || '';
+
+            if (!allLessonsCache) {
+                try {
+                    allLessonsCache = await apiRequest('/api/lessons');
+                } catch (error) {
+                    allLessonsCache = [];
+                }
+            }
+
+            select.innerHTML = '<option value="">-- Nessuna lezione --</option>';
+            (allLessonsCache || []).forEach((lesson) => {
+                if (!teacherId || lesson.teacherId === teacherId) {
+                    const dateStr = lesson.startDatetime ? new Date(lesson.startDatetime).toLocaleDateString('it-IT') : '';
+                    const option = document.createElement('option');
+                    option.value = lesson.id;
+                    option.textContent = lesson.title + (dateStr ? ` (${dateStr})` : '');
+                    select.appendChild(option);
+                }
+            });
+            if (currentValue) select.value = currentValue;
+        }
 
         function syncManualPreliminaryQuizDraftFromDom() {
             const container = document.getElementById('manual-preliminary-quiz-questions');
@@ -4672,6 +4725,8 @@ Buono studio!</textarea>
                 title: document.getElementById('manual-preliminary-quiz-title')?.value?.trim() || 'Quiz Preliminare - Master Carbon Farming',
                 passingScore: Number(document.getElementById('manual-preliminary-quiz-passing-score')?.value) || 70,
                 maxAttempts: Number(document.getElementById('manual-preliminary-quiz-max-attempts')?.value) || 0,
+                teacherId: document.getElementById('manual-preliminary-quiz-teacher')?.value || '',
+                lessonId: document.getElementById('manual-preliminary-quiz-lesson')?.value || '',
                 questions: cards.map((card, questionIndex) => {
                     const questionText = card.querySelector(`[data-manual-question-text="${questionIndex}"]`)?.value.trim() || '';
                     const points = Number(card.querySelector(`[data-manual-question-points="${questionIndex}"]`)?.value) || 1;
@@ -4700,6 +4755,8 @@ Buono studio!</textarea>
             document.getElementById('manual-preliminary-quiz-passing-score').value = String(manualPreliminaryQuizDraft.passingScore || 70);
             document.getElementById('manual-preliminary-quiz-max-attempts').value = String(manualPreliminaryQuizDraft.maxAttempts || 0);
             document.getElementById('manual-preliminary-quiz-count').value = String(manualPreliminaryQuizDraft.questions.length);
+            updateManualPreliminaryQuizTeacherSelect();
+            updateManualPreliminaryQuizLessonSelect();
 
             container.innerHTML = manualPreliminaryQuizDraft.questions.map((question, questionIndex) => `
                 <div data-manual-preliminary-question="${questionIndex}" style="padding: 14px; border: 1px solid rgba(249, 115, 22, 0.18); border-radius: 12px; background: white;">
@@ -4739,6 +4796,8 @@ Buono studio!</textarea>
                 title: 'Quiz Preliminare - Master Carbon Farming',
                 passingScore: 70,
                 maxAttempts: 0,
+                teacherId: '',
+                lessonId: '',
                 questions: [buildManualPreliminaryQuizQuestion()]
             };
             renderManualPreliminaryQuizBuilder();
@@ -4767,7 +4826,7 @@ Buono studio!</textarea>
             };
         }
 
-        async function savePreliminaryQuizResource(quizData, description) {
+        async function savePreliminaryQuizResource(quizData, description, { teacherId = null, lessonId = null } = {}) {
             await apiRequest('/api/resources', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -4775,7 +4834,9 @@ Buono studio!</textarea>
                     resourceType: 'quiz',
                     url: 'data:application/json,' + encodeURIComponent(JSON.stringify(quizData)),
                     description,
-                    isPublished: false
+                    isPublished: false,
+                    teacherId,
+                    lessonId
                 })
             });
         }
@@ -4813,11 +4874,32 @@ Buono studio!</textarea>
                 title,
                 passingScore: manualPreliminaryQuizDraft.passingScore,
                 maxAttempts: manualPreliminaryQuizDraft.maxAttempts,
+                teacherId: manualPreliminaryQuizDraft.teacherId || null,
+                lessonId: manualPreliminaryQuizDraft.lessonId || null,
                 questions
             };
         }
 
         renderManualPreliminaryQuizBuilder();
+
+        document.getElementById('manual-preliminary-quiz-teacher').addEventListener('change', async (event) => {
+            syncManualPreliminaryQuizDraftFromDom();
+            manualPreliminaryQuizDraft.teacherId = event.target.value || '';
+            if (!manualPreliminaryQuizDraft.teacherId) {
+                manualPreliminaryQuizDraft.lessonId = '';
+            } else {
+                const selectedLesson = (allLessonsCache || state.lessons || []).find((lesson) => lesson.id === manualPreliminaryQuizDraft.lessonId);
+                if (selectedLesson && selectedLesson.teacherId && selectedLesson.teacherId !== manualPreliminaryQuizDraft.teacherId) {
+                    manualPreliminaryQuizDraft.lessonId = '';
+                }
+            }
+            await updateManualPreliminaryQuizLessonSelect();
+        });
+
+        document.getElementById('manual-preliminary-quiz-lesson').addEventListener('change', (event) => {
+            syncManualPreliminaryQuizDraftFromDom();
+            manualPreliminaryQuizDraft.lessonId = event.target.value || '';
+        });
 
         document.getElementById('manual-preliminary-quiz-add-question').addEventListener('click', () => {
             syncManualPreliminaryQuizDraftFromDom();
@@ -4878,6 +4960,14 @@ Buono studio!</textarea>
         document.getElementById('manual-preliminary-quiz-save').addEventListener('click', async () => {
             try {
                 const quiz = collectManualPreliminaryQuiz();
+                const lesson = (allLessonsCache || state.lessons || []).find((item) => item.id === quiz.lessonId) || null;
+                let teacherId = quiz.teacherId || null;
+                if (!teacherId && lesson?.teacherId) {
+                    teacherId = lesson.teacherId;
+                }
+                if (teacherId && lesson?.teacherId && teacherId !== lesson.teacherId) {
+                    throw new Error('Il docente selezionato non coincide con il docente della lezione');
+                }
                 const quizData = buildPreliminaryQuizResourceData({
                     title: quiz.title,
                     questions: quiz.questions,
@@ -4887,7 +4977,11 @@ Buono studio!</textarea>
                 });
                 await savePreliminaryQuizResource(
                     quizData,
-                    `Quiz manuale con ${quiz.questions.length} domande`
+                    `Quiz manuale con ${quiz.questions.length} domande`,
+                    {
+                        teacherId,
+                        lessonId: quiz.lessonId || null
+                    }
                 );
                 showToast(`Quiz manuale salvato con ${quiz.questions.length} domande`, 'success');
                 resetManualPreliminaryQuizBuilder();
@@ -5137,11 +5231,15 @@ Buono studio!</textarea>
                 updateBlogReviewerSelect();
                 if (typeof updateTeacherSelect === 'function') updateTeacherSelect();
                 if (typeof updateResourceTeacherSelect === 'function') updateResourceTeacherSelect();
+                if (typeof updateManualPreliminaryQuizTeacherSelect === 'function') updateManualPreliminaryQuizTeacherSelect();
+                if (typeof updateManualPreliminaryQuizLessonSelect === 'function') updateManualPreliminaryQuizLessonSelect();
                 if (typeof populateResourceFilters === 'function') populateResourceFilters();
                 if (typeof fillTeacherMaterialsFilterOptions === 'function') fillTeacherMaterialsFilterOptions();
             } catch (error) {
                 state.faculty = [];
                 updateBlogReviewerSelect();
+                if (typeof updateManualPreliminaryQuizTeacherSelect === 'function') updateManualPreliminaryQuizTeacherSelect();
+                if (typeof updateManualPreliminaryQuizLessonSelect === 'function') updateManualPreliminaryQuizLessonSelect();
                 toggleEmptyState(tableBody, false, '[data-empty-faculty]');
                 if (typeof populateResourceFilters === 'function') populateResourceFilters();
                 if (typeof fillTeacherMaterialsFilterOptions === 'function') fillTeacherMaterialsFilterOptions();
@@ -5690,9 +5788,11 @@ Buono studio!</textarea>
                 renderCalendar();
                 renderLessonsList();
                 if (typeof updateResourceLessonSelect === 'function') updateResourceLessonSelect();
+                if (typeof updateManualPreliminaryQuizLessonSelect === 'function') updateManualPreliminaryQuizLessonSelect();
                 if (typeof fillTeacherMaterialsFilterOptions === 'function') fillTeacherMaterialsFilterOptions();
             } catch (error) {
                 state.lessons = [];
+                if (typeof updateManualPreliminaryQuizLessonSelect === 'function') updateManualPreliminaryQuizLessonSelect();
                 if (typeof fillTeacherMaterialsFilterOptions === 'function') fillTeacherMaterialsFilterOptions();
             }
         }

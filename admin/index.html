@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pannello Amministrazione - Master in Carbon Farming</title>
     <!-- Cache buster per fix teachers system -->
-    <meta name="cache-version" content="2026-04-02-v23-TEACHERS-FIX">
+    <meta name="cache-version" content="2026-04-29-v24-MANUAL-QUIZ">
     <!-- Prevent extension conflicts -->
     <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; object-src 'none';">
     <!-- Force cache refresh -->
@@ -202,6 +202,23 @@
             gap: 12px;
             margin-top: 24px;
             flex-wrap: wrap;
+        }
+
+        .quiz-editor-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .quiz-editor-field label {
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        .quiz-editor-field input,
+        .quiz-editor-field textarea,
+        .quiz-editor-field select {
+            width: 100%;
         }
 
         button,
@@ -1626,6 +1643,25 @@ Buono studio!</textarea>
                     🤖 Genera quiz preliminare
                 </button>
                 <div id="preliminary-quiz-preview" style="margin-top: 12px; display: none;"></div>
+
+                <div style="margin-top: 18px; padding: 16px; background: #fff7ed; border-radius: 12px; border: 1px solid #fdba74;">
+                    <h4 style="margin: 0 0 8px; color: #9a3412;">✍️ Quiz Preliminare manuale</h4>
+                    <p style="margin: 0 0 12px; color: var(--gray-600); font-size: 0.9rem;">
+                        Inserisci il quiz nello stesso formato che poi il docente può modificare in revisione: titolo, domande, opzioni e risposta corretta.
+                    </p>
+                    <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 0;">
+                        <label>Titolo quiz <input type="text" id="manual-preliminary-quiz-title" value="Quiz Preliminare - Master Carbon Farming" placeholder="Titolo quiz"></label>
+                        <label>Numero domande <input type="number" id="manual-preliminary-quiz-count" min="1" value="1" readonly></label>
+                        <label>Punteggio minimo (%) <input type="number" id="manual-preliminary-quiz-passing-score" min="0" max="100" value="70"></label>
+                        <label>Max tentativi (0=illimitati) <input type="number" id="manual-preliminary-quiz-max-attempts" min="0" value="0"></label>
+                    </div>
+                    <div class="actions" style="margin-top: 12px;">
+                        <button type="button" id="manual-preliminary-quiz-add-question" class="secondary" style="background: var(--green-100); color: var(--green-700);">+ Aggiungi domanda</button>
+                        <button type="button" id="manual-preliminary-quiz-reset" class="secondary">Reset domande</button>
+                        <button type="button" id="manual-preliminary-quiz-save" style="background: #f97316; color: white;">💾 Salva quiz manuale</button>
+                    </div>
+                    <div id="manual-preliminary-quiz-questions" style="margin-top: 16px; display: grid; gap: 14px;"></div>
+                </div>
             </div>
 
             <div id="resources-toolbar" style="margin: 20px 0; padding: 16px; background: #f9fafb; border-radius: 12px; border: 1px solid var(--gray-200);">
@@ -4565,23 +4601,25 @@ Buono studio!</textarea>
                 // Salva come risorsa di tipo quiz
                 document.getElementById('save-preliminary-quiz').addEventListener('click', async () => {
                     try {
-                        // Salva il quiz come risorsa (JSON nel campo URL)
-                        const quizData = {
+                        const quizData = buildPreliminaryQuizResourceData({
                             title: result.title,
-                            questions: result.questions,
-                            createdAt: new Date().toISOString()
-                        };
-                        
-                        await apiRequest('/api/resources', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                title: result.title,
-                                resourceType: 'quiz',
-                                url: 'data:application/json,' + encodeURIComponent(JSON.stringify(quizData)),
-                                description: `Quiz con ${result.questions.length} domande - Difficoltà: ${difficulty}`,
-                                isPublished: false
-                            })
+                            questions: (result.questions || []).map((q, index) => ({
+                                questionText: q.questionText,
+                                options: q.options || [],
+                                correctAnswer: q.correctAnswer,
+                                points: q.points || 1,
+                                sortOrder: index
+                            })),
+                            generationReport: result.generationReport || null,
+                            source: 'admin_ai_generated_preliminary_quiz',
+                            passingScore: 70,
+                            maxAttempts: 0
                         });
+
+                        await savePreliminaryQuizResource(
+                            quizData,
+                            `Quiz con ${result.questions.length} domande - Difficoltà: ${difficulty}`
+                        );
 
                         showToast(`Quiz salvato con ${result.questions.length} domande! Pubblicalo quando sei pronto.`, 'success');
                         preview.style.display = 'none';
@@ -4602,6 +4640,260 @@ Buono studio!</textarea>
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🤖 Genera quiz preliminare';
+            }
+        });
+
+        function buildManualPreliminaryQuizQuestion(question = {}) {
+            const options = Array.isArray(question.options) && question.options.length
+                ? question.options.map((opt) => String(opt ?? ''))
+                : ['', ''];
+            while (options.length < 2) options.push('');
+            return {
+                questionText: String(question.questionText || ''),
+                options,
+                correctAnswer: String(question.correctAnswer || ''),
+                points: Number(question.points) > 0 ? Number(question.points) : 1
+            };
+        }
+
+        let manualPreliminaryQuizDraft = {
+            title: document.getElementById('manual-preliminary-quiz-title')?.value?.trim() || 'Quiz Preliminare - Master Carbon Farming',
+            passingScore: Number(document.getElementById('manual-preliminary-quiz-passing-score')?.value) || 70,
+            maxAttempts: Number(document.getElementById('manual-preliminary-quiz-max-attempts')?.value) || 0,
+            questions: [buildManualPreliminaryQuizQuestion()]
+        };
+
+        function syncManualPreliminaryQuizDraftFromDom() {
+            const container = document.getElementById('manual-preliminary-quiz-questions');
+            if (!container) return;
+
+            const cards = Array.from(container.querySelectorAll('[data-manual-preliminary-question]'));
+            manualPreliminaryQuizDraft = {
+                title: document.getElementById('manual-preliminary-quiz-title')?.value?.trim() || 'Quiz Preliminare - Master Carbon Farming',
+                passingScore: Number(document.getElementById('manual-preliminary-quiz-passing-score')?.value) || 70,
+                maxAttempts: Number(document.getElementById('manual-preliminary-quiz-max-attempts')?.value) || 0,
+                questions: cards.map((card, questionIndex) => {
+                    const questionText = card.querySelector(`[data-manual-question-text="${questionIndex}"]`)?.value.trim() || '';
+                    const points = Number(card.querySelector(`[data-manual-question-points="${questionIndex}"]`)?.value) || 1;
+                    const optionInputs = Array.from(card.querySelectorAll(`[data-manual-option-text^="${questionIndex}:"]`));
+                    const options = optionInputs.map((input) => input.value.trim());
+                    const correctSelects = Array.from(card.querySelectorAll(`[data-manual-correct-option^="${questionIndex}:"]`));
+                    let correctAnswer = '';
+                    correctSelects.forEach((select, optionIndex) => {
+                        if (select.value === 'true' && options[optionIndex]) correctAnswer = options[optionIndex];
+                    });
+                    return { questionText, options, correctAnswer, points };
+                })
+            };
+            document.getElementById('manual-preliminary-quiz-count').value = String(manualPreliminaryQuizDraft.questions.length);
+        }
+
+        function renderManualPreliminaryQuizBuilder() {
+            const container = document.getElementById('manual-preliminary-quiz-questions');
+            if (!container) return;
+
+            if (!manualPreliminaryQuizDraft.questions.length) {
+                manualPreliminaryQuizDraft.questions = [buildManualPreliminaryQuizQuestion()];
+            }
+
+            document.getElementById('manual-preliminary-quiz-title').value = manualPreliminaryQuizDraft.title || '';
+            document.getElementById('manual-preliminary-quiz-passing-score').value = String(manualPreliminaryQuizDraft.passingScore || 70);
+            document.getElementById('manual-preliminary-quiz-max-attempts').value = String(manualPreliminaryQuizDraft.maxAttempts || 0);
+            document.getElementById('manual-preliminary-quiz-count').value = String(manualPreliminaryQuizDraft.questions.length);
+
+            container.innerHTML = manualPreliminaryQuizDraft.questions.map((question, questionIndex) => `
+                <div data-manual-preliminary-question="${questionIndex}" style="padding: 14px; border: 1px solid rgba(249, 115, 22, 0.18); border-radius: 12px; background: white;">
+                    <div style="display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+                        <strong style="color: #9a3412;">Domanda ${questionIndex + 1}</strong>
+                        <button type="button" class="secondary" data-manual-remove-question="${questionIndex}" style="padding: 8px 14px; background: #fee2e2; color: #991b1b;">Rimuovi domanda</button>
+                    </div>
+                    <div class="quiz-editor-field">
+                        <label>Testo domanda</label>
+                        <textarea data-manual-question-text="${questionIndex}" placeholder="Scrivi la domanda">${escapeHtml(question.questionText)}</textarea>
+                    </div>
+                    <div class="quiz-editor-field" style="margin-top: 12px; max-width: 220px;">
+                        <label>Punti</label>
+                        <input type="number" min="1" step="1" data-manual-question-points="${questionIndex}" value="${question.points}">
+                    </div>
+                    <div style="margin-top: 14px;">
+                        ${question.options.map((option, optionIndex) => `
+                            <div class="quiz-option-row" style="display:flex; gap: 10px; align-items:center; margin-bottom: 10px; flex-wrap: wrap;">
+                                <input type="text" data-manual-option-text="${questionIndex}:${optionIndex}" value="${escapeHtml(option)}" placeholder="Opzione ${optionIndex + 1}" style="flex: 1; min-width: 220px;">
+                                <select data-manual-correct-option="${questionIndex}:${optionIndex}" style="min-width: 120px;">
+                                    <option value="false">Opzione</option>
+                                    <option value="true" ${question.correctAnswer === option ? 'selected' : ''}>Corretta</option>
+                                </select>
+                                <button type="button" class="secondary" data-manual-remove-option="${questionIndex}:${optionIndex}" style="padding: 8px 12px; background: #f3f4f6;">✕</button>
+                            </div>
+                        `).join('')}
+                        <div style="margin-top: 10px;">
+                            <button type="button" class="secondary" data-manual-add-option="${questionIndex}" style="background: var(--green-100); color: var(--green-700);">+ Aggiungi opzione</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function resetManualPreliminaryQuizBuilder() {
+            manualPreliminaryQuizDraft = {
+                title: 'Quiz Preliminare - Master Carbon Farming',
+                passingScore: 70,
+                maxAttempts: 0,
+                questions: [buildManualPreliminaryQuizQuestion()]
+            };
+            renderManualPreliminaryQuizBuilder();
+        }
+
+        function buildPreliminaryQuizResourceData({ title, questions, generationReport = null, source = 'admin_manual_preliminary_quiz', passingScore = 70, maxAttempts = 0 }) {
+            const now = new Date().toISOString();
+            return {
+                source,
+                title,
+                passingScore: Number(passingScore) || 70,
+                maxAttempts: Number(maxAttempts) || 0,
+                timeLimitMinutes: null,
+                questions: questions.map((question, index) => ({
+                    questionText: String(question.questionText || ''),
+                    options: Array.isArray(question.options) ? question.options.map((option) => String(option ?? '')) : [],
+                    correctAnswer: Array.isArray(question.correctAnswer)
+                        ? question.correctAnswer.map((option) => String(option ?? ''))
+                        : String(question.correctAnswer || ''),
+                    points: Number(question.points) > 0 ? Number(question.points) : 1,
+                    sortOrder: Number.isFinite(Number(question.sortOrder)) ? Number(question.sortOrder) : index
+                })),
+                generationReport,
+                createdAt: now,
+                updatedAt: now
+            };
+        }
+
+        async function savePreliminaryQuizResource(quizData, description) {
+            await apiRequest('/api/resources', {
+                method: 'POST',
+                body: JSON.stringify({
+                    title: quizData.title,
+                    resourceType: 'quiz',
+                    url: 'data:application/json,' + encodeURIComponent(JSON.stringify(quizData)),
+                    description,
+                    isPublished: false
+                })
+            });
+        }
+
+        function collectManualPreliminaryQuiz() {
+            syncManualPreliminaryQuizDraftFromDom();
+
+            const title = manualPreliminaryQuizDraft.title.trim();
+            if (!title) throw new Error('Inserisci il titolo del quiz');
+            if (!manualPreliminaryQuizDraft.questions.length) throw new Error('Inserisci almeno una domanda');
+
+            const questions = manualPreliminaryQuizDraft.questions.map((question, index) => {
+                const questionText = String(question.questionText || '').trim();
+                if (!questionText) throw new Error(`La domanda ${index + 1} non ha testo`);
+
+                const options = (question.options || []).map((option) => String(option || '').trim()).filter(Boolean);
+                if (options.length < 2) throw new Error(`La domanda ${index + 1} deve avere almeno 2 opzioni`);
+
+                const correctAnswer = String(question.correctAnswer || '').trim();
+                if (!correctAnswer) throw new Error(`Seleziona o scrivi la risposta corretta per la domanda ${index + 1}`);
+                if (!options.includes(correctAnswer)) {
+                    throw new Error(`La risposta corretta della domanda ${index + 1} deve essere una delle opzioni inserite`);
+                }
+
+                return {
+                    questionText,
+                    options,
+                    correctAnswer,
+                    points: Number(question.points) > 0 ? Number(question.points) : 1,
+                    sortOrder: index
+                };
+            });
+
+            return {
+                title,
+                passingScore: manualPreliminaryQuizDraft.passingScore,
+                maxAttempts: manualPreliminaryQuizDraft.maxAttempts,
+                questions
+            };
+        }
+
+        renderManualPreliminaryQuizBuilder();
+
+        document.getElementById('manual-preliminary-quiz-add-question').addEventListener('click', () => {
+            syncManualPreliminaryQuizDraftFromDom();
+            manualPreliminaryQuizDraft.questions.push(buildManualPreliminaryQuizQuestion());
+            renderManualPreliminaryQuizBuilder();
+        });
+
+        document.getElementById('manual-preliminary-quiz-reset').addEventListener('click', () => {
+            resetManualPreliminaryQuizBuilder();
+        });
+
+        document.getElementById('manual-preliminary-quiz-questions').addEventListener('click', (event) => {
+            const removeQuestionButton = event.target.closest('[data-manual-remove-question]');
+            const addOptionButton = event.target.closest('[data-manual-add-option]');
+            const removeOptionButton = event.target.closest('[data-manual-remove-option]');
+
+            if (removeQuestionButton) {
+                syncManualPreliminaryQuizDraftFromDom();
+                const questionIndex = Number(removeQuestionButton.dataset.manualRemoveQuestion);
+                if (manualPreliminaryQuizDraft.questions.length <= 1) {
+                    showToast('Il quiz deve contenere almeno una domanda', 'error');
+                    return;
+                }
+                manualPreliminaryQuizDraft.questions.splice(questionIndex, 1);
+                renderManualPreliminaryQuizBuilder();
+                return;
+            }
+
+            if (addOptionButton) {
+                syncManualPreliminaryQuizDraftFromDom();
+                const questionIndex = Number(addOptionButton.dataset.manualAddOption);
+                const question = manualPreliminaryQuizDraft.questions[questionIndex];
+                if (!question) return;
+                question.options.push('');
+                renderManualPreliminaryQuizBuilder();
+                return;
+            }
+
+            if (removeOptionButton) {
+                syncManualPreliminaryQuizDraftFromDom();
+                const [questionIndexRaw, optionIndexRaw] = String(removeOptionButton.dataset.manualRemoveOption || '').split(':');
+                const questionIndex = Number(questionIndexRaw);
+                const optionIndex = Number(optionIndexRaw);
+                const question = manualPreliminaryQuizDraft.questions[questionIndex];
+                if (!question) return;
+                if (question.options.length <= 2) {
+                    showToast('Ogni domanda deve avere almeno due opzioni', 'error');
+                    return;
+                }
+                question.options.splice(optionIndex, 1);
+                if (question.correctAnswer && !question.options.includes(question.correctAnswer)) {
+                    question.correctAnswer = '';
+                }
+                renderManualPreliminaryQuizBuilder();
+            }
+        });
+
+        document.getElementById('manual-preliminary-quiz-save').addEventListener('click', async () => {
+            try {
+                const quiz = collectManualPreliminaryQuiz();
+                const quizData = buildPreliminaryQuizResourceData({
+                    title: quiz.title,
+                    questions: quiz.questions,
+                    source: 'admin_manual_preliminary_quiz',
+                    passingScore: quiz.passingScore,
+                    maxAttempts: quiz.maxAttempts
+                });
+                await savePreliminaryQuizResource(
+                    quizData,
+                    `Quiz manuale con ${quiz.questions.length} domande`
+                );
+                showToast(`Quiz manuale salvato con ${quiz.questions.length} domande`, 'success');
+                resetManualPreliminaryQuizBuilder();
+                loadResources();
+            } catch (error) {
+                showToast(error.message || 'Errore nel salvataggio del quiz manuale', 'error');
             }
         });
 

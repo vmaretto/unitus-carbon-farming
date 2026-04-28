@@ -1141,22 +1141,22 @@ app.get('/api/teachers/materials', requireTeacher, async (req, res) => {
     let resources = [];
     if (resourcesSchema.hasTable && resourcesSchema.hasTeacherId) {
       const resourceFragments = buildTeacherResourcesSelectFragments(resourcesSchema);
-      const resourceTypeFilter = resourcesSchema.hasResourceType ? `AND resource_type <> 'quiz'` : '';
+      const resourceTypeFilter = resourcesSchema.hasResourceType ? `AND r.resource_type <> 'quiz'` : '';
       const lessonJoin = resourcesSchema.hasLessonId ? 'LEFT JOIN lessons l ON l.id = r.lesson_id' : '';
       const accessClause = resourcesSchema.hasLessonId
         ? 'WHERE (r.teacher_id = $1 OR l.teacher_id = $1)'
         : 'WHERE r.teacher_id = $1';
       try {
         const result = await pool.query(
-          `SELECT id, title, ${resourceFragments.description}, url AS file_url, NULL AS file_name, ${resourceFragments.fileSize},
+          `SELECT r.id, r.title, ${resourceFragments.description}, r.url AS file_url, NULL AS file_name, ${resourceFragments.fileSize},
                   ${resourceFragments.fileType}, ${resourceFragments.status},
                   ${resourceFragments.reviewStatus}, ${resourceFragments.reviewNotes}, ${resourceFragments.reviewedAt},
-                  created_at, 'admin' AS source
+                  r.created_at, 'admin' AS source
            FROM resources
            ${lessonJoin}
            ${accessClause}
            ${resourceTypeFilter}
-           ORDER BY created_at DESC`,
+           ORDER BY r.created_at DESC`,
           [facultyId]
         );
         resources = result.rows;

@@ -148,7 +148,7 @@ class FakeTeacherMaterialsPool {
       return { rows: this.pendingRows.map((row) => ({ ...row })) };
     }
 
-    if (normalized.includes('FROM resources') && normalized.includes('resource_type <> \'quiz\'')) {
+    if (normalized.includes('FROM resources') && normalized.includes('r.resource_type <> \'quiz\'')) {
       return { rows: this.resourceRows.map((row) => ({ ...row })) };
     }
 

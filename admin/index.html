@@ -3069,7 +3069,6 @@ Buono studio!</textarea>
         async function updateResourceLessonSelect() {
             const sel = document.getElementById('resource-lesson');
             const cur = sel.value;
-            const teacherId = document.getElementById('resource-teacher').value;
 
             if (!allLessonsCache) {
                 try { allLessonsCache = await apiRequest('/api/lessons'); }
@@ -3078,15 +3077,26 @@ Buono studio!</textarea>
 
             sel.innerHTML = '<option value="">-- Nessuna lezione --</option>';
             allLessonsCache.forEach(l => {
-                if (!teacherId || l.teacherId === teacherId) {
-                    const dateStr = l.startDatetime ? new Date(l.startDatetime).toLocaleDateString('it-IT') : '';
-                    sel.innerHTML += '<option value="' + l.id + '">' + (l.title || 'Lezione') + (dateStr ? ' (' + dateStr + ')' : '') + '</option>';
-                }
+                const dateStr = l.startDatetime ? new Date(l.startDatetime).toLocaleDateString('it-IT') : '';
+                const teacherName = l.teacherName ? ' - ' + l.teacherName : '';
+                sel.innerHTML += '<option value="' + l.id + '">' + (l.title || 'Lezione') + teacherName + (dateStr ? ' (' + dateStr + ')' : '') + '</option>';
             });
             if (cur) sel.value = cur;
         }
 
+        function syncResourceTeacherFromLesson(lessonId) {
+            if (!lessonId) return;
+            const lesson = (allLessonsCache || state.lessons || []).find((item) => item.id === lessonId);
+            if (!lesson || !lesson.teacherId) return;
+            const teacherSelect = document.getElementById('resource-teacher');
+            if (!teacherSelect) return;
+            teacherSelect.value = lesson.teacherId;
+        }
+
         document.getElementById('resource-teacher').addEventListener('change', updateResourceLessonSelect);
+        document.getElementById('resource-lesson').addEventListener('change', (event) => {
+            syncResourceTeacherFromLesson(event.target.value || '');
+        });
 
         // ============================================
         // TEACHER DOCUMENTS (LIBERATORIE DOCENTI)
@@ -5079,6 +5089,12 @@ Buono studio!</textarea>
             }
 
             try {
+                if (payload.lessonId) {
+                    const selectedLesson = (allLessonsCache || state.lessons || []).find((item) => item.id === payload.lessonId);
+                    if (selectedLesson?.teacherId) {
+                        payload.teacherId = selectedLesson.teacherId;
+                    }
+                }
                 const method = state.editingResourceId ? 'PUT' : 'POST';
                 const url = state.editingResourceId ? `/api/resources/${state.editingResourceId}` : '/api/resources';
                 await apiRequest(url, {
@@ -5121,6 +5137,7 @@ Buono studio!</textarea>
                 document.getElementById('resource-teacher').value = current.teacherId || '';
                 document.getElementById('resource-lesson').value = current.lessonId || '';
                 updateResourceLessonSelect();
+                syncResourceTeacherFromLesson(current.lessonId || '');
                 state.editingResourceId = id;
                 document.getElementById('resource-submit-btn').textContent = 'Salva modifiche';
                 document.getElementById('resource-cancel-btn').style.display = 'inline-block';

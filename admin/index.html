@@ -7146,6 +7146,8 @@ Buono studio!</textarea>
 
                 if (!quiz) {
                     // Form to create quiz
+                    const lessonMeta = (panel._lessons || []).find((item) => item.id === lessonId) || null;
+                    const lessonTitle = lessonMeta?.title || 'la lezione';
                     html = `
                         <h4 style="margin: 0 0 12px; color: var(--green-700);">Quiz della lezione</h4>
                         
@@ -7196,6 +7198,29 @@ Buono studio!</textarea>
                                 <button class="primary" type="submit">Crea quiz</button>
                             </div>
                         </form>
+
+                        <div data-manual-lms-quiz-builder style="margin-top: 18px; padding: 16px; background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border: 1px solid #fb923c; border-radius: 10px;">
+                            <h5 style="margin: 0 0 8px; color: #9a3412; display: flex; align-items: center; gap: 8px;">
+                                ✍️ Quiz manuale della lezione
+                            </h5>
+                            <p style="margin: 0 0 12px; font-size: 0.85rem; color: #7c2d12;">
+                                Crea il quiz nello stesso formato che il docente può poi rivedere: titolo, domande, opzioni e risposta corretta.
+                            </p>
+                            <div class="form-grid">
+                                <label>Titolo quiz <input type="text" data-manual-lms-quiz-title value="Quiz di verifica - ${escapeHtml(lessonTitle)}" placeholder="Quiz di verifica"></label>
+                                <label>Punteggio minimo (%) <input type="number" data-manual-lms-quiz-passing-score min="0" max="100" value="70"></label>
+                                <label>Limite tempo (min) <input type="number" data-manual-lms-quiz-time-limit min="0" placeholder="Opzionale"></label>
+                                <label>Max tentativi (0=illimitati) <input type="number" data-manual-lms-quiz-max-attempts min="0" value="0"></label>
+                            </div>
+                            <p style="margin: 10px 0 0; font-size: 0.85rem; color: #9a3412;">Il quiz viene creato in bozza e assegnato automaticamente a questa lezione e al relativo docente.</p>
+                            <div class="actions" style="margin-top: 12px;">
+                                <button type="button" class="secondary" data-manual-lms-quiz-add-question style="background: var(--green-100); color: var(--green-700);">+ Aggiungi domanda</button>
+                                <button type="button" class="secondary" data-manual-lms-quiz-reset>Reset domande</button>
+                                <button type="button" class="primary" data-manual-lms-quiz-save style="background: #f97316; color: white;">💾 Salva quiz manuale</button>
+                            </div>
+                            <div data-manual-lms-quiz-count-wrap style="margin-top: 8px; font-size: 0.85rem; color: #92400e;">Domande: <strong data-manual-lms-quiz-count>1</strong></div>
+                            <div data-manual-lms-quiz-questions style="margin-top: 14px; display: grid; gap: 14px;"></div>
+                        </div>
                     `;
                     container.innerHTML = html;
 
@@ -7326,6 +7351,271 @@ Buono studio!</textarea>
                             loadLmsQuiz(lessonId, container);
                         } catch (error) {}
                     });
+
+                    const manualBuilder = container.querySelector('[data-manual-lms-quiz-builder]');
+                    if (manualBuilder) {
+                        const manualState = {
+                            title: manualBuilder.querySelector('[data-manual-lms-quiz-title]')?.value?.trim() || `Quiz di verifica - ${lessonTitle}`,
+                            passingScore: Number(manualBuilder.querySelector('[data-manual-lms-quiz-passing-score]')?.value) || 70,
+                            timeLimitMinutes: manualBuilder.querySelector('[data-manual-lms-quiz-time-limit]')?.value === '' ? null : Number(manualBuilder.querySelector('[data-manual-lms-quiz-time-limit]')?.value),
+                            maxAttempts: Number(manualBuilder.querySelector('[data-manual-lms-quiz-max-attempts]')?.value) || 0,
+                            questions: [{
+                                questionText: '',
+                                questionType: 'single_choice',
+                                options: ['', '', '', ''],
+                                correctAnswer: '',
+                                points: 1
+                            }]
+                        };
+
+                        function buildManualQuestionCard(question, questionIndex) {
+                            const questionType = question.questionType || 'single_choice';
+                            const options = Array.isArray(question.options) ? question.options : ['', '', '', ''];
+                            return `
+                                <div data-manual-lms-question="${questionIndex}" class="quiz-question-card" style="background: white;">
+                                    <div class="quiz-question-head">
+                                        <strong>Domanda ${questionIndex + 1}</strong>
+                                        <button type="button" class="danger" data-manual-lms-remove-question="${questionIndex}" style="padding: 4px 10px;">Rimuovi domanda</button>
+                                    </div>
+                                    <div class="quiz-editor-field">
+                                        <label>Testo domanda</label>
+                                        <textarea data-manual-lms-question-text="${questionIndex}" placeholder="Scrivi la domanda">${escapeHtml(question.questionText || '')}</textarea>
+                                    </div>
+                                    <div class="form-grid" style="margin-top: 12px;">
+                                        <label>Tipo
+                                            <select data-manual-lms-question-type="${questionIndex}">
+                                                <option value="single_choice" ${questionType === 'single_choice' ? 'selected' : ''}>Scelta singola</option>
+                                                <option value="true_false" ${questionType === 'true_false' ? 'selected' : ''}>Vero/Falso</option>
+                                            </select>
+                                        </label>
+                                        <label>Punti <input type="number" min="1" step="1" data-manual-lms-question-points="${questionIndex}" value="${Number(question.points) > 0 ? Number(question.points) : 1}"></label>
+                                    </div>
+                                    <div data-manual-lms-options="${questionIndex}" style="margin-top: 14px;">
+                                        ${options.map((option, optionIndex) => `
+                                            <div class="quiz-option-row" style="display:flex; gap: 10px; align-items:center; margin-bottom: 10px; flex-wrap: wrap;">
+                                                <input type="text" data-manual-lms-option-text="${questionIndex}:${optionIndex}" value="${escapeHtml(option)}" placeholder="Opzione ${optionIndex + 1}" style="flex: 1; min-width: 220px;">
+                                                <select data-manual-lms-correct-option="${questionIndex}:${optionIndex}" style="min-width: 120px;">
+                                                    <option value="false">Opzione</option>
+                                                    <option value="true" ${question.correctAnswer === option ? 'selected' : ''}>Corretta</option>
+                                                </select>
+                                                <button type="button" class="secondary" data-manual-lms-remove-option="${questionIndex}:${optionIndex}" style="padding: 8px 12px; background: #f3f4f6;">✕</button>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    <div style="margin-top: 10px;">
+                                        <button type="button" class="secondary" data-manual-lms-add-option="${questionIndex}" style="background: var(--green-100); color: var(--green-700);">+ Aggiungi opzione</button>
+                                    </div>
+                                </div>
+                            `;
+                        }
+
+                        function renderManualQuizBuilder() {
+                            const questionsContainer = manualBuilder.querySelector('[data-manual-lms-quiz-questions]');
+                            const countEl = manualBuilder.querySelector('[data-manual-lms-quiz-count]');
+                            if (!questionsContainer || !countEl) return;
+                            manualBuilder.querySelector('[data-manual-lms-quiz-title]').value = manualState.title;
+                            manualBuilder.querySelector('[data-manual-lms-quiz-passing-score]').value = String(manualState.passingScore);
+                            manualBuilder.querySelector('[data-manual-lms-quiz-time-limit]').value = manualState.timeLimitMinutes === null ? '' : String(manualState.timeLimitMinutes);
+                            manualBuilder.querySelector('[data-manual-lms-quiz-max-attempts]').value = String(manualState.maxAttempts);
+                            countEl.textContent = String(manualState.questions.length);
+                            questionsContainer.innerHTML = manualState.questions.map((question, idx) => buildManualQuestionCard(question, idx)).join('');
+                        }
+
+                        function syncManualQuizStateFromDom() {
+                            const questionsContainer = manualBuilder.querySelector('[data-manual-lms-quiz-questions]');
+                            if (!questionsContainer) return;
+                            manualState.title = manualBuilder.querySelector('[data-manual-lms-quiz-title]')?.value?.trim() || `Quiz di verifica - ${lessonTitle}`;
+                            manualState.passingScore = Number(manualBuilder.querySelector('[data-manual-lms-quiz-passing-score]')?.value) || 70;
+                            const timeLimitRaw = manualBuilder.querySelector('[data-manual-lms-quiz-time-limit]')?.value;
+                            manualState.timeLimitMinutes = timeLimitRaw === '' ? null : Number(timeLimitRaw);
+                            manualState.maxAttempts = Number(manualBuilder.querySelector('[data-manual-lms-quiz-max-attempts]')?.value) || 0;
+                            manualState.questions = Array.from(questionsContainer.querySelectorAll('[data-manual-lms-question]')).map((card, questionIndex) => {
+                                const questionText = card.querySelector(`[data-manual-lms-question-text="${questionIndex}"]`)?.value.trim() || '';
+                                const questionType = card.querySelector(`[data-manual-lms-question-type="${questionIndex}"]`)?.value || 'single_choice';
+                                const points = Number(card.querySelector(`[data-manual-lms-question-points="${questionIndex}"]`)?.value) || 1;
+                                const optionInputs = Array.from(card.querySelectorAll(`[data-manual-lms-option-text^="${questionIndex}:"]`));
+                                const options = optionInputs.map((input) => input.value.trim());
+                                const correctSelects = Array.from(card.querySelectorAll(`[data-manual-lms-correct-option^="${questionIndex}:"]`));
+                                let correctAnswer = '';
+                                correctSelects.forEach((select, optionIndex) => {
+                                    if (select.value === 'true' && options[optionIndex]) correctAnswer = options[optionIndex];
+                                });
+                                return { questionText, questionType, options, correctAnswer, points };
+                            });
+                            countEl.textContent = String(manualState.questions.length);
+                        }
+
+                        function resetManualQuizBuilder() {
+                            manualState.title = `Quiz di verifica - ${lessonTitle}`;
+                            manualState.passingScore = 70;
+                            manualState.timeLimitMinutes = null;
+                            manualState.maxAttempts = 0;
+                            manualState.questions = [{
+                                questionText: '',
+                                questionType: 'single_choice',
+                                options: ['', '', '', ''],
+                                correctAnswer: '',
+                                points: 1
+                            }];
+                            renderManualQuizBuilder();
+                        }
+
+                        function normalizeManualQuizPayload() {
+                            syncManualQuizStateFromDom();
+                            const title = manualState.title.trim();
+                            if (!title) throw new Error('Inserisci il titolo del quiz');
+                            if (!manualState.questions.length) throw new Error('Inserisci almeno una domanda');
+
+                            const questions = manualState.questions.map((question, index) => {
+                                const questionText = String(question.questionText || '').trim();
+                                if (!questionText) throw new Error(`La domanda ${index + 1} non ha testo`);
+
+                                const options = (question.options || []).map((option) => String(option || '').trim()).filter(Boolean);
+                                if (options.length < 2) throw new Error(`La domanda ${index + 1} deve avere almeno 2 opzioni`);
+
+                                const correctAnswer = String(question.correctAnswer || '').trim();
+                                if (!correctAnswer) throw new Error(`Seleziona la risposta corretta per la domanda ${index + 1}`);
+                                if (!options.includes(correctAnswer)) {
+                                    throw new Error(`La risposta corretta della domanda ${index + 1} deve essere una delle opzioni inserite`);
+                                }
+
+                                return {
+                                    questionText,
+                                    questionType: question.questionType || 'single_choice',
+                                    options,
+                                    correctAnswer,
+                                    points: Number(question.points) > 0 ? Number(question.points) : 1,
+                                    sortOrder: index
+                                };
+                            });
+
+                            return {
+                                title,
+                                passingScore: manualState.passingScore,
+                                timeLimitMinutes: manualState.timeLimitMinutes,
+                                maxAttempts: manualState.maxAttempts,
+                                questions
+                            };
+                        }
+
+                        renderManualQuizBuilder();
+
+                        manualBuilder.querySelector('[data-manual-lms-quiz-title]').addEventListener('input', syncManualQuizStateFromDom);
+                        manualBuilder.querySelector('[data-manual-lms-quiz-passing-score]').addEventListener('input', syncManualQuizStateFromDom);
+                        manualBuilder.querySelector('[data-manual-lms-quiz-time-limit]').addEventListener('input', syncManualQuizStateFromDom);
+                        manualBuilder.querySelector('[data-manual-lms-quiz-max-attempts]').addEventListener('input', syncManualQuizStateFromDom);
+                        manualBuilder.querySelector('[data-manual-lms-quiz-add-question]').addEventListener('click', () => {
+                            syncManualQuizStateFromDom();
+                            manualState.questions.push({
+                                questionText: '',
+                                questionType: 'single_choice',
+                                options: ['', '', '', ''],
+                                correctAnswer: '',
+                                points: 1
+                            });
+                            renderManualQuizBuilder();
+                        });
+                        manualBuilder.querySelector('[data-manual-lms-quiz-reset]').addEventListener('click', resetManualQuizBuilder);
+                        manualBuilder.querySelector('[data-manual-lms-quiz-questions]').addEventListener('click', (event) => {
+                            const removeQuestionButton = event.target.closest('[data-manual-lms-remove-question]');
+                            const addOptionButton = event.target.closest('[data-manual-lms-add-option]');
+                            const removeOptionButton = event.target.closest('[data-manual-lms-remove-option]');
+                            if (removeQuestionButton) {
+                                syncManualQuizStateFromDom();
+                                const questionIndex = Number(removeQuestionButton.dataset.manualLmsRemoveQuestion);
+                                if (manualState.questions.length <= 1) {
+                                    showToast('Il quiz deve contenere almeno una domanda', 'error');
+                                    return;
+                                }
+                                manualState.questions.splice(questionIndex, 1);
+                                renderManualQuizBuilder();
+                                return;
+                            }
+                            if (addOptionButton) {
+                                syncManualQuizStateFromDom();
+                                const questionIndex = Number(addOptionButton.dataset.manualLmsAddOption);
+                                const question = manualState.questions[questionIndex];
+                                if (!question) return;
+                                question.options.push('');
+                                renderManualQuizBuilder();
+                                return;
+                            }
+                            if (removeOptionButton) {
+                                syncManualQuizStateFromDom();
+                                const [questionIndexRaw, optionIndexRaw] = String(removeOptionButton.dataset.manualLmsRemoveOption || '').split(':');
+                                const questionIndex = Number(questionIndexRaw);
+                                const optionIndex = Number(optionIndexRaw);
+                                const question = manualState.questions[questionIndex];
+                                if (!question) return;
+                                if (question.options.length <= 2) {
+                                    showToast('Ogni domanda deve avere almeno due opzioni', 'error');
+                                    return;
+                                }
+                                question.options.splice(optionIndex, 1);
+                                if (question.correctAnswer && !question.options.includes(question.correctAnswer)) {
+                                    question.correctAnswer = '';
+                                }
+                                renderManualQuizBuilder();
+                            }
+                        });
+                        manualBuilder.querySelector('[data-manual-lms-quiz-questions]').addEventListener('change', (event) => {
+                            const typeSelect = event.target.closest('[data-manual-lms-question-type]');
+                            if (!typeSelect) return;
+                            syncManualQuizStateFromDom();
+                            const questionIndex = Number(typeSelect.dataset.manualLmsQuestionType);
+                            const question = manualState.questions[questionIndex];
+                            if (!question) return;
+                            if (typeSelect.value === 'true_false') {
+                                question.options = ['Vero', 'Falso'];
+                                if (!question.correctAnswer || !question.options.includes(question.correctAnswer)) {
+                                    question.correctAnswer = 'Vero';
+                                }
+                            }
+                            renderManualQuizBuilder();
+                        });
+                        manualBuilder.querySelector('[data-manual-lms-quiz-save]').addEventListener('click', async () => {
+                            try {
+                                const quiz = normalizeManualQuizPayload();
+                                const quizResult = await apiRequest('/api/lms/quizzes', {
+                                    method: 'POST',
+                                    body: JSON.stringify({
+                                        lessonId,
+                                        title: quiz.title,
+                                        passingScore: quiz.passingScore,
+                                        timeLimitMinutes: quiz.timeLimitMinutes,
+                                        maxAttempts: quiz.maxAttempts,
+                                        isPublished: false,
+                                        generationReport: {
+                                            source: 'manual_lms_quiz',
+                                            lessonId,
+                                            lessonTitle
+                                        }
+                                    })
+                                });
+
+                                for (let i = 0; i < quiz.questions.length; i++) {
+                                    const q = quiz.questions[i];
+                                    await apiRequest('/api/lms/quiz-questions', {
+                                        method: 'POST',
+                                        body: JSON.stringify({
+                                            quizId: quizResult.id,
+                                            questionText: q.questionText,
+                                            questionType: q.questionType,
+                                            options: q.options,
+                                            correctAnswer: q.correctAnswer,
+                                            points: q.points || 1,
+                                            sortOrder: i
+                                        })
+                                    });
+                                }
+
+                                showToast(`Quiz manuale creato con ${quiz.questions.length} domande`, 'success');
+                                loadLmsQuiz(lessonId, container);
+                            } catch (error) {
+                                showToast(error.message || 'Errore nel salvataggio del quiz manuale', 'error');
+                            }
+                        });
+                    }
                     return;
                 }
 

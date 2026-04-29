@@ -7146,7 +7146,8 @@ Buono studio!</textarea>
 
                 if (!quiz) {
                     // Form to create quiz
-                    const lessonMeta = (panel._lessons || []).find((item) => item.id === lessonId) || null;
+                    const lessonPanel = container.closest('.lms-lessons-panel');
+                    const lessonMeta = (lessonPanel?._lessons || []).find((item) => item.id === lessonId) || null;
                     const lessonTitle = lessonMeta?.title || 'la lezione';
                     html = `
                         <h4 style="margin: 0 0 12px; color: var(--green-700);">Quiz della lezione</h4>

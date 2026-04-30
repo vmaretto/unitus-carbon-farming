@@ -423,7 +423,7 @@
 
                 // Setup materials - combina assets, materials JSON e risorse collegate
                 const assetMaterials = assets ? assets.filter(a => a.assetType !== 'recording_final') : [];
-                const lessonMaterials = (lesson.materials || [])
+                const lessonMaterials = (lesson.publicMaterials || lesson.materials || [])
                     .filter(m => m && m.type !== 'quiz' && !m.quizId)
                     .map(m => ({
                         title: m.name,

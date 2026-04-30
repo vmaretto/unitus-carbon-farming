@@ -101,6 +101,100 @@ test('GET /api/resources/:id pubblico non espone testo estratto', async () => {
   assert.equal(Object.hasOwn(res.body, 'extractionMetadata'), false);
 });
 
+test('GET /api/lms/lessons/:id espone solo materiali pubblicati agli studenti', async () => {
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+
+      if (statement.startsWith('SELECT id, lms_module_id AS "moduleId", title, description')) {
+        assert.deepEqual(params, ['lesson-1']);
+        return {
+          rows: [{
+            id: 'lesson-1',
+            moduleId: 'module-1',
+            title: 'Lezione 1',
+            description: 'Descrizione',
+            videoUrl: null,
+            videoProvider: null,
+            durationSeconds: 3600,
+            sortOrder: 1,
+            isFree: false,
+            isPublished: true,
+            materials: [
+              { type: 'document', name: 'Bozza materiale', url: 'https://example.com/draft.pdf' },
+              { type: 'document', name: 'Materiale approvato', url: 'https://example.com/approved.pdf' },
+              { type: 'link', name: 'Link libero', url: 'https://example.com/free' },
+              { type: 'quiz', name: 'Quiz nascosto', url: 'data:application/json,{}' }
+            ],
+            calendarLessonId: 'calendar-1',
+            createdAt: '2026-04-30T10:00:00.000Z',
+            updatedAt: '2026-04-30T10:00:00.000Z'
+          }]
+        };
+      }
+
+      assert.match(statement, /FROM resources r/);
+      assert.doesNotMatch(statement, /r\.is_published = true/);
+      assert.deepEqual(params, ['calendar-1']);
+      return {
+        rows: [
+          {
+            id: 'resource-draft',
+            title: 'Bozza materiale',
+            url: 'https://example.com/draft.pdf',
+            resourceType: 'pdf',
+            description: null,
+            teacherName: 'Prof. Test',
+            isPublished: false,
+            reviewStatus: 'pending_teacher_approval'
+          },
+          {
+            id: 'resource-pub',
+            title: 'Materiale approvato',
+            url: 'https://example.com/approved.pdf',
+            resourceType: 'pdf',
+            description: null,
+            teacherName: 'Prof. Test',
+            isPublished: true,
+            reviewStatus: 'teacher_approved'
+          }
+        ]
+      };
+    }
+  });
+
+  const layer = findGetRoute('/api/lms/lessons/:id');
+  assert.ok(layer, 'route /api/lms/lessons/:id non trovata');
+
+  const req = {
+    method: 'GET',
+    url: '/api/lms/lessons/lesson-1',
+    params: { id: 'lesson-1' },
+    headers: {}
+  };
+  const res = createJsonRes();
+
+  await layer.route.stack[0].handle(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.id, 'lesson-1');
+  assert.deepEqual(res.body.materials, [
+    { type: 'document', name: 'Materiale approvato', url: 'https://example.com/approved.pdf' }
+  ]);
+  assert.deepEqual(res.body.linkedResources, [
+    {
+      id: 'resource-pub',
+      title: 'Materiale approvato',
+      url: 'https://example.com/approved.pdf',
+      resourceType: 'pdf',
+      description: null,
+      teacherName: 'Prof. Test',
+      isPublished: true,
+      reviewStatus: 'teacher_approved'
+    }
+  ]);
+});
+
 test('GET /api/teachers/quizzes deduplica quiz identici prima del rendering', async () => {
   apiModule.__setPool({
     async query(sql, params = []) {

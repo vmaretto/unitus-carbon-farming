@@ -6413,22 +6413,56 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Lesson not found' });
 
     const lesson = rows[0];
+    const normalizeMaterialUrl = (value) => String(value || '').trim();
 
-    // Load linked resources from calendar lesson
+    // Load linked resources from calendar lesson and keep only published materials for students
     if (lesson.calendarLessonId) {
       const { rows: resRows } = await pool.query(`
         SELECT r.id, r.title, r.url, r.resource_type AS "resourceType",
-               r.description, f.name AS "teacherName"
+               r.description, f.name AS "teacherName",
+               r.is_published AS "isPublished",
+               r.review_status AS "reviewStatus"
         FROM resources r
         LEFT JOIN faculty f ON f.id = r.teacher_id
         WHERE r.lesson_id = $1
-          AND r.is_published = true
-          AND r.resource_type <> 'quiz'
         ORDER BY r.sort_order NULLS LAST, r.created_at
       `, [lesson.calendarLessonId]);
-      lesson.linkedResources = resRows;
+      const publishedResources = resRows.filter((resource) => resource && resource.isPublished && resource.resourceType !== 'quiz');
+      const publishedResourceIds = new Set(publishedResources.map((resource) => String(resource.id)));
+      const publishedResourceUrls = new Set(publishedResources.map((resource) => normalizeMaterialUrl(resource.url)));
+
+      lesson.linkedResources = publishedResources;
+
+      const rawMaterials = Array.isArray(lesson.materials) ? lesson.materials : [];
+      const publicMaterials = rawMaterials.filter((material) => {
+        if (!material) return false;
+        const materialType = String(material.type || material.assetType || '').toLowerCase();
+        if (materialType === 'quiz' || material.quizId) return false;
+
+        if (material.isPublished === true || material.status === 'approved' || material.reviewStatus === 'teacher_approved' || material.reviewStatus === 'approved') {
+          return true;
+        }
+
+        const materialResourceId = material.resourceId || material.id || null;
+        if (materialResourceId && publishedResourceIds.has(String(materialResourceId))) return true;
+
+        const materialUrl = normalizeMaterialUrl(material.url);
+        if (materialUrl && publishedResourceUrls.has(materialUrl)) return true;
+
+        return false;
+      });
+
+      lesson.publicMaterials = publicMaterials;
+      lesson.materials = publicMaterials;
     } else {
       lesson.linkedResources = [];
+      lesson.publicMaterials = Array.isArray(lesson.materials) ? lesson.materials.filter((material) => {
+        if (!material) return false;
+        const materialType = String(material.type || material.assetType || '').toLowerCase();
+        if (materialType === 'quiz' || material.quizId) return false;
+        return material.isPublished === true || material.status === 'approved' || material.reviewStatus === 'teacher_approved' || material.reviewStatus === 'approved';
+      }) : [];
+      lesson.materials = lesson.publicMaterials;
     }
 
     // If student is authenticated, include their progress

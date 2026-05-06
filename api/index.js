@@ -8851,6 +8851,285 @@ app.get('/api/attendance/export/:courseEditionId', requireAdmin, async (req, res
   }
 });
 
+app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { courseEditionId } = req.query || {};
+  if (!courseEditionId) {
+    return res.status(400).json({ error: 'courseEditionId is required' });
+  }
+
+  try {
+    const { rows: editionRows } = await pool.query(`
+      SELECT ce.id, ce.edition_name AS "editionName",
+             c.id AS "courseId", c.title AS "courseTitle"
+      FROM course_editions ce
+      JOIN courses c ON c.id = ce.course_id
+      WHERE ce.id = $1
+      LIMIT 1
+    `, [courseEditionId]);
+    if (!editionRows.length) {
+      return res.status(404).json({ error: 'Edizione corso non trovata' });
+    }
+
+    const edition = editionRows[0];
+    const { rows: studentRows } = await pool.query(`
+      SELECT e.user_id AS "userId",
+             u.first_name AS "firstName",
+             u.last_name AS "lastName",
+             u.email
+      FROM enrollments e
+      JOIN users u ON u.id = e.user_id
+      WHERE e.course_edition_id = $1
+        AND e.status = 'active'
+      ORDER BY u.last_name, u.first_name, u.email
+    `, [courseEditionId]);
+
+    const { rows: moduleRows } = await pool.query(
+      'SELECT id FROM modules WHERE course_id = $1',
+      [edition.courseId]
+    );
+    const moduleIds = moduleRows.map((row) => row.id);
+
+    const { rows: lessonRows } = await pool.query(`
+      SELECT ll.id, ll.calendar_lesson_id AS "calendarLessonId"
+      FROM lms_lessons ll
+      JOIN modules m ON m.id = ll.lms_module_id
+      WHERE m.course_id = $1
+        AND ll.is_published = true
+    `, [edition.courseId]);
+    const lessonIds = lessonRows.map((row) => row.id);
+    const calendarLessonIds = lessonRows.map((row) => row.calendarLessonId).filter(Boolean);
+    const studentIds = studentRows.map((row) => row.userId);
+
+    let attendanceRows = [];
+    let lessonProgressRows = [];
+    let quizRows = [];
+    let resourceRows = [];
+    let questionRows = [];
+    let totalResourceRows = [{ total: 0 }];
+
+    if (studentIds.length) {
+      if (calendarLessonIds.length || lessonIds.length) {
+        ({ rows: attendanceRows } = await pool.query(`
+          SELECT a.user_id AS "userId",
+                 COUNT(*) FILTER (WHERE a.attendance_type = 'in_person')::int AS "inPerson",
+                 COUNT(*) FILTER (WHERE a.attendance_type = 'remote_live')::int AS "remoteLive",
+                 COUNT(*) FILTER (WHERE a.attendance_type = 'remote_partial')::int AS "remotePartial",
+                 COUNT(*) FILTER (WHERE a.attendance_type = 'async')::int AS "async",
+                 COUNT(*)::int AS "total",
+                 MAX(COALESCE(a.check_in_at, a.created_at)) AS "lastAttendanceAt"
+          FROM attendance a
+          WHERE a.user_id = ANY($1::uuid[])
+            AND (a.lesson_id = ANY($2::uuid[]) OR a.lms_lesson_id = ANY($3::uuid[]))
+          GROUP BY a.user_id
+        `, [studentIds, calendarLessonIds, lessonIds]));
+
+        ({ rows: lessonProgressRows } = await pool.query(`
+          SELECT lp.user_id AS "userId",
+                 COUNT(*) FILTER (WHERE lp.completed_at IS NOT NULL)::int AS "completedLessons",
+                 COUNT(*)::int AS "progressedLessons",
+                 COALESCE(AVG(lp.progress_percent), 0)::numeric(5,2) AS "avgProgress",
+                 MAX(lp.completed_at) AS "lastProgressAt"
+          FROM lesson_progress lp
+          WHERE lp.user_id = ANY($1::uuid[])
+            AND lp.lms_lesson_id = ANY($2::uuid[])
+          GROUP BY lp.user_id
+        `, [studentIds, lessonIds]));
+
+        ({ rows: totalResourceRows } = await pool.query(`
+          SELECT COUNT(DISTINCT r.id)::int AS total
+          FROM resources r
+          WHERE r.is_published = true
+            AND r.resource_type <> 'quiz'
+            AND r.lesson_id = ANY($1::uuid[])
+        `, [calendarLessonIds]));
+
+        ({ rows: resourceRows } = await pool.query(`
+          SELECT rv.user_id AS "userId",
+                 COUNT(DISTINCT rv.resource_id)::int AS "viewedResources",
+                 COUNT(*)::int AS "resourceViews",
+                 MAX(rv.first_viewed_at) AS "lastResourceAt"
+          FROM resource_views rv
+          JOIN resources r ON r.id = rv.resource_id
+          WHERE rv.user_id = ANY($1::uuid[])
+            AND r.is_published = true
+            AND r.resource_type <> 'quiz'
+            AND r.lesson_id = ANY($2::uuid[])
+          GROUP BY rv.user_id
+        `, [studentIds, calendarLessonIds]));
+      }
+
+      const { rows: quizIdRows } = await pool.query(`
+        SELECT id
+        FROM quizzes
+        WHERE is_published = true
+          AND (lms_lesson_id = ANY($1::uuid[]) OR lms_module_id = ANY($2::uuid[]))
+      `, [lessonIds, moduleIds]);
+      const quizIds = quizIdRows.map((row) => row.id);
+
+      if (quizIds.length) {
+        ({ rows: quizRows } = await pool.query(`
+          SELECT qa.user_id AS "userId",
+                 COUNT(*)::int AS "attempts",
+                 COUNT(*) FILTER (WHERE qa.passed)::int AS "passedAttempts",
+                 MAX(COALESCE(qa.percentage, qa.score))::int AS "bestScore",
+                 COALESCE(AVG(COALESCE(qa.percentage, qa.score)), 0)::numeric(5,2) AS "avgScore",
+                 MAX(qa.completed_at) AS "lastQuizAt"
+          FROM quiz_attempts qa
+          WHERE qa.user_id = ANY($1::uuid[])
+            AND qa.quiz_id = ANY($2::uuid[])
+            AND qa.completed_at IS NOT NULL
+          GROUP BY qa.user_id
+        `, [studentIds, quizIds]));
+      }
+
+      ({ rows: questionRows } = await pool.query(`
+        SELECT sq.user_id AS "userId",
+               COUNT(DISTINCT sq.id)::int AS "questionsAsked",
+               COUNT(DISTINCT qr.id)::int AS "repliesReceived",
+               MAX(COALESCE(qr.created_at, sq.created_at)) AS "lastQuestionAt"
+        FROM student_questions sq
+        LEFT JOIN question_replies qr ON qr.question_id = sq.id
+        WHERE sq.user_id = ANY($1::uuid[])
+          AND (sq.lms_lesson_id = ANY($2::uuid[]) OR sq.module_id = ANY($3::uuid[]))
+        GROUP BY sq.user_id
+      `, [studentIds, lessonIds, moduleIds]));
+    }
+
+    const attendanceMap = new Map(attendanceRows.map((row) => [row.userId, row]));
+    const progressMap = new Map(lessonProgressRows.map((row) => [row.userId, row]));
+    const quizMap = new Map(quizRows.map((row) => [row.userId, row]));
+    const resourceMap = new Map(resourceRows.map((row) => [row.userId, row]));
+    const questionMap = new Map(questionRows.map((row) => [row.userId, row]));
+
+    const totalLessons = lessonRows.length;
+    const totalResources = Number(totalResourceRows[0]?.total || 0);
+
+    const students = studentRows.map((student) => {
+      const attendance = attendanceMap.get(student.userId) || {};
+      const progress = progressMap.get(student.userId) || {};
+      const quiz = quizMap.get(student.userId) || {};
+      const resources = resourceMap.get(student.userId) || {};
+      const questions = questionMap.get(student.userId) || {};
+
+      const attendanceTotal = Number(attendance.total || 0);
+      const completedLessons = Number(progress.completedLessons || 0);
+      const lessonProgressPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+      const attendancePercent = totalLessons > 0 ? Math.round((attendanceTotal / totalLessons) * 100) : 0;
+      const quizBestScore = quiz.bestScore === null || quiz.bestScore === undefined ? null : Number(quiz.bestScore);
+      const materialsViewed = Number(resources.viewedResources || 0);
+      const materialsPercent = totalResources > 0 ? Math.round((materialsViewed / totalResources) * 100) : 0;
+      const askedQuestions = Number(questions.questionsAsked || 0);
+      const repliesReceived = Number(questions.repliesReceived || 0);
+      const overallPercent = Math.round((
+        lessonProgressPercent +
+        Math.min(attendancePercent, 100) +
+        (quizBestScore ?? 0) +
+        materialsPercent
+      ) / 4);
+
+      const lastActivityAt = [
+        attendance.lastAttendanceAt,
+        progress.lastProgressAt,
+        quiz.lastQuizAt,
+        resources.lastResourceAt,
+        questions.lastQuestionAt
+      ].filter(Boolean).sort((a, b) => new Date(b) - new Date(a))[0] || null;
+
+      return {
+        ...student,
+        attendance: {
+          inPerson: Number(attendance.inPerson || 0),
+          remoteLive: Number(attendance.remoteLive || 0),
+          remotePartial: Number(attendance.remotePartial || 0),
+          async: Number(attendance.async || 0),
+          total: attendanceTotal
+        },
+        lessons: {
+          completed: completedLessons,
+          total: totalLessons,
+          percent: lessonProgressPercent,
+          avgProgress: Number(progress.avgProgress || 0)
+        },
+        quizzes: {
+          attempts: Number(quiz.attempts || 0),
+          passedAttempts: Number(quiz.passedAttempts || 0),
+          bestScore: quizBestScore,
+          avgScore: quiz.avgScore === null || quiz.avgScore === undefined ? null : Number(quiz.avgScore)
+        },
+        materials: {
+          viewed: materialsViewed,
+          total: totalResources,
+          percent: materialsPercent,
+          views: Number(resources.resourceViews || 0)
+        },
+        questions: {
+          asked: askedQuestions,
+          repliesReceived
+        },
+        overallPercent,
+        lastActivityAt
+      };
+    });
+
+    const summary = students.reduce((acc, student) => {
+      acc.studentsCount += 1;
+      acc.lessonsCompleted += student.lessons.completed;
+      acc.lessonProgressPercentTotal += student.lessons.percent;
+      acc.inPerson += student.attendance.inPerson;
+      acc.remoteLive += student.attendance.remoteLive;
+      acc.remotePartial += student.attendance.remotePartial;
+      acc.async += student.attendance.async;
+      acc.quizAttempts += student.quizzes.attempts;
+      acc.quizPassed += student.quizzes.passedAttempts;
+      if (student.quizzes.bestScore !== null && student.quizzes.bestScore !== undefined) {
+        acc.quizBestScoreTotal += student.quizzes.bestScore;
+        acc.quizBestScoreCount += 1;
+      }
+      acc.materialsViewed += student.materials.viewed;
+      acc.questionsAsked += student.questions.asked;
+      acc.repliesReceived += student.questions.repliesReceived;
+      return acc;
+    }, {
+      studentsCount: 0,
+      lessonsCompleted: 0,
+      lessonProgressPercentTotal: 0,
+      inPerson: 0,
+      remoteLive: 0,
+      remotePartial: 0,
+      async: 0,
+      quizAttempts: 0,
+      quizPassed: 0,
+      quizBestScoreTotal: 0,
+      quizBestScoreCount: 0,
+      materialsViewed: 0,
+      questionsAsked: 0,
+      repliesReceived: 0
+    });
+
+    summary.totalLessons = totalLessons;
+    summary.totalResources = totalResources;
+    summary.avgLessonProgress = summary.studentsCount ? Math.round(summary.lessonProgressPercentTotal / summary.studentsCount) : 0;
+    summary.avgQuizBestScore = summary.quizBestScoreCount ? Math.round(summary.quizBestScoreTotal / summary.quizBestScoreCount) : null;
+    summary.quizPassRate = summary.quizAttempts ? Math.round((summary.quizPassed / summary.quizAttempts) * 100) : 0;
+
+    res.json({
+      edition,
+      summary,
+      students: students.sort((a, b) => (b.overallPercent - a.overallPercent) || String(a.lastName || '').localeCompare(String(b.lastName || ''))),
+      attendanceBreakdown: [
+        { key: 'inPerson', label: '🏫 In sito', count: summary.inPerson },
+        { key: 'remoteLive', label: '💻 Online', count: summary.remoteLive },
+        { key: 'remotePartial', label: '⏱️ Online parziale', count: summary.remotePartial },
+        { key: 'async', label: '📹 Offline / asincrona', count: summary.async }
+      ]
+    });
+  } catch (error) {
+    console.error('Error fetching student progress admin report', error);
+    res.status(500).json({ error: 'Unable to retrieve student progress report' });
+  }
+});
+
 // Admin: lista presenze per una lezione specifica
 app.get('/api/attendance/lesson/:lessonId', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;

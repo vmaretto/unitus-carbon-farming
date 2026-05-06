@@ -585,6 +585,211 @@
             min-width: 0;
         }
 
+        .progress-dashboard {
+            display: grid;
+            gap: 18px;
+        }
+
+        .progress-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: flex-end;
+            margin-bottom: 12px;
+        }
+
+        .progress-toolbar label {
+            flex: 1;
+            min-width: 220px;
+        }
+
+        .progress-toolbar select {
+            margin-top: 4px;
+        }
+
+        .progress-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .progress-summary-card {
+            background: white;
+            border: 1px solid rgba(36, 90, 61, 0.08);
+            border-radius: 14px;
+            padding: 16px;
+            box-shadow: 0 8px 30px rgba(31, 41, 55, 0.06);
+        }
+
+        .progress-summary-card .label {
+            font-size: 0.8rem;
+            color: var(--gray-500);
+            margin-bottom: 6px;
+        }
+
+        .progress-summary-card .value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--green-900);
+            line-height: 1.1;
+        }
+
+        .progress-summary-card .subvalue {
+            margin-top: 6px;
+            font-size: 0.85rem;
+            color: var(--gray-500);
+        }
+
+        .progress-grid {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 16px;
+            align-items: start;
+        }
+
+        .progress-chart-card,
+        .progress-detail-card {
+            background: white;
+            border: 1px solid rgba(36, 90, 61, 0.08);
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: 0 8px 30px rgba(31, 41, 55, 0.06);
+        }
+
+        .progress-chart-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--green-900);
+            margin: 0 0 12px;
+        }
+
+        .progress-bars {
+            display: grid;
+            gap: 10px;
+        }
+
+        .progress-bar-row {
+            display: grid;
+            gap: 6px;
+        }
+
+        .progress-bar-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 0.86rem;
+            color: var(--gray-700);
+        }
+
+        .progress-track {
+            height: 12px;
+            background: rgba(107, 114, 128, 0.12);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--green-700), var(--green-500));
+        }
+
+        .progress-fill.alt {
+            background: linear-gradient(90deg, #2563eb, #38bdf8);
+        }
+
+        .progress-fill.warn {
+            background: linear-gradient(90deg, #f59e0b, #fbbf24);
+        }
+
+        .progress-fill.purple {
+            background: linear-gradient(90deg, #7c3aed, #a78bfa);
+        }
+
+        .progress-fill.red {
+            background: linear-gradient(90deg, #dc2626, #f87171);
+        }
+
+        .progress-mini-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .progress-mini {
+            background: var(--gray-100);
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        .progress-mini .label {
+            font-size: 0.78rem;
+            color: var(--gray-500);
+            margin-bottom: 4px;
+        }
+
+        .progress-mini .value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .student-progress-table-wrapper {
+            margin-top: 8px;
+        }
+
+        .student-progress-table-wrapper table {
+            min-width: 1020px;
+        }
+
+        .student-progress-row-selected td {
+            background: rgba(236, 246, 240, 0.7);
+        }
+
+        .student-progress-detail-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .student-progress-detail-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--green-900);
+        }
+
+        .student-progress-detail-meta {
+            color: var(--gray-500);
+            font-size: 0.85rem;
+        }
+
+        .student-progress-detail-list {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .student-progress-detail-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: var(--gray-100);
+            font-size: 0.9rem;
+        }
+
+        .student-progress-detail-item strong {
+            color: var(--green-900);
+        }
+
+        @media (max-width: 1100px) {
+            .progress-summary-grid,
+            .progress-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         #att-filter-lesson {
             width: min(100%, 560px);
             max-width: 100%;
@@ -938,6 +1143,7 @@
                 <a href="#lms-modules" data-section="lms-modules">📦 Moduli e lezioni</a>
                 <a href="#lms-enrollments" data-section="lms-enrollments">👥 Iscrizioni</a>
                 <a href="#attendance" data-section="attendance">✅ Presenze</a>
+                <a href="#student-progress" data-section="student-progress">📈 Progressi studenti</a>
             </div>
             <div class="sidebar-group">
                 <div class="sidebar-group-title">Produzione</div>
@@ -2377,6 +2583,83 @@ Buono studio!</textarea>
                             <tr><td colspan="8" class="empty-state">Seleziona un'edizione per visualizzare il report.</td></tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================ -->
+        <!-- PROGRESSI STUDENTI -->
+        <!-- ============================================ -->
+        <section id="student-progress">
+            <header>
+                <h2>📈 Progressi studenti</h2>
+                <p class="section-description">Vista complessiva di frequenza, lezioni completate, quiz, materiali consultati e domande/feedback inviati dagli studenti.</p>
+            </header>
+
+            <div class="progress-dashboard">
+                <div class="progress-toolbar">
+                    <label>
+                        Seleziona edizione corso
+                        <select id="sp-edition-select" style="margin-top: 4px;">
+                            <option value="">-- Seleziona un'edizione --</option>
+                        </select>
+                    </label>
+                    <label>
+                        Studente
+                        <select id="sp-student-select" style="margin-top: 4px;">
+                            <option value="">-- Tutti gli studenti --</option>
+                        </select>
+                    </label>
+                    <button type="button" class="secondary-button" id="sp-refresh">🔄 Aggiorna</button>
+                </div>
+
+                <div id="sp-empty" class="empty-state">Seleziona un'edizione per visualizzare i progressi.</div>
+
+                <div id="sp-content" style="display: none;">
+                    <div class="progress-summary-grid" id="sp-summary-grid"></div>
+
+                    <div class="progress-grid" style="margin-top: 16px;">
+                        <div class="progress-chart-card">
+                            <h3 class="progress-chart-title">Andamento complessivo</h3>
+                            <div class="progress-bars" id="sp-overview-chart"></div>
+                        </div>
+                        <div class="progress-detail-card">
+                            <h3 class="progress-chart-title">Dettaglio studente</h3>
+                            <div id="sp-student-detail" class="student-progress-detail-grid">
+                                <div class="empty-state" style="margin: 0;">Seleziona uno studente per vedere il dettaglio.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="progress-chart-card" style="margin-top: 16px;">
+                        <h3 class="progress-chart-title">Distribuzione presenza</h3>
+                        <div class="progress-bars" id="sp-attendance-chart"></div>
+                        <div class="progress-mini-grid" id="sp-mini-metrics"></div>
+                    </div>
+
+                    <div class="progress-chart-card" style="margin-top: 16px;">
+                        <h3 class="progress-chart-title">Studenti monitorati</h3>
+                        <div class="table-wrapper student-progress-table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Cognome</th>
+                                        <th>Nome</th>
+                                        <th>Email</th>
+                                        <th>Presenza</th>
+                                        <th>Lezioni</th>
+                                        <th>Quiz</th>
+                                        <th>Materiali</th>
+                                        <th>Domande / feedback</th>
+                                        <th>Ultima attività</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sp-table-body">
+                                    <tr><td colspan="9" class="empty-state">Caricamento progressi...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -6390,6 +6673,8 @@ Buono studio!</textarea>
             updateEnrollEditionSelect();
             // Attendance edition select
             updateAttEditionSelect();
+            // Progress edition select
+            updateSpEditionSelect();
             // Workflow section
             if (typeof initWorkflowSection === 'function') initWorkflowSection();
         }
@@ -8125,18 +8410,20 @@ Buono studio!</textarea>
         // ============================================
 
         state.attendanceReport = [];
+        state.studentProgress = {
+            students: [],
+            selectedStudentId: ''
+        };
 
         let _attEditionSelectUpdating = false;
-        async function updateAttEditionSelect() {
-            if (!hasActiveAdminSession()) return;
-            // Evita chiamate multiple simultanee
-            if (_attEditionSelectUpdating) return;
-            _attEditionSelectUpdating = true;
-            
-            const select = document.getElementById('att-edition-select');
-            const cur = select.value;
-            select.innerHTML = '<option value="">-- Seleziona un\'edizione --</option>';
-            
+        let _spEditionSelectUpdating = false;
+
+        async function populateEditionSelect(selectId, currentValue, placeholderLabel = '-- Seleziona un\'edizione --') {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+            const cur = currentValue || select.value;
+            select.innerHTML = `<option value="">${placeholderLabel}</option>`;
+
             const addedIds = new Set();
             for (const course of state.lmsCourses) {
                 try {
@@ -8150,7 +8437,23 @@ Buono studio!</textarea>
                 } catch (error) {}
             }
             if (cur) select.value = cur;
+        }
+
+        async function updateAttEditionSelect() {
+            if (!hasActiveAdminSession()) return;
+            // Evita chiamate multiple simultanee
+            if (_attEditionSelectUpdating) return;
+            _attEditionSelectUpdating = true;
+            await populateEditionSelect('att-edition-select', document.getElementById('att-edition-select')?.value || '');
             _attEditionSelectUpdating = false;
+        }
+
+        async function updateSpEditionSelect() {
+            if (!hasActiveAdminSession()) return;
+            if (_spEditionSelectUpdating) return;
+            _spEditionSelectUpdating = true;
+            await populateEditionSelect('sp-edition-select', document.getElementById('sp-edition-select')?.value || '');
+            _spEditionSelectUpdating = false;
         }
 
         async function loadAttLessons(courseEditionId) {
@@ -8253,6 +8556,257 @@ Buono studio!</textarea>
                 resultDiv.innerHTML = '<span style="color: #b91c1c;">Errore: ' + (error.message || 'check-in fallito') + '</span>';
                 showToast('Errore nel check-in', 'error');
             }
+        });
+
+        // Progressi studenti
+        function formatProgressDate(value) {
+            if (!value) return '—';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '—';
+            return date.toLocaleString('it-IT');
+        }
+
+        function renderProgressSummary(summary) {
+            const grid = document.getElementById('sp-summary-grid');
+            if (!grid) return;
+            grid.innerHTML = `
+                <div class="progress-summary-card">
+                    <div class="label">Studenti monitorati</div>
+                    <div class="value">${summary.studentsCount || 0}</div>
+                    <div class="subvalue">Iscrizioni attive nell'edizione</div>
+                </div>
+                <div class="progress-summary-card">
+                    <div class="label">Lezioni completate</div>
+                    <div class="value">${summary.lessonsCompleted || 0}</div>
+                    <div class="subvalue">${summary.totalLessons || 0} lezioni pubblicate</div>
+                </div>
+                <div class="progress-summary-card">
+                    <div class="label">Quiz superati</div>
+                    <div class="value">${summary.quizPassRate || 0}%</div>
+                    <div class="subvalue">${summary.quizAttempts || 0} tentativi completati</div>
+                </div>
+                <div class="progress-summary-card">
+                    <div class="label">Domande / feedback</div>
+                    <div class="value">${summary.questionsAsked || 0}</div>
+                    <div class="subvalue">${summary.repliesReceived || 0} risposte ricevute</div>
+                </div>
+            `;
+        }
+
+        function renderProgressAttendanceChart(breakdown) {
+            const container = document.getElementById('sp-attendance-chart');
+            if (!container) return;
+            const total = (breakdown || []).reduce((sum, item) => sum + Number(item.count || 0), 0);
+            container.innerHTML = (breakdown || []).map((item) => {
+                const pct = total > 0 ? Math.round((Number(item.count || 0) / total) * 100) : 0;
+                const cls = item.key === 'inPerson' ? '' : item.key === 'remoteLive' ? 'alt' : item.key === 'remotePartial' ? 'warn' : 'purple';
+                return `
+                    <div class="progress-bar-row">
+                        <div class="progress-bar-head">
+                            <span>${item.label}</span>
+                            <strong>${item.count || 0} (${pct}%)</strong>
+                        </div>
+                        <div class="progress-track"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderProgressOverviewChart(students) {
+            const container = document.getElementById('sp-overview-chart');
+            if (!container) return;
+            const topStudents = [...(students || [])].slice(0, 8);
+            if (!topStudents.length) {
+                container.innerHTML = '<div class="empty-state">Nessun dato disponibile.</div>';
+                return;
+            }
+            container.innerHTML = topStudents.map((student) => {
+                const name = [student.lastName, student.firstName].filter(Boolean).join(' ') || student.email || 'Studente';
+                return `
+                    <div class="progress-bar-row">
+                        <div class="progress-bar-head">
+                            <span>${escapeHtml(name)}</span>
+                            <strong>${student.overallPercent || 0}%</strong>
+                        </div>
+                        <div class="progress-track"><div class="progress-fill" style="width:${student.overallPercent || 0}%"></div></div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderProgressMiniMetrics(summary) {
+            const container = document.getElementById('sp-mini-metrics');
+            if (!container) return;
+            container.innerHTML = `
+                <div class="progress-mini">
+                    <div class="label">Media progressi lezioni</div>
+                    <div class="value">${summary.avgLessonProgress || 0}%</div>
+                </div>
+                <div class="progress-mini">
+                    <div class="label">Media miglior quiz</div>
+                    <div class="value">${summary.avgQuizBestScore === null || summary.avgQuizBestScore === undefined ? '—' : `${summary.avgQuizBestScore}%`}</div>
+                </div>
+                <div class="progress-mini">
+                    <div class="label">Materiali consultati</div>
+                    <div class="value">${summary.materialsViewed || 0}/${summary.totalResources || 0}</div>
+                </div>
+                <div class="progress-mini">
+                    <div class="label">Presenze totali</div>
+                    <div class="value">${(summary.inPerson || 0) + (summary.remoteLive || 0) + (summary.remotePartial || 0) + (summary.async || 0)}</div>
+                </div>
+            `;
+        }
+
+        function renderProgressDetail(student) {
+            const container = document.getElementById('sp-student-detail');
+            if (!container) return;
+            if (!student) {
+                container.innerHTML = '<div class="empty-state" style="margin: 0;">Seleziona uno studente per vedere il dettaglio.</div>';
+                return;
+            }
+
+            const name = [student.lastName, student.firstName].filter(Boolean).join(' ') || student.email || 'Studente';
+            container.innerHTML = `
+                <div>
+                    <div class="student-progress-detail-title">${escapeHtml(name)}</div>
+                    <div class="student-progress-detail-meta">${escapeHtml(student.email || '—')}</div>
+                </div>
+                <div class="student-progress-detail-list">
+                    <div class="student-progress-detail-item"><span>Presenze totali</span><strong>${student.attendance.total}</strong></div>
+                    <div class="student-progress-detail-item"><span>Lezioni completate</span><strong>${student.lessons.completed}/${student.lessons.total} (${student.lessons.percent}%)</strong></div>
+                    <div class="student-progress-detail-item"><span>Miglior quiz</span><strong>${student.quizzes.bestScore === null || student.quizzes.bestScore === undefined ? '—' : `${student.quizzes.bestScore}%`}</strong></div>
+                    <div class="student-progress-detail-item"><span>Materiali consultati</span><strong>${student.materials.viewed}/${student.materials.total} (${student.materials.percent}%)</strong></div>
+                    <div class="student-progress-detail-item"><span>Domande inviate</span><strong>${student.questions.asked}</strong></div>
+                    <div class="student-progress-detail-item"><span>Risposte ricevute</span><strong>${student.questions.repliesReceived}</strong></div>
+                    <div class="student-progress-detail-item"><span>Ultima attività</span><strong>${escapeHtml(formatProgressDate(student.lastActivityAt))}</strong></div>
+                </div>
+            `;
+        }
+
+        function renderProgressTable(students) {
+            const tbody = document.getElementById('sp-table-body');
+            if (!tbody) return;
+            if (!students || !students.length) {
+                tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Nessuno studente trovato per questa edizione.</td></tr>';
+                return;
+            }
+
+            const selectedId = state.studentProgress.selectedStudentId;
+            tbody.innerHTML = students.map((student) => {
+                const isSelected = selectedId && student.userId === selectedId;
+                return `
+                    <tr data-progress-student="${student.userId}" class="${isSelected ? 'student-progress-row-selected' : ''}">
+                        <td>${escapeHtml(student.lastName || '—')}</td>
+                        <td>${escapeHtml(student.firstName || '—')}</td>
+                        <td>${escapeHtml(student.email || '—')}</td>
+                        <td>${student.attendance.total} ${student.attendance.inPerson ? `(${student.attendance.inPerson} in sito)` : ''}</td>
+                        <td>${student.lessons.completed}/${student.lessons.total} (${student.lessons.percent}%)</td>
+                        <td>${student.quizzes.bestScore === null || student.quizzes.bestScore === undefined ? '—' : `${student.quizzes.bestScore}%`}</td>
+                        <td>${student.materials.viewed}/${student.materials.total} (${student.materials.percent}%)</td>
+                        <td>${student.questions.asked}/${student.questions.repliesReceived}</td>
+                        <td>${escapeHtml(formatProgressDate(student.lastActivityAt))}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderStudentProgress(data) {
+            const empty = document.getElementById('sp-empty');
+            const content = document.getElementById('sp-content');
+            const studentSelect = document.getElementById('sp-student-select');
+            const students = data?.students || [];
+
+            if (!students.length) {
+                if (empty) empty.style.display = '';
+                if (content) content.style.display = 'none';
+                renderProgressDetail(null);
+                renderProgressTable([]);
+                return;
+            }
+
+            if (empty) empty.style.display = 'none';
+            if (content) content.style.display = '';
+
+            const previousSelected = state.studentProgress.selectedStudentId;
+            const selectedStudentId = previousSelected && students.some((student) => student.userId === previousSelected)
+                ? previousSelected
+                : (students[0]?.userId || '');
+            state.studentProgress = {
+                ...data,
+                students,
+                selectedStudentId
+            };
+
+            studentSelect.innerHTML = '<option value="">-- Tutti gli studenti --</option>' + students.map((student) => {
+                const name = [student.lastName, student.firstName].filter(Boolean).join(' ') || student.email || 'Studente';
+                return `<option value="${student.userId}">${escapeHtml(name)}</option>`;
+            }).join('');
+            studentSelect.value = selectedStudentId || '';
+
+            renderProgressSummary(data.summary || {});
+            renderProgressAttendanceChart(data.attendanceBreakdown || []);
+            renderProgressOverviewChart(students);
+            renderProgressMiniMetrics(data.summary || {});
+            renderProgressTable(students);
+            renderProgressDetail(students.find((student) => student.userId === selectedStudentId) || students[0] || null);
+        }
+
+        async function loadStudentProgress(courseEditionId) {
+            if (!courseEditionId) return;
+            const params = new URLSearchParams({ courseEditionId });
+            const data = await apiRequest(`/api/admin/student-progress?${params.toString()}`);
+            renderStudentProgress(data);
+        }
+
+        document.getElementById('sp-edition-select').addEventListener('change', async (event) => {
+            const editionId = event.target.value;
+            const empty = document.getElementById('sp-empty');
+            const content = document.getElementById('sp-content');
+            if (!editionId) {
+                if (empty) empty.style.display = '';
+                if (content) content.style.display = 'none';
+                document.getElementById('sp-table-body').innerHTML = '<tr><td colspan="9" class="empty-state">Seleziona un\'edizione per visualizzare i progressi.</td></tr>';
+                document.getElementById('sp-student-select').innerHTML = '<option value="">-- Tutti gli studenti --</option>';
+                renderProgressDetail(null);
+                return;
+            }
+            try {
+                await loadStudentProgress(editionId);
+            } catch (error) {
+                showToast('Errore nel caricamento progressi', 'error');
+            }
+        });
+
+        document.getElementById('sp-student-select').addEventListener('change', () => {
+            state.studentProgress.selectedStudentId = document.getElementById('sp-student-select').value || '';
+            const student = (state.studentProgress.students || []).find((row) => row.userId === state.studentProgress.selectedStudentId) || null;
+            renderProgressTable(state.studentProgress.students || []);
+            renderProgressDetail(student);
+        });
+
+        document.getElementById('sp-refresh').addEventListener('click', async () => {
+            const editionId = document.getElementById('sp-edition-select').value;
+            if (!editionId) {
+                showToast('Seleziona un\'edizione', 'error');
+                return;
+            }
+            try {
+                await loadStudentProgress(editionId);
+                showToast('Progressi aggiornati');
+            } catch (error) {
+                showToast('Errore nell\'aggiornamento progressi', 'error');
+            }
+        });
+
+        document.getElementById('sp-table-body').addEventListener('click', (event) => {
+            const row = event.target.closest('tr[data-progress-student]');
+            if (!row) return;
+            const studentId = row.dataset.progressStudent;
+            state.studentProgress.selectedStudentId = studentId;
+            const select = document.getElementById('sp-student-select');
+            if (select) select.value = studentId;
+            renderProgressTable(state.studentProgress.students || []);
+            renderProgressDetail((state.studentProgress.students || []).find((student) => student.userId === studentId) || null);
         });
 
         // Import CSV Teams/Zoom

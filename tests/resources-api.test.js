@@ -348,6 +348,179 @@ test('GET /api/lms/quizzes/:id/attempts espone come score la percentuale salvata
   }]);
 });
 
+test('GET /api/admin/student-progress aggrega frequenza, quiz, materiali e domande', async () => {
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+
+      if (statement.includes('FROM course_editions ce') && statement.includes('JOIN courses c ON c.id = ce.course_id')) {
+        assert.deepEqual(params, ['edition-1']);
+        return {
+          rows: [{
+            id: 'edition-1',
+            editionName: '2026',
+            courseId: 'course-1',
+            courseTitle: 'Master Carbon Farming'
+          }]
+        };
+      }
+
+      if (statement.includes('FROM enrollments e') && statement.includes('JOIN users u ON u.id = e.user_id')) {
+        assert.deepEqual(params, ['edition-1']);
+        return {
+          rows: [
+            {
+              userId: 'student-1',
+              firstName: 'Anna',
+              lastName: 'Rossi',
+              email: 'anna@example.com'
+            },
+            {
+              userId: 'student-2',
+              firstName: 'Luca',
+              lastName: 'Bianchi',
+              email: 'luca@example.com'
+            }
+          ]
+        };
+      }
+
+      if (statement === 'SELECT id FROM modules WHERE course_id = $1') {
+        assert.deepEqual(params, ['course-1']);
+        return { rows: [{ id: 'module-1' }] };
+      }
+
+      if (statement.includes('FROM lms_lessons ll') && statement.includes('JOIN modules m ON m.id = ll.lms_module_id')) {
+        assert.deepEqual(params, ['course-1']);
+        return { rows: [{ id: 'lesson-1', calendarLessonId: 'calendar-1' }] };
+      }
+
+      if (statement.includes('FROM attendance a') && statement.includes('a.lesson_id = ANY($2::uuid[]) OR a.lms_lesson_id = ANY($3::uuid[])')) {
+        assert.deepEqual(params, [['student-1', 'student-2'], ['calendar-1'], ['lesson-1']]);
+        return {
+          rows: [{
+            userId: 'student-1',
+            inPerson: 1,
+            remoteLive: 0,
+            remotePartial: 0,
+            async: 0,
+            total: 1,
+            lastAttendanceAt: '2026-05-06T08:00:00.000Z'
+          }]
+        };
+      }
+
+      if (statement.includes('FROM lesson_progress lp')) {
+        assert.deepEqual(params, [['student-1', 'student-2'], ['lesson-1']]);
+        return {
+          rows: [{
+            userId: 'student-1',
+            completedLessons: 1,
+            progressedLessons: 1,
+            avgProgress: '100.00',
+            lastProgressAt: '2026-05-06T09:00:00.000Z'
+          }]
+        };
+      }
+
+      if (statement.includes('FROM resources r') && statement.includes('r.resource_type <> \'quiz\'') && statement.includes('COUNT(DISTINCT r.id)::int AS total')) {
+        assert.deepEqual(params, [['calendar-1']]);
+        return { rows: [{ total: 4 }] };
+      }
+
+      if (statement.includes('FROM resource_views rv') && statement.includes('JOIN resources r ON r.id = rv.resource_id')) {
+        assert.deepEqual(params, [['student-1', 'student-2'], ['calendar-1']]);
+        return {
+          rows: [{
+            userId: 'student-1',
+            viewedResources: 3,
+            resourceViews: 5,
+            lastResourceAt: '2026-05-06T10:00:00.000Z'
+          }]
+        };
+      }
+
+      if (statement.includes('FROM quizzes') && statement.includes('lms_lesson_id = ANY($1::uuid[]) OR lms_module_id = ANY($2::uuid[])')) {
+        assert.deepEqual(params, [['lesson-1'], ['module-1']]);
+        return {
+          rows: [
+            { id: 'quiz-1' },
+            { id: 'quiz-2' }
+          ]
+        };
+      }
+
+      if (statement.includes('FROM quiz_attempts qa') && statement.includes('qa.completed_at IS NOT NULL')) {
+        assert.deepEqual(params, [['student-1', 'student-2'], ['quiz-1', 'quiz-2']]);
+        return {
+          rows: [
+            {
+              userId: 'student-1',
+              attempts: 1,
+              passedAttempts: 1,
+              bestScore: 90,
+              avgScore: '90.00',
+              lastQuizAt: '2026-05-06T11:00:00.000Z'
+            },
+            {
+              userId: 'student-2',
+              attempts: 1,
+              passedAttempts: 0,
+              bestScore: 60,
+              avgScore: '60.00',
+              lastQuizAt: '2026-05-05T11:00:00.000Z'
+            }
+          ]
+        };
+      }
+
+      if (statement.includes('FROM student_questions sq') && statement.includes('LEFT JOIN question_replies qr ON qr.question_id = sq.id')) {
+        assert.deepEqual(params, [['student-1', 'student-2'], ['lesson-1'], ['module-1']]);
+        return {
+          rows: [{
+            userId: 'student-1',
+            questionsAsked: 2,
+            repliesReceived: 1,
+            lastQuestionAt: '2026-05-06T12:00:00.000Z'
+          }]
+        };
+      }
+
+      throw new Error(`Unsupported query in student progress test: ${statement}`);
+    }
+  });
+
+  const layer = findGetRoute('/api/admin/student-progress');
+  assert.ok(layer, 'route /api/admin/student-progress non trovata');
+
+  const req = {
+    method: 'GET',
+    url: '/api/admin/student-progress?courseEditionId=edition-1',
+    query: { courseEditionId: 'edition-1' },
+    headers: {},
+    user: { role: 'admin' }
+  };
+  const res = createJsonRes();
+
+  await layer.route.stack[layer.route.stack.length - 1].handle(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.edition.id, 'edition-1');
+  assert.equal(res.body.summary.studentsCount, 2);
+  assert.equal(res.body.summary.totalLessons, 1);
+  assert.equal(res.body.summary.totalResources, 4);
+  assert.equal(res.body.summary.quizPassRate, 50);
+  assert.equal(res.body.students[0].userId, 'student-1');
+  assert.equal(res.body.students[0].overallPercent, 91);
+  assert.equal(res.body.students[1].overallPercent, 15);
+  assert.deepEqual(res.body.attendanceBreakdown, [
+    { key: 'inPerson', label: '🏫 In sito', count: 1 },
+    { key: 'remoteLive', label: '💻 Online', count: 0 },
+    { key: 'remotePartial', label: '⏱️ Online parziale', count: 0 },
+    { key: 'async', label: '📹 Offline / asincrona', count: 0 }
+  ]);
+});
+
 test('POST /api/quiz-attempts/:id/submit valuta correttamente i quiz LMS anche con risposte serializzate', async () => {
   const queries = [];
   apiModule.__setPool({

@@ -12,10 +12,11 @@ test('il menu admin separa Area riservata / Piattaforma e Sito pubblico', () => 
   assert.match(html, /Gestione Corsi/);
   assert.match(html, /Sito Pubblico/);
   assert.match(html, /href="#attendance" data-section="attendance">✅ Presenze</);
+  assert.match(html, /href="#student-progress" data-section="student-progress">📈 Progressi studenti</);
   assert.match(html, /href="#lms-courses" data-section="lms-courses">🎓 Percorsi formativi</);
   assert.match(html, /href="#blog" data-section="blog">📝 Blog</);
   assert.match(html, /href="#partners" data-section="partners">🤝 Partner</);
-  assert.equal((html.match(/<section id="/g) || []).length, 13);
+  assert.equal((html.match(/<section id="/g) || []).length, 14);
 });
 
 test('la sezione LMS admin non contiene debug temporanei e usa cache lezioni per modulo', () => {

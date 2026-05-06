@@ -3066,14 +3066,22 @@ Buono studio!</textarea>
 
         let allLessonsCache = null;
 
+        async function ensureAllLessonsCache() {
+            if (!allLessonsCache) {
+                try {
+                    allLessonsCache = await apiRequest('/api/lessons');
+                } catch (e) {
+                    allLessonsCache = [];
+                }
+            }
+            return allLessonsCache;
+        }
+
         async function updateResourceLessonSelect() {
             const sel = document.getElementById('resource-lesson');
             const cur = sel.value;
 
-            if (!allLessonsCache) {
-                try { allLessonsCache = await apiRequest('/api/lessons'); }
-                catch(e) { allLessonsCache = []; }
-            }
+            await ensureAllLessonsCache();
 
             sel.innerHTML = '<option value="">-- Nessuna lezione --</option>';
             allLessonsCache.forEach(l => {
@@ -6596,6 +6604,7 @@ Buono studio!</textarea>
             const requestId = (panel._requestId || 0) + 1;
             panel._requestId = requestId;
             try {
+                await ensureAllLessonsCache();
                 const lessons = await apiRequest(`/api/lms/lessons?moduleId=${moduleId}`);
                 if (panel._requestId !== requestId) return;
                 state.lmsLessonsByModule[moduleId] = lessons;

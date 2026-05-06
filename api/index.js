@@ -6575,6 +6575,7 @@ app.put('/api/lms/lessons/:id', requireAdmin, async (req, res) => {
       videoUrl: r.video_url, videoProvider: r.video_provider,
       durationSeconds: r.duration_seconds, sortOrder: r.sort_order,
       isFree: r.is_free, isPublished: r.is_published,
+      calendarLessonId: r.calendar_lesson_id,
       createdAt: r.created_at, updatedAt: r.updated_at
     });
   } catch (error) {

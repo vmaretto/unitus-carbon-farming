@@ -173,6 +173,7 @@
                     <div class="quiz-actions" id="quiz-actions" style="display: none;">
                         <button class="btn btn-primary" id="quiz-submit-btn">Invia risposte</button>
                     </div>
+                    <div id="quiz-review-area" style="display: none; margin-top: 16px;"></div>
                     <div id="quiz-attempts-area" style="margin-top: 16px;"></div>
                 </div>
 
@@ -860,6 +861,7 @@
 
                 // Show result
                 const resultArea = document.getElementById('quiz-result-area');
+                const reviewArea = document.getElementById('quiz-review-area');
                 const cls = result.passed ? 'passed' : 'failed';
                 resultArea.innerHTML = `
                     <div class="quiz-result ${cls}">
@@ -868,6 +870,11 @@
                     </div>
                 `;
                 resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+                if (reviewArea) {
+                    reviewArea.style.display = 'block';
+                    reviewArea.innerHTML = renderQuizReview(result);
+                }
 
                 // Highlight correct/incorrect answers
                 if (result.answers) {
@@ -945,6 +952,11 @@
                 quizBestScore = null;
                 quizAnswers = Array.isArray(currentQuiz.questions) ? currentQuiz.questions.map(() => null) : [];
                 document.getElementById('quiz-result-area').innerHTML = '';
+                const reviewArea = document.getElementById('quiz-review-area');
+                if (reviewArea) {
+                    reviewArea.style.display = 'none';
+                    reviewArea.innerHTML = '';
+                }
                 document.getElementById('quiz-actions').innerHTML = `
                     <button class="btn btn-primary" id="quiz-submit-btn">Invia risposte</button>
                 `;
@@ -992,15 +1004,54 @@
                 container.innerHTML = '';
                 return;
             }
+            const formatAttemptDate = (attempt) => {
+                const rawDate = attempt.completedAt || attempt.startedAt;
+                if (!rawDate) return 'Data non disponibile';
+                const parsed = new Date(rawDate);
+                if (Number.isNaN(parsed.getTime())) return 'Data non disponibile';
+                return parsed.toLocaleString('it-IT');
+            };
             container.innerHTML = `
                 <details style="font-size: 0.85rem;">
                     <summary style="cursor: pointer; color: var(--gray-500); margin-bottom: 8px;">Storico tentativi (${attempts.length})</summary>
                     ${attempts.map(a => `
                         <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--gray-200);">
-                            <span>${a.passed ? '&#10003;' : '&#10007;'} Punteggio: ${a.score}%</span>
-                            <span style="color: var(--gray-500);">${new Date(a.completedAt).toLocaleString('it-IT')}</span>
+                            <span>${a.passed ? '&#10003;' : '&#10007;'} Punteggio: ${a.percentage ?? a.score}%</span>
+                            <span style="color: var(--gray-500);">${formatAttemptDate(a)}</span>
                         </div>
                     `).join('')}
+                </details>
+            `;
+        }
+
+        function renderQuizReview(result) {
+            if (!currentQuiz || !result || !Array.isArray(result.answers)) return '';
+
+            const formatAnswer = (value) => {
+                if (value === null || value === undefined || value === '') return 'Nessuna risposta';
+                if (Array.isArray(value)) return value.map(formatAnswer).join(', ');
+                return String(value);
+            };
+
+            return `
+                <details open style="border: 1px solid var(--gray-200); border-radius: 14px; padding: 16px; background: white;">
+                    <summary style="cursor: pointer; font-weight: 600; color: var(--green-900); margin-bottom: 12px;">Verifica risposte</summary>
+                    <div style="display: flex; flex-direction: column; gap: 14px;">
+                        ${currentQuiz.questions.map((q, index) => {
+                            const answer = result.answers[index] || {};
+                            const selected = answer.selectedAnswer;
+                            const correct = answer.correctAnswer;
+                            const selectedMatches = answer.isCorrect;
+                            return `
+                                <div style="border: 1px solid ${selectedMatches ? '#22c55e' : '#ef4444'}; background: ${selectedMatches ? '#f0fdf4' : '#fef2f2'}; border-radius: 12px; padding: 14px;">
+                                    <div style="font-size: 0.8rem; color: var(--gray-500); margin-bottom: 4px;">Domanda ${index + 1}</div>
+                                    <div style="font-weight: 600; margin-bottom: 8px; color: var(--green-900);">${escapeHtml(q.questionText || 'Domanda senza testo')}</div>
+                                    <div style="font-size: 0.9rem; margin-bottom: 6px;"><strong style="color: #991b1b;">La tua risposta:</strong> ${escapeHtml(formatAnswer(selected))}</div>
+                                    <div style="font-size: 0.9rem;"><strong style="color: #166534;">Risposta corretta:</strong> ${escapeHtml(formatAnswer(correct))}</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
                 </details>
             `;
         }

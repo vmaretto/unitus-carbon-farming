@@ -45,6 +45,9 @@ test('la lezione usa il flusso quiz-attempts e le risorse non espongono quiz', (
   assert.match(lessonHtml, /input\.addEventListener\('change', \(\) =>/);
   assert.match(lessonHtml, /normalizeQuizAnswerForSubmit\(quizAnswers\[index\], q\.questionType\)/);
   assert.match(lessonHtml, /resultArea\.scrollIntoView\(\{ behavior: 'smooth', block: 'start' \}\);/);
+  assert.match(lessonHtml, /id="quiz-review-area"/);
+  assert.match(lessonHtml, /renderQuizReview\(result\)/);
+  assert.match(lessonHtml, /formatAttemptDate/);
   assert.match(resourcesHtml, /quizSection\.style\.display = 'none'/);
   assert.match(resourcesHtml, /if \(quizList\) quizList\.innerHTML = '';/);
 });

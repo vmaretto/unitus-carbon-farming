@@ -41,8 +41,10 @@ test('la lezione usa il flusso quiz-attempts e le risorse non espongono quiz', (
   assert.match(lessonHtml, /\/api\/quiz-attempts\/\$\{quizAttemptId\}\/submit/);
   assert.match(lessonHtml, /let quizAnswers = \[\];/);
   assert.match(lessonHtml, /quizAnswers = Array\.isArray\(quiz\.questions\) \? quiz\.questions\.map\(\(\) => null\) : \[\];/);
+  assert.match(lessonHtml, /encodeURIComponent\(JSON\.stringify\(opt\)\)/);
   assert.match(lessonHtml, /input\.addEventListener\('change', \(\) =>/);
   assert.match(lessonHtml, /normalizeQuizAnswerForSubmit\(quizAnswers\[index\], q\.questionType\)/);
+  assert.match(lessonHtml, /resultArea\.scrollIntoView\(\{ behavior: 'smooth', block: 'start' \}\);/);
   assert.match(resourcesHtml, /quizSection\.style\.display = 'none'/);
   assert.match(resourcesHtml, /if \(quizList\) quizList\.innerHTML = '';/);
 });

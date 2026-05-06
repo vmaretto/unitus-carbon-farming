@@ -780,9 +780,9 @@
                     
                     let safeValue;
                     try {
-                        safeValue = escapeHtml(JSON.stringify(opt));
+                        safeValue = encodeURIComponent(JSON.stringify(opt));
                     } catch (e) {
-                        safeValue = escapeHtml(String(opt));
+                        safeValue = encodeURIComponent(String(opt));
                     }
                     
                     return `
@@ -867,6 +867,7 @@
                         <p>Punteggio: ${result.percentage}% (minimo: ${result.passingScore}%)</p>
                     </div>
                 `;
+                resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
                 // Highlight correct/incorrect answers
                 if (result.answers) {
@@ -956,7 +957,15 @@
         function parseQuizValue(value) {
             if (value === null || value === undefined || value === '') return null;
             try {
-                return JSON.parse(value);
+                return JSON.parse(decodeQuizValue(value));
+            } catch (_error) {
+                return decodeQuizValue(value);
+            }
+        }
+
+        function decodeQuizValue(value) {
+            try {
+                return decodeURIComponent(value);
             } catch (_error) {
                 return value;
             }

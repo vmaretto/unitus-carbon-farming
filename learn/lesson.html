@@ -1000,7 +1000,8 @@
 
         function renderAttempts(attempts) {
             const container = document.getElementById('quiz-attempts-area');
-            if (!attempts || !attempts.length) {
+            const completedAttempts = (attempts || []).filter(a => a && a.completedAt);
+            if (!completedAttempts.length) {
                 container.innerHTML = '';
                 return;
             }
@@ -1013,8 +1014,8 @@
             };
             container.innerHTML = `
                 <details style="font-size: 0.85rem;">
-                    <summary style="cursor: pointer; color: var(--gray-500); margin-bottom: 8px;">Storico tentativi (${attempts.length})</summary>
-                    ${attempts.map(a => `
+                    <summary style="cursor: pointer; color: var(--gray-500); margin-bottom: 8px;">Storico tentativi (${completedAttempts.length})</summary>
+                    ${completedAttempts.map(a => `
                         <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--gray-200);">
                             <span>${a.passed ? '&#10003;' : '&#10007;'} Punteggio: ${a.percentage ?? a.score}%</span>
                             <span style="color: var(--gray-500);">${formatAttemptDate(a)}</span>

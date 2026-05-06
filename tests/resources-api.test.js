@@ -308,6 +308,7 @@ test('GET /api/lms/quizzes/:id/attempts espone come score la percentuale salvata
     async query(sql, params = []) {
       const statement = String(sql).replace(/\s+/g, ' ').trim();
       assert.match(statement, /COALESCE\(percentage, score\)::int AS score/);
+      assert.match(statement, /completed_at IS NOT NULL/);
       assert.deepEqual(params, ['user-1', 'quiz-1']);
       return {
         rows: [{

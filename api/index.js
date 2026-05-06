@@ -8286,7 +8286,7 @@ app.get('/api/lms/quizzes/:id/attempts', requireStudent, async (req, res) => {
       SELECT id, COALESCE(percentage, score)::int AS score, percentage, passed,
              started_at AS "startedAt", completed_at AS "completedAt"
       FROM quiz_attempts
-      WHERE user_id = $1 AND quiz_id = $2
+      WHERE user_id = $1 AND quiz_id = $2 AND completed_at IS NOT NULL
       ORDER BY completed_at DESC
     `, [req.user.userId, req.params.id]);
     res.json(rows);

@@ -6402,13 +6402,16 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { rows } = await pool.query(`
-      SELECT id, lms_module_id AS "moduleId", title, description,
+      SELECT ll.id, ll.lms_module_id AS "moduleId", ll.title, ll.description,
              video_url AS "videoUrl", video_provider AS "videoProvider",
              duration_seconds AS "durationSeconds", sort_order AS "sortOrder",
              is_free AS "isFree", is_published AS "isPublished",
              materials, calendar_lesson_id AS "calendarLessonId",
-             created_at AS "createdAt", updated_at AS "updatedAt"
-      FROM lms_lessons WHERE id = $1
+             cal.title AS "calendarLessonTitle",
+             ll.created_at AS "createdAt", ll.updated_at AS "updatedAt"
+      FROM lms_lessons ll
+      LEFT JOIN lessons cal ON cal.id = ll.calendar_lesson_id
+      WHERE ll.id = $1
     `, [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Lesson not found' });
 
@@ -6454,6 +6457,29 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
 
       lesson.publicMaterials = publicMaterials;
       lesson.materials = publicMaterials;
+
+      if (!lesson.linkedResources.length) {
+        const fallbackTitles = [lesson.calendarLessonTitle, lesson.title].filter(Boolean);
+        if (fallbackTitles.length) {
+          const { rows: fallbackRows } = await pool.query(`
+            SELECT r.id, r.title, r.url, r.resource_type AS "resourceType",
+                   r.description, f.name AS "teacherName",
+                   r.is_published AS "isPublished",
+                   r.review_status AS "reviewStatus"
+            FROM resources r
+            LEFT JOIN faculty f ON f.id = r.teacher_id
+            WHERE r.is_published = true
+              AND r.resource_type <> 'quiz'
+              AND COALESCE(r.source, 'admin') = 'calendar_lesson'
+              AND (
+                LOWER(TRIM(r.title)) = LOWER(TRIM($1))
+                OR LOWER(TRIM(r.title)) = LOWER(TRIM($2))
+              )
+            ORDER BY r.sort_order NULLS LAST, r.created_at
+          `, [fallbackTitles[0], fallbackTitles[1] || fallbackTitles[0]]);
+          lesson.linkedResources = fallbackRows;
+        }
+      }
     } else {
       lesson.linkedResources = [];
       lesson.publicMaterials = Array.isArray(lesson.materials) ? lesson.materials.filter((material) => {

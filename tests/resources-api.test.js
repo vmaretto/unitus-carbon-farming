@@ -106,7 +106,7 @@ test('GET /api/lms/lessons/:id espone solo materiali pubblicati agli studenti', 
     async query(sql, params = []) {
       const statement = String(sql).replace(/\s+/g, ' ').trim();
 
-      if (statement.startsWith('SELECT id, lms_module_id AS "moduleId", title, description')) {
+      if (statement.startsWith('SELECT ll.id, ll.lms_module_id AS "moduleId", ll.title, ll.description')) {
         assert.deepEqual(params, ['lesson-1']);
         return {
           rows: [{
@@ -220,6 +220,87 @@ test('POST /api/lms/lessons rifiuta lezioni senza collegamento calendario', asyn
 
   assert.equal(res.statusCode, 400);
   assert.equal(res.body.error, 'calendarLessonId is required');
+});
+
+test('GET /api/lms/lessons/:id usa il fallback per materiali calendar_lesson quando il legame diretto manca', async () => {
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+
+      if (statement.includes('FROM lms_lessons ll LEFT JOIN lessons cal ON cal.id = ll.calendar_lesson_id')) {
+        assert.deepEqual(params, ['lesson-1']);
+        return {
+          rows: [{
+            id: 'lesson-1',
+            moduleId: 'module-1',
+            title: 'Lezione 1',
+            description: 'Descrizione',
+            videoUrl: null,
+            videoProvider: null,
+            durationSeconds: 3600,
+            sortOrder: 1,
+            isFree: false,
+            isPublished: true,
+            materials: [],
+            calendarLessonId: 'calendar-1',
+            calendarLessonTitle: 'Lezione 1',
+            createdAt: '2026-04-30T10:00:00.000Z',
+            updatedAt: '2026-04-30T10:00:00.000Z'
+          }]
+        };
+      }
+
+      if (statement.includes('WHERE r.lesson_id = $1')) {
+        assert.deepEqual(params, ['calendar-1']);
+        return { rows: [] };
+      }
+
+      if (statement.includes('COALESCE(r.source, \'admin\') = \'calendar_lesson\'') && statement.includes('LOWER(TRIM(r.title)) = LOWER(TRIM($1))')) {
+        assert.deepEqual(params, ['Lezione 1', 'Lezione 1']);
+        return {
+          rows: [{
+            id: 'resource-fallback',
+            title: 'Lezione 1',
+            url: 'https://example.com/fallback.pdf',
+            resourceType: 'pdf',
+            description: null,
+            teacherName: 'Prof. Test',
+            isPublished: true,
+            reviewStatus: 'teacher_approved'
+          }]
+        };
+      }
+
+      throw new Error(`Unsupported query in test fallback: ${statement}`);
+    }
+  });
+
+  const layer = findGetRoute('/api/lms/lessons/:id');
+  assert.ok(layer, 'route /api/lms/lessons/:id non trovata');
+
+  const req = {
+    method: 'GET',
+    url: '/api/lms/lessons/lesson-1',
+    params: { id: 'lesson-1' },
+    headers: {}
+  };
+  const res = createJsonRes();
+
+  await layer.route.stack[0].handle(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body.linkedResources, [
+    {
+      id: 'resource-fallback',
+      title: 'Lezione 1',
+      url: 'https://example.com/fallback.pdf',
+      resourceType: 'pdf',
+      description: null,
+      teacherName: 'Prof. Test',
+      isPublished: true,
+      reviewStatus: 'teacher_approved'
+    }
+  ]);
 });
 
 test('GET /api/teachers/quizzes deduplica quiz identici prima del rendering', async () => {

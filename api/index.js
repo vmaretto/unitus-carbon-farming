@@ -6406,7 +6406,7 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
              video_url AS "videoUrl", video_provider AS "videoProvider",
              duration_seconds AS "durationSeconds", sort_order AS "sortOrder",
              is_free AS "isFree", is_published AS "isPublished",
-             materials, calendar_lesson_id AS "calendarLessonId",
+             ll.materials, calendar_lesson_id AS "calendarLessonId",
              cal.title AS "calendarLessonTitle",
              ll.created_at AS "createdAt", ll.updated_at AS "updatedAt"
       FROM lms_lessons ll

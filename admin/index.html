@@ -6666,10 +6666,11 @@ Buono studio!</textarea>
                     <input type="hidden" data-field="materials" value="[]">
                     <label style="margin-top: 8px;">
                         Collega a lezione calendario
-                        <select data-field="calendarLessonId" style="width:100%; padding:8px; border:1px solid var(--gray-200); border-radius:8px;">
-                            <option value="">-- Nessun collegamento --</option>
+                        <select data-field="calendarLessonId" required style="width:100%; padding:8px; border:1px solid var(--gray-200); border-radius:8px;">
+                            <option value="">-- Seleziona una lezione calendario --</option>
                             ${(allLessonsCache || []).map(l => '<option value="' + l.id + '">' + (l.title || 'Lezione') + (l.startDatetime ? ' (' + new Date(l.startDatetime).toLocaleDateString('it-IT') + ')' : '') + '</option>').join('')}
                         </select>
+                        <small style="display:block; margin-top:4px; color: var(--gray-500);">Obbligatorio per far comparire materiali e quiz nelle risorse collegate.</small>
                     </label>
                     <div class="actions">
                         <label class="switch"><input type="checkbox" data-field="isPublished" checked><span class="slider"></span> Pubblicata</label>
@@ -6915,6 +6916,11 @@ Buono studio!</textarea>
 
             form.addEventListener('submit', async (ev) => {
                 ev.preventDefault();
+                const calendarLessonId = form.querySelector('[data-field="calendarLessonId"]')?.value || '';
+                if (!calendarLessonId) {
+                    showToast('Seleziona una lezione calendario per collegare materiali e quiz.', 'error');
+                    return;
+                }
                 const payload = {
                     moduleId: moduleId,
                     title: form.querySelector('[data-field="title"]')?.value?.trim() || '',
@@ -6926,7 +6932,7 @@ Buono studio!</textarea>
                     isFree: false,
                     isPublished: safeChecked('[data-field="isPublished"]', form),
                     materials: currentMaterials,
-                    calendarLessonId: form.querySelector('[data-field="calendarLessonId"]')?.value || null
+                    calendarLessonId
                 };
                 if (!payload.title) { showToast('Inserisci il titolo', 'error'); return; }
                 try {

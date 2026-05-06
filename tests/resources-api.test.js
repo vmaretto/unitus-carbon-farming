@@ -195,6 +195,33 @@ test('GET /api/lms/lessons/:id espone solo materiali pubblicati agli studenti', 
   ]);
 });
 
+test('POST /api/lms/lessons rifiuta lezioni senza collegamento calendario', async () => {
+  apiModule.__setPool({
+    async query() {
+      throw new Error('query non attesa');
+    }
+  });
+
+  const layer = findRoute('/api/lms/lessons', 'post');
+  assert.ok(layer, 'route POST /api/lms/lessons non trovata');
+
+  const req = {
+    method: 'POST',
+    url: '/api/lms/lessons',
+    body: {
+      moduleId: 'module-1',
+      title: 'Lezione senza calendario'
+    },
+    headers: {}
+  };
+  const res = createJsonRes();
+
+  await layer.route.stack[layer.route.stack.length - 1].handle(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.error, 'calendarLessonId is required');
+});
+
 test('GET /api/teachers/quizzes deduplica quiz identici prima del rendering', async () => {
   apiModule.__setPool({
     async query(sql, params = []) {

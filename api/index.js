@@ -6530,6 +6530,7 @@ app.post('/api/lms/lessons', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   const { moduleId, title, description, videoUrl, videoProvider, durationSeconds, sortOrder, isFree, isPublished, materials, calendarLessonId } = req.body;
   if (!moduleId || !title) return res.status(400).json({ error: 'moduleId and title are required' });
+  if (!calendarLessonId) return res.status(400).json({ error: 'calendarLessonId is required' });
   try {
     const id = uuidv4();
     const { rows } = await pool.query(`
@@ -6554,6 +6555,7 @@ app.post('/api/lms/lessons', requireAdmin, async (req, res) => {
 app.put('/api/lms/lessons/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   const { moduleId, title, description, videoUrl, videoProvider, durationSeconds, sortOrder, isFree, isPublished, materials, calendarLessonId } = req.body;
+  if (!calendarLessonId) return res.status(400).json({ error: 'calendarLessonId is required' });
   try {
     const updateFields = {
       lms_module_id: moduleId, title, description,

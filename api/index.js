@@ -3357,7 +3357,7 @@ async function getLessonCompletionStatus(lessonId, userId, preloaded = {}) {
   let quizOk = true;
   if (quizIds.length) {
     const { rows: attemptRows } = await pool.query(
-      'SELECT MAX(score)::int AS "bestScore" FROM quiz_attempts WHERE user_id = $1 AND quiz_id = ANY($2) AND completed_at IS NOT NULL',
+      'SELECT MAX(COALESCE(percentage, score))::int AS "bestScore" FROM quiz_attempts WHERE user_id = $1 AND quiz_id = ANY($2) AND completed_at IS NOT NULL',
       [userId, quizIds]
     );
     quizBestScore = attemptRows[0]?.bestScore === null || attemptRows[0]?.bestScore === undefined
@@ -8283,7 +8283,8 @@ app.get('/api/lms/quizzes/:id/attempts', requireStudent, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { rows } = await pool.query(`
-      SELECT id, score, passed, started_at AS "startedAt", completed_at AS "completedAt"
+      SELECT id, COALESCE(percentage, score)::int AS score, percentage, passed,
+             started_at AS "startedAt", completed_at AS "completedAt"
       FROM quiz_attempts
       WHERE user_id = $1 AND quiz_id = $2
       ORDER BY completed_at DESC

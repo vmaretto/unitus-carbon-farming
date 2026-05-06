@@ -303,6 +303,50 @@ test('GET /api/lms/lessons/:id usa il fallback per materiali calendar_lesson qua
   ]);
 });
 
+test('GET /api/lms/quizzes/:id/attempts espone come score la percentuale salvata', async () => {
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      assert.match(statement, /COALESCE\(percentage, score\)::int AS score/);
+      assert.deepEqual(params, ['user-1', 'quiz-1']);
+      return {
+        rows: [{
+          id: 'attempt-1',
+          score: 86,
+          percentage: 86,
+          passed: true,
+          startedAt: '2026-05-06T08:00:00.000Z',
+          completedAt: '2026-05-06T08:05:00.000Z'
+        }]
+      };
+    }
+  });
+
+  const layer = findGetRoute('/api/lms/quizzes/:id/attempts');
+  assert.ok(layer, 'route /api/lms/quizzes/:id/attempts non trovata');
+
+  const req = {
+    method: 'GET',
+    url: '/api/lms/quizzes/quiz-1/attempts',
+    params: { id: 'quiz-1' },
+    headers: {},
+    user: { userId: 'user-1' }
+  };
+  const res = createJsonRes();
+
+  await layer.route.stack[layer.route.stack.length - 1].handle(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, [{
+    id: 'attempt-1',
+    score: 86,
+    percentage: 86,
+    passed: true,
+    startedAt: '2026-05-06T08:00:00.000Z',
+    completedAt: '2026-05-06T08:05:00.000Z'
+  }]);
+});
+
 test('GET /api/teachers/quizzes deduplica quiz identici prima del rendering', async () => {
   apiModule.__setPool({
     async query(sql, params = []) {

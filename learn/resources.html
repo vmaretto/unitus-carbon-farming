@@ -155,8 +155,6 @@
                 const videos = allResources.filter(r => r.resourceType === 'video');
                 const allDocs = allResources.filter(r => ['pdf', 'document', 'audio', 'link'].includes(r.resourceType));
                 const generalDocs = allDocs.filter(r => !r.teacherId && !r.lessonId);
-                const quizzes = allResources.filter(r => r.resourceType === 'quiz');
-
                 const videoList = document.getElementById('video-list');
                 const docList = document.getElementById('doc-list');
 
@@ -172,13 +170,10 @@
                     docList.innerHTML = '<div class="empty">Nessun documento disponibile</div>';
                 }
 
-                // Quiz section
                 const quizSection = document.getElementById('quiz-section');
                 const quizList = document.getElementById('quiz-list');
-                if (!window.__isGuest && quizzes.length > 0) {
-                    quizSection.style.display = 'block';
-                    quizList.innerHTML = quizzes.map(renderResource).join('');
-                }
+                if (quizSection) quizSection.style.display = 'none';
+                if (quizList) quizList.innerHTML = '';
             } catch (error) {
                 console.error('Error loading resources:', error);
                 document.getElementById('video-list').innerHTML = '<div class="empty">Errore nel caricamento</div>';

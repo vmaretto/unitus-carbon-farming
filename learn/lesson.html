@@ -340,6 +340,7 @@
         let saveInterval = null;
         let currentLesson = null;
         let currentQuiz = null;
+        let quizAttemptId = null;
         let quizPassed = false;
         let quizBestScore = null;
         let completionState = null;
@@ -696,6 +697,7 @@
                 const quiz = await api(`/api/lms/quizzes/${quizSummary.id}`);
                 if (!quiz) return;
                 currentQuiz = quiz;
+                quizAttemptId = null;
 
                 document.getElementById('quiz-section').style.display = '';
                 document.getElementById('quiz-title').textContent = quiz.title || 'Quiz di verifica';
@@ -729,11 +731,33 @@
                 // Show attempts history
                 renderAttempts(attempts);
 
+                await startQuizAttempt(quiz.id);
+
                 // Render questions
                 renderQuizQuestions(quiz.questions);
             } catch (error) {
                 console.error('Error loading quiz', error);
             }
+        }
+
+        async function startQuizAttempt(quizId) {
+            if (window.__isGuest) return null;
+            const token = localStorage.getItem('learnToken');
+            const startRes = await fetch('/api/quiz-attempts/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ quizId })
+            });
+            if (!startRes.ok) {
+                const err = await startRes.json().catch(() => ({}));
+                throw new Error(err.error || 'Errore nell\'avvio del quiz');
+            }
+            const attempt = await startRes.json();
+            quizAttemptId = attempt.id;
+            return attempt;
         }
 
         function renderQuizQuestions(questions) {
@@ -785,41 +809,51 @@
         async function submitQuiz() {
             if (window.__isGuest) return;
             if (!currentQuiz) return;
-            const answers = {};
+            if (!quizAttemptId) {
+                await startQuizAttempt(currentQuiz.id);
+            }
 
-            currentQuiz.questions.forEach(q => {
+            const answers = currentQuiz.questions.map((q) => {
                 try {
                     if (q.questionType === 'multiple_choice') {
                         const checked = document.querySelectorAll(`input[name="q_${q.id}"]:checked`);
-                        answers[q.id] = Array.from(checked).map(el => {
-                            if (!el || !el.value) return null;
-                            try {
-                                return JSON.parse(el.value);
-                            } catch (e) {
-                                return el.value;
-                            }
-                        }).filter(v => v !== null);
-                    } else {
-                        const checked = document.querySelector(`input[name="q_${q.id}"]:checked`);
-                        if (checked && checked.value) {
-                            try {
-                                answers[q.id] = JSON.parse(checked.value);
-                            } catch (e) {
-                                answers[q.id] = checked.value;
-                            }
-                        } else {
-                            answers[q.id] = null;
+                        return {
+                            questionIndex: currentQuiz.questions.findIndex(item => item.id === q.id),
+                            selectedAnswer: Array.from(checked).map(el => {
+                                if (!el || !el.value) return null;
+                                try {
+                                    return JSON.parse(el.value);
+                                } catch (e) {
+                                    return el.value;
+                                }
+                            }).filter(v => v !== null)
+                        };
+                    }
+                    const checked = document.querySelector(`input[name="q_${q.id}"]:checked`);
+                    let selectedAnswer = null;
+                    if (checked && checked.value) {
+                        try {
+                            selectedAnswer = JSON.parse(checked.value);
+                        } catch (e) {
+                            selectedAnswer = checked.value;
                         }
                     }
+                    return {
+                        questionIndex: currentQuiz.questions.findIndex(item => item.id === q.id),
+                        selectedAnswer
+                    };
                 } catch (error) {
                     console.warn(`Error processing question ${q.id}:`, error);
-                    answers[q.id] = null;
+                    return {
+                        questionIndex: currentQuiz.questions.findIndex(item => item.id === q.id),
+                        selectedAnswer: null
+                    };
                 }
             });
 
             try {
                 document.getElementById('quiz-submit-btn').disabled = true;
-                const result = await api(`/api/lms/quizzes/${currentQuiz.id}/submit`, {
+                const result = await api(`/api/quiz-attempts/${quizAttemptId}/submit`, {
                     method: 'POST',
                     body: JSON.stringify({ answers })
                 });
@@ -831,30 +865,32 @@
                 resultArea.innerHTML = `
                     <div class="quiz-result ${cls}">
                         <h3>${result.passed ? 'Quiz superato!' : 'Quiz non superato'}</h3>
-                        <p>Punteggio: ${result.score}% (minimo: ${result.passingScore}%)</p>
+                        <p>Punteggio: ${result.percentage}% (minimo: ${result.passingScore}%)</p>
                     </div>
                 `;
 
                 // Highlight correct/incorrect answers
-                if (result.results) {
-                    Object.entries(result.results).forEach(([qId, r]) => {
+                if (result.answers) {
+                    result.answers.forEach((answer, index) => {
                         try {
-                            const questionDiv = document.querySelector(`[data-question-id="${qId}"]`);
+                            const question = currentQuiz.questions[index];
+                            if (!question) return;
+                            const questionDiv = document.querySelector(`[data-question-id="${question.id}"]`);
                             if (!questionDiv) return;
                             const labels = questionDiv.querySelectorAll('.option-label');
                             labels.forEach(label => {
                                 try {
                                     const input = label.querySelector('input');
                                     if (!input || !input.value) return;
-                                    
+
                                     let val;
                                     try {
                                         val = JSON.parse(input.value);
                                     } catch (e) {
                                         val = input.value;
                                     }
-                                    
-                                    const correctAnswer = r.correctAnswer;
+
+                                    const correctAnswer = answer.correctAnswer;
                                     const isCorrectOption = Array.isArray(correctAnswer)
                                         ? correctAnswer.includes(val)
                                         : val === correctAnswer;
@@ -866,11 +902,11 @@
                                     }
                                     input.disabled = true;
                                 } catch (error) {
-                                    console.warn(`Error processing label for question ${qId}:`, error);
+                                    console.warn(`Error processing label for question ${question.id}:`, error);
                                 }
                             });
                         } catch (error) {
-                            console.warn(`Error highlighting answers for question ${qId}:`, error);
+                            console.warn(`Error highlighting answers for question ${index}:`, error);
                         }
                     });
                 }
@@ -890,7 +926,7 @@
                 const attempts = await api(`/api/lms/quizzes/${currentQuiz.id}/attempts`);
                 quizBestScore = attempts && attempts.length
                     ? Math.max(...attempts.map(a => Number(a.score || 0)))
-                    : result.score;
+                    : result.percentage;
                 renderAttempts(attempts);
 
                 // Update completion criteria
@@ -902,9 +938,19 @@
         }
 
         // Exposed globally for onclick
-        window.retryQuiz = function() {
-            document.getElementById('quiz-result-area').innerHTML = '';
-            renderQuizQuestions(currentQuiz.questions);
+        window.retryQuiz = async function() {
+            try {
+                await startQuizAttempt(currentQuiz.id);
+                quizPassed = false;
+                quizBestScore = null;
+                document.getElementById('quiz-result-area').innerHTML = '';
+                document.getElementById('quiz-actions').innerHTML = `
+                    <button class="btn btn-primary" id="quiz-submit-btn">Invia risposte</button>
+                `;
+                renderQuizQuestions(currentQuiz.questions);
+            } catch (error) {
+                console.error('Error restarting quiz', error);
+            }
         };
 
         function renderAttempts(attempts) {

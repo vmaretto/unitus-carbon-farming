@@ -347,6 +347,93 @@ test('GET /api/lms/quizzes/:id/attempts espone come score la percentuale salvata
   }]);
 });
 
+test('POST /api/quiz-attempts/:id/submit valuta correttamente i quiz LMS anche con risposte serializzate', async () => {
+  const queries = [];
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      queries.push({ statement, params });
+
+      if (statement === 'SELECT * FROM quiz_attempts WHERE id = $1 AND user_id = $2') {
+        assert.deepEqual(params, ['attempt-1', 'user-1']);
+        return {
+          rows: [{
+            id: 'attempt-1',
+            user_id: 'user-1',
+            quiz_id: 'quiz-1',
+            resource_id: null,
+            started_at: '2026-05-06T08:00:00.000Z',
+            completed_at: null
+          }]
+        };
+      }
+
+      if (statement === 'SELECT passing_score FROM quizzes WHERE id = $1') {
+        assert.deepEqual(params, ['quiz-1']);
+        return { rows: [{ passing_score: 70 }] };
+      }
+
+      if (statement.includes('FROM quiz_questions WHERE quiz_id = $1 ORDER BY sort_order')) {
+        assert.deepEqual(params, ['quiz-1']);
+        return {
+          rows: [
+            {
+              question_text: 'Q1',
+              options: ['A', 'B'],
+              correct_answer: '"A"',
+              points: 1
+            },
+            {
+              question_text: 'Q2',
+              options: ['C', 'D'],
+              correct_answer: '"D"',
+              points: 1
+            }
+          ]
+        };
+      }
+
+      if (statement.startsWith('UPDATE quiz_attempts SET')) {
+        assert.match(statement, /percentage = \$4/);
+        assert.deepEqual(params[1], 2);
+        assert.deepEqual(params[2], 2);
+        assert.deepEqual(params[3], 100);
+        assert.deepEqual(params[4], true);
+        return { rows: [{ id: 'attempt-1' }] };
+      }
+
+      throw new Error(`Unsupported query in quiz submit test: ${statement}`);
+    }
+  });
+
+  const layer = apiModule.app._router.stack.find((entry) => entry?.route?.path === '/api/quiz-attempts/:id/submit' && entry.route.methods.post);
+  assert.ok(layer, 'route POST /api/quiz-attempts/:id/submit non trovata');
+
+  const req = {
+    method: 'POST',
+    url: '/api/quiz-attempts/attempt-1/submit',
+    params: { id: 'attempt-1' },
+    body: {
+      answers: [
+        { questionIndex: 0, selectedAnswer: 'A' },
+        { questionIndex: 1, selectedAnswer: 'D' }
+      ]
+    },
+    headers: {},
+    user: { userId: 'user-1' }
+  };
+  const res = createJsonRes();
+
+  await layer.route.stack[layer.route.stack.length - 1].handle(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.percentage, 100);
+  assert.equal(res.body.passed, true);
+  assert.equal(res.body.answers[0].isCorrect, true);
+  assert.equal(res.body.answers[1].isCorrect, true);
+  assert.ok(queries.length >= 4);
+});
+
 test('GET /api/teachers/quizzes deduplica quiz identici prima del rendering', async () => {
   apiModule.__setPool({
     async query(sql, params = []) {

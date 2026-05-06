@@ -9347,6 +9347,34 @@ app.post('/api/quiz-attempts/:id/submit', requireStudent, requireNonGuest, async
       return res.status(400).json({ error: 'Quiz già completato' });
     }
 
+    const normalizeQuizAnswer = (value) => {
+      if (value === null || value === undefined) return value;
+      if (Array.isArray(value)) {
+        return value.map(normalizeQuizAnswer).sort((a, b) => String(a).localeCompare(String(b)));
+      }
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return '';
+        try {
+          return normalizeQuizAnswer(JSON.parse(trimmed));
+        } catch (_error) {
+          return trimmed;
+        }
+      }
+      return value;
+    };
+
+    const answersMatch = (studentAnswer, correctAnswer) => {
+      const normalizedStudent = normalizeQuizAnswer(studentAnswer);
+      const normalizedCorrect = normalizeQuizAnswer(correctAnswer);
+      if (Array.isArray(normalizedStudent) || Array.isArray(normalizedCorrect)) {
+        if (!Array.isArray(normalizedStudent) || !Array.isArray(normalizedCorrect)) return false;
+        if (normalizedStudent.length !== normalizedCorrect.length) return false;
+        return normalizedStudent.every((item, index) => JSON.stringify(item) === JSON.stringify(normalizedCorrect[index]));
+      }
+      return String(normalizedStudent) === String(normalizedCorrect);
+    };
+
     // Get questions based on quiz_id or resource_id
     let questions = [];
     let passingScore = 70;
@@ -9382,7 +9410,7 @@ app.post('/api/quiz-attempts/:id/submit', requireStudent, requireNonGuest, async
       if (!question) return { ...a, isCorrect: false, points: 0 };
       
       totalPoints += question.points || 1;
-      const isCorrect = a.selectedAnswer === question.correct_answer;
+      const isCorrect = answersMatch(a.selectedAnswer, question.correct_answer);
       if (isCorrect) score += question.points || 1;
       
       return {

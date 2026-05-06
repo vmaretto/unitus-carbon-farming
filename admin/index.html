@@ -36,95 +36,125 @@
 
         body {
             margin: 0;
-            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: var(--gray-100);
-            color: var(--gray-900);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: #f3f4f6;
+            color: #1c1c1c;
             min-height: 100vh;
         }
 
-        header {
-            background: linear-gradient(135deg, rgba(27, 58, 45, 0.9), rgba(44, 122, 75, 0.85));
+        .mobile-header {
+            display: none;
+        }
+
+        .admin-sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 260px;
+            background: linear-gradient(180deg, #1b3a2d 0%, #245a3d 100%);
             color: white;
-            padding: 32px 24px 40px;
-            box-shadow: 0 10px 40px rgba(27, 58, 45, 0.25);
-        }
-
-        header .header-content {
-            max-width: 1100px;
-            margin: 0 auto;
+            overflow-y: auto;
+            z-index: 100;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            padding: 0;
         }
 
-        header h1 {
-            font-size: 2.2rem;
+        .sidebar-header {
+            padding: 24px 20px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.1rem;
             font-weight: 700;
             margin: 0;
+            line-height: 1.3;
         }
 
-        header p {
-            font-size: 1.05rem;
-            line-height: 1.6;
-            margin: 0;
-            opacity: 0.9;
+        .sidebar-header p {
+            font-size: 0.75rem;
+            opacity: 0.6;
+            margin: 4px 0 0;
         }
 
-        header .nav-links {
-            margin-top: 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
+        .sidebar-nav {
+            flex: 1;
+            padding: 12px 0;
+            overflow-y: auto;
         }
 
-        .nav-group {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+        .sidebar-group {
+            margin-bottom: 8px;
         }
 
-        .nav-group-title {
-            font-size: 0.8rem;
+        .sidebar-group-title {
+            font-size: 0.65rem;
             font-weight: 700;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.1em;
             text-transform: uppercase;
-            color: rgba(255, 255, 255, 0.78);
+            color: rgba(255,255,255,0.45);
+            padding: 12px 20px 6px;
         }
 
-        .nav-group-links {
+        .sidebar-nav a {
             display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-        }
-
-        header .nav-links a {
-            color: white;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            color: rgba(255,255,255,0.75);
             text-decoration: none;
-            padding: 8px 16px;
-            border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            font-size: 0.88rem;
             font-weight: 500;
-            transition: background 0.2s ease;
+            transition: all 0.15s;
+            border-left: 3px solid transparent;
         }
 
-        header .nav-links a:hover {
-            background: rgba(255, 255, 255, 0.15);
+        .sidebar-nav a:hover {
+            background: rgba(255,255,255,0.08);
+            color: white;
         }
 
-        .nav-utility-links {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            padding-top: 4px;
+        .sidebar-nav a.active {
+            background: rgba(255,255,255,0.12);
+            color: white;
+            border-left-color: #4ade80;
+            font-weight: 600;
         }
 
-        main {
-            max-width: 1100px;
-            margin: -32px auto 60px;
-            padding: 0 24px 40px;
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
             display: flex;
             flex-direction: column;
-            gap: 36px;
+            gap: 8px;
+        }
+
+        .sidebar-footer a {
+            color: rgba(255,255,255,0.6);
+            text-decoration: none;
+            font-size: 0.82rem;
+            padding: 6px 0;
+        }
+
+        .sidebar-footer a:hover {
+            color: white;
+        }
+
+        .admin-main {
+            margin-left: 260px;
+            padding: 32px 40px;
+            min-height: 100vh;
+        }
+
+        .admin-main section {
+            display: none;
+            max-width: 1200px;
+        }
+
+        .admin-main section.active {
+            display: block;
         }
 
         section {
@@ -827,12 +857,42 @@
         }
 
         @media (max-width: 768px) {
-            header .header-content {
-                gap: 12px;
+            .admin-sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+                width: 260px;
             }
 
-            main {
-                margin: -24px auto 40px;
+            .admin-sidebar.open {
+                transform: translateX(0);
+            }
+
+            .mobile-header {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 12px 16px;
+                background: #1b3a2d;
+                color: white;
+                position: sticky;
+                top: 0;
+                z-index: 90;
+                box-shadow: 0 8px 24px rgba(27, 58, 45, 0.2);
+            }
+
+            .mobile-header button {
+                background: none;
+                border: none;
+                color: white;
+                font-size: 1.5rem;
+                cursor: pointer;
+                margin-right: 0;
+                padding: 0;
+            }
+
+            .admin-main {
+                margin-left: 0;
+                padding: 16px;
             }
 
             section {
@@ -850,41 +910,50 @@
     </style>
 </head>
 <body>
-    <header style="display:none;">
-        <div class="header-content">
-            <h1>Pannello di amministrazione</h1>
-            <p>Gestisci la faculty del Master, programma la pubblicazione degli articoli del blog e controlla la visibilità dei contenuti online.</p>
-            <div class="nav-links">
-                <div class="nav-group">
-                    <div class="nav-group-title">Area riservata / Piattaforma</div>
-                    <div class="nav-group-links">
-                        <a href="#calendar">Calendario</a>
-                        <a href="#faculty">Gestione docenti</a>
-                        <a href="#resources">Risorse</a>
-                        <a href="#teacher-materials">Materiali Docenti</a>
-                        <a href="#teacher-docs">Liberatorie Docenti</a>
-                        <a href="#questions">💬 Domande <span id="questions-nav-badge" style="display:none; background:#f97316; color:white; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:700;">0</span></a>
-                        <a href="#lms-courses">Percorsi Formativi</a>
-                        <a href="#lms-modules">Moduli e Lezioni</a>
-                        <a href="#lms-enrollments">Iscrizioni</a>
-                        <a href="#attendance">Presenze</a>
-                        <a href="#workflow">Produzione</a>
-                    </div>
-                </div>
-                <div class="nav-group">
-                    <div class="nav-group-title">Sito pubblico</div>
-                    <div class="nav-group-links">
-                        <a href="#blog">Gestione blog</a>
-                        <a href="#partners">Gestione partner</a>
-                    </div>
-                </div>
-                <div class="nav-utility-links">
-                    <a href="/index.html">&larr; Torna al sito</a>
-                    <a href="#" id="logout-btn" onclick="adminLogout(); return false;" style="background: rgba(255,255,255,0.15);">Esci</a>
-                </div>
+    <!-- Mobile header -->
+    <div class="mobile-header" style="display:none;">
+        <button type="button" aria-label="Apri menu" onclick="document.querySelector('.admin-sidebar').classList.toggle('open')">☰</button>
+        <span style="font-weight: 600;">Admin Panel</span>
+    </div>
+
+    <!-- Sidebar -->
+    <nav class="admin-sidebar" style="display:none;">
+        <div class="sidebar-header">
+            <h1>🌱 Carbon Farming</h1>
+            <p>Pannello Amministrazione</p>
+        </div>
+        <div class="sidebar-nav">
+            <div class="sidebar-group">
+                <div class="sidebar-group-title">Piattaforma LMS</div>
+                <a href="#calendar" data-section="calendar">📅 Calendario</a>
+                <a href="#faculty" data-section="faculty">👨‍🏫 Docenti</a>
+                <a href="#resources" data-section="resources">📚 Risorse</a>
+                <a href="#teacher-materials" data-section="teacher-materials">📤 Materiali docenti</a>
+                <a href="#teacher-docs" data-section="teacher-docs">📄 Liberatorie</a>
+                <a href="#questions" data-section="questions">💬 Domande <span id="questions-nav-badge" style="display:none; background:#f97316; color:white; border-radius:999px; padding:2px 6px; font-size:11px; margin-left:auto;">0</span></a>
+            </div>
+            <div class="sidebar-group">
+                <div class="sidebar-group-title">Gestione Corsi</div>
+                <a href="#lms-courses" data-section="lms-courses">🎓 Percorsi formativi</a>
+                <a href="#lms-modules" data-section="lms-modules">📦 Moduli e lezioni</a>
+                <a href="#lms-enrollments" data-section="lms-enrollments">👥 Iscrizioni</a>
+                <a href="#attendance" data-section="attendance">✅ Presenze</a>
+            </div>
+            <div class="sidebar-group">
+                <div class="sidebar-group-title">Produzione</div>
+                <a href="#workflow" data-section="workflow">🎬 Produzione contenuti</a>
+            </div>
+            <div class="sidebar-group">
+                <div class="sidebar-group-title">Sito Pubblico</div>
+                <a href="#blog" data-section="blog">📝 Blog</a>
+                <a href="#partners" data-section="partners">🤝 Partner</a>
             </div>
         </div>
-    </header>
+        <div class="sidebar-footer">
+            <a href="/index.html">← Torna al sito</a>
+            <a href="#" id="logout-btn" onclick="adminLogout(); return false;">🚪 Esci</a>
+        </div>
+    </nav>
 
     <!-- LOGIN GATE -->
     <div id="login-gate" style="min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 24px;">
@@ -903,7 +972,7 @@
         </div>
     </div>
 
-    <main style="display:none;">
+    <main class="admin-main" style="display:none;">
         <section id="calendar">
             <header>
                 <h2>Calendario lezioni</h2>
@@ -2529,8 +2598,10 @@ Buono studio!</textarea>
         }
 
         const loginGate = document.getElementById('login-gate');
-        const mainContent = document.querySelector('main');
-        const headerEl = document.querySelector('header');
+        const mainContent = document.querySelector('.admin-main');
+        const sidebarEl = document.querySelector('.admin-sidebar');
+        const mobileHeaderEl = document.querySelector('.mobile-header');
+        const sidebarLinks = Array.from(document.querySelectorAll('.sidebar-nav a[data-section]'));
         let adminBootstrapPromise = null;
 
         function sleep(ms) {
@@ -2590,8 +2661,10 @@ Buono studio!</textarea>
             isAuthenticated = true;
             loginGate.style.display = 'none';
             mainContent.style.display = 'block';
-            headerEl.style.display = 'block';
+            sidebarEl.style.display = 'flex';
+            mobileHeaderEl.style.display = window.innerWidth <= 768 ? 'flex' : 'none';
             document.getElementById('logout-btn').style.display = 'inline-block';
+            handleHashRoute();
             bootstrapAdminData();
         }
 
@@ -2601,9 +2674,54 @@ Buono studio!</textarea>
             if (pwdField) pwdField.value = '';
             loginGate.style.display = 'flex';
             mainContent.style.display = 'none';
-            headerEl.style.display = 'none';
+            sidebarEl.style.display = 'none';
+            mobileHeaderEl.style.display = 'none';
             document.getElementById('logout-btn').style.display = 'none';
         }
+
+        // === SECTION ROUTING ===
+        function showSection(sectionId) {
+            document.querySelectorAll('.admin-main section').forEach((section) => {
+                section.classList.remove('active');
+            });
+
+            const target = document.getElementById(sectionId);
+            if (target) {
+                target.classList.add('active');
+            }
+
+            sidebarLinks.forEach((link) => {
+                link.classList.toggle('active', link.dataset.section === sectionId);
+            });
+
+            if (window.innerWidth <= 768) {
+                sidebarEl.classList.remove('open');
+            }
+        }
+
+        function handleHashRoute() {
+            if (!isAuthenticated) return;
+            const hash = (location.hash || '').replace('#', '') || 'calendar';
+            const target = document.getElementById(hash) ? hash : 'calendar';
+            showSection(target);
+        }
+
+        window.addEventListener('hashchange', handleHashRoute);
+
+        sidebarLinks.forEach((link) => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                const section = link.dataset.section;
+                if (section) {
+                    location.hash = section;
+                }
+            });
+        });
+
+        window.addEventListener('resize', () => {
+            if (!isAuthenticated) return;
+            mobileHeaderEl.style.display = window.innerWidth <= 768 ? 'flex' : 'none';
+        });
 
         async function checkAuth() {
             // Controlla se il server richiede autenticazione

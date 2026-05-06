@@ -76,6 +76,7 @@
         .question-number { color: var(--gray-500); font-size: 0.8rem; margin-bottom: 4px; }
         .option-label { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--gray-200); margin-bottom: 6px; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: white; font-size: 0.9rem; }
         .option-label:hover { border-color: var(--green-500); background: var(--green-100); }
+        .option-label.selected { border-color: var(--green-500); background: var(--green-100); }
         .option-label input { accent-color: var(--green-500); }
         .option-label.correct { border-color: #22c55e; background: #f0fdf4; }
         .option-label.incorrect { border-color: #ef4444; background: #fef2f2; }
@@ -344,6 +345,7 @@
         let quizPassed = false;
         let quizBestScore = null;
         let completionState = null;
+        let quizAnswers = [];
         const viewedResourceIds = new Set();
 
         async function loadLesson() {
@@ -698,6 +700,7 @@
                 if (!quiz) return;
                 currentQuiz = quiz;
                 quizAttemptId = null;
+                quizAnswers = Array.isArray(quiz.questions) ? quiz.questions.map(() => null) : [];
 
                 document.getElementById('quiz-section').style.display = '';
                 document.getElementById('quiz-title').textContent = quiz.title || 'Quiz di verifica';
@@ -769,6 +772,7 @@
 
             container.innerHTML = questions.map((q, i) => {
                 if (!q || !q.id) return '';
+                const selectedAnswer = quizAnswers[i];
                 
                 const inputType = q.questionType === 'multiple_choice' ? 'checkbox' : 'radio';
                 const options = (q.options || []).map((opt, j) => {
@@ -782,8 +786,8 @@
                     }
                     
                     return `
-                        <label class="option-label" data-question="${q.id}" data-option="${j}">
-                            <input type="${inputType}" name="q_${q.id}" value="${safeValue}" />
+                        <label class="option-label ${answersMatch(selectedAnswer, opt) ? 'selected' : ''}" data-question="${q.id}" data-option="${j}">
+                            <input type="${inputType}" name="q_${q.id}" value="${safeValue}" ${answersMatch(selectedAnswer, opt) ? 'checked' : ''} />
                             <span>${escapeHtml(String(opt))}</span>
                         </label>
                     `;
@@ -804,6 +808,34 @@
             const submitBtn = document.getElementById('quiz-submit-btn');
             if (actionsEl) actionsEl.style.display = '';
             if (submitBtn) submitBtn.onclick = submitQuiz;
+
+            container.querySelectorAll('.option-label').forEach((label) => {
+                const input = label.querySelector('input');
+                if (!input) return;
+                input.addEventListener('change', () => {
+                    const questionDiv = label.closest('.question');
+                    const questionId = questionDiv?.dataset?.questionId;
+                    const questionIndex = currentQuiz.questions.findIndex(item => item.id === questionId);
+                    const question = currentQuiz.questions[questionIndex];
+                    if (questionIndex < 0 || !question) return;
+
+                    if (question.questionType === 'multiple_choice') {
+                        const checked = questionDiv.querySelectorAll(`input[name="q_${question.id}"]:checked`);
+                        quizAnswers[questionIndex] = Array.from(checked).map(el => parseQuizValue(el.value)).filter(v => v !== null);
+                        questionDiv.querySelectorAll('.option-label').forEach((optionLabel) => {
+                            const optionInput = optionLabel.querySelector('input');
+                            optionLabel.classList.toggle('selected', !!optionInput?.checked);
+                        });
+                        return;
+                    }
+
+                    quizAnswers[questionIndex] = parseQuizValue(input.value);
+                    questionDiv.querySelectorAll('.option-label').forEach((optionLabel) => {
+                        const optionInput = optionLabel.querySelector('input');
+                        optionLabel.classList.toggle('selected', !!optionInput?.checked);
+                    });
+                });
+            });
         }
 
         async function submitQuiz() {
@@ -813,43 +845,10 @@
                 await startQuizAttempt(currentQuiz.id);
             }
 
-            const answers = currentQuiz.questions.map((q) => {
-                try {
-                    if (q.questionType === 'multiple_choice') {
-                        const checked = document.querySelectorAll(`input[name="q_${q.id}"]:checked`);
-                        return {
-                            questionIndex: currentQuiz.questions.findIndex(item => item.id === q.id),
-                            selectedAnswer: Array.from(checked).map(el => {
-                                if (!el || !el.value) return null;
-                                try {
-                                    return JSON.parse(el.value);
-                                } catch (e) {
-                                    return el.value;
-                                }
-                            }).filter(v => v !== null)
-                        };
-                    }
-                    const checked = document.querySelector(`input[name="q_${q.id}"]:checked`);
-                    let selectedAnswer = null;
-                    if (checked && checked.value) {
-                        try {
-                            selectedAnswer = JSON.parse(checked.value);
-                        } catch (e) {
-                            selectedAnswer = checked.value;
-                        }
-                    }
-                    return {
-                        questionIndex: currentQuiz.questions.findIndex(item => item.id === q.id),
-                        selectedAnswer
-                    };
-                } catch (error) {
-                    console.warn(`Error processing question ${q.id}:`, error);
-                    return {
-                        questionIndex: currentQuiz.questions.findIndex(item => item.id === q.id),
-                        selectedAnswer: null
-                    };
-                }
-            });
+            const answers = currentQuiz.questions.map((q, index) => ({
+                questionIndex: index,
+                selectedAnswer: normalizeQuizAnswerForSubmit(quizAnswers[index], q.questionType)
+            }));
 
             try {
                 document.getElementById('quiz-submit-btn').disabled = true;
@@ -943,6 +942,7 @@
                 await startQuizAttempt(currentQuiz.id);
                 quizPassed = false;
                 quizBestScore = null;
+                quizAnswers = Array.isArray(currentQuiz.questions) ? currentQuiz.questions.map(() => null) : [];
                 document.getElementById('quiz-result-area').innerHTML = '';
                 document.getElementById('quiz-actions').innerHTML = `
                     <button class="btn btn-primary" id="quiz-submit-btn">Invia risposte</button>
@@ -952,6 +952,30 @@
                 console.error('Error restarting quiz', error);
             }
         };
+
+        function parseQuizValue(value) {
+            if (value === null || value === undefined || value === '') return null;
+            try {
+                return JSON.parse(value);
+            } catch (_error) {
+                return value;
+            }
+        }
+
+        function normalizeQuizAnswerForSubmit(value, questionType) {
+            if (value === null || value === undefined) return null;
+            if (questionType === 'multiple_choice') {
+                return Array.isArray(value) ? value : [value];
+            }
+            return value;
+        }
+
+        function answersMatch(selectedAnswer, optionValue) {
+            if (Array.isArray(selectedAnswer)) {
+                return selectedAnswer.some(item => String(item) === String(optionValue));
+            }
+            return String(selectedAnswer) === String(optionValue);
+        }
 
         function renderAttempts(attempts) {
             const container = document.getElementById('quiz-attempts-area');

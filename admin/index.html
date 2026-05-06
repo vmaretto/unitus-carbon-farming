@@ -3066,22 +3066,29 @@ Buono studio!</textarea>
 
         let allLessonsCache = null;
 
-        async function ensureAllLessonsCache() {
-            if (!allLessonsCache) {
+        async function ensureAllLessonsCache(forceRefresh = false) {
+            if (forceRefresh || !Array.isArray(allLessonsCache) || allLessonsCache.length === 0) {
                 try {
                     allLessonsCache = await apiRequest('/api/lessons');
                 } catch (e) {
-                    allLessonsCache = [];
+                    if (!Array.isArray(allLessonsCache)) {
+                        allLessonsCache = [];
+                    }
+                    throw e;
                 }
             }
             return allLessonsCache;
         }
 
-        async function updateResourceLessonSelect() {
+        async function updateResourceLessonSelect(forceRefresh = false) {
             const sel = document.getElementById('resource-lesson');
             const cur = sel.value;
 
-            await ensureAllLessonsCache();
+            try {
+                await ensureAllLessonsCache(forceRefresh);
+            } catch (error) {
+                // Keep rendering with the current cache, if any.
+            }
 
             sel.innerHTML = '<option value="">-- Nessuna lezione --</option>';
             allLessonsCache.forEach(l => {
@@ -6620,7 +6627,7 @@ Buono studio!</textarea>
             let html = `
                 <h4 style="margin: 0 0 12px; color: var(--green-700);">Lezioni del modulo</h4>
                 <div data-editing-lesson-title style="display: none; margin-bottom: 12px; padding: 10px 14px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; font-weight: 600; color: #92400e;">✏️ Modifica: <span></span></div>
-                <form data-lms-lesson-form="${moduleId}">
+                <form data-lms-lesson-form="${moduleId}" data-module-id="${moduleId}">
                     <div class="form-grid">
                         <label>Titolo <input type="text" data-field="title" required placeholder="Titolo lezione"></label>
                         <label>Video URL <input type="text" data-field="videoUrl" placeholder="https://... (opzionale)"></label>
@@ -6666,10 +6673,13 @@ Buono studio!</textarea>
                     <input type="hidden" data-field="materials" value="[]">
                     <label style="margin-top: 8px;">
                         Collega a lezione calendario
-                        <select data-field="calendarLessonId" required style="width:100%; padding:8px; border:1px solid var(--gray-200); border-radius:8px;">
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <select data-field="calendarLessonId" required style="flex:1; width:100%; padding:8px; border:1px solid var(--gray-200); border-radius:8px;">
                             <option value="">-- Seleziona una lezione calendario --</option>
                             ${(allLessonsCache || []).map(l => '<option value="' + l.id + '">' + (l.title || 'Lezione') + (l.startDatetime ? ' (' + new Date(l.startDatetime).toLocaleDateString('it-IT') + ')' : '') + '</option>').join('')}
-                        </select>
+                            </select>
+                            <button type="button" class="secondary" data-refresh-calendar-lessons="${moduleId}" title="Ricarica le lezioni calendario">↻</button>
+                        </div>
                         <small style="display:block; margin-top:4px; color: var(--gray-500);">Obbligatorio per far comparire materiali e quiz nelle risorse collegate.</small>
                     </label>
                     <div class="actions">
@@ -6972,6 +6982,7 @@ Buono studio!</textarea>
                 const deleteQuestionBtn = ev.target.closest('[data-delete-question]');
                 const deleteQuizBtn = ev.target.closest('[data-delete-quiz]');
                 const genModQuizBtn = ev.target.closest('[data-generate-mod-quiz]');
+                const refreshCalendarLessonsBtn = ev.target.closest('[data-refresh-calendar-lessons]');
 
                 if (copyLessonBtn) {
                     await copyAdminEntityId(copyLessonBtn, copyLessonBtn.dataset.copyLessonId);
@@ -7038,6 +7049,22 @@ Buono studio!</textarea>
                     }
                     genModQuizBtn.disabled = false;
                     genModQuizBtn.textContent = '🤖 Genera quiz modulo';
+                    return;
+                }
+
+                if (refreshCalendarLessonsBtn) {
+                    const mid = refreshCalendarLessonsBtn.dataset.refreshCalendarLessons;
+                    refreshCalendarLessonsBtn.disabled = true;
+                    refreshCalendarLessonsBtn.textContent = '⟳';
+                    try {
+                        await ensureAllLessonsCache(true);
+                        loadLmsLessons(mid, panel);
+                    } catch (error) {
+                        showToast('Impossibile ricaricare le lezioni calendario', 'error');
+                    } finally {
+                        refreshCalendarLessonsBtn.disabled = false;
+                        refreshCalendarLessonsBtn.textContent = '↻';
+                    }
                     return;
                 }
 

@@ -18,8 +18,9 @@ test('la sezione LMS admin non contiene debug temporanei e usa cache lezioni per
   const html = fs.readFileSync(path.join(__dirname, '..', 'admin', 'index.html'), 'utf8');
 
   assert.match(html, /lmsLessonsByModule/);
-  assert.match(html, /async function ensureAllLessonsCache\(\)/);
-  assert.match(html, /await ensureAllLessonsCache\(\);/);
+  assert.match(html, /async function ensureAllLessonsCache\(forceRefresh = false\)/);
+  assert.match(html, /data-refresh-calendar-lessons/);
+  assert.match(html, /await ensureAllLessonsCache\(forceRefresh\);/);
   assert.doesNotMatch(html, /🐛 DEBUG|CHIAMANDO: \/api\/materials\/upload|Edit clicked, id:|Found enrollment:/);
   assert.match(html, /Quiz manuale della lezione/);
   assert.match(html, /data-manual-lms-quiz-save/);

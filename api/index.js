@@ -10488,6 +10488,133 @@ app.delete('/api/admin/surveys/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// Genera un questionario con AI in base al pubblico e allo scopo descritto dall'admin
+app.post('/api/admin/surveys/generate-with-ai', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(503).json({ error: 'Generazione AI non disponibile (ANTHROPIC_API_KEY non configurata)' });
+  }
+  const { targetRole, purpose, scopeType, scopeId, numQuestions } = req.body || {};
+  if (!['student', 'teacher'].includes(targetRole)) {
+    return res.status(400).json({ error: 'targetRole (student|teacher) obbligatorio' });
+  }
+  if (!purpose || !String(purpose).trim()) {
+    return res.status(400).json({ error: 'purpose: descrivi cosa vuoi misurare' });
+  }
+  const nq = Math.min(Math.max(parseInt(numQuestions || 8, 10) || 8, 3), 15);
+
+  // Costruisco il contesto dello scope per dare info concrete a Claude
+  let scopeContext = '';
+  try {
+    if (scopeType === 'course' && scopeId) {
+      const { rows } = await pool.query('SELECT title, description FROM courses WHERE id=$1', [scopeId]);
+      if (rows[0]) scopeContext = `Corso: "${rows[0].title}". ${rows[0].description || ''}`;
+    } else if (scopeType === 'module' && scopeId) {
+      const { rows } = await pool.query('SELECT name, description, contents_main, learning_objectives FROM modules WHERE id=$1', [scopeId]);
+      if (rows[0]) scopeContext = `Modulo: "${rows[0].name}".\n${rows[0].description || ''}\nContenuti: ${rows[0].contents_main || ''}\nObiettivi: ${rows[0].learning_objectives || ''}`;
+    } else if (scopeType === 'lesson' && scopeId) {
+      const { rows } = await pool.query('SELECT l.title, l.description, m.name AS module_name FROM lessons l LEFT JOIN modules m ON m.id=l.module_id WHERE l.id=$1', [scopeId]);
+      if (rows[0]) scopeContext = `Lezione: "${rows[0].title}"${rows[0].module_name ? ` (modulo "${rows[0].module_name}")` : ''}.\n${rows[0].description || ''}`;
+    } else if (scopeType === 'teacher' && scopeId) {
+      const { rows } = await pool.query('SELECT name, role, bio FROM faculty WHERE id=$1', [scopeId]);
+      if (rows[0]) scopeContext = `Docente valutato: ${rows[0].name}${rows[0].role ? ` (${rows[0].role})` : ''}.\n${rows[0].bio || ''}`;
+    }
+  } catch (_) {}
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk').default;
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const audienceLabel = targetRole === 'student'
+      ? 'studenti del Master in Carbon Farming (Università della Tuscia)'
+      : 'docenti del Master in Carbon Farming (Università della Tuscia)';
+
+    const prompt = `Sei un esperto di valutazione didattica universitaria. Devi creare un questionario di feedback.
+
+PUBBLICO: ${audienceLabel}.
+SCOPO DEL FEEDBACK (descritto dall'admin): ${String(purpose).trim()}
+${scopeContext ? '\nCONTESTO SPECIFICO:\n' + scopeContext + '\n' : ''}
+
+ISTRUZIONI:
+- Genera esattamente ${nq} domande di feedback, mix di rating e testo libero (almeno 1-2 testo libero).
+- Le domande di tipo "rating" sono su scala 1-5 (1=pessimo, 5=ottimo) e devono essere formulate in positivo (es. "Quanto è stato chiaro...", "Quanto è utile...").
+- Le domande "text" sono aperte (es. "Cosa miglioreresti?", "Suggerimenti?").
+- Le prime domande siano più generali, le ultime più specifiche/aperte.
+- Ottimizza per ricavare insight azionabili.
+- Tono professionale ma amichevole, in italiano.
+- Formulazioni neutre, non leading.
+
+Genera anche un titolo del questionario (breve, sotto i 60 caratteri) e una descrizione (1-2 frasi) che apparirà a chi compila.
+
+FORMATO OUTPUT (JSON valido, niente altro testo):
+{
+  "title": "...",
+  "description": "...",
+  "questions": [
+    { "text": "...", "questionType": "rating", "isRequired": true },
+    { "text": "...", "questionType": "text",   "isRequired": false }
+  ]
+}`;
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2048,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    const responseText = message.content[0].text;
+    let generated;
+    try {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('JSON non trovato');
+      generated = JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      console.error('Error parsing AI survey response:', responseText);
+      return res.status(500).json({ error: 'Errore parsing risposta AI' });
+    }
+    if (!generated.title || !Array.isArray(generated.questions) || !generated.questions.length) {
+      return res.status(500).json({ error: 'Risposta AI incompleta' });
+    }
+
+    // Salva direttamente survey + questions in DB (l'admin potrà poi modificarle)
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const surveyId = uuidv4();
+      await client.query(
+        'INSERT INTO surveys (id, title, description, target_role) VALUES ($1, $2, $3, $4)',
+        [surveyId, String(generated.title).slice(0, 200), generated.description || null, targetRole]
+      );
+      let order = 0;
+      for (const q of generated.questions) {
+        if (!q.text) continue;
+        const qt = ['rating', 'text'].includes(q.questionType) ? q.questionType : 'rating';
+        await client.query(
+          'INSERT INTO survey_questions (id, survey_id, text, question_type, is_required, sort_order) VALUES ($1, $2, $3, $4, $5, $6)',
+          [uuidv4(), surveyId, String(q.text).slice(0, 500), qt, q.isRequired !== false, order++]
+        );
+      }
+      await client.query('COMMIT');
+      res.status(201).json({
+        id: surveyId,
+        title: generated.title,
+        description: generated.description,
+        targetRole,
+        questionCount: order,
+        createdByAi: true
+      });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error generating survey with AI:', error);
+    res.status(error.statusCode || 500).json({ error: 'Errore generazione AI: ' + (error.message || 'sconosciuto') });
+  }
+});
+
 // --- ADMIN: SURVEY QUESTIONS ---
 
 app.post('/api/admin/surveys/:id/questions', requireAdmin, async (req, res) => {

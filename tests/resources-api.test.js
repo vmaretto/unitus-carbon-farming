@@ -521,6 +521,78 @@ test('GET /api/admin/student-progress aggrega frequenza, quiz, materiali e doman
   ]);
 });
 
+test('POST /api/teachers/student-view-token genera un token guest per la consultazione studenti', async () => {
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      assert.match(statement, /SELECT id, email, first_name, last_name FROM faculty WHERE id = \$1 LIMIT 1/);
+      assert.deepEqual(params, ['teacher-1']);
+      return {
+        rows: [{
+          id: 'teacher-1',
+          email: 'docente@example.com',
+          first_name: 'Giulia',
+          last_name: 'Verdi'
+        }]
+      };
+    }
+  });
+
+  const layer = apiModule.app._router.stack.find((entry) => entry?.route?.path === '/api/teachers/student-view-token' && entry.route.methods.post);
+  assert.ok(layer, 'route POST /api/teachers/student-view-token non trovata');
+
+  const req = {
+    method: 'POST',
+    url: '/api/teachers/student-view-token',
+    headers: {},
+    teacher: { id: 'teacher-1' }
+  };
+  const res = createJsonRes();
+
+  await layer.route.stack[layer.route.stack.length - 1].handle(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.ok(res.body.token);
+  assert.equal(res.body.user.role, 'guest');
+  assert.equal(res.body.user.firstName, 'Giulia');
+  assert.equal(res.body.user.accessMode, 'student_view');
+});
+
+test('GET /api/students/me ritorna un profilo sintetico per la vista guest', async () => {
+  let queryCalled = false;
+  apiModule.__setPool({
+    async query() {
+      queryCalled = true;
+      throw new Error('query non attesa');
+    }
+  });
+
+  const layer = apiModule.app._router.stack.find((entry) => entry?.route?.path === '/api/students/me' && entry.route.methods.get);
+  assert.ok(layer, 'route GET /api/students/me non trovata');
+
+  const req = {
+    method: 'GET',
+    url: '/api/students/me',
+    headers: {},
+    user: {
+      role: 'guest',
+      teacherId: 'teacher-1',
+      email: 'docente@example.com',
+      firstName: 'Giulia',
+      lastName: 'Verdi'
+    }
+  };
+  const res = createJsonRes();
+
+  await layer.route.stack[layer.route.stack.length - 1].handle(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(queryCalled, false);
+  assert.equal(res.body.role, 'guest');
+  assert.equal(res.body.firstName, 'Giulia');
+  assert.equal(res.body.accessMode, 'student_view');
+});
+
 test('POST /api/quiz-attempts/:id/submit valuta correttamente i quiz LMS anche con risposte serializzate', async () => {
   const queries = [];
   apiModule.__setPool({

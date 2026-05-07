@@ -895,6 +895,45 @@ app.get('/api/teachers/me', requireTeacher, async (req, res) => {
   }
 });
 
+app.post('/api/teachers/student-view-token', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, email, first_name, last_name FROM faculty WHERE id = $1 LIMIT 1',
+      [req.teacher.id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Docente non trovato' });
+    }
+
+    const teacher = rows[0];
+    const token = generateToken({
+      role: 'guest',
+      purpose: 'teacher_student_view',
+      teacherId: teacher.id,
+      firstName: teacher.first_name,
+      lastName: teacher.last_name,
+      email: teacher.email
+    });
+
+    res.json({
+      token,
+      user: {
+        role: 'guest',
+        firstName: teacher.first_name,
+        lastName: teacher.last_name,
+        email: teacher.email,
+        accessMode: 'student_view'
+      }
+    });
+  } catch (error) {
+    console.error('Error generating teacher student-view token', error);
+    res.status(500).json({ error: 'Unable to generate student view token' });
+  }
+});
+
 // Get teacher statistics
 app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
   if (!ensurePool(res)) return;
@@ -7093,6 +7132,17 @@ app.post('/api/auth/confirm-magic/:token', async (req, res) => {
 // Corsi dello studente loggato
 app.get('/api/students/me', requireStudent, async (req, res) => {
   if (!ensurePool(res)) return;
+  if (req.user.role === 'guest') {
+    return res.json({
+      id: req.user.teacherId || req.user.userId || null,
+      email: req.user.email || null,
+      firstName: req.user.firstName || null,
+      lastName: req.user.lastName || null,
+      role: 'guest',
+      updatedAt: null,
+      accessMode: 'student_view'
+    });
+  }
   try {
     const { rows } = await pool.query(
       'SELECT id, email, first_name AS "firstName", last_name AS "lastName", role, updated_at AS "updatedAt" FROM users WHERE id = $1',

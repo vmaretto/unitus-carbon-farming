@@ -7,6 +7,17 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        (function() {
+            try {
+                const stored = localStorage.getItem('learnUser');
+                const user = stored ? JSON.parse(stored) : {};
+                if (user.role === 'guest') {
+                    document.documentElement.classList.add('guest-view');
+                }
+            } catch (_error) {}
+        })();
+    </script>
     <style>
         :root { --green-900:#1b3a2d; --green-700:#245a3d; --green-500:#2c7a4b; --green-100:#ecf6f0; --orange-500:#ff7a1a; --gray-900:#1c1c1c; --gray-700:#3d3d3d; --gray-500:#6b6b6b; --gray-200:#d9d9d9; --gray-100:#f3f4f6; }
         * { box-sizing: border-box; }
@@ -47,6 +58,11 @@
         .lesson-desc { color: var(--gray-500); font-size: 0.8rem; margin-top: 2px; }
         .lesson-duration { color: var(--gray-500); font-size: 0.8rem; white-space: nowrap; }
         .empty { color: var(--gray-500); text-align: center; padding: 32px; }
+        html.guest-view .progress-bar,
+        html.guest-view .attendance-legend,
+        html.guest-view .attendance-summary {
+            display: none !important;
+        }
         @media (max-width: 980px) {
             .header-content { flex-direction: column; align-items: flex-start; }
             .nav-links { width: 100%; gap: 16px; flex-wrap: wrap; }

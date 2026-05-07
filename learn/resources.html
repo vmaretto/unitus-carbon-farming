@@ -38,6 +38,8 @@
         .resource-arrow { color: var(--gray-500); font-size: 1.2rem; }
         .empty { color: var(--gray-500); text-align: center; padding: 32px; }
         .loading { text-align: center; padding: 40px; color: var(--gray-500); }
+        .resource-group + .resource-group { margin-top: 16px; }
+        .resource-group-title { font-size: 0.95rem; font-weight: 700; color: var(--green-700); margin: 0 0 12px; }
         @media (max-width: 640px) { 
             .header-content { flex-direction: column; align-items: flex-start; }
             .resource-item { flex-direction: column; text-align: center; }
@@ -147,6 +149,26 @@
             `;
         }
 
+        function renderResourceGroup(title, items, emptyText) {
+            if (!items.length) {
+                return `
+                    <div class="resource-group">
+                        <h3 class="resource-group-title">${title}</h3>
+                        <div class="empty">${emptyText}</div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="resource-group">
+                    <h3 class="resource-group-title">${title}</h3>
+                    <div class="resource-list">
+                        ${items.map(renderResource).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
         async function loadResources() {
             try {
                 const res = await fetch('/api/resources?published=true');
@@ -155,6 +177,7 @@
                 const videos = allResources.filter(r => r.resourceType === 'video');
                 const allDocs = allResources.filter(r => ['pdf', 'document', 'audio', 'link'].includes(r.resourceType));
                 const generalDocs = allDocs.filter(r => !r.teacherId && !r.lessonId);
+                const lessonDocs = allDocs.filter(r => r.lessonId);
                 const videoList = document.getElementById('video-list');
                 const docList = document.getElementById('doc-list');
 
@@ -164,7 +187,13 @@
                     videoList.innerHTML = '<div class="empty">Nessun video disponibile</div>';
                 }
 
-                if (generalDocs.length > 0) {
+                if (window.__isTeacherGuestView) {
+                    const guestGroups = [
+                        renderResourceGroup('Materiali generali', generalDocs, 'Nessun materiale generale disponibile'),
+                        renderResourceGroup('Materiali delle lezioni', lessonDocs, 'Nessun materiale collegato alle lezioni')
+                    ].join('');
+                    docList.innerHTML = guestGroups;
+                } else if (generalDocs.length > 0) {
                     docList.innerHTML = generalDocs.map(renderResource).join('');
                 } else {
                     docList.innerHTML = '<div class="empty">Nessun documento disponibile</div>';

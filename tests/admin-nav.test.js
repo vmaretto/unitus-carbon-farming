@@ -36,6 +36,7 @@ test('la sezione LMS admin non contiene debug temporanei e usa cache lezioni per
 
 test('la lezione usa il flusso quiz-attempts e le risorse non espongono quiz', () => {
   const lessonHtml = fs.readFileSync(path.join(__dirname, '..', 'learn', 'lesson.html'), 'utf8');
+  const courseHtml = fs.readFileSync(path.join(__dirname, '..', 'learn', 'course.html'), 'utf8');
   const resourcesHtml = fs.readFileSync(path.join(__dirname, '..', 'learn', 'resources.html'), 'utf8');
 
   assert.match(lessonHtml, /\/api\/quiz-attempts\/start/);
@@ -49,6 +50,10 @@ test('la lezione usa il flusso quiz-attempts e le risorse non espongono quiz', (
   assert.match(lessonHtml, /id="quiz-review-area"/);
   assert.match(lessonHtml, /renderQuizReview\(result\)/);
   assert.match(lessonHtml, /formatAttemptDate/);
+  assert.match(courseHtml, /document\.documentElement\.classList\.add\('guest-view'\)/);
+  assert.match(courseHtml, /html\.guest-view \.progress-bar,/);
+  assert.doesNotMatch(courseHtml, /Materiali didattici/);
   assert.match(resourcesHtml, /quizSection\.style\.display = 'none'/);
   assert.match(resourcesHtml, /if \(quizList\) quizList\.innerHTML = '';/);
+  assert.match(resourcesHtml, /Materiali delle lezioni/);
 });

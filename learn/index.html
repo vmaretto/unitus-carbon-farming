@@ -403,7 +403,6 @@
         }
 
         async function renderGuestDashboard(user) {
-            const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Ospite';
             let courses = [];
             try {
                 courses = await api('/api/lms/my-courses');
@@ -428,24 +427,15 @@
                 : '<div class="empty">Nessun percorso disponibile in consultazione.</div>';
 
             document.querySelector('main').innerHTML = `
-                <div class="card" style="text-align: center; padding: 40px 20px;">
-                    <h2 style="color: var(--green-700);">Benvenuto/a, ${name}</h2>
-                    <p style="color: var(--gray-600); font-size: 1.1rem; margin-bottom: 18px;">
-                        Hai accesso in modalità consultazione docente ai contenuti del Master Carbon Farming.
-                    </p>
-                    <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 18px;">
-                        <a href="/learn/resources.html" style="display: inline-block; padding: 16px 24px; background: #0369a1; color: white; border-radius: 12px; text-decoration: none; font-weight: 600;">
-                            📚 Materiali didattici
-                        </a>
-                    </div>
-                    <p style="margin-top: 10px; padding: 12px 16px; background: #fef3c7; border-radius: 8px; color: #92400e; font-size: 0.9rem; display: inline-block;">
-                        ℹ️ Profilo consultazione: il tracking di progresso, quiz e presenze non è attivo.
-                    </p>
-                </div>
                 <div class="card">
                     <h2>Corsi disponibili</h2>
                     <div class="course-list">
                         ${courseCards}
+                    </div>
+                    <div style="margin-top:16px; text-align:center;">
+                        <a href="/learn/resources.html" style="display:inline-flex; align-items:center; gap:8px; padding:12px 18px; border-radius:999px; background:var(--green-100); color:var(--green-900); text-decoration:none; font-weight:600;">
+                            📚 Risorse e altri materiali
+                        </a>
                     </div>
                 </div>
             `;

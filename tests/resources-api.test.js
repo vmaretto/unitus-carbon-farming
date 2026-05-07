@@ -554,6 +554,7 @@ test('POST /api/teachers/student-view-token genera un token guest per la consult
   assert.equal(res.statusCode, 200);
   assert.ok(res.body.token);
   assert.equal(res.body.user.role, 'guest');
+  assert.equal(res.body.user.teacherId, 'teacher-1');
   assert.equal(res.body.user.firstName, 'Giulia');
   assert.equal(res.body.user.accessMode, 'student_view');
 });
@@ -594,11 +595,18 @@ test('GET /api/students/me ritorna un profilo sintetico per la vista guest', asy
 });
 
 test('GET /api/lms/my-courses ritorna i corsi per la vista guest docente', async () => {
+  let queryCount = 0;
   apiModule.__setPool({
     async query(sql, params = []) {
+      queryCount += 1;
       const statement = String(sql).replace(/\s+/g, ' ').trim();
-      if (statement.includes('FROM course_editions ce') && statement.includes('JOIN courses c ON c.id = ce.course_id') && statement.includes('ll.teacher_id = $1')) {
+
+      if (statement.includes('FROM lessons l') && statement.includes('JOIN modules m ON m.id = l.module_id') && statement.includes('JOIN courses c ON c.id = m.course_id') && statement.includes('WHERE l.teacher_id = $1')) {
         assert.deepEqual(params, ['teacher-1']);
+        return { rows: [] };
+      }
+
+      if (statement.includes('FROM course_editions ce') && statement.includes('JOIN courses c ON c.id = ce.course_id') && statement.includes('WHERE ce.is_active = true')) {
         return {
           rows: [{
             id: 'course-1',
@@ -649,6 +657,7 @@ test('GET /api/lms/my-courses ritorna i corsi per la vista guest docente', async
   assert.equal(res.body.length, 1);
   assert.equal(res.body[0].id, 'course-1');
   assert.equal(res.body[0].totalLessons, 12);
+  assert.equal(queryCount, 3);
 });
 
 test('POST /api/quiz-attempts/:id/submit valuta correttamente i quiz LMS anche con risposte serializzate', async () => {

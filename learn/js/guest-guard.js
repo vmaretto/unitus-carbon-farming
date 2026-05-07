@@ -31,9 +31,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         const logoutBtn = document.getElementById('logout-btn');
         if (window.__isTeacherGuestView && logoutBtn) {
-            logoutBtn.textContent = '↩ Torna al pannello docenti';
-            logoutBtn.setAttribute('href', '/teachers/');
-            logoutBtn.setAttribute('aria-label', 'Torna al pannello docenti');
+            logoutBtn.style.display = 'none';
         }
 
         if (window.__isTeacherGuestView && !document.getElementById('teacher-guest-banner')) {

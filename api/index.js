@@ -922,6 +922,7 @@ app.post('/api/teachers/student-view-token', requireTeacher, async (req, res) =>
       token,
       user: {
         role: 'guest',
+        teacherId: teacher.id,
         firstName: teacher.first_name,
         lastName: teacher.last_name,
         email: teacher.email,
@@ -7169,7 +7170,7 @@ app.get('/api/lms/my-courses', requireStudent, async (req, res) => {
 
       const schema = await getCourseEditionSchemaConfig();
       const fragments = buildCourseEditionSelectFragments(schema, 'ce');
-      const { rows } = await pool.query(`
+      const teacherCourseQuery = `
         SELECT DISTINCT ON (c.id) c.id, c.title, c.slug, c.description, c.cover_image_url AS "coverImageUrl",
                ce.id AS "editionId", ce.edition_name AS "editionName",
                ${fragments.totalPlannedHours},
@@ -7188,7 +7189,30 @@ app.get('/api/lms/my-courses', requireStudent, async (req, res) => {
         LEFT JOIN course_editions ce ON ce.course_id = c.id
         WHERE l.teacher_id = $1
         ORDER BY c.id, ce.start_date DESC NULLS LAST, ce.created_at DESC NULLS LAST, c.title
-      `, [req.user.teacherId]);
+      `;
+      const { rows: teacherRows } = await pool.query(teacherCourseQuery, [req.user.teacherId]);
+      if (teacherRows.length) {
+        return res.json(teacherRows);
+      }
+
+      const { rows } = await pool.query(`
+        SELECT DISTINCT ON (c.id) c.id, c.title, c.slug, c.description, c.cover_image_url AS "coverImageUrl",
+               ce.id AS "editionId", ce.edition_name AS "editionName",
+               ${fragments.totalPlannedHours},
+               ${fragments.minimumInPersonAttendanceRatio},
+               NULL::text AS "enrollmentStatus", NULL::timestamptz AS "enrolledAt",
+               (SELECT COUNT(*)::int FROM modules m WHERE m.course_id = c.id) AS "totalModules",
+               (SELECT COUNT(*)::int FROM lms_lessons ll
+                JOIN modules m2 ON m2.id = ll.lms_module_id
+                WHERE m2.course_id = c.id AND ll.is_published = true) AS "totalLessons",
+               0::numeric AS "attendedHours",
+               0::numeric AS "inPersonHours",
+               0::int AS "completedLessons"
+        FROM course_editions ce
+        JOIN courses c ON c.id = ce.course_id
+        WHERE ce.is_active = true
+        ORDER BY c.id, ce.start_date DESC NULLS LAST, ce.created_at DESC NULLS LAST, c.title
+      `);
 
       return res.json(rows);
     } catch (error) {

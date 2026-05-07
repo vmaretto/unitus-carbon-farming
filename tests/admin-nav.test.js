@@ -57,6 +57,7 @@ test('la lezione usa il flusso quiz-attempts e le risorse non espongono quiz', (
   assert.match(lessonHtml, /id="quiz-review-area"/);
   assert.match(lessonHtml, /renderQuizReview\(result\)/);
   assert.match(lessonHtml, /formatAttemptDate/);
+  assert.match(lessonHtml, /Presenza in aula o live registrata/);
   assert.match(courseHtml, /document\.documentElement\.classList\.add\('guest-view'\)/);
   assert.match(courseHtml, /html\.guest-view \.progress-bar,/);
   assert.doesNotMatch(courseHtml, /Materiali didattici/);

@@ -3364,8 +3364,21 @@ async function getLessonCompletionStatus(lessonId, userId, preloaded = {}) {
     [userId, lessonId]
   )).rows[0] || null;
 
+  const hasAttendance = typeof preloaded.hasAttendance === 'boolean'
+    ? preloaded.hasAttendance
+    : lesson.calendarLessonId
+      ? ((await pool.query(`
+        SELECT a.id
+        FROM attendance a
+        WHERE a.user_id = $2
+          AND a.lesson_id = $1
+          AND a.attendance_type IN ('in_person', 'remote_live')
+        LIMIT 1
+      `, [lesson.calendarLessonId, userId])).rows.length > 0)
+      : false;
+
   const videoPercent = Number(progress?.progress_percent || 0);
-  const videoOk = videoPercent >= 80;
+  const videoOk = hasAttendance ? true : videoPercent >= 80;
 
   const { rows: materialRows } = lesson.calendarLessonId
     ? await pool.query(`
@@ -3406,8 +3419,9 @@ async function getLessonCompletionStatus(lessonId, userId, preloaded = {}) {
     quizOk = (quizBestScore ?? -1) >= 70;
   }
 
-  const criteria = { video: videoOk, materials: materialsOk, quiz: quizOk };
+  const criteria = { attendance: hasAttendance, video: videoOk, materials: materialsOk, quiz: quizOk };
   const details = {
+    hasAttendance,
     videoPercent,
     videoRequired: 80,
     materialViewed,
@@ -8422,38 +8436,23 @@ app.post('/api/lms/lessons/:id/complete', requireStudent, requireNonGuest, async
     if (!lessonRows.length) return res.status(404).json({ error: 'Lesson not found' });
     const lesson = lessonRows[0];
 
-    // 2. Controlla se lo studente ha una presenza (in_person o remote_live)
-    const { rows: attendanceRows } = await pool.query(`
-      SELECT a.id FROM attendance a
-      JOIN lms_lessons ll ON ll.id = $1
-      WHERE a.user_id = $2
-      AND a.lesson_id = ll.calendar_lesson_id
-      AND a.attendance_type IN ('in_person', 'remote_live')
-      LIMIT 1
-    `, [lessonId, userId]);
+    const { rows: attendanceRows } = lesson.calendarLessonId
+      ? await pool.query(`
+        SELECT a.id
+        FROM attendance a
+        WHERE a.user_id = $2
+          AND a.lesson_id = $1
+          AND a.attendance_type IN ('in_person', 'remote_live')
+        LIMIT 1
+      `, [lesson.calendarLessonId, userId])
+      : { rows: [] };
+    const hasAttendance = attendanceRows.length > 0;
 
-    if (attendanceRows.length > 0) {
-      // Presenza trovata — completa automaticamente
-      await pool.query(`
-        INSERT INTO lesson_progress (id, user_id, lms_lesson_id, progress_percent, completed_at)
-        VALUES ($1, $2, $3, 100, NOW())
-        ON CONFLICT (user_id, lms_lesson_id) DO UPDATE SET completed_at = NOW(), progress_percent = 100, updated_at = NOW()
-      `, [uuidv4(), userId, lessonId]);
-      return res.json({ completed: true, message: 'Lezione completata (presenza registrata)', criteria: { attendance: true } });
-    }
-
-    // 3. Nessuna presenza — controlla i criteri asincroni
+    // 2. Carica progresso: può mancare se la presenza sostituisce il video
     const { rows: progressRows } = await pool.query(
       'SELECT progress_percent, time_spent_seconds, completed_at FROM lesson_progress WHERE user_id = $1 AND lms_lesson_id = $2',
       [userId, lessonId]
     );
-
-    if (!progressRows.length) {
-      return res.status(400).json({
-        error: 'Nessun progresso registrato',
-        criteria: { video: false, materials: false, quiz: false }
-      });
-    }
 
     const progress = progressRows[0];
     if (progress.completed_at) {
@@ -8462,7 +8461,8 @@ app.post('/api/lms/lessons/:id/complete', requireStudent, requireNonGuest, async
 
     const completion = await getLessonCompletionStatus(lessonId, userId, {
       lesson,
-      progress
+      progress,
+      hasAttendance
     });
 
     if (!completion.allMet) {
@@ -8479,12 +8479,14 @@ app.post('/api/lms/lessons/:id/complete', requireStudent, requireNonGuest, async
       [userId, lessonId]
     );
 
-    // Crea automaticamente presenza asincrona
-    await pool.query(`
-      INSERT INTO attendance (id, user_id, lms_lesson_id, attendance_type, method)
-      VALUES ($1, $2, $3, 'async', 'auto_tracking')
-      ON CONFLICT (user_id, lms_lesson_id) DO NOTHING
-    `, [uuidv4(), userId, lessonId]);
+    // Crea automaticamente presenza asincrona solo per completamenti senza presenza live
+    if (!hasAttendance) {
+      await pool.query(`
+        INSERT INTO attendance (id, user_id, lms_lesson_id, attendance_type, method)
+        VALUES ($1, $2, $3, 'async', 'auto_tracking')
+        ON CONFLICT (user_id, lms_lesson_id) DO NOTHING
+      `, [uuidv4(), userId, lessonId]);
+    }
 
     res.json({
       completed: true,

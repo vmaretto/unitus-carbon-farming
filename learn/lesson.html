@@ -1094,6 +1094,7 @@
             if (!currentLesson) return;
 
             const progress = currentLesson.progress;
+            const hasAttendance = Boolean(completionState?.details?.hasAttendance);
 
             // Already completed?
             if (progress && progress.completedAt) {
@@ -1103,7 +1104,7 @@
             }
 
             const videoPercent = segmentTracker ? segmentTracker.getPercentage() : (progress ? progress.progressPercent : 0);
-            const videoOk = videoPercent >= 80;
+            const videoOk = hasAttendance ? true : videoPercent >= 80;
             const materialTotal = completionState?.details?.materialTotal || 0;
             const materialViewed = viewedResourceIds.size || completionState?.details?.materialViewed || 0;
             const materialsOk = materialTotal === 0 || (materialViewed / materialTotal) >= 0.5;
@@ -1112,10 +1113,17 @@
             const quizOk = !hasQuiz || ((bestScore ?? -1) >= 70) || quizPassed;
 
             criteriaDiv.innerHTML = `
+                ${hasAttendance ? `
+                <div class="criterion met">
+                    <span class="criterion-icon">&#10003;</span>
+                    <span>Presenza in aula o live registrata</span>
+                </div>
+                ` : `
                 <div class="criterion ${videoOk ? 'met' : 'unmet'}">
                     <span class="criterion-icon">${videoOk ? '&#10003;' : '&#9675;'}</span>
                     <span>Video guardato almeno 80% (attuale: ${videoPercent}%)</span>
                 </div>
+                `}
                 <div class="criterion ${materialsOk ? 'met' : 'unmet'}">
                     <span class="criterion-icon">${materialsOk ? '&#10003;' : '&#9675;'}</span>
                     <span>Materiali visualizzati almeno 50% (${materialViewed}/${materialTotal})</span>

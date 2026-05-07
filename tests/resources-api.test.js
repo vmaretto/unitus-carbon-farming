@@ -222,6 +222,101 @@ test('POST /api/lms/lessons rifiuta lezioni senza collegamento calendario', asyn
   assert.equal(res.body.error, 'calendarLessonId is required');
 });
 
+test('POST /api/lms/lessons/:id/complete richiede materiali e quiz anche con presenza live', async () => {
+  let asyncAttendanceInsertCalled = false;
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+
+      if (statement.includes('FROM lms_lessons WHERE id = $1')) {
+        assert.deepEqual(params, ['lesson-1']);
+        return {
+          rows: [{
+            id: 'lesson-1',
+            moduleId: 'module-1',
+            durationSeconds: 3600,
+            calendarLessonId: 'calendar-1'
+          }]
+        };
+      }
+
+      if (statement.includes('FROM attendance a') && statement.includes("attendance_type IN ('in_person', 'remote_live')")) {
+        assert.deepEqual(params, ['calendar-1', 'user-1']);
+        return { rows: [{ id: 'attendance-1' }] };
+      }
+
+      if (statement === 'SELECT progress_percent, time_spent_seconds, completed_at FROM lesson_progress WHERE user_id = $1 AND lms_lesson_id = $2') {
+        assert.deepEqual(params, ['user-1', 'lesson-1']);
+        return {
+          rows: [{
+            progress_percent: 35,
+            time_spent_seconds: 900,
+            completed_at: null
+          }]
+        };
+      }
+
+      if (statement.includes('COUNT(DISTINCT r.id)::int AS "materialTotal"')) {
+        assert.deepEqual(params, ['calendar-1', 'user-1']);
+        return {
+          rows: [{
+            materialTotal: 2,
+            materialViewed: 2,
+            viewedResourceIds: ['resource-1', 'resource-2']
+          }]
+        };
+      }
+
+      if (statement.includes('FROM quizzes') && statement.includes('lms_lesson_id = $1 OR lms_module_id = $2')) {
+        assert.deepEqual(params, ['lesson-1', 'module-1']);
+        return { rows: [{ id: 'quiz-1' }] };
+      }
+
+      if (statement.includes('MAX(COALESCE(percentage, score))::int AS "bestScore"')) {
+        assert.deepEqual(params, ['user-1', ['quiz-1']]);
+        return {
+          rows: [{ bestScore: 75 }]
+        };
+      }
+
+      if (statement.startsWith('UPDATE lesson_progress SET completed_at = NOW()')) {
+        assert.deepEqual(params, ['user-1', 'lesson-1']);
+        return { rows: [] };
+      }
+
+      if (statement.startsWith('INSERT INTO attendance (id, user_id, lms_lesson_id, attendance_type, method)')) {
+        asyncAttendanceInsertCalled = true;
+        return { rows: [] };
+      }
+
+      throw new Error(`Unexpected query in completion test: ${statement}`);
+    }
+  });
+
+  const layer = findRoute('/api/lms/lessons/:id/complete', 'post');
+  assert.ok(layer, 'route POST /api/lms/lessons/:id/complete non trovata');
+
+  const req = {
+    method: 'POST',
+    url: '/api/lms/lessons/lesson-1/complete',
+    params: { id: 'lesson-1' },
+    headers: {},
+    user: { userId: 'user-1' },
+    body: {}
+  };
+  const res = createJsonRes();
+
+  await layer.route.stack[layer.route.stack.length - 1].handle(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.completed, true);
+  assert.equal(res.body.criteria.attendance, true);
+  assert.equal(res.body.criteria.video, true);
+  assert.equal(res.body.criteria.materials, true);
+  assert.equal(res.body.criteria.quiz, true);
+  assert.equal(asyncAttendanceInsertCalled, false);
+});
+
 test('GET /api/lms/lessons/:id usa il fallback per materiali calendar_lesson quando il legame diretto manca', async () => {
   apiModule.__setPool({
     async query(sql, params = []) {

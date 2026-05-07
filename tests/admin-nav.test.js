@@ -35,6 +35,7 @@ test('la sezione LMS admin non contiene debug temporanei e usa cache lezioni per
   assert.doesNotMatch(html, /🐛 DEBUG|CHIAMANDO: \/api\/materials\/upload|Edit clicked, id:|Found enrollment:/);
   assert.match(html, /Quiz manuale della lezione/);
   assert.match(html, /data-manual-lms-quiz-save/);
+  assert.match(html, /pubblicata direttamente/);
   assert.match(html, /function handleHashRoute\(\)/);
   assert.match(html, /window\.addEventListener\('hashchange', handleHashRoute\)/);
   assert.match(html, /document\.querySelectorAll\('\.admin-main section'\)/);

@@ -7207,8 +7207,8 @@ Buono studio!</textarea>
                     <label style="margin-top: 12px;">Descrizione <textarea data-field="description" rows="2" placeholder="Descrizione lezione"></textarea></label>
                     <div style="margin-top: 12px; padding: 12px; background: var(--gray-100); border-radius: 8px;">
                         <label style="font-weight: 600; margin-bottom: 4px; display: block;">📎 Materiali della lezione</label>
-                    <div style="font-size: 0.82rem; color: var(--gray-500); margin-bottom: 8px;">
-                            Questa lista resta nella lezione LMS. Quando salvi la lezione, il sistema crea anche una risorsa globale in <strong>bozza</strong>.
+                        <div style="font-size: 0.82rem; color: var(--gray-500); margin-bottom: 8px;">
+                            Questa lista resta nella lezione LMS. Quando salvi la lezione, il sistema crea anche una risorsa globale <strong>pubblicata direttamente</strong>, senza revisione docente.
                         </div>
                         <div data-materials-list style="margin-bottom: 8px;"></div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
@@ -7389,7 +7389,7 @@ Buono studio!</textarea>
                     // Aggiorna la lista materiali locale: la risorsa globale verrà creata al salvataggio della lezione
                     currentMaterials.push({ type: detectedType, name: finalName, url: data.url, sessionOnly: true });
                     renderMaterialsList();
-                    statusEl.textContent = '✅ ' + finalName + ' — aggiunto alla lezione; verrà salvato nelle risorse al momento del salvataggio';
+                    statusEl.textContent = '✅ ' + finalName + ' — aggiunto alla lezione; verrà pubblicato nelle risorse al salvataggio';
                     statusEl.style.color = 'var(--green-500)';
                     showToast('Materiale aggiunto alla lezione');
 
@@ -7482,7 +7482,7 @@ Buono studio!</textarea>
                                     url: material.url,
                                     description: null,
                                     sortOrder: null,
-                                    isPublished: false,
+                                    isPublished: true,
                                     teacherId,
                                     lessonId: calendarLessonId,
                                     source: 'calendar_lesson'
@@ -7491,12 +7491,6 @@ Buono studio!</textarea>
                             if (createdResource?.id) {
                                 material.sessionOnly = false;
                                 material.resourceId = createdResource.id;
-                                if (teacherId) {
-                                    await apiRequest(`/api/resources/${createdResource.id}/request-review`, {
-                                        method: 'PUT',
-                                        body: JSON.stringify({ teacherId })
-                                    }).catch(() => {});
-                                }
                             }
                         } catch (resourceError) {
                             console.warn('Errore creazione risorsa materiale lezione:', resourceError);

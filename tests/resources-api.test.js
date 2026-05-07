@@ -593,6 +593,64 @@ test('GET /api/students/me ritorna un profilo sintetico per la vista guest', asy
   assert.equal(res.body.accessMode, 'student_view');
 });
 
+test('GET /api/lms/my-courses ritorna i corsi per la vista guest docente', async () => {
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      if (statement.includes('FROM course_editions ce') && statement.includes('JOIN courses c ON c.id = ce.course_id') && statement.includes('ll.teacher_id = $1')) {
+        assert.deepEqual(params, ['teacher-1']);
+        return {
+          rows: [{
+            id: 'course-1',
+            title: 'Master Carbon Farming',
+            slug: 'master-carbon-farming',
+            description: 'Corso',
+            coverImageUrl: null,
+            editionId: 'edition-1',
+            editionName: 'Edizione 2026',
+            totalPlannedHours: 432,
+            minimumInPersonAttendanceRatio: 0.7,
+            enrollmentStatus: null,
+            enrolledAt: null,
+            totalModules: 3,
+            totalLessons: 12,
+            attendedHours: 0,
+            inPersonHours: 0,
+            completedLessons: 0
+          }]
+        };
+      }
+
+      if (statement.includes('FROM information_schema')) {
+        return { rows: [] };
+      }
+
+      throw new Error(`Unsupported query in guest courses test: ${statement}`);
+    }
+  });
+
+  const layer = findGetRoute('/api/lms/my-courses');
+  assert.ok(layer, 'route GET /api/lms/my-courses non trovata');
+
+  const req = {
+    method: 'GET',
+    url: '/api/lms/my-courses',
+    headers: {},
+    user: {
+      role: 'guest',
+      teacherId: 'teacher-1'
+    }
+  };
+  const res = createJsonRes();
+
+  await layer.route.stack[layer.route.stack.length - 1].handle(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.length, 1);
+  assert.equal(res.body[0].id, 'course-1');
+  assert.equal(res.body[0].totalLessons, 12);
+});
+
 test('POST /api/quiz-attempts/:id/submit valuta correttamente i quiz LMS anche con risposte serializzate', async () => {
   const queries = [];
   apiModule.__setPool({

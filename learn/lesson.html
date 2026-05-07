@@ -684,10 +684,6 @@
 
         // --- Quiz ---
         async function loadQuiz() {
-            if (window.__isGuest) {
-                document.getElementById('quiz-section').style.display = 'none';
-                return;
-            }
             try {
                 const quizzes = await api(`/api/lms/quizzes?lessonId=${lessonId}`);
                 if (!quizzes || !quizzes.length) {
@@ -704,13 +700,34 @@
                 quizAnswers = Array.isArray(quiz.questions) ? quiz.questions.map(() => null) : [];
 
                 document.getElementById('quiz-section').style.display = '';
-                document.getElementById('quiz-title').textContent = quiz.title || 'Quiz di verifica';
+                const isGuestView = window.__isGuest === true;
+                document.getElementById('quiz-title').textContent = isGuestView
+                    ? `${quiz.title || 'Quiz di verifica'} (consultazione)`
+                    : (quiz.title || 'Quiz di verifica');
 
                 const metaParts = [];
                 metaParts.push(`Punteggio minimo: ${quiz.passingScore}%`);
                 if (quiz.timeLimitMinutes) metaParts.push(`Tempo: ${quiz.timeLimitMinutes} min`);
                 if (quiz.maxAttempts > 0) metaParts.push(`Max tentativi: ${quiz.maxAttempts}`);
+                if (isGuestView) metaParts.push('Modalità consultazione');
                 document.getElementById('quiz-meta').textContent = metaParts.join(' — ');
+
+                if (isGuestView) {
+                    document.getElementById('quiz-result-area').innerHTML = `
+                        <div class="quiz-result passed" style="background: #f8fafc; border-color: #d1d5db; color: #374151;">
+                            <h3>Quiz in consultazione</h3>
+                            <p>Il docente guest può visualizzare domande e opzioni, senza inviare risposte.</p>
+                        </div>
+                    `;
+                    const actionsEl = document.getElementById('quiz-actions');
+                    if (actionsEl) actionsEl.style.display = 'none';
+                    const attemptsArea = document.getElementById('quiz-attempts-area');
+                    if (attemptsArea) attemptsArea.style.display = 'none';
+                    const reviewArea = document.getElementById('quiz-review-area');
+                    if (reviewArea) reviewArea.style.display = 'none';
+                    renderQuizQuestions(quiz.questions);
+                    return;
+                }
 
                 // Load previous attempts
                 const attempts = await api(`/api/lms/quizzes/${quiz.id}/attempts`);
@@ -770,6 +787,7 @@
                 container.innerHTML = '<p style="color: var(--gray-500);">Nessuna domanda disponibile.</p>';
                 return;
             }
+            const isGuestView = window.__isGuest === true;
 
             container.innerHTML = questions.map((q, i) => {
                 if (!q || !q.id) return '';
@@ -788,7 +806,7 @@
                     
                     return `
                         <label class="option-label ${answersMatch(selectedAnswer, opt) ? 'selected' : ''}" data-question="${q.id}" data-option="${j}">
-                            <input type="${inputType}" name="q_${q.id}" value="${safeValue}" ${answersMatch(selectedAnswer, opt) ? 'checked' : ''} />
+                            <input type="${inputType}" name="q_${q.id}" value="${safeValue}" ${answersMatch(selectedAnswer, opt) ? 'checked' : ''} ${isGuestView ? 'disabled' : ''} />
                             <span>${escapeHtml(String(opt))}</span>
                         </label>
                     `;
@@ -803,6 +821,12 @@
                     </div>
                 `;
             }).filter(Boolean).join('');
+
+            if (isGuestView) {
+                const actionsEl = document.getElementById('quiz-actions');
+                if (actionsEl) actionsEl.style.display = 'none';
+                return;
+            }
 
             // Show submit button
             const actionsEl = document.getElementById('quiz-actions');

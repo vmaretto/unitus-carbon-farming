@@ -7161,6 +7161,45 @@ app.get('/api/students/me', requireStudent, async (req, res) => {
 // Corsi dello studente loggato
 app.get('/api/lms/my-courses', requireStudent, async (req, res) => {
   if (!ensurePool(res)) return;
+  if (req.user.role === 'guest') {
+    try {
+      if (!req.user.teacherId) {
+        return res.json([]);
+      }
+
+      const schema = await getCourseEditionSchemaConfig();
+      const fragments = buildCourseEditionSelectFragments(schema, 'ce');
+      const { rows } = await pool.query(`
+        SELECT DISTINCT c.id, c.title, c.slug, c.description, c.cover_image_url AS "coverImageUrl",
+               ce.id AS "editionId", ce.edition_name AS "editionName",
+               ${fragments.totalPlannedHours},
+               ${fragments.minimumInPersonAttendanceRatio},
+               NULL::text AS "enrollmentStatus", NULL::timestamptz AS "enrolledAt",
+               (SELECT COUNT(*)::int FROM modules m WHERE m.course_id = c.id) AS "totalModules",
+               (SELECT COUNT(*)::int FROM lms_lessons ll
+                JOIN modules m2 ON m2.id = ll.lms_module_id
+                WHERE m2.course_id = c.id AND ll.is_published = true) AS "totalLessons",
+               0::numeric AS "attendedHours",
+               0::numeric AS "inPersonHours",
+               0::int AS "completedLessons"
+        FROM course_editions ce
+        JOIN courses c ON c.id = ce.course_id
+        WHERE EXISTS (
+          SELECT 1
+          FROM modules m
+          JOIN lms_lessons ll ON ll.lms_module_id = m.id
+          WHERE m.course_id = c.id
+            AND ll.teacher_id = $1
+        )
+        ORDER BY ce.edition_name DESC, c.title
+      `, [req.user.teacherId]);
+
+      return res.json(rows);
+    } catch (error) {
+      console.error('Error fetching teacher guest courses', error);
+      return res.status(500).json({ error: 'Unable to retrieve courses' });
+    }
+  }
   try {
     const schema = await getCourseEditionSchemaConfig();
     const fragments = buildCourseEditionSelectFragments(schema, 'ce');

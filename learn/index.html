@@ -99,12 +99,16 @@
                 <a href="/learn/checkin.html">Check-in</a>
                 <a href="/learn/documents.html">Documenti</a>
                 <a href="/learn/questions.html">Domande</a>
+                <a href="/learn/surveys.html">Questionari</a>
                 <a href="#" id="logout-btn">Esci</a>
             </div>
         </div>
     </header>
 
     <main>
+        <!-- Banner questionari da compilare -->
+        <div id="surveys-banner" style="display:none;"></div>
+
         <!-- Prossima lezione live -->
         <div id="live-section"></div>
 
@@ -421,7 +425,27 @@
             `;
         }
 
-        refreshCurrentUser().then(loadDashboard);
+        async function loadPendingSurveys() {
+            if (window.__isGuest) return;
+            try {
+                const items = await api('/api/lms/my-surveys');
+                if (!items) return;
+                const pending = items.filter(it => !it.completedAt);
+                const banner = document.getElementById('surveys-banner');
+                if (!pending.length) { banner.style.display = 'none'; return; }
+                banner.style.display = 'block';
+                banner.innerHTML = `
+                    <a href="/learn/surveys.html" style="display:block; padding:18px 24px; background: linear-gradient(135deg,#ff7a1a,#fbbc42); color:white; border-radius:14px; text-decoration:none; margin-bottom:16px; box-shadow: 0 8px 30px rgba(255,122,26,0.25);">
+                        <strong style="font-size:1.1rem;">📋 Hai ${pending.length} questionario/i da compilare</strong>
+                        <div style="font-size:0.9rem; opacity:0.92; margin-top:4px;">Clicca per dare il tuo feedback →</div>
+                    </a>
+                `;
+            } catch (e) {
+                console.error('Error loading pending surveys', e);
+            }
+        }
+
+        refreshCurrentUser().then(loadDashboard).then(loadPendingSurveys);
     </script>
 </body>
 </html>

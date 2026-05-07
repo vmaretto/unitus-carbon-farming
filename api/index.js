@@ -9666,6 +9666,707 @@ app.get('/api/documents/:id/export', (req, res, next) => {
   }
 });
 
+// ============================================================
+// SURVEYS / FEEDBACK QUESTIONNAIRES
+//   - 1c: tracciato per sistema, anonimo per i risultati
+//   - 2b: docente vede aggregati anonimi sui questionari "su di lui"
+//   - 3a: tipi domanda = rating 1-5 e text libero
+//   - 4b: scope = course | module | lesson | teacher
+// ============================================================
+
+// --- Helper: calcola la lista degli invitati per una campagna in base allo scope ---
+async function computeSurveyInvitees(client, scopeType, scopeId, targetRole) {
+  if (targetRole === 'student') {
+    let courseIds = null; // null => tutti i corsi
+    if (scopeType === 'course') {
+      courseIds = scopeId ? [scopeId] : null;
+    } else if (scopeType === 'module') {
+      const { rows } = await client.query('SELECT course_id FROM modules WHERE id=$1', [scopeId]);
+      if (!rows.length || !rows[0].course_id) return [];
+      courseIds = [rows[0].course_id];
+    } else if (scopeType === 'lesson') {
+      const { rows } = await client.query(
+        'SELECT m.course_id FROM lessons l JOIN modules m ON m.id = l.module_id WHERE l.id = $1',
+        [scopeId]
+      );
+      if (!rows.length || !rows[0].course_id) return [];
+      courseIds = [rows[0].course_id];
+    } else if (scopeType === 'teacher') {
+      const { rows } = await client.query(
+        `SELECT DISTINCT m.course_id FROM lessons l
+         JOIN modules m ON m.id = l.module_id
+         WHERE l.teacher_id = $1 AND m.course_id IS NOT NULL`,
+        [scopeId]
+      );
+      if (!rows.length) return [];
+      courseIds = rows.map(r => r.course_id);
+    }
+
+    let q, params;
+    if (courseIds) {
+      q = `SELECT DISTINCT e.user_id FROM enrollments e
+           JOIN course_editions ce ON ce.id = e.course_edition_id
+           WHERE ce.course_id = ANY($1::uuid[]) AND e.status = 'active' AND e.user_id IS NOT NULL`;
+      params = [courseIds];
+    } else {
+      q = `SELECT DISTINCT e.user_id FROM enrollments e
+           WHERE e.status = 'active' AND e.user_id IS NOT NULL`;
+      params = [];
+    }
+    const { rows: enrollees } = await client.query(q, params);
+    return enrollees.map(r => ({ user_id: r.user_id, faculty_id: null }));
+  }
+
+  // target_role === 'teacher'
+  if (scopeType === 'teacher') {
+    return scopeId ? [{ user_id: null, faculty_id: scopeId }] : [];
+  }
+  if (scopeType === 'lesson') {
+    const { rows } = await client.query(
+      'SELECT teacher_id FROM lessons WHERE id=$1 AND teacher_id IS NOT NULL',
+      [scopeId]
+    );
+    return rows.map(r => ({ user_id: null, faculty_id: r.teacher_id }));
+  }
+  if (scopeType === 'module') {
+    const { rows } = await client.query(
+      'SELECT DISTINCT teacher_id FROM lessons WHERE module_id = $1 AND teacher_id IS NOT NULL',
+      [scopeId]
+    );
+    return rows.map(r => ({ user_id: null, faculty_id: r.teacher_id }));
+  }
+  if (scopeType === 'course') {
+    const where = scopeId ? 'WHERE m.course_id = $1 AND l.teacher_id IS NOT NULL' : 'WHERE l.teacher_id IS NOT NULL';
+    const params = scopeId ? [scopeId] : [];
+    const { rows } = await client.query(
+      `SELECT DISTINCT l.teacher_id FROM lessons l JOIN modules m ON m.id = l.module_id ${where}`,
+      params
+    );
+    return rows.map(r => ({ user_id: null, faculty_id: r.teacher_id }));
+  }
+  return [];
+}
+
+// Risolve il nome leggibile dello scope (per UI)
+async function resolveSurveyScopeLabel(scopeType, scopeId) {
+  if (!scopeId) return scopeType === 'course' ? 'Tutti i corsi' : '—';
+  try {
+    if (scopeType === 'course') {
+      const { rows } = await pool.query('SELECT title FROM courses WHERE id=$1', [scopeId]);
+      return rows[0]?.title || '(corso eliminato)';
+    }
+    if (scopeType === 'module') {
+      const { rows } = await pool.query('SELECT name FROM modules WHERE id=$1', [scopeId]);
+      return rows[0]?.name || '(modulo eliminato)';
+    }
+    if (scopeType === 'lesson') {
+      const { rows } = await pool.query('SELECT title FROM lessons WHERE id=$1', [scopeId]);
+      return rows[0]?.title || '(lezione eliminata)';
+    }
+    if (scopeType === 'teacher') {
+      const { rows } = await pool.query('SELECT name FROM faculty WHERE id=$1', [scopeId]);
+      return rows[0]?.name || '(docente eliminato)';
+    }
+  } catch (_) {}
+  return '—';
+}
+
+// --- ADMIN: SURVEY TEMPLATES ---
+
+app.get('/api/admin/surveys', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT s.id, s.title, s.description, s.target_role AS "targetRole",
+             s.created_at AS "createdAt", s.updated_at AS "updatedAt",
+             (SELECT COUNT(*)::int FROM survey_questions q WHERE q.survey_id = s.id) AS "questionCount",
+             (SELECT COUNT(*)::int FROM survey_campaigns c WHERE c.survey_id = s.id) AS "campaignCount"
+      FROM surveys s ORDER BY s.created_at DESC
+    `);
+    res.json(rows);
+  } catch (e) {
+    console.error('Error listing surveys', e);
+    res.status(500).json({ error: 'Errore nel recupero dei questionari' });
+  }
+});
+
+app.post('/api/admin/surveys', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { title, description, targetRole } = req.body || {};
+  if (!title || !['student', 'teacher'].includes(targetRole)) {
+    return res.status(400).json({ error: 'title e targetRole (student|teacher) sono obbligatori' });
+  }
+  try {
+    const id = uuidv4();
+    await pool.query(
+      'INSERT INTO surveys (id, title, description, target_role) VALUES ($1,$2,$3,$4)',
+      [id, title, description || null, targetRole]
+    );
+    res.status(201).json({ id, title, description: description || null, targetRole });
+  } catch (e) {
+    console.error('Error creating survey', e);
+    res.status(500).json({ error: 'Errore nella creazione' });
+  }
+});
+
+app.get('/api/admin/surveys/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows: surveys } = await pool.query(
+      `SELECT id, title, description, target_role AS "targetRole",
+              created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM surveys WHERE id=$1`, [req.params.id]
+    );
+    if (!surveys.length) return res.status(404).json({ error: 'Questionario non trovato' });
+    const { rows: questions } = await pool.query(
+      `SELECT id, text, question_type AS "questionType", is_required AS "isRequired", sort_order AS "sortOrder"
+       FROM survey_questions WHERE survey_id = $1 ORDER BY sort_order ASC, created_at ASC`,
+      [req.params.id]
+    );
+    res.json({ ...surveys[0], questions });
+  } catch (e) {
+    console.error('Error fetching survey', e);
+    res.status(500).json({ error: 'Errore nel recupero' });
+  }
+});
+
+app.put('/api/admin/surveys/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { title, description, targetRole } = req.body || {};
+  try {
+    const { query, values } = buildUpdateQuery('surveys', {
+      title, description,
+      target_role: ['student', 'teacher'].includes(targetRole) ? targetRole : undefined
+    }, req.params.id);
+    const { rows } = await pool.query(query, values);
+    if (!rows.length) return res.status(404).json({ error: 'Non trovato' });
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('Error updating survey', e);
+    res.status(500).json({ error: 'Errore aggiornamento' });
+  }
+});
+
+app.delete('/api/admin/surveys/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM surveys WHERE id=$1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Non trovato' });
+    res.status(204).send();
+  } catch (e) {
+    console.error('Error deleting survey', e);
+    res.status(500).json({ error: 'Errore eliminazione' });
+  }
+});
+
+// --- ADMIN: SURVEY QUESTIONS ---
+
+app.post('/api/admin/surveys/:id/questions', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { text, questionType, isRequired, sortOrder } = req.body || {};
+  if (!text || !['rating', 'text'].includes(questionType)) {
+    return res.status(400).json({ error: 'text e questionType (rating|text) sono obbligatori' });
+  }
+  try {
+    const id = uuidv4();
+    await pool.query(
+      `INSERT INTO survey_questions (id, survey_id, text, question_type, is_required, sort_order)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [id, req.params.id, text, questionType, isRequired !== false, typeof sortOrder === 'number' ? sortOrder : 0]
+    );
+    res.status(201).json({ id });
+  } catch (e) {
+    console.error('Error adding survey question', e);
+    res.status(500).json({ error: 'Errore creazione domanda' });
+  }
+});
+
+app.put('/api/admin/survey-questions/:qid', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { text, questionType, isRequired, sortOrder } = req.body || {};
+  try {
+    const { query, values } = buildUpdateQuery('survey_questions', {
+      text,
+      question_type: ['rating', 'text'].includes(questionType) ? questionType : undefined,
+      is_required: typeof isRequired === 'boolean' ? isRequired : undefined,
+      sort_order: typeof sortOrder === 'number' ? sortOrder : undefined
+    }, req.params.qid);
+    const { rows } = await pool.query(query, values);
+    if (!rows.length) return res.status(404).json({ error: 'Non trovato' });
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('Error updating survey question', e);
+    res.status(500).json({ error: 'Errore aggiornamento' });
+  }
+});
+
+app.delete('/api/admin/survey-questions/:qid', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM survey_questions WHERE id=$1', [req.params.qid]);
+    if (!rowCount) return res.status(404).json({ error: 'Non trovato' });
+    res.status(204).send();
+  } catch (e) {
+    console.error('Error deleting survey question', e);
+    res.status(500).json({ error: 'Errore eliminazione' });
+  }
+});
+
+// --- ADMIN: SURVEY CAMPAIGNS (lanci) ---
+
+app.get('/api/admin/survey-campaigns', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT c.id, c.survey_id AS "surveyId", c.title, c.scope_type AS "scopeType", c.scope_id AS "scopeId",
+             c.opens_at AS "opensAt", c.closes_at AS "closesAt", c.is_active AS "isActive",
+             c.created_at AS "createdAt",
+             s.title AS "surveyTitle", s.target_role AS "targetRole",
+             (SELECT COUNT(*)::int FROM survey_invitations i WHERE i.campaign_id = c.id) AS "invitedCount",
+             (SELECT COUNT(*)::int FROM survey_invitations i WHERE i.campaign_id = c.id AND i.completed_at IS NOT NULL) AS "completedCount"
+      FROM survey_campaigns c
+      JOIN surveys s ON s.id = c.survey_id
+      ORDER BY c.created_at DESC
+    `);
+    // arricchisco con lo scope label
+    for (const r of rows) {
+      r.scopeLabel = await resolveSurveyScopeLabel(r.scopeType, r.scopeId);
+    }
+    res.json(rows);
+  } catch (e) {
+    console.error('Error listing survey campaigns', e);
+    res.status(500).json({ error: 'Errore' });
+  }
+});
+
+app.post('/api/admin/survey-campaigns', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { surveyId, title, scopeType, scopeId, opensAt, closesAt } = req.body || {};
+  if (!surveyId || !['course', 'module', 'lesson', 'teacher'].includes(scopeType)) {
+    return res.status(400).json({ error: 'surveyId e scopeType sono obbligatori' });
+  }
+  if (scopeType !== 'course' && !scopeId) {
+    return res.status(400).json({ error: 'scopeId è obbligatorio per scope diverso da course' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: surveys } = await client.query(
+      'SELECT target_role FROM surveys WHERE id=$1', [surveyId]
+    );
+    if (!surveys.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Questionario non trovato' }); }
+    const targetRole = surveys[0].target_role;
+    const { rows: hasQ } = await client.query(
+      'SELECT 1 FROM survey_questions WHERE survey_id=$1 LIMIT 1', [surveyId]
+    );
+    if (!hasQ.length) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Aggiungi almeno una domanda al questionario prima di lanciarlo' }); }
+
+    const campaignId = uuidv4();
+    await client.query(
+      `INSERT INTO survey_campaigns (id, survey_id, title, scope_type, scope_id, opens_at, closes_at, is_active)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE)`,
+      [campaignId, surveyId, title || null, scopeType, scopeId || null,
+       opensAt || new Date().toISOString(), closesAt || null]
+    );
+
+    const invitees = await computeSurveyInvitees(client, scopeType, scopeId || null, targetRole);
+    let invitedCount = 0;
+    for (const inv of invitees) {
+      await client.query(
+        `INSERT INTO survey_invitations (id, campaign_id, user_id, faculty_id) VALUES ($1,$2,$3,$4)
+         ON CONFLICT DO NOTHING`,
+        [uuidv4(), campaignId, inv.user_id, inv.faculty_id]
+      );
+      invitedCount++;
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({ id: campaignId, invitedCount, targetRole });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('Error launching survey campaign', e);
+    res.status(500).json({ error: 'Errore nel lancio della campagna: ' + e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/api/admin/survey-campaigns/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows: campaigns } = await pool.query(`
+      SELECT c.id, c.survey_id AS "surveyId", c.title, c.scope_type AS "scopeType", c.scope_id AS "scopeId",
+             c.opens_at AS "opensAt", c.closes_at AS "closesAt", c.is_active AS "isActive",
+             s.title AS "surveyTitle", s.target_role AS "targetRole"
+      FROM survey_campaigns c JOIN surveys s ON s.id=c.survey_id WHERE c.id=$1
+    `, [req.params.id]);
+    if (!campaigns.length) return res.status(404).json({ error: 'Non trovata' });
+    const c = campaigns[0];
+    c.scopeLabel = await resolveSurveyScopeLabel(c.scopeType, c.scopeId);
+    res.json(c);
+  } catch (e) {
+    console.error('Error fetching campaign', e);
+    res.status(500).json({ error: 'Errore' });
+  }
+});
+
+app.put('/api/admin/survey-campaigns/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { isActive, closesAt, title } = req.body || {};
+  try {
+    const { query, values } = buildUpdateQuery('survey_campaigns', {
+      title,
+      is_active: typeof isActive === 'boolean' ? isActive : undefined,
+      closes_at: closesAt !== undefined ? (closesAt || null) : undefined
+    }, req.params.id);
+    const { rows } = await pool.query(query, values);
+    if (!rows.length) return res.status(404).json({ error: 'Non trovata' });
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('Error updating campaign', e);
+    res.status(500).json({ error: 'Errore' });
+  }
+});
+
+app.delete('/api/admin/survey-campaigns/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM survey_campaigns WHERE id=$1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Non trovata' });
+    res.status(204).send();
+  } catch (e) {
+    console.error('Error deleting campaign', e);
+    res.status(500).json({ error: 'Errore' });
+  }
+});
+
+// Risultati aggregati di una campagna (admin vede aggregati + commenti senza nominativo)
+app.get('/api/admin/survey-campaigns/:id/results', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows: campaign } = await pool.query(`
+      SELECT c.id, c.survey_id AS "surveyId", c.title, c.scope_type AS "scopeType", c.scope_id AS "scopeId",
+             c.is_active AS "isActive", s.title AS "surveyTitle", s.target_role AS "targetRole"
+      FROM survey_campaigns c JOIN surveys s ON s.id=c.survey_id WHERE c.id=$1
+    `, [req.params.id]);
+    if (!campaign.length) return res.status(404).json({ error: 'Non trovata' });
+
+    const { rows: questions } = await pool.query(
+      `SELECT id, text, question_type AS "questionType", sort_order AS "sortOrder"
+       FROM survey_questions WHERE survey_id=$1 ORDER BY sort_order ASC, created_at ASC`,
+      [campaign[0].surveyId]
+    );
+
+    const { rows: invStats } = await pool.query(
+      `SELECT COUNT(*)::int AS invited,
+              COUNT(*) FILTER (WHERE completed_at IS NOT NULL)::int AS completed
+       FROM survey_invitations WHERE campaign_id=$1`, [req.params.id]
+    );
+
+    // Per ogni domanda: media+istogramma se rating, lista commenti se text
+    const aggregates = [];
+    for (const q of questions) {
+      if (q.questionType === 'rating') {
+        const { rows: agg } = await pool.query(
+          `SELECT AVG(rating_value)::numeric(4,2) AS avg, COUNT(*)::int AS n,
+                  COUNT(*) FILTER (WHERE rating_value=1)::int AS r1,
+                  COUNT(*) FILTER (WHERE rating_value=2)::int AS r2,
+                  COUNT(*) FILTER (WHERE rating_value=3)::int AS r3,
+                  COUNT(*) FILTER (WHERE rating_value=4)::int AS r4,
+                  COUNT(*) FILTER (WHERE rating_value=5)::int AS r5
+           FROM survey_answers a
+           JOIN survey_invitations i ON i.id = a.invitation_id
+           WHERE i.campaign_id=$1 AND a.question_id=$2 AND a.rating_value IS NOT NULL`,
+          [req.params.id, q.id]
+        );
+        aggregates.push({ ...q, ...agg[0] });
+      } else {
+        const { rows: comments } = await pool.query(
+          `SELECT a.text_value AS comment FROM survey_answers a
+           JOIN survey_invitations i ON i.id = a.invitation_id
+           WHERE i.campaign_id=$1 AND a.question_id=$2 AND a.text_value IS NOT NULL AND TRIM(a.text_value)<>''`,
+          [req.params.id, q.id]
+        );
+        aggregates.push({ ...q, comments: comments.map(c => c.comment), n: comments.length });
+      }
+    }
+
+    res.json({
+      campaign: { ...campaign[0], scopeLabel: await resolveSurveyScopeLabel(campaign[0].scopeType, campaign[0].scopeId) },
+      stats: invStats[0],
+      questions: aggregates
+    });
+  } catch (e) {
+    console.error('Error fetching results', e);
+    res.status(500).json({ error: 'Errore nel recupero dei risultati' });
+  }
+});
+
+// --- COMPILE: condiviso student/teacher (interno) ---
+
+async function getInvitationForUser(invitationId, identity) {
+  // identity = { userId } per student, { facultyId } per teacher
+  const { rows } = await pool.query(`
+    SELECT i.id, i.campaign_id AS "campaignId", i.user_id AS "userId", i.faculty_id AS "facultyId",
+           i.completed_at AS "completedAt",
+           c.opens_at AS "opensAt", c.closes_at AS "closesAt", c.is_active AS "isActive",
+           c.scope_type AS "scopeType", c.scope_id AS "scopeId", c.title AS "campaignTitle",
+           s.id AS "surveyId", s.title AS "surveyTitle", s.description AS "surveyDescription", s.target_role AS "targetRole"
+    FROM survey_invitations i
+    JOIN survey_campaigns c ON c.id = i.campaign_id
+    JOIN surveys s ON s.id = c.survey_id
+    WHERE i.id = $1
+  `, [invitationId]);
+  if (!rows.length) return { notFound: true };
+  const inv = rows[0];
+  if (identity.userId && inv.userId !== identity.userId) return { forbidden: true };
+  if (identity.facultyId && inv.facultyId !== identity.facultyId) return { forbidden: true };
+  if (!inv.isActive) return { closed: true, invitation: inv };
+  if (inv.closesAt && new Date(inv.closesAt) < new Date()) return { closed: true, invitation: inv };
+  return { ok: true, invitation: inv };
+}
+
+async function loadSurveyQuestionsForCompile(surveyId) {
+  const { rows } = await pool.query(
+    `SELECT id, text, question_type AS "questionType", is_required AS "isRequired", sort_order AS "sortOrder"
+     FROM survey_questions WHERE survey_id=$1 ORDER BY sort_order ASC, created_at ASC`,
+    [surveyId]
+  );
+  return rows;
+}
+
+async function submitSurveyAnswers(invitationId, surveyId, answers) {
+  // answers: [{ questionId, ratingValue?, textValue? }]
+  const questions = await loadSurveyQuestionsForCompile(surveyId);
+  const qmap = new Map(questions.map(q => [q.id, q]));
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const ans of answers || []) {
+      const q = qmap.get(ans.questionId);
+      if (!q) continue;
+      let rating = null, text = null;
+      if (q.questionType === 'rating') {
+        rating = Number(ans.ratingValue);
+        if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+          if (q.isRequired) throw new Error('Risposta rating mancante o invalida per "' + q.text + '"');
+          continue;
+        }
+      } else {
+        text = (ans.textValue || '').trim() || null;
+        if (!text && q.isRequired) throw new Error('Risposta mancante per "' + q.text + '"');
+      }
+      await client.query(
+        `INSERT INTO survey_answers (id, invitation_id, question_id, rating_value, text_value)
+         VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (invitation_id, question_id)
+         DO UPDATE SET rating_value=EXCLUDED.rating_value, text_value=EXCLUDED.text_value, answered_at=NOW()`,
+        [uuidv4(), invitationId, q.id, rating, text]
+      );
+    }
+    // verifica required tutti coperti
+    const { rows: missing } = await client.query(
+      `SELECT q.id, q.text FROM survey_questions q
+       WHERE q.survey_id=$1 AND q.is_required=TRUE
+       AND NOT EXISTS (
+         SELECT 1 FROM survey_answers a WHERE a.invitation_id=$2 AND a.question_id=q.id
+         AND ((q.question_type='rating' AND a.rating_value IS NOT NULL)
+           OR (q.question_type='text' AND a.text_value IS NOT NULL AND TRIM(a.text_value)<>''))
+       )`,
+      [surveyId, invitationId]
+    );
+    if (missing.length) throw new Error('Mancano risposte obbligatorie: ' + missing.map(m => m.text).join('; '));
+    await client.query('UPDATE survey_invitations SET completed_at=NOW() WHERE id=$1', [invitationId]);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+// --- STUDENT: compile ---
+
+app.get('/api/lms/my-surveys', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT i.id AS "invitationId", i.completed_at AS "completedAt",
+             c.id AS "campaignId", c.title AS "campaignTitle", c.scope_type AS "scopeType", c.scope_id AS "scopeId",
+             c.opens_at AS "opensAt", c.closes_at AS "closesAt", c.is_active AS "isActive",
+             s.title AS "surveyTitle", s.description AS "surveyDescription"
+      FROM survey_invitations i
+      JOIN survey_campaigns c ON c.id = i.campaign_id
+      JOIN surveys s ON s.id = c.survey_id
+      WHERE i.user_id = $1 AND c.is_active = TRUE
+        AND (c.opens_at IS NULL OR c.opens_at <= NOW())
+        AND (c.closes_at IS NULL OR c.closes_at > NOW())
+      ORDER BY i.completed_at NULLS FIRST, c.opens_at DESC
+    `, [req.user.userId]);
+    for (const r of rows) r.scopeLabel = await resolveSurveyScopeLabel(r.scopeType, r.scopeId);
+    res.json(rows);
+  } catch (e) {
+    console.error('Error listing my-surveys (student)', e);
+    res.status(500).json({ error: 'Errore' });
+  }
+});
+
+app.get('/api/lms/surveys/invitations/:invitationId', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const result = await getInvitationForUser(req.params.invitationId, { userId: req.user.userId });
+    if (result.notFound) return res.status(404).json({ error: 'Invito non trovato' });
+    if (result.forbidden) return res.status(403).json({ error: 'Non autorizzato' });
+    if (result.closed) return res.status(410).json({ error: 'Questa campagna è chiusa', invitation: result.invitation });
+    const questions = await loadSurveyQuestionsForCompile(result.invitation.surveyId);
+    let existingAnswers = [];
+    if (result.invitation.completedAt) {
+      const { rows: existing } = await pool.query(
+        `SELECT question_id AS "questionId", rating_value AS "ratingValue", text_value AS "textValue"
+         FROM survey_answers WHERE invitation_id = $1`, [result.invitation.id]
+      );
+      existingAnswers = existing;
+    }
+    res.json({ invitation: result.invitation, questions, existingAnswers });
+  } catch (e) {
+    console.error('Error get survey for compile (student)', e);
+    res.status(500).json({ error: 'Errore' });
+  }
+});
+
+app.post('/api/lms/surveys/invitations/:invitationId/submit', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const result = await getInvitationForUser(req.params.invitationId, { userId: req.user.userId });
+    if (result.notFound) return res.status(404).json({ error: 'Invito non trovato' });
+    if (result.forbidden) return res.status(403).json({ error: 'Non autorizzato' });
+    if (result.closed) return res.status(410).json({ error: 'Campagna chiusa' });
+    await submitSurveyAnswers(req.params.invitationId, result.invitation.surveyId, req.body?.answers || []);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Error submitting survey (student)', e);
+    res.status(400).json({ error: e.message || 'Errore invio risposte' });
+  }
+});
+
+// --- TEACHER: compile (questionari rivolti ai docenti) ---
+
+app.get('/api/teachers/my-surveys', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT i.id AS "invitationId", i.completed_at AS "completedAt",
+             c.id AS "campaignId", c.title AS "campaignTitle", c.scope_type AS "scopeType", c.scope_id AS "scopeId",
+             c.opens_at AS "opensAt", c.closes_at AS "closesAt",
+             s.title AS "surveyTitle", s.description AS "surveyDescription"
+      FROM survey_invitations i
+      JOIN survey_campaigns c ON c.id = i.campaign_id
+      JOIN surveys s ON s.id = c.survey_id
+      WHERE i.faculty_id = $1 AND c.is_active = TRUE
+        AND (c.opens_at IS NULL OR c.opens_at <= NOW())
+        AND (c.closes_at IS NULL OR c.closes_at > NOW())
+      ORDER BY i.completed_at NULLS FIRST, c.opens_at DESC
+    `, [req.user.id]);
+    for (const r of rows) r.scopeLabel = await resolveSurveyScopeLabel(r.scopeType, r.scopeId);
+    res.json(rows);
+  } catch (e) {
+    console.error('Error listing my-surveys (teacher)', e);
+    res.status(500).json({ error: 'Errore' });
+  }
+});
+
+app.get('/api/teachers/surveys/invitations/:invitationId', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const result = await getInvitationForUser(req.params.invitationId, { facultyId: req.user.id });
+    if (result.notFound) return res.status(404).json({ error: 'Invito non trovato' });
+    if (result.forbidden) return res.status(403).json({ error: 'Non autorizzato' });
+    if (result.closed) return res.status(410).json({ error: 'Campagna chiusa', invitation: result.invitation });
+    const questions = await loadSurveyQuestionsForCompile(result.invitation.surveyId);
+    let existingAnswers = [];
+    if (result.invitation.completedAt) {
+      const { rows: existing } = await pool.query(
+        `SELECT question_id AS "questionId", rating_value AS "ratingValue", text_value AS "textValue"
+         FROM survey_answers WHERE invitation_id = $1`, [result.invitation.id]
+      );
+      existingAnswers = existing;
+    }
+    res.json({ invitation: result.invitation, questions, existingAnswers });
+  } catch (e) {
+    console.error('Error get survey for compile (teacher)', e);
+    res.status(500).json({ error: 'Errore' });
+  }
+});
+
+app.post('/api/teachers/surveys/invitations/:invitationId/submit', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const result = await getInvitationForUser(req.params.invitationId, { facultyId: req.user.id });
+    if (result.notFound) return res.status(404).json({ error: 'Invito non trovato' });
+    if (result.forbidden) return res.status(403).json({ error: 'Non autorizzato' });
+    if (result.closed) return res.status(410).json({ error: 'Campagna chiusa' });
+    await submitSurveyAnswers(req.params.invitationId, result.invitation.surveyId, req.body?.answers || []);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Error submitting survey (teacher)', e);
+    res.status(400).json({ error: e.message || 'Errore invio risposte' });
+  }
+});
+
+// --- TEACHER: feedback ricevuti (aggregati anonimi sui questionari "su di lui") ---
+//   2b: il docente vede aggregati senza nominativi delle proprie campagne (scope='teacher', scope_id = la sua faculty_id)
+app.get('/api/teachers/feedback-on-me', requireTeacher, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const facultyId = req.user.id;
+    const { rows: campaigns } = await pool.query(`
+      SELECT c.id, c.title, c.scope_type AS "scopeType", c.scope_id AS "scopeId",
+             c.opens_at AS "opensAt", c.closes_at AS "closesAt", c.is_active AS "isActive",
+             s.id AS "surveyId", s.title AS "surveyTitle", s.target_role AS "targetRole",
+             (SELECT COUNT(*)::int FROM survey_invitations i WHERE i.campaign_id=c.id) AS "invitedCount",
+             (SELECT COUNT(*)::int FROM survey_invitations i WHERE i.campaign_id=c.id AND i.completed_at IS NOT NULL) AS "completedCount"
+      FROM survey_campaigns c JOIN surveys s ON s.id=c.survey_id
+      WHERE c.scope_type='teacher' AND c.scope_id=$1
+      ORDER BY c.created_at DESC
+    `, [facultyId]);
+
+    const out = [];
+    for (const camp of campaigns) {
+      const { rows: questions } = await pool.query(
+        `SELECT id, text, question_type AS "questionType", sort_order AS "sortOrder"
+         FROM survey_questions WHERE survey_id=$1 ORDER BY sort_order ASC, created_at ASC`,
+        [camp.surveyId]
+      );
+      const aggregates = [];
+      for (const q of questions) {
+        if (q.questionType === 'rating') {
+          const { rows: agg } = await pool.query(
+            `SELECT AVG(rating_value)::numeric(4,2) AS avg, COUNT(*)::int AS n
+             FROM survey_answers a JOIN survey_invitations i ON i.id=a.invitation_id
+             WHERE i.campaign_id=$1 AND a.question_id=$2 AND a.rating_value IS NOT NULL`,
+            [camp.id, q.id]
+          );
+          aggregates.push({ ...q, ...agg[0] });
+        } else {
+          const { rows: comments } = await pool.query(
+            `SELECT a.text_value AS comment FROM survey_answers a
+             JOIN survey_invitations i ON i.id=a.invitation_id
+             WHERE i.campaign_id=$1 AND a.question_id=$2 AND a.text_value IS NOT NULL AND TRIM(a.text_value)<>''`,
+            [camp.id, q.id]
+          );
+          aggregates.push({ ...q, comments: comments.map(c => c.comment), n: comments.length });
+        }
+      }
+      out.push({ campaign: camp, questions: aggregates });
+    }
+    res.json(out);
+  } catch (e) {
+    console.error('Error fetching feedback-on-me', e);
+    res.status(500).json({ error: 'Errore' });
+  }
+});
+
 // Catch-all per file statici (DEVE essere DOPO tutte le API routes!)
 app.get('*', (req, res) => {
   const filePath = path.join(staticRoot, req.path);

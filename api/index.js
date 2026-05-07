@@ -10503,23 +10503,189 @@ app.post('/api/admin/surveys/generate-with-ai', requireAdmin, async (req, res) =
   }
   const nq = Math.min(Math.max(parseInt(numQuestions || 8, 10) || 8, 3), 15);
 
-  // Costruisco il contesto dello scope per dare info concrete a Claude
+  // Costruisce un contesto ricco per Claude pescando da DB:
+  //  - extracted_text già pronto sui materiali (resources.extracted_text)
+  //  - trascrizioni video (workflow Whisper) per le lezioni LMS
+  //  - bio/ruolo docente, lezioni assegnate, materiali del docente
+  // Limite totale ~6000 char per non far esplodere prompt e costo.
+  const SURVEY_CONTEXT_LIMIT = 6000;
+  function clip(str, max) {
+    if (!str) return '';
+    const s = String(str).replace(/\s+/g, ' ').trim();
+    return s.length > max ? s.slice(0, max) + '…[troncato]' : s;
+  }
+  async function gatherResourcesText(query, params, perResourceLimit = 1200, maxResources = 6) {
+    const { rows } = await pool.query(query, params);
+    const parts = [];
+    for (const r of rows.slice(0, maxResources)) {
+      const txt = clip(r.extracted_text, perResourceLimit);
+      if (txt) parts.push(`Materiale "${r.title}" (${r.resource_type || 'doc'}):\n${txt}`);
+    }
+    return { count: rows.length, withText: parts.length, text: parts.join('\n\n') };
+  }
+
   let scopeContext = '';
+  let contextSourcesUsed = 0;
   try {
     if (scopeType === 'course' && scopeId) {
-      const { rows } = await pool.query('SELECT title, description FROM courses WHERE id=$1', [scopeId]);
-      if (rows[0]) scopeContext = `Corso: "${rows[0].title}". ${rows[0].description || ''}`;
+      const { rows: c } = await pool.query('SELECT title, description FROM courses WHERE id=$1', [scopeId]);
+      if (c[0]) {
+        scopeContext = `Corso: "${c[0].title}".\n${c[0].description || ''}`;
+        const { rows: mods } = await pool.query(
+          'SELECT name, description_short, contents_main, learning_objectives FROM modules WHERE course_id=$1 ORDER BY sort_order',
+          [scopeId]
+        );
+        if (mods.length) {
+          scopeContext += '\n\nMODULI DEL CORSO:';
+          for (const m of mods.slice(0, 8)) {
+            scopeContext += `\n• ${m.name}`;
+            if (m.description_short) scopeContext += ` — ${clip(m.description_short, 200)}`;
+            if (m.contents_main) scopeContext += `\n  Contenuti: ${clip(m.contents_main, 300)}`;
+          }
+          contextSourcesUsed = mods.length;
+        }
+      }
     } else if (scopeType === 'module' && scopeId) {
-      const { rows } = await pool.query('SELECT name, description, contents_main, learning_objectives FROM modules WHERE id=$1', [scopeId]);
-      if (rows[0]) scopeContext = `Modulo: "${rows[0].name}".\n${rows[0].description || ''}\nContenuti: ${rows[0].contents_main || ''}\nObiettivi: ${rows[0].learning_objectives || ''}`;
+      const { rows: m } = await pool.query(
+        'SELECT name, description, contents_main, learning_objectives FROM modules WHERE id=$1',
+        [scopeId]
+      );
+      if (m[0]) {
+        scopeContext = `Modulo: "${m[0].name}".`;
+        if (m[0].description) scopeContext += `\nDescrizione: ${m[0].description}`;
+        if (m[0].learning_objectives) scopeContext += `\nObiettivi: ${clip(m[0].learning_objectives, 600)}`;
+        if (m[0].contents_main) scopeContext += `\nContenuti principali: ${clip(m[0].contents_main, 600)}`;
+      }
+      // Lezioni del modulo (calendario) con docenti
+      const { rows: lessons } = await pool.query(
+        `SELECT l.id, l.title, l.start_datetime, l.description, f.name AS teacher_name, l.external_teacher_name
+         FROM lessons l LEFT JOIN faculty f ON f.id = l.teacher_id
+         WHERE l.module_id = $1 ORDER BY l.start_datetime NULLS LAST`,
+        [scopeId]
+      );
+      if (lessons.length) {
+        scopeContext += `\n\nLEZIONI DEL MODULO (${lessons.length}):`;
+        for (const l of lessons.slice(0, 10)) {
+          const who = l.teacher_name || l.external_teacher_name || 'docente n/d';
+          const when = l.start_datetime ? new Date(l.start_datetime).toLocaleDateString('it-IT') : '';
+          scopeContext += `\n• ${l.title} — ${who}${when ? ' (' + when + ')' : ''}`;
+          if (l.description) scopeContext += `\n  ${clip(l.description, 200)}`;
+        }
+      }
+      // Materiali del modulo (via lessons)
+      const lessonIds = lessons.map(l => l.id);
+      if (lessonIds.length) {
+        const r = await gatherResourcesText(
+          `SELECT title, resource_type, extracted_text FROM resources
+           WHERE lesson_id = ANY($1::uuid[]) AND extracted_text IS NOT NULL
+             AND char_length(TRIM(extracted_text)) > 50 AND resource_type <> 'quiz'
+           ORDER BY created_at DESC`,
+          [lessonIds],
+          1000, 5
+        );
+        if (r.text) scopeContext += `\n\nMATERIALI DEL MODULO:\n${r.text}`;
+        contextSourcesUsed = r.withText;
+      }
     } else if (scopeType === 'lesson' && scopeId) {
-      const { rows } = await pool.query('SELECT l.title, l.description, m.name AS module_name FROM lessons l LEFT JOIN modules m ON m.id=l.module_id WHERE l.id=$1', [scopeId]);
-      if (rows[0]) scopeContext = `Lezione: "${rows[0].title}"${rows[0].module_name ? ` (modulo "${rows[0].module_name}")` : ''}.\n${rows[0].description || ''}`;
+      const { rows: l } = await pool.query(
+        `SELECT l.title, l.description, l.notes, l.start_datetime,
+                m.name AS module_name, f.name AS teacher_name, l.external_teacher_name
+         FROM lessons l LEFT JOIN modules m ON m.id=l.module_id
+         LEFT JOIN faculty f ON f.id = l.teacher_id WHERE l.id=$1`,
+        [scopeId]
+      );
+      if (l[0]) {
+        const who = l[0].teacher_name || l[0].external_teacher_name || '';
+        scopeContext = `Lezione: "${l[0].title}"`;
+        if (l[0].module_name) scopeContext += ` (modulo "${l[0].module_name}")`;
+        if (who) scopeContext += `, docente: ${who}`;
+        if (l[0].start_datetime) scopeContext += ` — ${new Date(l[0].start_datetime).toLocaleDateString('it-IT')}`;
+        if (l[0].description) scopeContext += `\nDescrizione: ${l[0].description}`;
+        if (l[0].notes) scopeContext += `\nNote: ${clip(l[0].notes, 400)}`;
+      }
+      // Trascrizione dell'eventuale lezione LMS associata
+      const { rows: lmsLessons } = await pool.query(
+        'SELECT id FROM lms_lessons WHERE calendar_lesson_id = $1 LIMIT 1',
+        [scopeId]
+      );
+      if (lmsLessons[0]) {
+        const transcript = await getLatestWorkflowTranscriptForLesson(lmsLessons[0].id);
+        if (transcript) {
+          scopeContext += `\n\nESTRATTO DALLA TRASCRIZIONE VIDEO:\n${clip(transcript, 2500)}`;
+          contextSourcesUsed++;
+        }
+      }
+      // Materiali della lezione
+      const r = await gatherResourcesText(
+        `SELECT title, resource_type, extracted_text FROM resources
+         WHERE lesson_id = $1 AND extracted_text IS NOT NULL
+           AND char_length(TRIM(extracted_text)) > 50 AND resource_type <> 'quiz'
+         ORDER BY sort_order NULLS LAST, created_at`,
+        [scopeId], 1500, 4
+      );
+      if (r.text) {
+        scopeContext += `\n\nMATERIALI DELLA LEZIONE:\n${r.text}`;
+        contextSourcesUsed += r.withText;
+      }
     } else if (scopeType === 'teacher' && scopeId) {
-      const { rows } = await pool.query('SELECT name, role, bio FROM faculty WHERE id=$1', [scopeId]);
-      if (rows[0]) scopeContext = `Docente valutato: ${rows[0].name}${rows[0].role ? ` (${rows[0].role})` : ''}.\n${rows[0].bio || ''}`;
+      const { rows: f } = await pool.query(
+        'SELECT name, role, bio FROM faculty WHERE id=$1',
+        [scopeId]
+      );
+      if (f[0]) {
+        scopeContext = `Docente valutato: ${f[0].name}`;
+        if (f[0].role) scopeContext += ` (${f[0].role})`;
+        if (f[0].bio) scopeContext += `\nBio: ${clip(f[0].bio, 600)}`;
+      }
+      // Lezioni del docente
+      const { rows: lessons } = await pool.query(
+        `SELECT l.id, l.title, l.start_datetime, m.name AS module_name
+         FROM lessons l LEFT JOIN modules m ON m.id = l.module_id
+         WHERE l.teacher_id = $1 ORDER BY l.start_datetime NULLS LAST`,
+        [scopeId]
+      );
+      if (lessons.length) {
+        scopeContext += `\n\nLEZIONI TENUTE (${lessons.length}):`;
+        for (const l of lessons.slice(0, 10)) {
+          const when = l.start_datetime ? new Date(l.start_datetime).toLocaleDateString('it-IT') : '';
+          scopeContext += `\n• "${l.title}"${l.module_name ? ' — ' + l.module_name : ''}${when ? ' (' + when + ')' : ''}`;
+        }
+      }
+      // Materiali caricati dal docente (extracted_text)
+      const r = await gatherResourcesText(
+        `SELECT title, resource_type, extracted_text FROM resources
+         WHERE teacher_id = $1 AND extracted_text IS NOT NULL
+           AND char_length(TRIM(extracted_text)) > 50 AND resource_type <> 'quiz'
+         ORDER BY created_at DESC`,
+        [scopeId], 1000, 4
+      );
+      if (r.text) {
+        scopeContext += `\n\nMATERIALI CARICATI DAL DOCENTE:\n${r.text}`;
+        contextSourcesUsed += r.withText;
+      }
+      // Eventuali trascrizioni delle sue lezioni LMS
+      const { rows: lmsLessons } = await pool.query(
+        `SELECT ll.id, ll.title FROM lms_lessons ll
+         JOIN lessons l ON l.id = ll.calendar_lesson_id
+         WHERE l.teacher_id = $1 LIMIT 3`,
+        [scopeId]
+      );
+      for (const lms of lmsLessons) {
+        const t = await getLatestWorkflowTranscriptForLesson(lms.id);
+        if (t) {
+          scopeContext += `\n\nESTRATTO TRASCRIZIONE — "${lms.title}":\n${clip(t, 1500)}`;
+          contextSourcesUsed++;
+        }
+      }
     }
-  } catch (_) {}
+  } catch (e) {
+    console.error('Survey context build error:', e);
+  }
+
+  // Tronco il context complessivo per non sforare il prompt
+  if (scopeContext.length > SURVEY_CONTEXT_LIMIT) {
+    scopeContext = scopeContext.slice(0, SURVEY_CONTEXT_LIMIT) + '\n…[contesto troncato]';
+  }
 
   try {
     const Anthropic = require('@anthropic-ai/sdk').default;
@@ -10533,10 +10699,11 @@ app.post('/api/admin/surveys/generate-with-ai', requireAdmin, async (req, res) =
 
 PUBBLICO: ${audienceLabel}.
 SCOPO DEL FEEDBACK (descritto dall'admin): ${String(purpose).trim()}
-${scopeContext ? '\nCONTESTO SPECIFICO:\n' + scopeContext + '\n' : ''}
+${scopeContext ? '\nCONTESTO REALE ESTRATTO DAL SISTEMA (titoli, descrizioni, contenuti dei materiali e/o trascrizioni video):\n' + scopeContext + '\n' : ''}
 
 ISTRUZIONI:
 - Genera esattamente ${nq} domande di feedback, mix di rating e testo libero (almeno 1-2 testo libero).
+- ${scopeContext ? 'USA IL CONTESTO REALE: cita argomenti specifici, materiali, lezioni o concetti che vedi sopra. Le domande devono essere ancorate a quel contenuto, non generiche.' : 'Niente contesto specifico: fai domande di feedback generali ma calibrate sul pubblico.'}
 - Le domande di tipo "rating" sono su scala 1-5 (1=pessimo, 5=ottimo) e devono essere formulate in positivo (es. "Quanto è stato chiaro...", "Quanto è utile...").
 - Le domande "text" sono aperte (es. "Cosa miglioreresti?", "Suggerimenti?").
 - Le prime domande siano più generali, le ultime più specifiche/aperte.
@@ -10601,7 +10768,9 @@ FORMATO OUTPUT (JSON valido, niente altro testo):
         description: generated.description,
         targetRole,
         questionCount: order,
-        createdByAi: true
+        createdByAi: true,
+        contextSourcesUsed,
+        contextChars: scopeContext.length
       });
     } catch (e) {
       await client.query('ROLLBACK');

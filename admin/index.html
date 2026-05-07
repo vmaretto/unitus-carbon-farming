@@ -9658,7 +9658,10 @@ Buono studio!</textarea>
             }
             try {
                 const result = await apiRequest('/api/admin/surveys/generate-with-ai', { method: 'POST', body: JSON.stringify(payload) });
-                showToast(`Template generato: "${result.title}" (${result.questionCount} domande)`);
+                const sourcesNote = result.contextSourcesUsed > 0
+                    ? ` — usate ${result.contextSourcesUsed} fonti reali (materiali/transcript)`
+                    : (result.contextChars > 0 ? ' — contesto base usato' : '');
+                showToast(`Template generato: "${result.title}" (${result.questionCount} domande)${sourcesNote}`);
                 e.target.reset();
                 document.getElementById('surv-ai-scope-id-wrap').style.display = 'none';
                 document.getElementById('surv-ai-form-details').open = false;

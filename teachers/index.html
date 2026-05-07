@@ -267,6 +267,7 @@
                 <div class="tab" data-tab="quizzes">🧠 Quiz</div>
                 <div class="tab" data-tab="questions">💬 Domande <span id="questions-tab-badge" class="tab-badge" style="display:none;">0</span></div>
                 <div class="tab" data-tab="documents">📝 Liberatorie <span id="docs-tab-badge" class="tab-badge" style="display:none;">0</span></div>
+                <div class="tab" data-tab="surveys">📋 Questionari <span id="surveys-tab-badge" class="tab-badge" style="display:none;">0</span></div>
             </div>
 
             <div class="tab-panel" id="panel-calendar">
@@ -370,6 +371,29 @@
                     <div class="section-body" id="docs-signed-container">
                         <div class="empty-state">Caricamento...</div>
                     </div>
+                </div>
+            </div>
+
+            <!-- TAB: Questionari -->
+            <div class="tab-panel" id="panel-surveys">
+                <!-- Sotto-tab -->
+                <div style="display:flex; gap:8px; margin-bottom: 18px; border-bottom: 1px solid var(--gray-200);">
+                    <button type="button" class="btn-sm btn-orange surv-subtab-btn" data-surv-subtab="pending">📝 Da compilare</button>
+                    <button type="button" class="btn-sm btn-gray surv-subtab-btn" data-surv-subtab="received">📊 Feedback ricevuti</button>
+                </div>
+
+                <div class="section-card" data-surv-subpane="pending">
+                    <div class="section-header"><h2>📝 I tuoi questionari da compilare</h2></div>
+                    <div class="section-body" id="teacher-surveys-pending"><div class="empty-state">Caricamento...</div></div>
+                </div>
+
+                <div class="section-card" data-surv-subpane="received" style="display:none;">
+                    <div class="section-header"><h2>📊 Feedback ricevuti su di te (anonimi)</h2></div>
+                    <div class="section-body" id="teacher-surveys-received"><div class="empty-state">Caricamento...</div></div>
+                </div>
+
+                <div class="section-card" id="teacher-survey-compile-card" style="display:none;">
+                    <div class="section-body" id="teacher-survey-compile"></div>
                 </div>
             </div>
         </main>
@@ -653,6 +677,7 @@
                 document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
                 if (tab.dataset.tab === 'calendar') loadTeacherCalendar();
                 if (tab.dataset.tab === 'all-materials') loadAllMaterials();
+                if (tab.dataset.tab === 'surveys') loadTeacherSurveysSection();
             });
         });
 
@@ -1771,6 +1796,208 @@
             document.body.appendChild(t);
             setTimeout(() => t.classList.add('show'), 100);
             setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3000);
+        }
+
+        // ============================================================
+        // SURVEYS / QUESTIONARI (DOCENTE)
+        // ============================================================
+
+        function escHtmlSurv(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+        document.querySelectorAll('.surv-subtab-btn').forEach(b => {
+            b.addEventListener('click', () => {
+                const sub = b.dataset.survSubtab;
+                document.querySelectorAll('.surv-subtab-btn').forEach(x => {
+                    x.classList.toggle('btn-orange', x === b);
+                    x.classList.toggle('btn-gray', x !== b);
+                });
+                document.querySelectorAll('[data-surv-subpane]').forEach(p => {
+                    p.style.display = p.dataset.survSubpane === sub ? '' : 'none';
+                });
+                document.getElementById('teacher-survey-compile-card').style.display = 'none';
+            });
+        });
+
+        async function loadTeacherSurveysSection() {
+            // Pending
+            try {
+                const items = await apiCall('/api/teachers/my-surveys');
+                const container = document.getElementById('teacher-surveys-pending');
+                const pending = (items || []).filter(it => !it.completedAt);
+                const badge = document.getElementById('surveys-tab-badge');
+                if (pending.length) {
+                    badge.style.display = '';
+                    badge.textContent = pending.length;
+                } else {
+                    badge.style.display = 'none';
+                }
+                if (!items.length) {
+                    container.innerHTML = '<div class="empty-state">Nessun questionario in questo momento.</div>';
+                } else {
+                    container.innerHTML = items.map(it => {
+                        const done = !!it.completedAt;
+                        return `
+                            <div style="padding:14px; border:1px solid var(--gray-200); border-radius:10px; margin-bottom:10px; ${done ? 'background:#f0fdf4;' : ''}">
+                                <strong>${escHtmlSurv(it.surveyTitle)}</strong>
+                                <span class="badge ${done ? 'badge-green' : 'badge-orange'}" style="margin-left:8px;">${done ? '✅ Compilato' : '📝 Da compilare'}</span>
+                                <div style="color: var(--gray-500); font-size:0.85rem; margin-top:4px;">
+                                    ${it.campaignTitle ? escHtmlSurv(it.campaignTitle) + ' • ' : ''}Scope: ${it.scopeType} → ${escHtmlSurv(it.scopeLabel || '')}
+                                </div>
+                                ${it.surveyDescription ? `<div style="margin-top:6px;">${escHtmlSurv(it.surveyDescription)}</div>` : ''}
+                                <button type="button" class="btn-sm btn-orange" data-teacher-surv-open="${it.invitationId}" style="margin-top:10px;">${done ? 'Rivedi' : 'Compila ora'}</button>
+                            </div>
+                        `;
+                    }).join('');
+                    container.querySelectorAll('[data-teacher-surv-open]').forEach(b => {
+                        b.addEventListener('click', () => openTeacherSurveyCompile(b.dataset.teacherSurvOpen));
+                    });
+                }
+            } catch (e) {
+                document.getElementById('teacher-surveys-pending').innerHTML = `<div class="empty-state">Errore: ${escHtmlSurv(e.message)}</div>`;
+            }
+
+            // Received feedback (aggregated anonymously)
+            try {
+                const data = await apiCall('/api/teachers/feedback-on-me');
+                const container = document.getElementById('teacher-surveys-received');
+                if (!data || !data.length) {
+                    container.innerHTML = '<div class="empty-state">Non hai ancora ricevuto feedback.</div>';
+                    return;
+                }
+                container.innerHTML = data.map(entry => {
+                    const c = entry.campaign;
+                    const status = c.isActive ? '<span class="badge badge-orange">In corso</span>' : '<span class="badge badge-gray">Chiusa</span>';
+                    let qsHtml = '';
+                    entry.questions.forEach(q => {
+                        if (q.questionType === 'rating') {
+                            qsHtml += `
+                                <div style="padding:12px; border:1px solid var(--gray-200); border-radius:8px; margin-bottom:8px;">
+                                    <div style="font-weight:600;">${escHtmlSurv(q.text)}</div>
+                                    <div style="font-size:1.4rem; color: var(--green-600); font-weight:700; margin-top:4px;">⭐ ${q.avg ?? '—'} <span style="font-size:0.85rem; color:var(--gray-500); font-weight:400;">(${q.n||0} risposte)</span></div>
+                                </div>
+                            `;
+                        } else {
+                            qsHtml += `
+                                <div style="padding:12px; border:1px solid var(--gray-200); border-radius:8px; margin-bottom:8px;">
+                                    <div style="font-weight:600;">${escHtmlSurv(q.text)}</div>
+                                    <div style="font-size:0.85rem; color:var(--gray-500); margin-bottom:6px;">${q.n} commento/i (anonimi)</div>
+                                    ${(q.comments||[]).map(c => `<div style="padding:8px 12px; background: var(--gray-100); border-left:3px solid var(--green-500); border-radius:6px; margin-top:6px;">${escHtmlSurv(c)}</div>`).join('')}
+                                    ${!q.comments?.length ? '<div class="empty-state">Nessun commento.</div>' : ''}
+                                </div>
+                            `;
+                        }
+                    });
+                    return `
+                        <div style="padding:14px; border:1px solid var(--gray-200); border-radius:10px; margin-bottom:14px;">
+                            <strong>${escHtmlSurv(c.title || c.surveyTitle)}</strong> ${status}
+                            <div style="color:var(--gray-500); font-size:0.85rem; margin-top:4px;">
+                                ${c.completedCount}/${c.invitedCount} studenti hanno risposto
+                            </div>
+                            <div style="margin-top:12px;">${qsHtml}</div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                document.getElementById('teacher-surveys-received').innerHTML = `<div class="empty-state">Errore: ${escHtmlSurv(e.message)}</div>`;
+            }
+        }
+
+        async function openTeacherSurveyCompile(invitationId) {
+            try {
+                const data = await apiCall('/api/teachers/surveys/invitations/' + invitationId);
+                const card = document.getElementById('teacher-survey-compile-card');
+                const target = document.getElementById('teacher-survey-compile');
+                document.querySelectorAll('[data-surv-subpane]').forEach(p => p.style.display = 'none');
+                card.style.display = '';
+                const inv = data.invitation;
+                const existing = new Map((data.existingAnswers || []).map(a => [a.questionId, a]));
+                target.innerHTML = `
+                    <a href="#" id="teacher-surv-back" style="color: var(--green-600); text-decoration:none;">← Torna alla lista</a>
+                    <h2 style="margin-top:8px;">${escHtmlSurv(inv.surveyTitle)}</h2>
+                    ${inv.surveyDescription ? `<p>${escHtmlSurv(inv.surveyDescription)}</p>` : ''}
+                    <form id="teacher-surv-form" style="margin-top:14px;">
+                        ${data.questions.map((q, i) => {
+                            const ex = existing.get(q.id);
+                            if (q.questionType === 'rating') {
+                                const sel = ex ? Number(ex.ratingValue) : null;
+                                return `
+                                    <div style="padding:14px; border:1px solid var(--gray-200); border-radius:10px; margin-bottom:10px;">
+                                        <div style="font-weight:600; margin-bottom:8px;">${i+1}. ${escHtmlSurv(q.text)} ${q.isRequired ? '<span style="color:#b91c1c;">*</span>' : ''}</div>
+                                        <div style="display:flex; gap:6px;">
+                                            ${[1,2,3,4,5].map(v => `
+                                                <label style="cursor:pointer; padding:6px 12px; border:2px solid ${sel === v ? '#fbbc42' : 'var(--gray-200)'}; border-radius:8px; background: ${sel === v ? '#fef3c7' : 'white'};">
+                                                    <input type="radio" name="q_${q.id}" value="${v}" data-question="${q.id}" data-type="rating" ${sel === v ? 'checked' : ''} ${q.isRequired ? 'required' : ''} style="display:none;">
+                                                    ${v} ⭐
+                                                </label>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `;
+                            } else {
+                                return `
+                                    <div style="padding:14px; border:1px solid var(--gray-200); border-radius:10px; margin-bottom:10px;">
+                                        <div style="font-weight:600; margin-bottom:8px;">${i+1}. ${escHtmlSurv(q.text)} ${q.isRequired ? '<span style="color:#b91c1c;">*</span>' : ''}</div>
+                                        <textarea data-question="${q.id}" data-type="text" ${q.isRequired ? 'required' : ''} placeholder="La tua risposta..." style="width:100%; padding:10px; border:1px solid var(--gray-200); border-radius:8px; min-height:80px;">${ex ? escHtmlSurv(ex.textValue || '') : ''}</textarea>
+                                    </div>
+                                `;
+                            }
+                        }).join('')}
+                        <div style="margin-top:14px;">
+                            <button class="btn-sm btn-orange" type="submit">${inv.completedAt ? 'Aggiorna risposte' : 'Invia risposte'}</button>
+                            <button class="btn-sm btn-gray" type="button" id="teacher-surv-cancel">Annulla</button>
+                        </div>
+                    </form>
+                `;
+                target.querySelector('label').addEventListener('click', () => {});
+                target.addEventListener('change', (e) => {
+                    if (e.target.matches('input[type="radio"][data-type="rating"]')) {
+                        const qid = e.target.dataset.question;
+                        target.querySelectorAll(`input[name="q_${qid}"]`).forEach(input => {
+                            const lbl = input.closest('label');
+                            if (lbl) {
+                                if (input.checked) { lbl.style.background = '#fef3c7'; lbl.style.borderColor = '#fbbc42'; }
+                                else { lbl.style.background = 'white'; lbl.style.borderColor = 'var(--gray-200)'; }
+                            }
+                        });
+                    }
+                });
+                document.getElementById('teacher-surv-back').addEventListener('click', (e) => { e.preventDefault(); closeTeacherSurveyCompile(); });
+                document.getElementById('teacher-surv-cancel').addEventListener('click', closeTeacherSurveyCompile);
+                document.getElementById('teacher-surv-form').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const answers = [];
+                    e.target.querySelectorAll('[data-question]').forEach(el => {
+                        const qid = el.dataset.question;
+                        if (el.dataset.type === 'rating') {
+                            if (el.type === 'radio' && el.checked) answers.push({ questionId: qid, ratingValue: Number(el.value) });
+                        } else {
+                            if (!answers.find(a => a.questionId === qid)) answers.push({ questionId: qid, textValue: el.value });
+                        }
+                    });
+                    try {
+                        await apiCall('/api/teachers/surveys/invitations/' + invitationId + '/submit', {
+                            method: 'POST',
+                            body: JSON.stringify({ answers })
+                        });
+                        showToast('Risposte inviate. Grazie!');
+                        closeTeacherSurveyCompile();
+                    } catch (err) {
+                        showToast('Errore: ' + err.message, 'error');
+                    }
+                });
+            } catch (e) {
+                showToast('Errore: ' + e.message, 'error');
+            }
+        }
+
+        function closeTeacherSurveyCompile() {
+            document.getElementById('teacher-survey-compile-card').style.display = 'none';
+            const active = document.querySelector('.surv-subtab-btn.btn-orange');
+            const sub = active ? active.dataset.survSubtab : 'pending';
+            document.querySelectorAll('[data-surv-subpane]').forEach(p => {
+                p.style.display = p.dataset.survSubpane === sub ? '' : 'none';
+            });
+            loadTeacherSurveysSection();
         }
     </script>
 </body>

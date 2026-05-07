@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Questionari - Carbon Farming Master</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --green-900:#1b3a2d; --green-700:#245a3d; --green-500:#2c7a4b; --green-100:#ecf6f0; --orange-500:#ff7a1a; --gray-900:#1c1c1c; --gray-700:#3d3d3d; --gray-500:#6b6b6b; --gray-200:#d9d9d9; --gray-100:#f3f4f6; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--gray-100); color: var(--gray-900); min-height: 100vh; }
+        header { background: linear-gradient(135deg, rgba(27,58,45,0.94), rgba(44,122,75,0.88)); color: white; padding: 22px 24px; box-shadow: 0 10px 40px rgba(27,58,45,0.25); }
+        .header-content { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
+        header h1 { font-size: 1.55rem; margin: 0; letter-spacing: -0.02em; }
+        .nav-links { display: flex; gap: 22px; align-items: center; flex-wrap: nowrap; }
+        .nav-links a { color: white; text-decoration: none; padding: 0 0 6px; font-weight: 600; font-size: 0.95rem; }
+        .nav-links a.active { color: #ffd7c1; border-bottom: 2px solid var(--orange-500); }
+        main { max-width: 900px; margin: 24px auto; padding: 0 24px 40px; }
+        .card { background: white; border-radius: 20px; padding: 28px; box-shadow: 0 8px 30px rgba(31,41,55,0.08); border: 1px solid rgba(36,90,61,0.08); margin-bottom: 24px; }
+        .card h2 { font-size: 1.3rem; margin: 0 0 16px; color: var(--green-900); }
+        .surv-item { padding: 16px; border: 1px solid var(--gray-200); border-radius: 12px; margin-bottom: 12px; }
+        .surv-item.completed { background: #f0fdf4; border-color: #86efac; }
+        .surv-item-title { font-weight: 600; }
+        .surv-item-meta { color: var(--gray-500); font-size: 0.85rem; margin-top: 4px; }
+        .surv-item-actions { margin-top: 12px; }
+        .btn { display: inline-block; padding: 10px 20px; border-radius: 999px; font-weight: 600; text-decoration: none; cursor: pointer; border: none; font-size: 0.95rem; }
+        .btn-primary { background: linear-gradient(120deg,#ff7a1a,#fbbc42); color: white; }
+        .btn-secondary { background: var(--gray-200); color: var(--gray-900); }
+        .badge { padding: 2px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; margin-left: 8px; }
+        .badge.pending { background: #fef3c7; color: #92400e; }
+        .badge.done { background: #dcfce7; color: #166534; }
+        .stars { display: inline-flex; gap: 4px; }
+        .stars input[type="radio"] { display: none; }
+        .stars label { font-size: 1.8rem; cursor: pointer; color: var(--gray-200); transition: color 0.15s; }
+        .stars input[type="radio"]:checked ~ label { color: var(--gray-200); }
+        .stars input[type="radio"]:checked + label,
+        .stars input[type="radio"]:checked + label ~ label { color: #fbbc42; }
+        .stars { direction: rtl; justify-content: flex-end; }
+        .question { padding: 16px; border: 1px solid var(--gray-200); border-radius: 12px; margin-bottom: 14px; }
+        .question .q-text { font-weight: 600; margin-bottom: 10px; }
+        .question textarea { width: 100%; padding: 10px; border: 1px solid var(--gray-200); border-radius: 8px; font-family: inherit; font-size: 0.95rem; resize: vertical; min-height: 80px; }
+        .empty { color: var(--gray-500); text-align: center; padding: 32px; }
+        .loading { text-align: center; padding: 40px; color: var(--gray-500); }
+        .scope-pill { display: inline-block; padding: 2px 8px; border-radius: 6px; background: var(--green-100); color: var(--green-700); font-size: 0.75rem; font-weight: 600; }
+    </style>
+    <script src="/learn/js/guest-guard.js"></script>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div>
+                <h1>Carbon Farming Master</h1>
+                <p style="font-size: 1.1rem; margin: 0; opacity: 0.9;">Questionari</p>
+            </div>
+            <div class="nav-links">
+                <a href="/learn/index.html">Dashboard</a>
+                <a href="/learn/calendar.html">Calendario</a>
+                <a href="/learn/resources.html">Risorse</a>
+                <a href="/learn/surveys.html" class="active">Questionari</a>
+                <a href="#" id="logout-btn">Esci</a>
+            </div>
+        </div>
+    </header>
+
+    <main id="main">
+        <div id="list-view">
+            <div class="card">
+                <h2>📋 I tuoi questionari</h2>
+                <div id="surv-list"><div class="loading">Caricamento...</div></div>
+            </div>
+        </div>
+        <div id="compile-view" hidden></div>
+    </main>
+
+    <script>
+        const token = localStorage.getItem('learnToken');
+        if (!token) window.location.href = '/learn/login.html';
+
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            localStorage.removeItem('learnToken');
+            localStorage.removeItem('learnUser');
+            window.location.href = '/learn/login.html';
+        });
+
+        async function api(path, opts = {}) {
+            const res = await fetch(path, {
+                ...opts,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token,
+                    ...(opts.headers || {})
+                }
+            });
+            if (res.status === 401) {
+                localStorage.removeItem('learnToken');
+                window.location.href = '/learn/login.html';
+                return null;
+            }
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Errore');
+            return data;
+        }
+
+        function escHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+        async function loadList() {
+            try {
+                const items = await api('/api/lms/my-surveys');
+                const container = document.getElementById('surv-list');
+                if (!items.length) {
+                    container.innerHTML = '<div class="empty">Nessun questionario aperto al momento.</div>';
+                    return;
+                }
+                container.innerHTML = items.map(it => {
+                    const done = !!it.completedAt;
+                    const closes = it.closesAt ? `<br>Chiude il ${new Date(it.closesAt).toLocaleDateString('it-IT')}` : '';
+                    return `
+                        <div class="surv-item ${done ? 'completed' : ''}">
+                            <div class="surv-item-title">
+                                ${escHtml(it.surveyTitle)}
+                                ${done ? '<span class="badge done">✅ Compilato</span>' : '<span class="badge pending">📝 Da compilare</span>'}
+                            </div>
+                            <div class="surv-item-meta">
+                                ${it.campaignTitle ? escHtml(it.campaignTitle) + ' • ' : ''}
+                                <span class="scope-pill">${it.scopeType}: ${escHtml(it.scopeLabel || '')}</span>
+                                ${closes}
+                            </div>
+                            ${it.surveyDescription ? `<div style="margin-top:8px; color: var(--gray-700);">${escHtml(it.surveyDescription)}</div>` : ''}
+                            <div class="surv-item-actions">
+                                <button class="btn btn-primary" data-open="${it.invitationId}">${done ? 'Rivedi risposte' : 'Compila ora'}</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                container.querySelectorAll('[data-open]').forEach(b => {
+                    b.addEventListener('click', () => openCompile(b.dataset.open));
+                });
+            } catch (e) {
+                document.getElementById('surv-list').innerHTML = `<div class="empty">Errore: ${escHtml(e.message)}</div>`;
+            }
+        }
+
+        async function openCompile(invitationId) {
+            const data = await api('/api/lms/surveys/invitations/' + invitationId);
+            if (!data) return;
+            const existing = new Map((data.existingAnswers || []).map(a => [a.questionId, a]));
+            const inv = data.invitation;
+            document.getElementById('list-view').hidden = true;
+            const compile = document.getElementById('compile-view');
+            compile.hidden = false;
+            compile.innerHTML = `
+                <div class="card">
+                    <a href="#" id="back-to-list" style="color: var(--green-700); text-decoration:none;">← Torna alla lista</a>
+                    <h2 style="margin-top:12px;">${escHtml(inv.surveyTitle)}</h2>
+                    ${inv.surveyDescription ? `<p style="color: var(--gray-700);">${escHtml(inv.surveyDescription)}</p>` : ''}
+                    <div class="surv-item-meta">
+                        ${inv.campaignTitle ? escHtml(inv.campaignTitle) + ' • ' : ''}
+                        <span class="scope-pill">${inv.scopeType}</span>
+                    </div>
+                    <form id="compile-form" style="margin-top:20px;">
+                        ${data.questions.map((q, i) => {
+                            const ex = existing.get(q.id);
+                            if (q.questionType === 'rating') {
+                                const sel = ex ? Number(ex.ratingValue) : null;
+                                return `
+                                    <div class="question">
+                                        <div class="q-text">${i+1}. ${escHtml(q.text)} ${q.isRequired ? '<span style="color:#b91c1c;">*</span>' : ''}</div>
+                                        <div class="stars">
+                                            ${[5,4,3,2,1].map(v => `
+                                                <input type="radio" id="q${q.id}_${v}" name="q_${q.id}" value="${v}" data-question="${q.id}" data-type="rating" ${sel === v ? 'checked' : ''} ${q.isRequired ? 'required' : ''}>
+                                                <label for="q${q.id}_${v}">★</label>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `;
+                            } else {
+                                return `
+                                    <div class="question">
+                                        <div class="q-text">${i+1}. ${escHtml(q.text)} ${q.isRequired ? '<span style="color:#b91c1c;">*</span>' : ''}</div>
+                                        <textarea data-question="${q.id}" data-type="text" ${q.isRequired ? 'required' : ''} placeholder="La tua risposta...">${ex ? escHtml(ex.textValue || '') : ''}</textarea>
+                                    </div>
+                                `;
+                            }
+                        }).join('')}
+                        <div style="margin-top:20px;">
+                            <button class="btn btn-primary" type="submit">${inv.completedAt ? 'Aggiorna risposte' : 'Invia risposte'}</button>
+                            <button class="btn btn-secondary" type="button" id="cancel-compile">Annulla</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.getElementById('back-to-list').addEventListener('click', (e) => { e.preventDefault(); backToList(); });
+            document.getElementById('cancel-compile').addEventListener('click', backToList);
+            document.getElementById('compile-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const answers = [];
+                e.target.querySelectorAll('[data-question]').forEach(el => {
+                    const qid = el.dataset.question;
+                    if (el.dataset.type === 'rating') {
+                        if (el.type === 'radio' && el.checked) answers.push({ questionId: qid, ratingValue: Number(el.value) });
+                    } else {
+                        if (!answers.find(a => a.questionId === qid)) answers.push({ questionId: qid, textValue: el.value });
+                    }
+                });
+                try {
+                    await api('/api/lms/surveys/invitations/' + invitationId + '/submit', {
+                        method: 'POST',
+                        body: JSON.stringify({ answers })
+                    });
+                    alert('Risposte inviate. Grazie!');
+                    backToList();
+                } catch (err) {
+                    alert('Errore: ' + err.message);
+                }
+            });
+        }
+
+        function backToList() {
+            document.getElementById('compile-view').hidden = true;
+            document.getElementById('list-view').hidden = false;
+            loadList();
+        }
+
+        loadList();
+    </script>
+</body>
+</html>

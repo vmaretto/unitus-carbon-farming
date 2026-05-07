@@ -1142,6 +1142,7 @@
                 <a href="#lms-courses" data-section="lms-courses">🎓 Percorsi formativi</a>
                 <a href="#lms-modules" data-section="lms-modules">📦 Moduli e lezioni</a>
                 <a href="#lms-enrollments" data-section="lms-enrollments">👥 Iscrizioni</a>
+                <a href="#surveys" data-section="surveys">📋 Questionari</a>
                 <a href="#attendance" data-section="attendance">✅ Presenze</a>
                 <a href="#student-progress" data-section="student-progress">📈 Progressi studenti</a>
             </div>
@@ -2449,6 +2450,114 @@ Buono studio!</textarea>
         </section>
 
         <!-- ============================================ -->
+        <!-- QUESTIONARI / FEEDBACK SURVEYS -->
+        <!-- ============================================ -->
+        <section id="surveys">
+            <header>
+                <h2>📋 Questionari di feedback</h2>
+                <p class="section-description">Crea questionari per studenti e docenti, lancia campagne e leggi i risultati aggregati.</p>
+            </header>
+
+            <!-- Tab di navigazione -->
+            <div style="display:flex; gap:8px; border-bottom: 1px solid var(--gray-200); margin-bottom:24px;">
+                <button type="button" class="surv-tab-btn primary" data-surv-tab="templates">Template</button>
+                <button type="button" class="surv-tab-btn secondary" data-surv-tab="campaigns">Campagne</button>
+                <button type="button" class="surv-tab-btn secondary" data-surv-tab="results">Risultati</button>
+            </div>
+
+            <!-- TAB: TEMPLATE -->
+            <div data-surv-pane="templates">
+                <details id="surv-tpl-form-details" style="background: var(--gray-100); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: var(--green-700);">+ Crea nuovo template</summary>
+                    <form id="surv-tpl-form" style="margin-top:16px;">
+                        <div class="form-grid">
+                            <label>Titolo
+                                <input type="text" id="surv-tpl-title" name="title" required placeholder="Es. Feedback fine modulo">
+                            </label>
+                            <label>Pubblico
+                                <select id="surv-tpl-target" name="targetRole" required>
+                                    <option value="student">Studenti</option>
+                                    <option value="teacher">Docenti</option>
+                                </select>
+                            </label>
+                        </div>
+                        <label style="margin-top:14px;">Descrizione (opzionale)
+                            <textarea id="surv-tpl-description" name="description" rows="2" placeholder="Breve descrizione mostrata a chi compila"></textarea>
+                        </label>
+                        <div class="actions">
+                            <button class="primary" type="submit">Crea template</button>
+                            <button class="secondary" type="button" id="surv-tpl-reset" hidden>Annulla</button>
+                        </div>
+                    </form>
+                </details>
+                <div id="surv-tpl-list">
+                    <div class="empty-state">Caricamento...</div>
+                </div>
+            </div>
+
+            <!-- TAB: CAMPAGNE -->
+            <div data-surv-pane="campaigns" hidden>
+                <details id="surv-camp-form-details" style="background: var(--gray-100); border-radius:12px; padding:20px; margin-bottom:20px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: var(--green-700);">+ Lancia nuova campagna</summary>
+                    <form id="surv-camp-form" style="margin-top:16px;">
+                        <div class="form-grid">
+                            <label>Template
+                                <select id="surv-camp-survey" required>
+                                    <option value="">-- Seleziona --</option>
+                                </select>
+                            </label>
+                            <label>Titolo campagna (opzionale)
+                                <input type="text" id="surv-camp-title" placeholder="Es. Feedback fine M1 — maggio 2026">
+                            </label>
+                        </div>
+                        <div class="form-grid" style="margin-top:14px;">
+                            <label>Scope
+                                <select id="surv-camp-scope-type" required>
+                                    <option value="course">Corso intero</option>
+                                    <option value="module">Modulo specifico</option>
+                                    <option value="lesson">Lezione specifica</option>
+                                    <option value="teacher">Docente specifico</option>
+                                </select>
+                            </label>
+                            <label id="surv-camp-scope-id-wrap">
+                                <span data-surv-scope-label>Corso</span>
+                                <select id="surv-camp-scope-id">
+                                    <option value="">-- Tutti i corsi --</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="form-grid" style="margin-top:14px;">
+                            <label>Apertura (opzionale)
+                                <input type="datetime-local" id="surv-camp-opens">
+                            </label>
+                            <label>Chiusura (opzionale)
+                                <input type="datetime-local" id="surv-camp-closes">
+                            </label>
+                        </div>
+                        <div class="actions">
+                            <button class="primary" type="submit">Lancia campagna</button>
+                        </div>
+                        <small style="color: var(--gray-500); display:block; margin-top:8px;">Al lancio verranno creati gli inviti per tutti gli utenti rilevanti del pubblico target.</small>
+                    </form>
+                </details>
+                <div id="surv-camp-list">
+                    <div class="empty-state">Caricamento...</div>
+                </div>
+            </div>
+
+            <!-- TAB: RISULTATI -->
+            <div data-surv-pane="results" hidden>
+                <label style="display:block; margin-bottom:16px;">
+                    Seleziona campagna
+                    <select id="surv-results-campaign" style="margin-top:8px;">
+                        <option value="">-- Seleziona --</option>
+                    </select>
+                </label>
+                <div id="surv-results-content"></div>
+            </div>
+        </section>
+
+        <!-- ============================================ -->
         <!-- PRESENZE -->
         <!-- ============================================ -->
         <section id="attendance">
@@ -2919,7 +3028,8 @@ Buono studio!</textarea>
                     () => typeof loadNotificationLogs === 'function' ? loadNotificationLogs() : Promise.resolve(),
                     () => typeof loadTeacherDocs === 'function' ? loadTeacherDocs() : Promise.resolve(),
                     () => typeof loadTeacherPendingMaterials === 'function' ? loadTeacherPendingMaterials() : Promise.resolve(),
-                    () => typeof loadStudentQuestions === 'function' ? loadStudentQuestions() : Promise.resolve()
+                    () => typeof loadStudentQuestions === 'function' ? loadStudentQuestions() : Promise.resolve(),
+                    () => typeof loadSurveysSection === 'function' ? loadSurveysSection() : Promise.resolve()
                 ];
 
                 for (const task of startupTasks) {
@@ -9388,6 +9498,373 @@ Buono studio!</textarea>
             } catch (error) {
                 showToast(error.message || 'Errore nell\'abilitazione login', 'error');
             }
+        }
+
+        // ============================================================
+        // SURVEYS / QUESTIONARI
+        // ============================================================
+
+        const survState = {
+            templates: [],
+            campaigns: [],
+            currentTemplate: null,
+            scopeOptions: { courses: [], modules: [], lessons: [], teachers: [] }
+        };
+
+        async function loadSurveysSection() {
+            try {
+                survState.templates = await apiRequest('/api/admin/surveys');
+                renderSurvTemplates();
+                survState.campaigns = await apiRequest('/api/admin/survey-campaigns');
+                renderSurvCampaigns();
+                fillSurvCampaignDropdowns();
+            } catch (e) {
+                console.error('loadSurveysSection error', e);
+            }
+        }
+
+        // --- Tab switching ---
+        document.querySelectorAll('[data-surv-tab]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.survTab;
+                document.querySelectorAll('[data-surv-tab]').forEach(b => {
+                    b.classList.toggle('primary', b === btn);
+                    b.classList.toggle('secondary', b !== btn);
+                });
+                document.querySelectorAll('[data-surv-pane]').forEach(p => {
+                    p.hidden = p.dataset.survPane !== tab;
+                });
+                if (tab === 'campaigns') fillSurvCampaignDropdowns();
+                if (tab === 'results') fillSurvResultsDropdown();
+            });
+        });
+
+        // --- Template list ---
+        function renderSurvTemplates() {
+            const container = document.getElementById('surv-tpl-list');
+            if (!survState.templates.length) {
+                container.innerHTML = '<div class="empty-state">Nessun template. Creane uno qui sopra.</div>';
+                return;
+            }
+            container.innerHTML = survState.templates.map(t => `
+                <div class="card" style="margin-bottom: 12px; padding: 16px; border:1px solid var(--gray-200); border-radius: 12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+                        <div>
+                            <strong>${escapeHtml(t.title)}</strong>
+                            <span class="badge" style="margin-left:8px; background: ${t.targetRole === 'student' ? '#dbeafe' : '#fef3c7'}; color: ${t.targetRole === 'student' ? '#1e40af' : '#92400e'}; padding:2px 8px; border-radius:999px; font-size:0.8rem;">
+                                ${t.targetRole === 'student' ? '👨‍🎓 Studenti' : '👩‍🏫 Docenti'}
+                            </span>
+                            <div style="color: var(--gray-500); font-size:0.85rem; margin-top:4px;">${t.questionCount} domande &bull; ${t.campaignCount} campagne lanciate</div>
+                            ${t.description ? `<div style="margin-top:6px; color: var(--gray-600);">${escapeHtml(t.description)}</div>` : ''}
+                        </div>
+                        <div class="actions" style="margin:0;">
+                            <button type="button" class="secondary" data-surv-tpl-edit="${t.id}">Modifica domande</button>
+                            <button type="button" class="danger" data-surv-tpl-del="${t.id}">Elimina</button>
+                        </div>
+                    </div>
+                    <div data-surv-tpl-questions="${t.id}" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--gray-200);"></div>
+                </div>
+            `).join('');
+        }
+
+        document.getElementById('surv-tpl-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                title: document.getElementById('surv-tpl-title').value.trim(),
+                description: document.getElementById('surv-tpl-description').value.trim() || null,
+                targetRole: document.getElementById('surv-tpl-target').value
+            };
+            if (!payload.title) return showToast('Inserisci un titolo', 'error');
+            try {
+                await apiRequest('/api/admin/surveys', { method: 'POST', body: JSON.stringify(payload) });
+                showToast('Template creato');
+                e.target.reset();
+                document.getElementById('surv-tpl-form-details').open = false;
+                loadSurveysSection();
+            } catch (err) { showToast(err.message || 'Errore', 'error'); }
+        });
+
+        document.getElementById('surv-tpl-list').addEventListener('click', async (e) => {
+            const editBtn = e.target.closest('[data-surv-tpl-edit]');
+            const delBtn = e.target.closest('[data-surv-tpl-del]');
+            if (editBtn) {
+                const id = editBtn.dataset.survTplEdit;
+                const panel = document.querySelector(`[data-surv-tpl-questions="${id}"]`);
+                if (!panel) return;
+                if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+                panel.style.display = '';
+                panel.innerHTML = '<div class="empty-state">Caricamento...</div>';
+                try {
+                    const detail = await apiRequest(`/api/admin/surveys/${id}`);
+                    renderSurvQuestionsPanel(panel, detail);
+                } catch (err) {
+                    panel.innerHTML = `<div style="color:#b91c1c;">Errore: ${escapeHtml(err.message || '')}</div>`;
+                }
+            }
+            if (delBtn) {
+                if (!confirm('Eliminare il template e tutte le sue campagne/risposte?')) return;
+                try {
+                    await apiRequest(`/api/admin/surveys/${delBtn.dataset.survTplDel}`, { method: 'DELETE' });
+                    showToast('Template eliminato');
+                    loadSurveysSection();
+                } catch (err) { showToast(err.message || 'Errore', 'error'); }
+            }
+        });
+
+        function renderSurvQuestionsPanel(panel, detail) {
+            const qs = detail.questions || [];
+            panel.innerHTML = `
+                <h4 style="margin: 0 0 12px;">Domande del template</h4>
+                <div class="surv-q-list">
+                    ${qs.length ? qs.map((q, i) => `
+                        <div style="padding:8px 12px; background: var(--gray-100); border-radius:8px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <strong>${i+1}.</strong> ${escapeHtml(q.text)}
+                                <span style="margin-left:8px; padding:2px 8px; border-radius:999px; background:white; font-size:0.75rem;">
+                                    ${q.questionType === 'rating' ? '⭐ rating 1-5' : '✏️ testo libero'}
+                                </span>
+                                ${q.isRequired ? '<span style="margin-left:6px; color:#b91c1c; font-size:0.75rem;">obbligatoria</span>' : ''}
+                            </div>
+                            <button type="button" class="danger" data-surv-q-del="${q.id}" style="padding:4px 10px;">🗑️</button>
+                        </div>
+                    `).join('') : '<div class="empty-state">Nessuna domanda. Aggiungi qui sotto.</div>'}
+                </div>
+                <form data-surv-q-form="${detail.id}" style="margin-top:14px; padding:12px; background:white; border:1px dashed var(--gray-200); border-radius:8px;">
+                    <div class="form-grid">
+                        <label>Testo della domanda
+                            <input type="text" data-q-text required placeholder="Es. Quanto è chiara la spiegazione del docente?">
+                        </label>
+                        <label>Tipo
+                            <select data-q-type>
+                                <option value="rating">⭐ Rating 1-5</option>
+                                <option value="text">✏️ Testo libero</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="actions" style="margin-top:8px;">
+                        <label class="switch"><input type="checkbox" data-q-required checked><span class="slider"></span> Obbligatoria</label>
+                        <button class="primary" type="submit">+ Aggiungi domanda</button>
+                    </div>
+                </form>
+            `;
+            panel.querySelector(`[data-surv-q-form]`).addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const form = ev.target;
+                const payload = {
+                    text: form.querySelector('[data-q-text]').value.trim(),
+                    questionType: form.querySelector('[data-q-type]').value,
+                    isRequired: form.querySelector('[data-q-required]').checked,
+                    sortOrder: qs.length
+                };
+                if (!payload.text) return showToast('Inserisci il testo', 'error');
+                try {
+                    await apiRequest(`/api/admin/surveys/${detail.id}/questions`, { method: 'POST', body: JSON.stringify(payload) });
+                    showToast('Domanda aggiunta');
+                    const fresh = await apiRequest(`/api/admin/surveys/${detail.id}`);
+                    renderSurvQuestionsPanel(panel, fresh);
+                    loadSurveysSection();
+                } catch (err) { showToast(err.message || 'Errore', 'error'); }
+            });
+            panel.querySelectorAll('[data-surv-q-del]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    if (!confirm('Eliminare questa domanda?')) return;
+                    try {
+                        await apiRequest(`/api/admin/survey-questions/${btn.dataset.survQDel}`, { method: 'DELETE' });
+                        showToast('Domanda eliminata');
+                        const fresh = await apiRequest(`/api/admin/surveys/${detail.id}`);
+                        renderSurvQuestionsPanel(panel, fresh);
+                        loadSurveysSection();
+                    } catch (err) { showToast(err.message || 'Errore', 'error'); }
+                });
+            });
+        }
+
+        // --- Campaigns ---
+        function renderSurvCampaigns() {
+            const container = document.getElementById('surv-camp-list');
+            if (!survState.campaigns.length) {
+                container.innerHTML = '<div class="empty-state">Nessuna campagna ancora lanciata.</div>';
+                return;
+            }
+            container.innerHTML = survState.campaigns.map(c => {
+                const completedPct = c.invitedCount ? Math.round((c.completedCount / c.invitedCount) * 100) : 0;
+                const status = c.isActive ? '<span class="status-pill" data-status="published">ATTIVA</span>' : '<span class="status-pill" data-status="draft">CHIUSA</span>';
+                return `
+                    <div style="padding:14px; border:1px solid var(--gray-200); border-radius:12px; margin-bottom:12px;">
+                        <div style="display:flex; justify-content:space-between; gap:12px;">
+                            <div>
+                                <strong>${escapeHtml(c.title || c.surveyTitle)}</strong> ${status}
+                                <div style="color: var(--gray-500); font-size:0.85rem; margin-top:4px;">
+                                    Template: ${escapeHtml(c.surveyTitle)} &bull; ${c.targetRole === 'student' ? 'Studenti' : 'Docenti'}
+                                    &bull; Scope: ${c.scopeType} → ${escapeHtml(c.scopeLabel || '—')}
+                                </div>
+                                <div style="margin-top:6px;"><strong>${c.completedCount}/${c.invitedCount}</strong> compilati (${completedPct}%)</div>
+                            </div>
+                            <div class="actions" style="margin:0;">
+                                ${c.isActive
+                                    ? `<button type="button" class="secondary" data-surv-camp-close="${c.id}">Chiudi</button>`
+                                    : `<button type="button" class="secondary" data-surv-camp-reopen="${c.id}">Riapri</button>`}
+                                <button type="button" class="danger" data-surv-camp-del="${c.id}">Elimina</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        document.getElementById('surv-camp-list').addEventListener('click', async (e) => {
+            const closeBtn = e.target.closest('[data-surv-camp-close]');
+            const reopenBtn = e.target.closest('[data-surv-camp-reopen]');
+            const delBtn = e.target.closest('[data-surv-camp-del]');
+            try {
+                if (closeBtn) {
+                    await apiRequest(`/api/admin/survey-campaigns/${closeBtn.dataset.survCampClose}`, { method: 'PUT', body: JSON.stringify({ isActive: false }) });
+                    showToast('Campagna chiusa');
+                    loadSurveysSection();
+                }
+                if (reopenBtn) {
+                    await apiRequest(`/api/admin/survey-campaigns/${reopenBtn.dataset.survCampReopen}`, { method: 'PUT', body: JSON.stringify({ isActive: true }) });
+                    showToast('Campagna riaperta');
+                    loadSurveysSection();
+                }
+                if (delBtn) {
+                    if (!confirm('Eliminare la campagna e tutte le risposte?')) return;
+                    await apiRequest(`/api/admin/survey-campaigns/${delBtn.dataset.survCampDel}`, { method: 'DELETE' });
+                    showToast('Campagna eliminata');
+                    loadSurveysSection();
+                }
+            } catch (err) { showToast(err.message || 'Errore', 'error'); }
+        });
+
+        async function fillSurvCampaignDropdowns() {
+            // Templates
+            const tplSel = document.getElementById('surv-camp-survey');
+            tplSel.innerHTML = '<option value="">-- Seleziona --</option>' +
+                survState.templates.map(t => `<option value="${t.id}" data-target="${t.targetRole}">${escapeHtml(t.title)} (${t.targetRole === 'student' ? 'studenti' : 'docenti'})</option>`).join('');
+            // Scope dropdown initial: courses
+            await refreshSurvScopeIdDropdown();
+        }
+
+        document.getElementById('surv-camp-scope-type').addEventListener('change', refreshSurvScopeIdDropdown);
+
+        async function refreshSurvScopeIdDropdown() {
+            const scopeType = document.getElementById('surv-camp-scope-type').value;
+            const scopeIdSel = document.getElementById('surv-camp-scope-id');
+            const labelSpan = document.querySelector('[data-surv-scope-label]');
+            try {
+                if (scopeType === 'course') {
+                    labelSpan.textContent = 'Corso';
+                    if (!survState.scopeOptions.courses.length) survState.scopeOptions.courses = await apiRequest('/api/lms/courses');
+                    scopeIdSel.innerHTML = '<option value="">-- Tutti i corsi --</option>' +
+                        survState.scopeOptions.courses.map(c => `<option value="${c.id}">${escapeHtml(c.title)}</option>`).join('');
+                } else if (scopeType === 'module') {
+                    labelSpan.textContent = 'Modulo';
+                    const modules = state.modules || await apiRequest('/api/modules');
+                    scopeIdSel.innerHTML = '<option value="">-- Seleziona --</option>' +
+                        modules.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+                } else if (scopeType === 'lesson') {
+                    labelSpan.textContent = 'Lezione';
+                    const lessons = state.lessons || await apiRequest('/api/lessons');
+                    scopeIdSel.innerHTML = '<option value="">-- Seleziona --</option>' +
+                        lessons.map(l => {
+                            const date = l.startDatetime ? ' (' + new Date(l.startDatetime).toLocaleDateString('it-IT') + ')' : '';
+                            return `<option value="${l.id}">${escapeHtml(l.title)}${date}</option>`;
+                        }).join('');
+                } else if (scopeType === 'teacher') {
+                    labelSpan.textContent = 'Docente';
+                    const faculty = state.faculty || await apiRequest('/api/faculty');
+                    scopeIdSel.innerHTML = '<option value="">-- Seleziona --</option>' +
+                        faculty.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+                }
+            } catch (err) {
+                scopeIdSel.innerHTML = '<option value="">Errore caricamento</option>';
+            }
+        }
+
+        document.getElementById('surv-camp-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                surveyId: document.getElementById('surv-camp-survey').value,
+                title: document.getElementById('surv-camp-title').value.trim() || null,
+                scopeType: document.getElementById('surv-camp-scope-type').value,
+                scopeId: document.getElementById('surv-camp-scope-id').value || null,
+                opensAt: document.getElementById('surv-camp-opens').value || null,
+                closesAt: document.getElementById('surv-camp-closes').value || null
+            };
+            if (!payload.surveyId) return showToast('Seleziona un template', 'error');
+            if (payload.scopeType !== 'course' && !payload.scopeId) return showToast('Seleziona uno scope', 'error');
+            try {
+                const result = await apiRequest('/api/admin/survey-campaigns', { method: 'POST', body: JSON.stringify(payload) });
+                showToast(`Campagna lanciata: ${result.invitedCount} inviti creati`);
+                e.target.reset();
+                document.getElementById('surv-camp-form-details').open = false;
+                loadSurveysSection();
+            } catch (err) { showToast(err.message || 'Errore', 'error'); }
+        });
+
+        // --- Results ---
+        function fillSurvResultsDropdown() {
+            const sel = document.getElementById('surv-results-campaign');
+            sel.innerHTML = '<option value="">-- Seleziona --</option>' +
+                survState.campaigns.map(c => `<option value="${c.id}">${escapeHtml(c.title || c.surveyTitle)} — ${c.completedCount}/${c.invitedCount}</option>`).join('');
+        }
+
+        document.getElementById('surv-results-campaign').addEventListener('change', async (e) => {
+            const id = e.target.value;
+            const container = document.getElementById('surv-results-content');
+            if (!id) { container.innerHTML = ''; return; }
+            container.innerHTML = '<div class="empty-state">Caricamento...</div>';
+            try {
+                const data = await apiRequest(`/api/admin/survey-campaigns/${id}/results`);
+                container.innerHTML = renderSurvResults(data);
+            } catch (err) {
+                container.innerHTML = `<div style="color:#b91c1c;">Errore: ${escapeHtml(err.message || '')}</div>`;
+            }
+        });
+
+        function renderSurvResults(data) {
+            const c = data.campaign;
+            const stats = data.stats;
+            let html = `
+                <div style="padding:16px; background: var(--gray-100); border-radius:12px; margin-bottom:16px;">
+                    <strong>${escapeHtml(c.title || c.surveyTitle)}</strong>
+                    <div style="color: var(--gray-500); font-size:0.9rem;">
+                        Template: ${escapeHtml(c.surveyTitle)} &bull; ${c.targetRole === 'student' ? 'Studenti' : 'Docenti'}
+                        &bull; Scope: ${c.scopeType} → ${escapeHtml(c.scopeLabel || '—')}
+                    </div>
+                    <div style="margin-top:8px;">📊 <strong>${stats.completed}/${stats.invited}</strong> compilati</div>
+                </div>
+            `;
+            data.questions.forEach(q => {
+                html += `<div style="padding:14px; border:1px solid var(--gray-200); border-radius:12px; margin-bottom:12px;">`;
+                html += `<div style="font-weight:600; margin-bottom:8px;">${escapeHtml(q.text)}</div>`;
+                if (q.questionType === 'rating') {
+                    const total = (q.r1||0)+(q.r2||0)+(q.r3||0)+(q.r4||0)+(q.r5||0);
+                    html += `<div style="font-size:1.4rem; font-weight:700; color: var(--green-700);">⭐ ${q.avg ?? '—'} <span style="font-size:0.85rem; color:var(--gray-500); font-weight:400;">(${q.n||0} risposte)</span></div>`;
+                    if (total) {
+                        for (let i=1; i<=5; i++) {
+                            const v = q[`r${i}`] || 0;
+                            const pct = Math.round((v/total)*100);
+                            html += `<div style="display:flex; align-items:center; gap:8px; margin-top:4px; font-size:0.85rem;">
+                                <span style="width:50px;">${i} ⭐</span>
+                                <div style="flex:1; background: var(--gray-200); border-radius:6px; overflow:hidden; height:14px;">
+                                    <div style="background: var(--green-500); height:100%; width:${pct}%;"></div>
+                                </div>
+                                <span style="width:60px;">${v} (${pct}%)</span>
+                            </div>`;
+                        }
+                    }
+                } else {
+                    html += `<div style="color: var(--gray-500); font-size:0.85rem; margin-bottom:8px;">${q.n} commento/i (anonimi)</div>`;
+                    if (q.comments && q.comments.length) {
+                        html += q.comments.map(c => `<div style="padding:8px 12px; background:var(--gray-100); border-left:3px solid var(--green-500); border-radius:6px; margin-top:6px;">${escapeHtml(c)}</div>`).join('');
+                    } else {
+                        html += '<div class="empty-state">Nessun commento.</div>';
+                    }
+                }
+                html += `</div>`;
+            });
+            return html;
         }
 
     </script>

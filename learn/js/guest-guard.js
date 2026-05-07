@@ -19,7 +19,8 @@
         '/learn/checkin.html',
         '/learn/documents.html',
         '/learn/questions.html',
-        '/learn/quiz.html'
+        '/learn/quiz.html',
+        '/learn/surveys.html'
     ]);
 
     if (restrictedPages.has(window.location.pathname)) {
@@ -53,7 +54,7 @@
 
         document.querySelectorAll('nav a, .nav a, .sidebar a, .nav-links a').forEach((link) => {
             const href = link.getAttribute('href') || '';
-            if (href.includes('checkin') || href.includes('documents') || href.includes('questions') || href.includes('quiz') || (window.__isTeacherGuestView && href.includes('calendar'))) {
+            if (href.includes('checkin') || href.includes('documents') || href.includes('questions') || href.includes('quiz') || href.includes('surveys') || (window.__isTeacherGuestView && href.includes('calendar'))) {
                 link.style.display = 'none';
             }
         });

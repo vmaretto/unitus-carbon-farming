@@ -609,7 +609,7 @@
 
         .progress-summary-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 12px;
         }
 
@@ -666,6 +666,12 @@
         .progress-bars {
             display: grid;
             gap: 10px;
+        }
+
+        #sp-overview-chart {
+            max-height: 420px;
+            overflow: auto;
+            padding-right: 4px;
         }
 
         .progress-bar-row {
@@ -740,7 +746,7 @@
         }
 
         .student-progress-table-wrapper table {
-            min-width: 1020px;
+            min-width: 1120px;
         }
 
         .student-progress-row-selected td {
@@ -2431,6 +2437,7 @@ Buono studio!</textarea>
                             <tr>
                                 <th>Email</th>
                                 <th>Nome</th>
+                                <th>Ruolo</th>
                                 <th>Modalità</th>
                                 <th>Azienda/Partner</th>
                                 <th>Stato</th>
@@ -2441,7 +2448,7 @@ Buono studio!</textarea>
                         </thead>
                         <tbody id="lms-enroll-table-body">
                             <tr data-empty-lms-enroll>
-                                <td colspan="8" class="empty-state">Nessun iscritto per questa edizione.</td>
+                                <td colspan="9" class="empty-state">Nessun iscritto per questa edizione.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -2788,24 +2795,26 @@ Buono studio!</textarea>
                         <h3 class="progress-chart-title">Studenti monitorati</h3>
                         <div class="table-wrapper student-progress-table-wrapper">
                             <table>
-                                <thead>
-                                    <tr>
-                                        <th>Cognome</th>
-                                        <th>Nome</th>
-                                        <th>Email</th>
-                                        <th>Presenza</th>
-                                        <th>Lezioni</th>
-                                        <th>Quiz</th>
-                                        <th>Materiali</th>
-                                        <th>Domande / feedback</th>
-                                        <th>Ultima attività</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="sp-table-body">
-                                    <tr><td colspan="9" class="empty-state">Caricamento progressi...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
+                        <thead>
+                            <tr>
+                                <th>Cognome</th>
+                                <th>Nome</th>
+                                <th>Email</th>
+                                <th>Ruolo</th>
+                                <th>Presenza</th>
+                                <th>Lezioni</th>
+                                <th>Quiz</th>
+                                <th>Materiali</th>
+                                <th>Domande</th>
+                                <th>Feedback</th>
+                                <th>Ultima attività</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sp-table-body">
+                            <tr><td colspan="10" class="empty-state">Caricamento progressi...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
                     </div>
                 </div>
             </div>
@@ -7198,8 +7207,8 @@ Buono studio!</textarea>
                     <label style="margin-top: 12px;">Descrizione <textarea data-field="description" rows="2" placeholder="Descrizione lezione"></textarea></label>
                     <div style="margin-top: 12px; padding: 12px; background: var(--gray-100); border-radius: 8px;">
                         <label style="font-weight: 600; margin-bottom: 4px; display: block;">📎 Materiali della lezione</label>
-                        <div style="font-size: 0.82rem; color: var(--gray-500); margin-bottom: 8px;">
-                            Questa lista resta nella lezione LMS. Quando carichi un file, il sistema crea anche una risorsa globale in <strong>bozza</strong>.
+                    <div style="font-size: 0.82rem; color: var(--gray-500); margin-bottom: 8px;">
+                            Questa lista resta nella lezione LMS. Quando salvi la lezione, il sistema crea anche una risorsa globale in <strong>bozza</strong>.
                         </div>
                         <div data-materials-list style="margin-bottom: 8px;"></div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
@@ -7375,57 +7384,14 @@ Buono studio!</textarea>
                     statusEl.style.color = 'var(--green-500)';
                     addBtn.disabled = false;
 
-                    // CREA RISORSA nella tabella resources (collegata alla lezione calendario)
                     const finalName = form.querySelector('[data-material-name]').value.trim() || materialName;
-                    const calendarLessonId = form.querySelector('[data-field="calendarLessonId"]')?.value || null;
 
-                    // Trova il teacherId dalla lezione calendario
-                    let teacherId = null;
-                    if (calendarLessonId) {
-                        const calLesson = (allLessonsCache || []).find(l => l.id === calendarLessonId);
-                        if (calLesson) teacherId = calLesson.teacherId || null;
-                    }
-
-                    try {
-                        const createdResource = await apiRequest('/api/resources', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                title: finalName,
-                                resourceType: detectedType,
-                                url: data.url,
-                                description: null,
-                                sortOrder: null,
-                                isPublished: false,
-                                teacherId: teacherId,
-                                lessonId: calendarLessonId,
-                                source: 'calendar_lesson'
-                            })
-                        });
-                        if (teacherId) {
-                            try {
-                                await apiRequest(`/api/resources/${createdResource.id}/request-review`, {
-                                    method: 'PUT',
-                                    body: JSON.stringify({ teacherId })
-                                });
-                                statusEl.textContent = '✅ ' + finalName + ' — salvato nelle risorse come bozza e inviato al docente';
-                            } catch (reviewError) {
-                                console.warn('Resource review request failed after lesson upload:', reviewError);
-                                statusEl.textContent = '⚠️ ' + finalName + ' — salvato nelle risorse come bozza, ma non inviato al docente';
-                            }
-                        } else {
-                            statusEl.textContent = '✅ ' + finalName + ' — salvato nelle risorse come bozza';
-                        }
-                        statusEl.style.color = 'var(--green-500)';
-                        showToast('Materiale caricato e salvato nelle risorse come bozza!', 'success');
-                    } catch (resourceError) {
-                        console.error('Errore creazione risorsa:', resourceError);
-                        statusEl.textContent = '⚠️ File caricato ma non salvato come risorsa. Aggiungilo manualmente in Gestione Risorse.';
-                        statusEl.style.color = '#d97706';
-                    }
-
-                    // Aggiorna anche la lista materiali JSONB locale (per visualizzazione nell'admin)
-                    currentMaterials.push({ type: detectedType, name: finalName, url: data.url });
+                    // Aggiorna la lista materiali locale: la risorsa globale verrà creata al salvataggio della lezione
+                    currentMaterials.push({ type: detectedType, name: finalName, url: data.url, sessionOnly: true });
                     renderMaterialsList();
+                    statusEl.textContent = '✅ ' + finalName + ' — aggiunto alla lezione; verrà salvato nelle risorse al momento del salvataggio';
+                    statusEl.style.color = 'var(--green-500)';
+                    showToast('Materiale aggiunto alla lezione');
 
                     // Reset campi materiale
                     form.querySelector('[data-material-name]').value = '';
@@ -7451,7 +7417,7 @@ Buono studio!</textarea>
                 if (!url && !form.querySelector('[data-material-file]').files[0]) { 
                     showToast('Inserisci URL o carica un file', 'error'); return; 
                 }
-                currentMaterials.push({ type, name, url });
+                currentMaterials.push({ type, name, url, sessionOnly: true });
                 renderMaterialsList();
                 nameInput.value = '';
                 urlInput.value = '';
@@ -7482,6 +7448,7 @@ Buono studio!</textarea>
                     showToast('Seleziona una lezione calendario per collegare materiali e quiz.', 'error');
                     return;
                 }
+                const lessonMaterials = currentMaterials.map(({ sessionOnly, ...material }) => material);
                 const payload = {
                     moduleId: moduleId,
                     title: form.querySelector('[data-field="title"]')?.value?.trim() || '',
@@ -7492,14 +7459,50 @@ Buono studio!</textarea>
                     sortOrder: Number(form.querySelector('[data-field="sortOrder"]')?.value) || 0,
                     isFree: false,
                     isPublished: safeChecked('[data-field="isPublished"]', form),
-                    materials: currentMaterials,
+                    materials: lessonMaterials,
                     calendarLessonId
                 };
                 if (!payload.title) { showToast('Inserisci il titolo', 'error'); return; }
                 try {
                     const method = editingId ? 'PUT' : 'POST';
                     const url = editingId ? `/api/lms/lessons/${editingId}` : '/api/lms/lessons';
+                    const sessionMaterials = currentMaterials.filter((material) => material && material.sessionOnly && material.type !== 'quiz');
                     await apiRequest(url, { method, body: JSON.stringify(payload) });
+
+                    const calendarLesson = (allLessonsCache || []).find(l => l.id === calendarLessonId);
+                    const teacherId = calendarLesson ? calendarLesson.teacherId || null : null;
+
+                    for (const material of sessionMaterials) {
+                        try {
+                            const createdResource = await apiRequest('/api/resources', {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                    title: material.name,
+                                    resourceType: material.type,
+                                    url: material.url,
+                                    description: null,
+                                    sortOrder: null,
+                                    isPublished: false,
+                                    teacherId,
+                                    lessonId: calendarLessonId,
+                                    source: 'calendar_lesson'
+                                })
+                            });
+                            if (createdResource?.id) {
+                                material.sessionOnly = false;
+                                material.resourceId = createdResource.id;
+                                if (teacherId) {
+                                    await apiRequest(`/api/resources/${createdResource.id}/request-review`, {
+                                        method: 'PUT',
+                                        body: JSON.stringify({ teacherId })
+                                    }).catch(() => {});
+                                }
+                            }
+                        } catch (resourceError) {
+                            console.warn('Errore creazione risorsa materiale lezione:', resourceError);
+                        }
+                    }
+
                     showToast('Lezione salvata');
                     editingId = null;
                     currentMaterials = [];
@@ -8388,9 +8391,20 @@ Buono studio!</textarea>
                 tr.dataset.id = en.id;
                 const statusMap = { active: 'Attivo', suspended: 'Sospeso', completed: 'Completato', cancelled: 'Cancellato' };
                 const statusClass = en.status === 'active' ? 'published' : 'draft';
-                const roleBadge = en.role === 'guest'
-                    ? '<span style="display: inline-block; padding: 2px 8px; background: #fef3c7; color: #92400e; border-radius: 4px; font-size: 0.75rem; margin-left: 6px;">👁️ Ospite</span>'
-                    : '';
+                const roleLabel = en.role === 'guest'
+                    ? '👁️ Ospite'
+                    : en.role === 'teacher'
+                        ? 'Docente'
+                        : en.role === 'admin'
+                            ? 'Admin'
+                            : 'Studente';
+                const roleStyle = en.role === 'guest'
+                    ? 'background: #fef3c7; color: #92400e;'
+                    : en.role === 'teacher'
+                        ? 'background: #dbeafe; color: #1e40af;'
+                        : en.role === 'admin'
+                            ? 'background: #ede9fe; color: #6d28d9;'
+                            : 'background: #ecfdf5; color: #166534;';
                 const lastLogin = en.lastLoginAt 
                     ? new Date(en.lastLoginAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                     : '<span style="color: #b91c1c;">Mai</span>';
@@ -8400,7 +8414,8 @@ Buono studio!</textarea>
                      'background: #f3f4f6; color: #374151;') : '';
                 tr.innerHTML = `
                     <td>${en.email}</td>
-                    <td>${[en.firstName, en.lastName].filter(Boolean).join(' ') || '—'} ${roleBadge}</td>
+                    <td>${[en.firstName, en.lastName].filter(Boolean).join(' ') || '—'}</td>
+                    <td><span style="padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; ${roleStyle}">${roleLabel}</span></td>
                     <td><span style="padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; ${enrollTypeStyle}">${en.enrollmentType || '—'}</span></td>
                     <td>${en.partnerCompany || '—'}</td>
                     <td><span class="status-pill" data-status="${statusClass}">${statusMap[en.status] || en.status}</span></td>
@@ -8734,9 +8749,14 @@ Buono studio!</textarea>
                     <div class="subvalue">${summary.quizAttempts || 0} tentativi completati</div>
                 </div>
                 <div class="progress-summary-card">
-                    <div class="label">Domande / feedback</div>
+                    <div class="label">Domande inviate</div>
                     <div class="value">${summary.questionsAsked || 0}</div>
-                    <div class="subvalue">${summary.repliesReceived || 0} risposte ricevute</div>
+                    <div class="subvalue">Richieste di supporto e chiarimento</div>
+                </div>
+                <div class="progress-summary-card">
+                    <div class="label">Feedback ricevuti</div>
+                    <div class="value">${summary.repliesReceived || 0}</div>
+                    <div class="subvalue">Risposte del docente e commenti</div>
                 </div>
             `;
         }
@@ -8763,12 +8783,12 @@ Buono studio!</textarea>
         function renderProgressOverviewChart(students) {
             const container = document.getElementById('sp-overview-chart');
             if (!container) return;
-            const topStudents = [...(students || [])].slice(0, 8);
-            if (!topStudents.length) {
+            const items = Array.isArray(students) ? [...students] : [];
+            if (!items.length) {
                 container.innerHTML = '<div class="empty-state">Nessun dato disponibile.</div>';
                 return;
             }
-            container.innerHTML = topStudents.map((student) => {
+            container.innerHTML = items.map((student) => {
                 const name = [student.lastName, student.firstName].filter(Boolean).join(' ') || student.email || 'Studente';
                 return `
                     <div class="progress-bar-row">
@@ -8825,7 +8845,7 @@ Buono studio!</textarea>
                     <div class="student-progress-detail-item"><span>Miglior quiz</span><strong>${student.quizzes.bestScore === null || student.quizzes.bestScore === undefined ? '—' : `${student.quizzes.bestScore}%`}</strong></div>
                     <div class="student-progress-detail-item"><span>Materiali consultati</span><strong>${student.materials.viewed}/${student.materials.total} (${student.materials.percent}%)</strong></div>
                     <div class="student-progress-detail-item"><span>Domande inviate</span><strong>${student.questions.asked}</strong></div>
-                    <div class="student-progress-detail-item"><span>Risposte ricevute</span><strong>${student.questions.repliesReceived}</strong></div>
+                    <div class="student-progress-detail-item"><span>Feedback ricevuti</span><strong>${student.questions.repliesReceived}</strong></div>
                     <div class="student-progress-detail-item"><span>Ultima attività</span><strong>${escapeHtml(formatProgressDate(student.lastActivityAt))}</strong></div>
                 </div>
             `;
@@ -8834,8 +8854,8 @@ Buono studio!</textarea>
         function renderProgressTable(students) {
             const tbody = document.getElementById('sp-table-body');
             if (!tbody) return;
-            if (!students || !students.length) {
-                tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Nessuno studente trovato per questa edizione.</td></tr>';
+                if (!students || !students.length) {
+                tbody.innerHTML = '<tr><td colspan="10" class="empty-state">Nessuno studente trovato per questa edizione.</td></tr>';
                 return;
             }
 
@@ -8847,11 +8867,13 @@ Buono studio!</textarea>
                         <td>${escapeHtml(student.lastName || '—')}</td>
                         <td>${escapeHtml(student.firstName || '—')}</td>
                         <td>${escapeHtml(student.email || '—')}</td>
+                        <td>${student.role === 'guest' ? '👁️ Ospite' : escapeHtml(student.role || 'student')}</td>
                         <td>${student.attendance.total} ${student.attendance.inPerson ? `(${student.attendance.inPerson} in sito)` : ''}</td>
                         <td>${student.lessons.completed}/${student.lessons.total} (${student.lessons.percent}%)</td>
                         <td>${student.quizzes.bestScore === null || student.quizzes.bestScore === undefined ? '—' : `${student.quizzes.bestScore}%`}</td>
                         <td>${student.materials.viewed}/${student.materials.total} (${student.materials.percent}%)</td>
-                        <td>${student.questions.asked}/${student.questions.repliesReceived}</td>
+                        <td>${student.questions.asked}</td>
+                        <td>${student.questions.repliesReceived}</td>
                         <td>${escapeHtml(formatProgressDate(student.lastActivityAt))}</td>
                     </tr>
                 `;
@@ -8913,7 +8935,7 @@ Buono studio!</textarea>
             if (!editionId) {
                 if (empty) empty.style.display = '';
                 if (content) content.style.display = 'none';
-                document.getElementById('sp-table-body').innerHTML = '<tr><td colspan="9" class="empty-state">Seleziona un\'edizione per visualizzare i progressi.</td></tr>';
+                document.getElementById('sp-table-body').innerHTML = '<tr><td colspan="10" class="empty-state">Seleziona un\'edizione per visualizzare i progressi.</td></tr>';
                 document.getElementById('sp-student-select').innerHTML = '<option value="">-- Tutti gli studenti --</option>';
                 renderProgressDetail(null);
                 return;

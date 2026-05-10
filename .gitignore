@@ -6,3 +6,6 @@ node_modules/
 api/uploads/
 tmp_*.js
 *.srt
+__pycache__/
+*.pyc
+.venv/

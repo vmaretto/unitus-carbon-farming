@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Realtime IT ⇄ EN</title>
+<style>
+  :root { color-scheme: dark; --bg:#0b0d10; --fg:#e6e8eb; --muted:#9aa3ad; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 24px;
+    padding: 24px env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background: var(--bg); color: var(--fg);
+    font: 400 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
+  }
+  h1 { margin: 0; font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  button#tap {
+    width: min(70vw, 60vh, 320px);
+    aspect-ratio: 1;
+    border: none; border-radius: 50%; cursor: pointer;
+    font-size: 22px; font-weight: 600; color: white;
+    background: #2563eb;
+    transition: background .2s ease, transform .08s ease;
+    box-shadow: 0 12px 40px rgba(37,99,235,.35);
+    user-select: none;
+  }
+  button#tap:active { transform: scale(.97); }
+  button#tap.connecting { background: #d97706; box-shadow: 0 12px 40px rgba(217,119,6,.35); }
+  button#tap.live {
+    background: #dc2626;
+    box-shadow: 0 12px 40px rgba(220,38,38,.35);
+    animation: pulse 1.6s ease-out infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(220,38,38,.55), 0 12px 40px rgba(220,38,38,.35); }
+    70%  { box-shadow: 0 0 0 28px rgba(220,38,38,0), 0 12px 40px rgba(220,38,38,.35); }
+    100% { box-shadow: 0 0 0 0 rgba(220,38,38,0),   0 12px 40px rgba(220,38,38,.35); }
+  }
+  #status { font-size: 14px; color: var(--muted); min-height: 1.2em; text-align: center; }
+  #log {
+    width: min(92vw, 640px); max-height: 28vh; overflow-y: auto;
+    padding: 14px 16px; border-radius: 12px;
+    background: rgba(255,255,255,.04);
+    font-size: 14px; line-height: 1.5;
+    white-space: pre-wrap; word-wrap: break-word;
+  }
+  #log:empty::before {
+    content: "La traduzione apparirà qui mentre parli.";
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+  <h1>Realtime IT ⇄ EN</h1>
+  <button id="tap" type="button" aria-live="polite">Tap per parlare</button>
+  <div id="status">Premi il pulsante per iniziare</div>
+  <div id="log" aria-live="polite"></div>
+  <audio id="player" autoplay playsinline></audio>
+
+<script>
+(() => {
+  const tapBtn = document.getElementById('tap');
+  const statusEl = document.getElementById('status');
+  const logEl = document.getElementById('log');
+  const player = document.getElementById('player');
+
+  let pc = null;
+  let dc = null;
+  let micStream = null;
+  let state = 'idle';
+
+  const setState = (s, msg) => {
+    state = s;
+    tapBtn.classList.toggle('connecting', s === 'connecting');
+    tapBtn.classList.toggle('live', s === 'live');
+    tapBtn.textContent =
+      s === 'live' ? 'Tap per fermare' :
+      s === 'connecting' ? 'Connessione…' :
+      'Tap per parlare';
+    if (msg !== undefined) statusEl.textContent = msg;
+  };
+
+  const appendLog = (text, partial) => {
+    if (!text) return;
+    const span = document.createElement('span');
+    span.textContent = text;
+    if (partial) span.style.opacity = '.7';
+    logEl.appendChild(span);
+    logEl.scrollTop = logEl.scrollHeight;
+  };
+
+  const start = async () => {
+    setState('connecting', 'Richiedo token effimero…');
+
+    let session;
+    try {
+      const r = await fetch('/session', { method: 'POST' });
+      session = await r.json();
+      if (!r.ok || !session.client_secret) {
+        throw new Error(JSON.stringify(session.error || session));
+      }
+    } catch (e) {
+      setState('idle', 'Errore token: ' + e.message);
+      return;
+    }
+    const ephemeral = session.client_secret.value;
+    const model = session.model || 'gpt-4o-realtime-preview';
+
+    setState('connecting', 'Microfono…');
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+    } catch (e) {
+      setState('idle', 'Microfono negato: ' + e.message);
+      return;
+    }
+
+    pc = new RTCPeerConnection();
+    pc.ontrack = (ev) => { player.srcObject = ev.streams[0]; };
+    pc.addTrack(micStream.getAudioTracks()[0], micStream);
+
+    pc.oniceconnectionstatechange = () => {
+      if (['failed', 'disconnected', 'closed'].includes(pc.iceConnectionState)) {
+        if (state === 'live') setState('idle', 'Connessione persa');
+      }
+    };
+
+    dc = pc.createDataChannel('oai-events');
+    dc.onmessage = (e) => {
+      let ev;
+      try { ev = JSON.parse(e.data); } catch { return; }
+      switch (ev.type) {
+        case 'response.audio_transcript.delta':
+          appendLog(ev.delta, true);
+          break;
+        case 'response.audio_transcript.done':
+          appendLog('\n');
+          break;
+        case 'error':
+          statusEl.textContent = 'Errore: ' + (ev.error?.message || 'unknown');
+          break;
+      }
+    };
+
+    setState('connecting', 'Negoziazione WebRTC…');
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    let answerSdp;
+    try {
+      const resp = await fetch(
+        'https://api.openai.com/v1/realtime?model=' + encodeURIComponent(model),
+        {
+          method: 'POST',
+          body: offer.sdp,
+          headers: {
+            Authorization: 'Bearer ' + ephemeral,
+            'Content-Type': 'application/sdp',
+          },
+        },
+      );
+      if (!resp.ok) throw new Error('SDP ' + resp.status + ' ' + (await resp.text()));
+      answerSdp = await resp.text();
+    } catch (e) {
+      setState('idle', e.message);
+      await stop();
+      return;
+    }
+    await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+
+    setState('live', 'In ascolto. Parla in italiano o inglese.');
+  };
+
+  const stop = async () => {
+    try { dc && dc.close(); } catch {}
+    try { pc && pc.close(); } catch {}
+    if (micStream) micStream.getTracks().forEach((t) => t.stop());
+    dc = null; pc = null; micStream = null;
+    player.srcObject = null;
+    setState('idle', 'Sessione chiusa');
+  };
+
+  tapBtn.addEventListener('click', () => {
+    if (state === 'idle') start();
+    else stop();
+  });
+})();
+</script>
+</body>
+</html>

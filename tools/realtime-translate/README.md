@@ -1,10 +1,35 @@
 # Realtime IT ↔ EN Translator
 
-Standalone CLI that pipes the microphone into the OpenAI Realtime API and plays
-back a simultaneous translation: Italian → English and English → Italian.
-The model auto-detects the spoken language on every turn.
+Two ways to drive the same pipeline (Italian ⇄ English simultaneous
+translation, language auto-detected on every turn) over the OpenAI Realtime
+API:
 
-## Install
+- **Web UI** (`server.py` + `index.html`) — single tap in the browser,
+  WebRTC straight to OpenAI. Good for phones and laptops.
+- **CLI** (`realtime_translate.py`) — Python WebSocket client with
+  `sounddevice` audio I/O. Good for headless boxes or scripting.
+
+## Web UI (tap-to-talk)
+
+```bash
+cd tools/realtime-translate
+python -m venv .venv && source .venv/bin/activate     # optional
+export OPENAI_API_KEY=sk-...
+python server.py
+```
+
+Open <http://127.0.0.1:8787/> and tap the button. The tiny Python server
+only mints ephemeral session tokens via `POST /v1/realtime/sessions`; the
+audio itself flows directly between the browser and `api.openai.com` over
+WebRTC, so the API key never reaches the page.
+
+States of the button: blue = idle, orange = connecting, pulsing red = live.
+Tap again to stop. Browsers require either `localhost` or HTTPS for
+`getUserMedia`, so test from `127.0.0.1`/`localhost` (not the LAN IP).
+
+## CLI
+
+### Install
 
 ```bash
 cd tools/realtime-translate
@@ -15,7 +40,7 @@ pip install -r requirements.txt
 `sounddevice` depends on PortAudio (`brew install portaudio` on macOS,
 `sudo apt install libportaudio2` on Debian/Ubuntu).
 
-## Run
+### Run
 
 ```bash
 export OPENAI_API_KEY=sk-...

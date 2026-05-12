@@ -206,14 +206,12 @@
             overflow: hidden;
             border: 1px solid #dfe9e2;
             background: #fff;
-            min-height: 980px;
+            min-height: 720px;
         }
-        .poster-frame object,
-        .poster-frame iframe {
+        .poster-frame img {
             display: block;
             width: 100%;
-            height: 980px;
-            border: 0;
+            height: auto;
         }
         .form-card {
             margin-top: 22px;
@@ -353,11 +351,7 @@
                 border-radius: 22px;
             }
             .poster-frame {
-                min-height: 720px;
-            }
-            .poster-frame object,
-            .poster-frame iframe {
-                height: 720px;
+                min-height: 480px;
             }
         }
     </style>
@@ -440,15 +434,10 @@
         <section class="poster-section" id="locandina">
             <h2 class="section-title">Locandina dell'evento</h2>
             <div class="poster-frame">
-                <object data="upload/Programma%20conferenza.pdf#view=FitH" type="application/pdf">
-                    <p style="padding: 20px;">
-                        Il tuo browser non supporta la visualizzazione del PDF.
-                        <a href="upload/Programma%20conferenza.pdf" download>Scarica la locandina</a>.
-                    </p>
-                </object>
+                <img src="upload/LocandinaConf26Maggio.jpeg" alt="Locandina della conferenza Carbon Farming e Soft Power del Food del 26 maggio 2026">
             </div>
             <div class="actions" style="margin-top: 16px;">
-                <a class="submit-btn" href="upload/Programma%20conferenza.pdf" download>⬇ Scarica locandina PDF</a>
+                <a class="submit-btn" href="upload/LocandinaConf26Maggio.jpeg" download>⬇ Scarica locandina JPEG</a>
                 <a class="secondary-btn" href="#modulo">Vai alla registrazione</a>
             </div>
         </section>

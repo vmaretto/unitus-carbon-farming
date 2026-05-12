@@ -192,6 +192,29 @@
             margin-bottom: 12px;
             font-weight: 800;
         }
+        .poster-section {
+            margin-top: 22px;
+            padding: 30px;
+            border-radius: 28px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid #e0ede4;
+            box-shadow: var(--shadow);
+        }
+        .poster-frame {
+            margin-top: 16px;
+            border-radius: 22px;
+            overflow: hidden;
+            border: 1px solid #dfe9e2;
+            background: #fff;
+            min-height: 980px;
+        }
+        .poster-frame object,
+        .poster-frame iframe {
+            display: block;
+            width: 100%;
+            height: 980px;
+            border: 0;
+        }
         .form-card {
             margin-top: 22px;
             padding: 30px;
@@ -324,6 +347,18 @@
                 grid-template-columns: 1fr;
                 gap: 6px;
             }
+            .poster-section,
+            .form-card {
+                padding: 22px;
+                border-radius: 22px;
+            }
+            .poster-frame {
+                min-height: 720px;
+            }
+            .poster-frame object,
+            .poster-frame iframe {
+                height: 720px;
+            }
         }
     </style>
 </head>
@@ -367,7 +402,7 @@
                 </div>
             </section>
 
-            <aside class="panel" id="programma">
+            <aside class="panel" id="dettagli">
                 <h2>Dettagli evento</h2>
                 <p>Un incontro per leggere il carbon farming come leva strategica per la transizione climatica, il soft power italiano e la valorizzazione del sistema agroalimentare.</p>
 
@@ -402,10 +437,27 @@
             </aside>
         </div>
 
+        <section class="poster-section" id="locandina">
+            <h2 class="section-title">Locandina dell'evento</h2>
+            <p>Puoi visualizzare la locandina qui sotto oppure scaricarla in PDF per condividerla nella mail di invito.</p>
+            <div class="poster-frame">
+                <object data="upload/Programma%20conferenza.pdf#view=FitH" type="application/pdf">
+                    <p style="padding: 20px;">
+                        Il tuo browser non supporta la visualizzazione del PDF.
+                        <a href="upload/Programma%20conferenza.pdf" download>Scarica la locandina</a>.
+                    </p>
+                </object>
+            </div>
+            <div class="actions" style="margin-top: 16px;">
+                <a class="submit-btn" href="upload/Programma%20conferenza.pdf" download>⬇ Scarica locandina PDF</a>
+                <a class="secondary-btn" href="#modulo">Vai alla registrazione</a>
+            </div>
+        </section>
+
         <section class="form-card" id="modulo">
             <h2 class="section-title">Modulo di registrazione</h2>
-            <form method="POST" action="https://formsubmit.co/virgilio.maretto@posti.world">
-                <input type="hidden" name="_subject" value="Registrazione conferenza 26 maggio 2026 - Master Carbon Farming">
+            <form method="POST" action="https://formsubmit.co/maretto@carbonfarmingmaster.it">
+                <input type="hidden" name="_subject" value="Registrazione conferenza 26 maggio 2026 - Carbon Farming e Soft Power del Food">
                 <input type="hidden" name="_captcha" value="false">
                 <input type="hidden" name="_template" value="table">
                 <input type="hidden" name="_next" value="https://vmaretto.github.io/unitus-carbon-farming/conferenza-26-maggio-2026.html?sent=1#grazie">
@@ -459,7 +511,7 @@
                 Grazie, abbiamo ricevuto la tua richiesta per la conferenza del 26 maggio 2026. Se hai bisogno di aggiornare i dati, scrivi direttamente alla segreteria organizzativa.
                 <div class="success-actions">
                     <a class="secondary-btn" href="index.html">Torna alla home</a>
-                    <a class="secondary-btn" href="mailto:virgilio.maretto@posti.world?subject=Aggiornamento%20registrazione%20conferenza%2026%20maggio%202026">Contatta la segreteria</a>
+                    <a class="secondary-btn" href="mailto:maretto@carbonfarmingmaster.it?subject=Aggiornamento%20registrazione%20conferenza%2026%20maggio%202026">Contatta la segreteria</a>
                 </div>
             </div>
 

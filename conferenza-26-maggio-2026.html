@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carbon Farming e Soft Power del Food - Registrazione</title>
+    <meta name="description" content="Registrati alla lezione magistrale del 26 maggio 2026: Carbon Farming e Soft Power del Food.">
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17743878069"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'AW-17743878069');
+    </script>
+    <style>
+        :root {
+            --green-900: #0f3a1f;
+            --green-800: #1f5a32;
+            --green-700: #2f7a43;
+            --green-200: #e8f6ed;
+            --green-100: #f4fbf7;
+            --accent: #ff7a1a;
+            --shadow: 0 22px 60px rgba(0, 0, 0, 0.14);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--green-900);
+            background:
+                radial-gradient(circle at top left, rgba(122, 185, 40, 0.18), transparent 32%),
+                radial-gradient(circle at 85% 10%, rgba(255, 122, 26, 0.12), transparent 28%),
+                linear-gradient(180deg, #f8fcf7 0%, #eef8f1 100%);
+            min-height: 100vh;
+        }
+        a { color: inherit; }
+        .shell {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 22px 18px 72px;
+        }
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+        .brand {
+            text-decoration: none;
+            color: var(--green-800);
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            line-height: 1.1;
+        }
+        .brand span {
+            display: block;
+            font-size: 0.92rem;
+            font-weight: 700;
+        }
+        .home-link {
+            text-decoration: none;
+            color: var(--green-800);
+            font-weight: 700;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid #dbe9df;
+            box-shadow: 0 10px 24px rgba(15, 58, 31, 0.08);
+        }
+        .hero {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 22px;
+            align-items: stretch;
+        }
+        .hero-card,
+        .panel {
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(216, 233, 221, 0.9);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+        }
+        .hero-card {
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-card::after {
+            content: "";
+            position: absolute;
+            inset: auto -10% -40% auto;
+            width: 260px;
+            height: 260px;
+            background: radial-gradient(circle, rgba(122, 185, 40, 0.14), transparent 68%);
+            pointer-events: none;
+        }
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: rgba(122, 185, 40, 0.12);
+            color: var(--green-800);
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            margin-bottom: 18px;
+        }
+        h1 {
+            font-size: clamp(2.2rem, 4vw, 4rem);
+            line-height: 1.02;
+            color: var(--green-800);
+            margin-bottom: 16px;
+        }
+        .lead {
+            font-size: 1.08rem;
+            line-height: 1.7;
+            color: #365942;
+            max-width: 62ch;
+        }
+        .hero-details {
+            margin-top: 24px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .detail-pill {
+            padding: 14px 16px;
+            border-radius: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, #f4fbf7 100%);
+            border: 1px solid #e4efe7;
+        }
+        .detail-pill strong {
+            display: block;
+            color: var(--green-800);
+            font-size: 0.88rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 4px;
+        }
+        .detail-pill span {
+            font-size: 1rem;
+            line-height: 1.4;
+        }
+        .panel {
+            padding: 28px;
+        }
+        .panel h2 {
+            color: var(--green-800);
+            font-size: 1.55rem;
+            margin-bottom: 10px;
+        }
+        .panel p {
+            color: #365942;
+            line-height: 1.6;
+            margin-bottom: 14px;
+        }
+        .agenda {
+            display: grid;
+            gap: 12px;
+            margin-top: 18px;
+        }
+        .agenda-item {
+            display: grid;
+            grid-template-columns: 74px 1fr;
+            gap: 12px;
+            align-items: start;
+            padding: 14px 16px;
+            border-radius: 18px;
+            background: #fff;
+            border: 1px solid #e4efe7;
+        }
+        .agenda-time {
+            font-weight: 800;
+            color: var(--accent);
+        }
+        .agenda-item strong {
+            display: block;
+            color: var(--green-800);
+            margin-bottom: 2px;
+        }
+        .section {
+            margin-top: 22px;
+        }
+        .section-title {
+            font-size: 1.15rem;
+            color: var(--green-800);
+            margin-bottom: 12px;
+            font-weight: 800;
+        }
+        .form-card {
+            margin-top: 22px;
+            padding: 30px;
+            border-radius: 28px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(244,251,247,0.96));
+            border: 1px solid #e0ede4;
+            box-shadow: var(--shadow);
+        }
+        form {
+            display: grid;
+            gap: 16px;
+        }
+        .row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+        .field {
+            display: grid;
+            gap: 8px;
+        }
+        label {
+            font-weight: 700;
+            color: var(--green-800);
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid #d7e6dc;
+            font-size: 1rem;
+            background: #fff;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--green-700);
+            box-shadow: 0 0 0 3px rgba(47, 122, 67, 0.16);
+        }
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        .actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 4px;
+        }
+        .submit-btn,
+        .secondary-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 18px;
+            border-radius: 14px;
+            text-decoration: none;
+            font-weight: 800;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+        .submit-btn {
+            color: #fff;
+            background: linear-gradient(135deg, #ff7a1a, #ff9a3c);
+            box-shadow: 0 14px 30px rgba(255, 122, 26, 0.22);
+        }
+        .secondary-btn {
+            color: var(--green-800);
+            background: #fff;
+            border: 1px solid #cfe0d5;
+        }
+        .submit-btn:hover,
+        .secondary-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+        }
+        .note {
+            color: #557160;
+            font-size: 0.92rem;
+            line-height: 1.5;
+        }
+        .success {
+            display: none;
+            margin-top: 18px;
+            padding: 18px 20px;
+            border-radius: 18px;
+            border: 1px solid #cfe7d6;
+            background: #f3fbf6;
+            color: #174422;
+        }
+        .success strong {
+            display: block;
+            margin-bottom: 6px;
+        }
+        .success-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+        .footer-note {
+            margin-top: 18px;
+            color: #5d7665;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        @media (max-width: 920px) {
+            .hero {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 720px) {
+            .shell {
+                padding: 16px 12px 56px;
+            }
+            .hero-card,
+            .panel,
+            .form-card {
+                padding: 22px;
+                border-radius: 22px;
+            }
+            .hero-details,
+            .row {
+                grid-template-columns: 1fr;
+            }
+            .agenda-item {
+                grid-template-columns: 1fr;
+                gap: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <div class="topbar">
+            <a class="brand" href="index.html">
+                Master in Carbon Farming
+                <span>Università della Tuscia</span>
+            </a>
+            <a class="home-link" href="index.html">← Torna alla home</a>
+        </div>
+
+        <div class="hero">
+            <section class="hero-card">
+                <div class="eyebrow">📣 Lezione magistrale del 26 maggio 2026</div>
+                <h1>Carbon Farming e Soft Power del Food</h1>
+                <p class="lead">
+                    <strong>Clima, agricoltura e ruolo dell’Italia nel nuovo ordine globale.</strong>
+                    Lezione magistrale con Francesco Rutelli, in dialogo con Riccardo Valentini e Luca Fraioli.
+                    Compila il modulo per riservare il tuo posto e ricevere i dettagli operativi.
+                </p>
+
+                <div class="hero-details">
+                    <div class="detail-pill">
+                        <strong>Data e ora</strong>
+                        <span>26 maggio 2026, ore 14:00</span>
+                    </div>
+                    <div class="detail-pill">
+                        <strong>Sede</strong>
+                        <span>INAIL, Via IV Novembre 144, Roma</span>
+                    </div>
+                    <div class="detail-pill">
+                        <strong>Formato</strong>
+                        <span>In presenza</span>
+                    </div>
+                    <div class="detail-pill">
+                        <strong>Richiesta</strong>
+                        <span>Registrazione tramite form</span>
+                    </div>
+                </div>
+            </section>
+
+            <aside class="panel" id="programma">
+                <h2>Dettagli evento</h2>
+                <p>Un incontro per leggere il carbon farming come leva strategica per la transizione climatica, il soft power italiano e la valorizzazione del sistema agroalimentare.</p>
+
+                <div class="agenda">
+                    <div class="agenda-item">
+                        <div class="agenda-time">14:00</div>
+                        <div>
+                            <strong>Apertura e introduzione</strong>
+                            Saluto istituzionale e presentazione del contesto della conferenza.
+                        </div>
+                    </div>
+                    <div class="agenda-item">
+                        <div class="agenda-time">14:20</div>
+                        <div>
+                            <strong>Lezione magistrale</strong>
+                            Intervento di Francesco Rutelli sul ruolo del carbon farming nei nuovi equilibri globali.
+                        </div>
+                    </div>
+                    <div class="agenda-item">
+                        <div class="agenda-time">15:00</div>
+                        <div>
+                            <strong>Dialogo e Q&A</strong>
+                            Con Riccardo Valentini e Luca Fraioli, seguito da domande dal pubblico.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Come funziona la registrazione</div>
+                    <p>Compila i dati richiesti qui sotto. La conferma viene inviata all'indirizzo email indicato nel modulo.</p>
+                </div>
+            </aside>
+        </div>
+
+        <section class="form-card" id="modulo">
+            <h2 class="section-title">Modulo di registrazione</h2>
+            <form method="POST" action="https://formsubmit.co/virgilio.maretto@posti.world">
+                <input type="hidden" name="_subject" value="Registrazione conferenza 26 maggio 2026 - Master Carbon Farming">
+                <input type="hidden" name="_captcha" value="false">
+                <input type="hidden" name="_template" value="table">
+                <input type="hidden" name="_next" value="https://vmaretto.github.io/unitus-carbon-farming/conferenza-26-maggio-2026.html?sent=1#grazie">
+                <input type="text" name="_honey" style="display:none">
+                <input type="hidden" name="evento" value="Conferenza 26 maggio 2026">
+                <div class="row">
+                    <div class="field">
+                        <label for="nome">Nome *</label>
+                        <input id="nome" name="nome" type="text" autocomplete="given-name" required>
+                    </div>
+                    <div class="field">
+                        <label for="cognome">Cognome *</label>
+                        <input id="cognome" name="cognome" type="text" autocomplete="family-name" required>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="email">Email *</label>
+                        <input id="email" name="email" type="email" autocomplete="email" required>
+                    </div>
+                    <div class="field">
+                        <label for="telefono">Telefono</label>
+                        <input id="telefono" name="telefono" type="tel" autocomplete="tel">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="ente">Ente / Azienda / Universita</label>
+                        <input id="ente" name="ente" type="text" autocomplete="organization">
+                    </div>
+                    <div class="field">
+                        <label for="ruolo">Ruolo</label>
+                        <input id="ruolo" name="ruolo" type="text" placeholder="Studente, docente, manager, giornalista...">
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="note">Note o richieste particolari</label>
+                    <textarea id="note" name="note" placeholder="Indicaci eventuali esigenze o domande sulla partecipazione."></textarea>
+                </div>
+                <div class="actions">
+                    <button class="submit-btn" type="submit">📝 Conferma registrazione</button>
+                    <a class="secondary-btn" href="index.html#info">Informazioni sul master</a>
+                </div>
+                <p class="note">
+                    La registrazione serve per organizzare l'accesso all'evento e per inviarti eventuali aggiornamenti logistici.
+                </p>
+            </form>
+
+            <div class="success" id="grazie">
+                <strong>Registrazione inviata.</strong>
+                Grazie, abbiamo ricevuto la tua richiesta per la conferenza del 26 maggio 2026. Se hai bisogno di aggiornare i dati, scrivi direttamente alla segreteria organizzativa.
+                <div class="success-actions">
+                    <a class="secondary-btn" href="index.html">Torna alla home</a>
+                    <a class="secondary-btn" href="mailto:virgilio.maretto@posti.world?subject=Aggiornamento%20registrazione%20conferenza%2026%20maggio%202026">Contatta la segreteria</a>
+                </div>
+            </div>
+
+            <p class="footer-note">
+                Questa pagina puo essere usata come link diretto nella mail di invito e nei messaggi di promozione dell'evento.
+            </p>
+        </section>
+    </div>
+
+    <script>
+        (function () {
+            const params = new URLSearchParams(window.location.search);
+            const success = document.getElementById('grazie');
+            if (!success) return;
+            if (params.get('sent') === '1') {
+                success.style.display = 'block';
+                success.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        })();
+    </script>
+</body>
+</html>

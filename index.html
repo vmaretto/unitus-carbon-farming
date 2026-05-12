@@ -2886,6 +2886,44 @@
             flex-wrap: wrap;
         }
 
+        .news-banner-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 12px;
+        }
+
+        .news-banner-cta {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 700;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .news-banner-cta:hover,
+        .news-banner-cta:focus-visible {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+        }
+
+        .news-banner-cta.primary {
+            background: #fff;
+            color: #4a7c59;
+        }
+
+        .news-banner-cta.secondary {
+            background: rgba(255, 255, 255, 0.16);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.34);
+        }
+
         .news-banner .news-icon {
             font-size: 1.5rem;
             animation: pulse 1.5s ease-in-out infinite;
@@ -2924,6 +2962,9 @@
                 flex-direction: column;
                 gap: 8px;
             }
+            .news-banner-actions {
+                margin-top: 10px;
+            }
         }
     </style>
 </head>
@@ -2932,7 +2973,11 @@
     <div class="news-banner" style="background: linear-gradient(135deg, #7AB928 0%, #4a7c59 50%, #7AB928 100%);">
         <div class="news-banner-content">
             <span class="news-icon">📣</span>
-            <span class="news-text"><strong>Dal suolo alla geopolitica: il carbon farming tra clima, cibo e nuovi equilibri globali</strong> — Lezione magistrale con Francesco Rutelli, in dialogo con Riccardo Valentini e Luca Fraioli — 📅 26 maggio 2026, ore 14:00 · Parlamentino sede INAIL</span>
+            <span class="news-text"><strong>Carbon Farming e Soft Power del Food</strong> — Clima, agricoltura e ruolo dell’Italia nel nuovo ordine globale — 📅 26 maggio 2026, ore 14:00 · Sede INAIL, Via IV Novembre 144, Roma</span>
+            <div class="news-banner-actions">
+                <a class="news-banner-cta primary" href="conferenza-26-maggio-2026.html">📝 Registrati all'evento</a>
+                <a class="news-banner-cta secondary" href="conferenza-26-maggio-2026.html#programma">Programma e dettagli</a>
+            </div>
         </div>
     </div>
 

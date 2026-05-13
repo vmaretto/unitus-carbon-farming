@@ -557,6 +557,168 @@
             color: #b45309;
         }
 
+        .blog-preview-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.65);
+            z-index: 1002;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .blog-preview-shell {
+            background: #fff;
+            width: min(1100px, 100%);
+            max-height: 96vh;
+            overflow: auto;
+            border-radius: 24px;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.28);
+            border: 1px solid rgba(36, 90, 61, 0.08);
+        }
+
+        .blog-preview-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 22px 24px;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .blog-preview-header h3 {
+            margin: 6px 0 0;
+            font-size: 1.5rem;
+            line-height: 1.2;
+            color: var(--green-900);
+        }
+
+        .blog-preview-body {
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+            gap: 20px;
+            padding: 24px;
+        }
+
+        .blog-preview-column {
+            display: grid;
+            gap: 16px;
+            align-content: start;
+        }
+
+        .blog-preview-cover {
+            border-radius: 18px;
+            overflow: hidden;
+            border: 1px solid var(--gray-200);
+            background: linear-gradient(180deg, #f8fafc, #eef6f0);
+            min-height: 280px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .blog-preview-cover img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .blog-preview-cover-empty {
+            padding: 24px;
+            text-align: center;
+            color: var(--gray-500);
+        }
+
+        .blog-preview-card {
+            background: #fff;
+            border: 1px solid var(--gray-200);
+            border-radius: 18px;
+            padding: 18px;
+        }
+
+        .blog-preview-card h4 {
+            margin: 0 0 10px;
+            font-size: 0.95rem;
+            color: var(--green-700);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .blog-preview-meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .blog-preview-meta {
+            background: var(--gray-100);
+            border-radius: 14px;
+            padding: 12px;
+        }
+
+        .blog-preview-meta .label {
+            font-size: 0.76rem;
+            color: var(--gray-500);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .blog-preview-meta .value {
+            font-size: 0.95rem;
+            color: var(--gray-900);
+            font-weight: 600;
+            word-break: break-word;
+        }
+
+        .blog-preview-content {
+            background: #fff;
+            border: 1px solid var(--gray-200);
+            border-radius: 18px;
+            padding: 18px;
+        }
+
+        .blog-preview-content .preview-excerpt {
+            font-size: 1.02rem;
+            line-height: 1.7;
+            color: var(--gray-700);
+        }
+
+        .blog-preview-content .preview-article {
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid var(--gray-200);
+            font-size: 0.98rem;
+            line-height: 1.75;
+            color: var(--gray-900);
+        }
+
+        .blog-preview-content .preview-article p {
+            margin: 0 0 12px;
+        }
+
+        .blog-preview-content .preview-article img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .blog-preview-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 0 24px 24px;
+        }
+
+        @media (max-width: 900px) {
+            .blog-preview-body {
+                grid-template-columns: 1fr;
+            }
+            .blog-preview-meta-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         @keyframes spin {
             to {
                 transform: rotate(360deg);
@@ -2958,6 +3120,7 @@ Buono studio!</textarea>
             <td data-status></td>
             <td>
                 <div class="actions">
+                    <button type="button" class="secondary" data-preview>Anteprima</button>
                     <button type="button" class="secondary" data-generate-cover>Genera cover AI</button>
                     <button type="button" class="secondary" data-edit>Modifica</button>
                     <button type="button" class="danger" data-delete>Elimina</button>
@@ -2974,6 +3137,7 @@ Buono studio!</textarea>
             <td data-cover></td>
             <td>
                 <div class="actions">
+                    <button type="button" class="secondary" data-preview>Anteprima</button>
                     <button type="button" class="secondary" data-generate-cover>Genera cover AI</button>
                     <button type="button" class="secondary" data-edit>Modifica</button>
                     <button type="button" class="primary" data-publish>Pubblica</button>
@@ -3537,6 +3701,141 @@ Buono studio!</textarea>
             state.editingPostId = current.id;
             document.getElementById('blog-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
             return true;
+        }
+
+        function getBlogPostById(postId) {
+            return state.blogPosts.find((post) => post.id === postId) ||
+                state.importedBlogPosts.find((post) => post.id === postId) ||
+                null;
+        }
+
+        function renderPreviewBody(htmlLikeValue) {
+            const raw = String(htmlLikeValue || '').trim();
+            if (!raw) {
+                return '<p style="color: #6b7280; margin: 0;">Nessun contenuto disponibile.</p>';
+            }
+
+            if (/<[a-z][\s\S]*>/i.test(raw)) {
+                return raw;
+            }
+
+            return escapeHtml(raw).replace(/\n/g, '<br>');
+        }
+
+        function openBlogPreview(postId) {
+            const post = getBlogPostById(postId);
+            if (!post) {
+                showToast('Articolo non trovato', 'error');
+                return;
+            }
+
+            const modal = document.createElement('div');
+            modal.id = 'blog-preview-modal';
+            modal.className = 'blog-preview-modal';
+
+            const statusLabel = post.isPublished ? 'Pubblicato' : 'Bozza';
+            const coverMarkup = post.coverImageUrl
+                ? `<img src="${escapeHtml(post.coverImageUrl)}" alt="Cover articolo ${escapeHtml(post.title || '')}">`
+                : `<div class="blog-preview-cover-empty">Nessuna cover ancora disponibile.<br>Puoi generarla prima della pubblicazione.</div>`;
+
+            modal.innerHTML = `
+                <div class="blog-preview-shell" role="dialog" aria-modal="true" aria-labelledby="blog-preview-title">
+                    <div class="blog-preview-header">
+                        <div>
+                            <div class="status-pill" data-status="${post.isPublished ? 'published' : 'draft'}" style="display: inline-flex;">${statusLabel}</div>
+                            <h3 id="blog-preview-title">${escapeHtml(post.title || 'Anteprima articolo')}</h3>
+                        </div>
+                        <button type="button" class="secondary" id="blog-preview-close">Chiudi</button>
+                    </div>
+
+                    <div class="blog-preview-body">
+                        <div class="blog-preview-column">
+                            <div class="blog-preview-cover">
+                                ${coverMarkup}
+                            </div>
+
+                            <div class="blog-preview-content">
+                                <h4>Estratto</h4>
+                                <div class="preview-excerpt">
+                                    ${post.excerpt ? escapeHtml(post.excerpt).replace(/\n/g, '<br>') : '<span style="color: #6b7280;">Nessun estratto inserito.</span>'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="blog-preview-column">
+                            <div class="blog-preview-card">
+                                <h4>Dettagli</h4>
+                                <div class="blog-preview-meta-grid">
+                                    <div class="blog-preview-meta">
+                                        <div class="label">Data pubblicazione</div>
+                                        <div class="value">${formatDate(post.publishedAt)}</div>
+                                    </div>
+                                    <div class="blog-preview-meta">
+                                        <div class="label">Revisore</div>
+                                        <div class="value">${escapeHtml(getFacultyDisplayNameById(post.reviewerTeacherId))}</div>
+                                    </div>
+                                    <div class="blog-preview-meta">
+                                        <div class="label">Slug</div>
+                                        <div class="value">${escapeHtml(post.slug || '—')}</div>
+                                    </div>
+                                    <div class="blog-preview-meta">
+                                        <div class="label">Cover</div>
+                                        <div class="value">${post.coverImageUrl ? 'Presente' : 'Assente'}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="blog-preview-content">
+                                <h4>Corpo articolo</h4>
+                                <div class="preview-article">
+                                    ${renderPreviewBody(post.content)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="blog-preview-footer">
+                        <button type="button" class="secondary" id="blog-preview-edit">Modifica articolo</button>
+                        <button type="button" class="secondary" id="blog-preview-generate">${post.coverImageUrl ? 'Cover presente' : 'Genera cover AI'}</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            const closeModal = () => modal.remove();
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+
+            const closeButton = modal.querySelector('#blog-preview-close');
+            if (closeButton) closeButton.addEventListener('click', closeModal);
+
+            const editButton = modal.querySelector('#blog-preview-edit');
+            if (editButton) {
+                editButton.addEventListener('click', () => {
+                    closeModal();
+                    populateBlogForm(post.id);
+                });
+            }
+
+            const generateButton = modal.querySelector('#blog-preview-generate');
+            if (generateButton) {
+                generateButton.disabled = Boolean(post.coverImageUrl);
+                generateButton.addEventListener('click', async () => {
+                    if (post.coverImageUrl) return;
+                    try {
+                        generateButton.disabled = true;
+                        generateButton.textContent = 'Generazione...';
+                        await generateBlogCoverWithFeedback(post.id, null, { silent: true });
+                        closeModal();
+                    } catch (error) {
+                        // handled
+                    }
+                });
+            }
         }
 
         async function publishBlogPost(postId) {
@@ -6043,9 +6342,15 @@ Buono studio!</textarea>
             const editButton = event.target.closest('button[data-edit]');
             const deleteButton = event.target.closest('button[data-delete]');
             const generateCoverButton = event.target.closest('button[data-generate-cover]');
+            const previewButton = event.target.closest('button[data-preview]');
             const row = event.target.closest('tr[data-id]');
             if (!row) return;
             const id = row.dataset.id;
+
+            if (previewButton) {
+                openBlogPreview(id);
+                return;
+            }
 
             if (generateCoverButton) {
                 try {
@@ -6138,6 +6443,11 @@ Buono studio!</textarea>
             const row = event.target.closest('tr[data-id]');
             if (!row) return;
             const id = row.dataset.id;
+
+            if (event.target.closest('button[data-preview]')) {
+                openBlogPreview(id);
+                return;
+            }
 
             if (event.target.closest('button[data-edit]')) {
                 populateBlogForm(id);

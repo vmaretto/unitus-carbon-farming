@@ -3796,6 +3796,7 @@ Buono studio!</textarea>
 
                     <div class="blog-preview-footer">
                         <button type="button" class="secondary" id="blog-preview-edit">Modifica articolo</button>
+                        <button type="button" class="secondary" id="blog-preview-public">Apri preview pubblica</button>
                         <button type="button" class="secondary" id="blog-preview-generate">${post.coverImageUrl ? 'Cover presente' : 'Genera cover AI'}</button>
                     </div>
                 </div>
@@ -3818,6 +3819,14 @@ Buono studio!</textarea>
                 editButton.addEventListener('click', () => {
                     closeModal();
                     populateBlogForm(post.id);
+                });
+            }
+
+            const publicPreviewButton = modal.querySelector('#blog-preview-public');
+            if (publicPreviewButton) {
+                publicPreviewButton.addEventListener('click', () => {
+                    const previewKey = encodeURIComponent(post.slug || post.id);
+                    window.open(`blog.html?preview=${previewKey}`, '_blank', 'noopener');
                 });
             }
 

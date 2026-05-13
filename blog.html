@@ -449,6 +449,16 @@
             align-items: center;
         }
 
+        .preview-notice {
+            margin-bottom: 18px;
+            padding: 14px 18px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(122, 185, 40, 0.14), rgba(255, 122, 26, 0.12));
+            border: 1px solid rgba(122, 185, 40, 0.2);
+            color: #2d5016;
+            font-weight: 600;
+        }
+
         .back-to-list {
             display: inline-flex;
             align-items: center;
@@ -696,6 +706,10 @@
                 return;
             }
             let cachedPosts = [];
+            const params = new URLSearchParams(window.location.search);
+            const previewKey = params.get('preview');
+            const isPreviewMode = Boolean(previewKey);
+            const adminToken = localStorage.getItem('adminToken');
 
             const renderPublishedDate = (publishedAt) => {
                 if (!publishedAt) return 'In attesa di data di pubblicazione';
@@ -785,6 +799,15 @@
             const renderDetailView = (post) => {
                 const article = buildArticleShell(post);
 
+                if (isPreviewMode) {
+                    const notice = document.createElement('div');
+                    notice.className = 'preview-notice';
+                    notice.textContent = post.isPublished
+                        ? 'Anteprima pubblica dell\'articolo già pubblicato.'
+                        : 'Anteprima pubblica della bozza: visibile solo con sessione admin attiva.';
+                    article.insertBefore(notice, article.firstChild);
+                }
+
                 const content = document.createElement('div');
                 content.className = 'article-content';
                 if (post.content) {
@@ -802,7 +825,7 @@
                 const backLink = document.createElement('a');
                 backLink.href = 'blog.html';
                 backLink.className = 'back-to-list';
-                backLink.textContent = 'Torna a tutti gli articoli';
+                backLink.textContent = isPreviewMode ? 'Esci dall\'anteprima' : 'Torna a tutti gli articoli';
                 actions.appendChild(backLink);
 
                 if (post.slug) {
@@ -828,16 +851,25 @@
 
                 article.appendChild(actions);
                 blogList.replaceChildren(article);
+                document.title = isPreviewMode
+                    ? `Anteprima: ${post.title || 'Articolo'} - Blog - Master in Carbon Farming`
+                    : document.title;
             };
 
             const renderCurrentView = () => {
                 if (!cachedPosts.length) {
+                    if (isPreviewMode) {
+                        emptyMessage.textContent = adminToken
+                            ? 'Anteprima non disponibile per questo articolo.'
+                            : 'Anteprima disponibile solo con una sessione amministratore attiva.';
+                    }
                     blogList.replaceChildren(emptyMessage);
                     return;
                 }
                 const currentSlug = window.location.hash ? window.location.hash.slice(1) : '';
-                const selectedPost = currentSlug
-                    ? cachedPosts.find((post) => post.slug === currentSlug)
+                const selectedKey = previewKey || currentSlug;
+                const selectedPost = selectedKey
+                    ? cachedPosts.find((post) => post.slug === selectedKey || post.id === selectedKey)
                     : null;
 
                 if (selectedPost) {
@@ -849,12 +881,18 @@
 
             const emptyMessage = document.createElement('div');
             emptyMessage.className = 'blog-empty-message';
-            emptyMessage.textContent = blogList.dataset.emptyText || 'Nessun articolo disponibile.';
+            emptyMessage.textContent = isPreviewMode
+                ? 'Anteprima non disponibile per questo articolo.'
+                : blogList.dataset.emptyText || 'Nessun articolo disponibile.';
 
             try {
-                const response = await fetch('/api/blog-posts?published=true', {
-                    headers: { Accept: 'application/json' }
-                });
+                const requestHeaders = { Accept: 'application/json' };
+                const requestUrl = isPreviewMode && adminToken ? '/api/blog-posts' : '/api/blog-posts?published=true';
+                if (isPreviewMode && adminToken) {
+                    requestHeaders.Authorization = `Bearer ${adminToken}`;
+                }
+
+                const response = await fetch(requestUrl, { headers: requestHeaders });
 
                 if (!response.ok) {
                     throw new Error('Risposta non valida dal server');
@@ -871,7 +909,9 @@
                 renderCurrentView();
             } catch (error) {
                 console.error('Errore durante il caricamento degli articoli del blog', error);
-                emptyMessage.textContent = 'Impossibile caricare gli articoli in questo momento. Riprova più tardi.';
+                emptyMessage.textContent = isPreviewMode
+                    ? 'Impossibile caricare l\'anteprima in questo momento.'
+                    : 'Impossibile caricare gli articoli in questo momento. Riprova più tardi.';
                 blogList.replaceChildren(emptyMessage);
             }
 

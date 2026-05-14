@@ -135,6 +135,96 @@ async function sendEmail({ to, subject, html, bcc, from }) {
   throw new Error('Nessun provider email configurato');
 }
 
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"]/g, (ch) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;'
+  }[ch]));
+}
+
+let conferenceRegistrationEmailSender = sendEmail;
+
+function buildConferenceRegistrationHtml(data, { isConfirmation = false } = {}) {
+  const title = isConfirmation
+    ? 'Conferma registrazione conferenza 26 maggio 2026'
+    : 'Nuova registrazione conferenza 26 maggio 2026';
+  const intro = isConfirmation
+    ? 'Abbiamo ricevuto la tua registrazione per la conferenza Carbon Farming e Soft Power del Food.'
+    : 'Hai ricevuto una nuova registrazione per la conferenza Carbon Farming e Soft Power del Food.';
+
+  const fields = [
+    ['Nome', data.nome],
+    ['Cognome', data.cognome],
+    ['Email', data.email],
+    ['Telefono', data.telefono],
+    ['Ente / Azienda / Universita', data.ente],
+    ['Ruolo', data.ruolo],
+    ['Note', data.note]
+  ].filter(([, value]) => Boolean(String(value || '').trim()));
+
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; color: #1f2937;">
+      <div style="background: linear-gradient(135deg, #2f6b3f 0%, #6a9f4f 100%); color: white; padding: 20px 24px; border-radius: 16px 16px 0 0;">
+        <h1 style="margin: 0; font-size: 24px;">${escapeHtml(title)}</h1>
+      </div>
+      <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-top: 0; border-radius: 0 0 16px 16px; padding: 24px;">
+        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6;">${escapeHtml(intro)}</p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tbody>
+            ${fields.map(([label, value]) => `
+              <tr>
+                <th style="text-align: left; vertical-align: top; padding: 10px 12px 10px 0; width: 220px; color: #374151;">${escapeHtml(label)}</th>
+                <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">${escapeHtml(value)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+app.post('/api/conference-registration', async (req, res) => {
+  const data = {
+    nome: String(req.body.nome || '').trim(),
+    cognome: String(req.body.cognome || '').trim(),
+    email: String(req.body.email || '').trim(),
+    telefono: String(req.body.telefono || '').trim(),
+    ente: String(req.body.ente || '').trim(),
+    ruolo: String(req.body.ruolo || '').trim(),
+    note: String(req.body.note || '').trim()
+  };
+
+  if (!data.nome || !data.cognome || !data.email) {
+    return res.status(400).send('Campi obbligatori mancanti.');
+  }
+
+  const organizerEmail = process.env.CONFERENCE_REGISTRATION_EMAIL || 'maretto@carbonfarmingmaster.it';
+  const organizerSubject = 'Registrazione conferenza 26 maggio 2026 - Carbon Farming e Soft Power del Food';
+  const confirmationSubject = 'Conferma registrazione conferenza 26 maggio 2026';
+
+  try {
+    await conferenceRegistrationEmailSender({
+      to: organizerEmail,
+      subject: organizerSubject,
+      html: buildConferenceRegistrationHtml(data)
+    });
+
+    await conferenceRegistrationEmailSender({
+      to: data.email,
+      subject: confirmationSubject,
+      html: buildConferenceRegistrationHtml(data, { isConfirmation: true })
+    });
+
+    return res.redirect(303, '/conferenza-26-maggio-2026.html?sent=1#grazie');
+  } catch (error) {
+    console.error('Conference registration failed:', error);
+    return res.status(500).send('Errore durante l\'invio della registrazione.');
+  }
+});
+
 function normalizeEmailList(input) {
   const raw = Array.isArray(input) ? input : [input];
   const seen = new Set();
@@ -619,6 +709,7 @@ if (hasDatabaseUrl) {
 }
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -11349,3 +11440,6 @@ module.exports.__getPool = () => pool;
 module.exports.__generateToken = generateToken;
 module.exports.__importBlogPostsFromDocxBufferIntoDatabase = importBlogPostsFromDocxBufferIntoDatabase;
 module.exports.__generateCoverForBlogPost = generateCoverForBlogPost;
+module.exports.__setConferenceRegistrationEmailSender = (nextSender) => {
+  conferenceRegistrationEmailSender = typeof nextSender === 'function' ? nextSender : sendEmail;
+};

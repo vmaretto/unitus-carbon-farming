@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+const { FakeBlogPool } = require('./helpers');
 const apiModule = require('../api/index.js');
 
 function findPostRoute(path) {
@@ -37,11 +38,17 @@ function createRes() {
   };
 }
 
-test('POST /api/conference-registration invia le email e reindirizza alla conferma', async () => {
+test('POST /api/conference-registration invia le email e reindirizza alla conferma', async (t) => {
   const calls = [];
+  const pool = new FakeBlogPool();
+  apiModule.__setPool(pool);
   apiModule.__setConferenceRegistrationEmailSender(async (payload) => {
     calls.push(payload);
-    return { success: true };
+    return { success: true, provider: 'resend' };
+  });
+  t.after(() => {
+    apiModule.__setPool(null);
+    apiModule.__setConferenceRegistrationEmailSender(null);
   });
 
   const layer = findPostRoute('/api/conference-registration');
@@ -72,4 +79,12 @@ test('POST /api/conference-registration invia le email e reindirizza alla confer
   assert.equal(calls[1].to, 'vmaretto@example.com');
   assert.match(String(calls[0].subject), /Registrazione conferenza 26 maggio 2026/);
   assert.match(String(calls[1].subject), /Conferma registrazione conferenza 26 maggio 2026/);
+
+  assert.equal(pool.conferenceRegistrations.length, 1);
+  const tracking = pool.conferenceRegistrations[0];
+  assert.equal(tracking.full_name, 'Virgilio Maretto');
+  assert.equal(tracking.email, 'vmaretto@example.com');
+  assert.equal(tracking.organizer_email_status, 'sent');
+  assert.equal(tracking.confirmation_email_status, 'sent');
+  assert.equal(tracking.overall_status, 'sent');
 });

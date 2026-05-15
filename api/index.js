@@ -167,6 +167,60 @@ function truncateText(value, limit = 220) {
   return `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
 }
 
+function normalizeConferenceRegistrationError(error) {
+  const message = String(error?.message || 'Errore sconosciuto').trim();
+  return message.length > 500 ? `${message.slice(0, 497)}...` : message;
+}
+
+async function createConferenceRegistrationTracking(data) {
+  if (!pool) return null;
+
+  const id = uuidv4();
+  const now = new Date();
+  const { rows } = await pool.query(
+    `INSERT INTO conference_registrations (
+       id, full_name, email, phone, organization, role, note,
+       organizer_email_status, confirmation_email_status, overall_status,
+       created_at, updated_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', 'pending', 'pending', $8, $9)
+     RETURNING *`,
+    [
+      id,
+      `${data.nome} ${data.cognome}`.trim(),
+      data.email,
+      data.telefono || null,
+      data.ente || null,
+      data.ruolo || null,
+      data.note || null,
+      now,
+      now
+    ]
+  );
+  return rows[0] || null;
+}
+
+async function updateConferenceRegistrationTracking(id, updates = {}) {
+  if (!pool || !id) return null;
+  const entries = Object.entries(updates).filter(([, value]) => value !== undefined);
+  if (!entries.length) return null;
+
+  const values = [];
+  const assignments = entries.map(([column, value], index) => {
+    values.push(value);
+    return `${column} = $${index + 1}`;
+  });
+  values.push(id);
+
+  const { rows } = await pool.query(
+    `UPDATE conference_registrations
+     SET ${assignments.join(', ')}, updated_at = NOW()
+     WHERE id = $${values.length}
+     RETURNING *`,
+    values
+  );
+  return rows[0] || null;
+}
+
 let conferenceRegistrationEmailSender = sendEmail;
 
 function buildConferenceRegistrationHtml(data, { isConfirmation = false } = {}) {
@@ -227,24 +281,98 @@ app.post('/api/conference-registration', async (req, res) => {
   const organizerEmail = process.env.CONFERENCE_REGISTRATION_EMAIL || 'maretto@carbonfarmingmaster.it';
   const organizerSubject = 'Registrazione conferenza 26 maggio 2026 - Carbon Farming e Soft Power del Food';
   const confirmationSubject = 'Conferma registrazione conferenza 26 maggio 2026';
+  let tracking = null;
 
   try {
-    await conferenceRegistrationEmailSender({
+    tracking = await createConferenceRegistrationTracking(data);
+  } catch (trackingError) {
+    console.error('Conference registration tracking insert failed:', trackingError);
+  }
+
+  try {
+    const organizerResult = await conferenceRegistrationEmailSender({
       to: organizerEmail,
       subject: organizerSubject,
       html: buildConferenceRegistrationHtml(data)
     });
+    if (tracking?.id) {
+      await updateConferenceRegistrationTracking(tracking.id, {
+        organizer_email_status: 'sent',
+        organizer_email_provider: organizerResult?.provider || null,
+        organizer_email_sent_at: new Date()
+      });
+    }
 
-    await conferenceRegistrationEmailSender({
+    const confirmationResult = await conferenceRegistrationEmailSender({
       to: data.email,
       subject: confirmationSubject,
       html: buildConferenceRegistrationHtml(data, { isConfirmation: true })
     });
+    if (tracking?.id) {
+      await updateConferenceRegistrationTracking(tracking.id, {
+        confirmation_email_status: 'sent',
+        confirmation_email_provider: confirmationResult?.provider || null,
+        confirmation_email_sent_at: new Date(),
+        overall_status: 'sent'
+      });
+    }
 
     return res.redirect(303, '/conferenza-26-maggio-2026.html?sent=1#grazie');
   } catch (error) {
+    if (tracking?.id) {
+      const failureUpdates = {
+        overall_status: 'failed',
+        final_error: normalizeConferenceRegistrationError(error)
+      };
+      if (!tracking.organizer_email_sent_at) {
+        failureUpdates.organizer_email_status = 'failed';
+        failureUpdates.organizer_email_error = normalizeConferenceRegistrationError(error);
+      } else if (!tracking.confirmation_email_sent_at) {
+        failureUpdates.confirmation_email_status = 'failed';
+        failureUpdates.confirmation_email_error = normalizeConferenceRegistrationError(error);
+        failureUpdates.overall_status = 'partial';
+      }
+      try {
+        await updateConferenceRegistrationTracking(tracking.id, failureUpdates);
+      } catch (trackingUpdateError) {
+        console.error('Conference registration tracking update failed:', trackingUpdateError);
+      }
+    }
     console.error('Conference registration failed:', error);
     return res.status(500).send('Errore durante l\'invio della registrazione.');
+  }
+});
+
+app.get('/api/admin/conference-registrations', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+    const { rows } = await pool.query(
+      `
+      SELECT id, full_name AS "fullName", email, phone, organization, role, note,
+             organizer_email_status AS "organizerEmailStatus",
+             organizer_email_provider AS "organizerEmailProvider",
+             organizer_email_error AS "organizerEmailError",
+             organizer_email_sent_at AS "organizerEmailSentAt",
+             confirmation_email_status AS "confirmationEmailStatus",
+             confirmation_email_provider AS "confirmationEmailProvider",
+             confirmation_email_error AS "confirmationEmailError",
+             confirmation_email_sent_at AS "confirmationEmailSentAt",
+             overall_status AS "overallStatus",
+             final_error AS "finalError",
+             created_at AS "createdAt",
+             updated_at AS "updatedAt"
+      FROM conference_registrations
+      ORDER BY created_at DESC
+      LIMIT $1
+      `,
+      [limit]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching conference registrations', error);
+    res.status(500).json({ error: 'Unable to retrieve conference registrations' });
   }
 });
 
@@ -2421,6 +2549,95 @@ async function initDatabase() {
   await pool.query(`
     ALTER TABLE faculty
     ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS conference_registrations (
+      id UUID PRIMARY KEY,
+      full_name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT,
+      organization TEXT,
+      role TEXT,
+      note TEXT,
+      organizer_email_status TEXT NOT NULL DEFAULT 'pending',
+      organizer_email_provider TEXT,
+      organizer_email_error TEXT,
+      organizer_email_sent_at TIMESTAMPTZ,
+      confirmation_email_status TEXT NOT NULL DEFAULT 'pending',
+      confirmation_email_provider TEXT,
+      confirmation_email_error TEXT,
+      confirmation_email_sent_at TIMESTAMPTZ,
+      overall_status TEXT NOT NULL DEFAULT 'pending',
+      final_error TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS full_name TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS email TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS phone TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS organization TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS role TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS note TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS organizer_email_status TEXT NOT NULL DEFAULT 'pending';
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS organizer_email_provider TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS organizer_email_error TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS organizer_email_sent_at TIMESTAMPTZ;
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS confirmation_email_status TEXT NOT NULL DEFAULT 'pending';
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS confirmation_email_provider TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS confirmation_email_error TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS confirmation_email_sent_at TIMESTAMPTZ;
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS overall_status TEXT NOT NULL DEFAULT 'pending';
+  `);
+  await pool.query(`
+    ALTER TABLE conference_registrations
+    ADD COLUMN IF NOT EXISTS final_error TEXT;
   `);
 
   const { rows: facultyCountRows } = await pool.query('SELECT COUNT(*)::INT AS count FROM faculty;');

@@ -1,6 +1,7 @@
 class FakeBlogPool {
   constructor() {
     this.posts = [];
+    this.conferenceRegistrations = [];
     this.columns = new Set([
       'id',
       'title',
@@ -60,6 +61,70 @@ class FakeBlogPool {
     if (/^SELECT \* FROM blog_posts WHERE slug = \$1 LIMIT 1$/i.test(normalized)) {
       const row = this.posts.find((post) => post.slug === params[0]);
       return { rows: row ? [{ ...row }] : [] };
+    }
+
+    if (normalized.startsWith('INSERT INTO conference_registrations')) {
+      const columnMatch = normalized.match(/INSERT INTO conference_registrations \(([^)]+)\)/i);
+      const columns = columnMatch[1].split(',').map((item) => item.trim());
+      const row = {};
+      columns.forEach((column, index) => {
+        row[column] = params[index];
+      });
+      row.created_at = row.created_at || new Date().toISOString();
+      row.updated_at = row.updated_at || new Date().toISOString();
+      this.conferenceRegistrations.push(row);
+      return { rows: [{ ...row }] };
+    }
+
+    if (normalized.startsWith('UPDATE conference_registrations SET')) {
+      const whereMatch = normalized.match(/WHERE id = \$(\d+)/i);
+      const id = whereMatch ? params[Number(whereMatch[1]) - 1] : params[params.length - 1];
+      const row = this.conferenceRegistrations.find((item) => item.id === id);
+      if (!row) return { rows: [] };
+
+      const setPart = normalized.split(' WHERE ')[0].replace('UPDATE conference_registrations SET ', '');
+      const assignments = setPart.split(',').map((item) => item.trim()).filter((item) => item !== 'updated_at = NOW()');
+      assignments.forEach((assignment) => {
+        const match = assignment.match(/^([a-z_]+) = \$(\d+)$/i);
+        if (!match) return;
+        const column = match[1];
+        const value = params[Number(match[2]) - 1];
+        row[column] = value;
+      });
+      row.updated_at = new Date().toISOString();
+      return { rows: [{ ...row }] };
+    }
+
+    if (normalized.startsWith('SELECT id, full_name AS "fullName"') && normalized.includes('FROM conference_registrations')) {
+      const rows = [...this.conferenceRegistrations].sort((a, b) => {
+        const left = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const right = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return right - left;
+      });
+      const limit = Number(params[0]) || rows.length;
+      return {
+        rows: rows.slice(0, limit).map((row) => ({
+          id: row.id,
+          fullName: row.full_name,
+          email: row.email,
+          phone: row.phone,
+          organization: row.organization,
+          role: row.role,
+          note: row.note,
+          organizerEmailStatus: row.organizer_email_status,
+          organizerEmailProvider: row.organizer_email_provider,
+          organizerEmailError: row.organizer_email_error,
+          organizerEmailSentAt: row.organizer_email_sent_at,
+          confirmationEmailStatus: row.confirmation_email_status,
+          confirmationEmailProvider: row.confirmation_email_provider,
+          confirmationEmailError: row.confirmation_email_error,
+          confirmationEmailSentAt: row.confirmation_email_sent_at,
+          overallStatus: row.overall_status,
+          finalError: row.final_error,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at
+        }))
+      };
     }
 
     if (normalized.startsWith('SELECT * FROM blog_posts')) {

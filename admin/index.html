@@ -4196,6 +4196,7 @@ Buono studio!</textarea>
 
             const sources = Array.isArray(post.sources) ? post.sources : [];
             const duplicationMatches = getBlogDuplicationMatches(post);
+            const sharePageUrl = post.slug ? `${window.location.origin}/share/blog/${encodeURIComponent(post.slug)}` : '';
 
             const modal = document.createElement('div');
             modal.id = 'blog-preview-modal';
@@ -4309,6 +4310,7 @@ Buono studio!</textarea>
                     <div class="blog-preview-footer">
                         <button type="button" class="secondary" id="blog-preview-edit">Modifica articolo</button>
                         <button type="button" class="secondary" id="blog-preview-public">Apri preview pubblica</button>
+                        ${post.isPublished && sharePageUrl ? `<button type="button" class="secondary" id="blog-preview-linkedin">Condividi LinkedIn</button>` : ''}
                         <button type="button" class="secondary" id="blog-preview-generate">${post.coverImageUrl ? 'Cover presente' : 'Genera cover AI'}</button>
                     </div>
                 </div>
@@ -4339,6 +4341,15 @@ Buono studio!</textarea>
                 publicPreviewButton.addEventListener('click', () => {
                     const previewKey = encodeURIComponent(post.slug || post.id);
                     window.open(`blog.html?preview=${previewKey}`, '_blank', 'noopener');
+                });
+            }
+
+            const linkedinButton = modal.querySelector('#blog-preview-linkedin');
+            if (linkedinButton) {
+                linkedinButton.addEventListener('click', () => {
+                    if (!sharePageUrl) return;
+                    const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(sharePageUrl)}`;
+                    window.open(linkedInUrl, '_blank', 'noopener');
                 });
             }
 

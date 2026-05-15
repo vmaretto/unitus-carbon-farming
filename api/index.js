@@ -144,6 +144,29 @@ function escapeHtml(value) {
   }[ch]));
 }
 
+function stripHtml(value) {
+  return String(value || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function resolveAbsoluteUrl(value, baseUrl) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    return new URL(raw, baseUrl).toString();
+  } catch (_error) {
+    return '';
+  }
+}
+
+function truncateText(value, limit = 220) {
+  const text = stripHtml(value);
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
+}
+
 let conferenceRegistrationEmailSender = sendEmail;
 
 function buildConferenceRegistrationHtml(data, { isConfirmation = false } = {}) {
@@ -4426,6 +4449,222 @@ app.post('/api/blog-posts/:id/generate-cover', requireAdmin, async (req, res) =>
   } catch (error) {
     console.error('Error generating blog cover', error);
     res.status(error.status || 500).json({ error: error.message || 'Impossibile generare la cover AI' });
+  }
+});
+
+app.get('/share/blog/:slug', async (req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  try {
+    const blogColumns = await getTableColumns('blog_posts');
+    const { rows } = await pool.query(
+      'SELECT * FROM blog_posts WHERE slug = $1 AND is_published = true LIMIT 1',
+      [req.params.slug]
+    );
+
+    if (!rows.length) {
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html lang="it">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Articolo non trovato - Master in Carbon Farming</title>
+          <style>
+            body { font-family: Inter, system-ui, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center; background: linear-gradient(135deg, #f3f7ef, #eef6ea); color: #1f2937; }
+            .card { max-width: 520px; padding: 36px; border-radius: 24px; background: white; box-shadow: 0 22px 60px rgba(31,41,55,0.12); text-align: center; }
+            h1 { margin: 0 0 12px; font-size: 1.8rem; color: #2d5016; }
+            p { margin: 0 0 20px; color: #4b5563; line-height: 1.6; }
+            a { display: inline-flex; align-items: center; justify-content: center; padding: 12px 20px; border-radius: 999px; background: #7AB928; color: white; text-decoration: none; font-weight: 700; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>Articolo non trovato</h1>
+            <p>Il contenuto richiesto non è disponibile oppure non è ancora pubblicato.</p>
+            <a href="/blog.html">Vai al blog</a>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+
+    const post = buildBlogPostPayload(rows[0], blogColumns);
+    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const sharePageUrl = new URL(`/share/blog/${encodeURIComponent(post.slug)}`, baseUrl).toString();
+    const articleUrl = new URL(`/blog.html#${encodeURIComponent(post.slug)}`, baseUrl).toString();
+    const coverImageUrl = resolveAbsoluteUrl(post.coverImageUrl, baseUrl);
+    const excerpt = truncateText(post.excerpt || post.content || 'Leggi l\'articolo pubblicato dal Master in Carbon Farming.');
+    const title = post.title || 'Articolo blog';
+    const ogImageTags = coverImageUrl ? `
+      <meta property="og:image" content="${escapeHtml(coverImageUrl)}">
+      <meta property="og:image:secure_url" content="${escapeHtml(coverImageUrl)}">
+      <meta property="og:image:alt" content="${escapeHtml(title)}">
+      <meta name="twitter:image" content="${escapeHtml(coverImageUrl)}">
+    ` : '';
+
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${escapeHtml(title)} - Master in Carbon Farming</title>
+        <meta name="description" content="${escapeHtml(excerpt)}">
+        <meta property="og:type" content="article">
+        <meta property="og:site_name" content="Master in Carbon Farming">
+        <meta property="og:title" content="${escapeHtml(title)}">
+        <meta property="og:description" content="${escapeHtml(excerpt)}">
+        <meta property="og:url" content="${escapeHtml(sharePageUrl)}">
+        ${ogImageTags}
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="${escapeHtml(title)}">
+        <meta name="twitter:description" content="${escapeHtml(excerpt)}">
+        <link rel="canonical" href="${escapeHtml(sharePageUrl)}">
+        <style>
+          body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #f4f8ef 0%, #eef5ea 100%);
+            color: #1f2937;
+          }
+          .shell {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 36px 20px 56px;
+          }
+          .card {
+            background: rgba(255,255,255,0.94);
+            border-radius: 28px;
+            box-shadow: 0 28px 80px rgba(31,41,55,0.12);
+            overflow: hidden;
+            border: 1px solid rgba(122, 185, 40, 0.14);
+          }
+          .hero {
+            padding: 28px;
+            display: grid;
+            gap: 22px;
+          }
+          .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #7AB928;
+            font-size: 0.82rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+          }
+          h1 {
+            margin: 8px 0 0;
+            font-size: clamp(2rem, 4vw, 3.4rem);
+            line-height: 1.05;
+            color: #17311c;
+          }
+          .meta {
+            margin-top: 14px;
+            color: #6b7280;
+            font-size: 0.96rem;
+          }
+          .cover {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+            display: block;
+            background: #eef4eb;
+          }
+          .cover-fallback {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, rgba(122,185,40,0.14), rgba(255,122,26,0.12));
+            color: #2d5016;
+            font-weight: 700;
+            text-align: center;
+            padding: 24px;
+          }
+          .excerpt {
+            font-size: 1.06rem;
+            line-height: 1.7;
+            color: #374151;
+            margin: 0;
+          }
+          .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 26px;
+          }
+          .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 20px;
+            border-radius: 999px;
+            text-decoration: none;
+            font-weight: 700;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+          }
+          .button:hover { transform: translateY(-1px); }
+          .button.primary {
+            background: linear-gradient(45deg, #ff6b35, #f7931e);
+            color: white;
+            box-shadow: 0 14px 30px rgba(255, 122, 26, 0.24);
+          }
+          .button.linkedin {
+            background: #0a66c2;
+            color: white;
+            box-shadow: 0 14px 30px rgba(10, 102, 194, 0.22);
+          }
+          .button.ghost {
+            background: #eef3ea;
+            color: #33513d;
+          }
+          .body {
+            padding: 0 28px 28px;
+            color: #374151;
+          }
+          .body h2 {
+            color: #2d5016;
+            margin: 0 0 12px;
+            font-size: 1.2rem;
+          }
+        </style>
+      </head>
+      <body>
+        <main class="shell">
+          <section class="card">
+            ${coverImageUrl ? `<img class="cover" src="${escapeHtml(coverImageUrl)}" alt="${escapeHtml(title)}">` : `<div class="cover-fallback">Copertina articolo non disponibile</div>`}
+            <div class="hero">
+              <div>
+                <div class="eyebrow">Master in Carbon Farming</div>
+                <h1>${escapeHtml(title)}</h1>
+                <div class="meta">${escapeHtml(post.sourceModule || 'Articolo del blog')} · ${escapeHtml(post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('it-IT', { year: 'numeric', month: 'long', day: 'numeric' }) : '')}</div>
+              </div>
+              <p class="excerpt">${escapeHtml(excerpt)}</p>
+              <div class="actions">
+                <a class="button primary" href="${escapeHtml(articleUrl)}">Leggi l'articolo</a>
+                <a class="button linkedin" href="https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(sharePageUrl)}" target="_blank" rel="noopener">Apri LinkedIn</a>
+                <a class="button ghost" href="/blog.html">Torna al blog</a>
+              </div>
+            </div>
+          </section>
+          <section class="body">
+            <h2>Per la condivisione</h2>
+            <p>Questa pagina contiene i meta Open Graph usati da LinkedIn per mostrare titolo, descrizione e immagine di copertina quando condividi l'articolo.</p>
+          </section>
+        </main>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Error rendering blog share page', error);
+    res.status(500).send('Impossibile generare la pagina di condivisione');
   }
 });
 

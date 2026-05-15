@@ -52,6 +52,16 @@ class FakeBlogPool {
       return { rows: row ? [{ ...row }] : [] };
     }
 
+    if (/^SELECT \* FROM blog_posts WHERE slug = \$1 AND is_published = true LIMIT 1$/i.test(normalized)) {
+      const row = this.posts.find((post) => post.slug === params[0] && Boolean(post.is_published) === true);
+      return { rows: row ? [{ ...row }] : [] };
+    }
+
+    if (/^SELECT \* FROM blog_posts WHERE slug = \$1 LIMIT 1$/i.test(normalized)) {
+      const row = this.posts.find((post) => post.slug === params[0]);
+      return { rows: row ? [{ ...row }] : [] };
+    }
+
     if (normalized.startsWith('SELECT * FROM blog_posts')) {
       let rows = [...this.posts];
       if (normalized.includes('WHERE is_published = $1')) {

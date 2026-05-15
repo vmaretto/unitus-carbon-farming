@@ -921,6 +921,10 @@
             align-items: start;
         }
 
+        .progress-grid > * {
+            min-width: 0;
+        }
+
         .progress-chart-card,
         .progress-detail-card {
             background: white;
@@ -928,6 +932,7 @@
             border-radius: 16px;
             padding: 18px;
             box-shadow: 0 8px 30px rgba(31, 41, 55, 0.06);
+            min-width: 0;
         }
 
         .progress-chart-title {
@@ -1032,6 +1037,10 @@
             gap: 10px;
         }
 
+        .student-progress-detail-grid.is-summary {
+            gap: 14px;
+        }
+
         .student-progress-detail-title {
             font-size: 1.05rem;
             font-weight: 700;
@@ -1047,6 +1056,31 @@
             display: grid;
             gap: 8px;
             margin-top: 10px;
+        }
+
+        .student-progress-detail-summary {
+            display: grid;
+            gap: 10px;
+        }
+
+        .student-progress-detail-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .student-progress-detail-summary-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: var(--gray-100);
+            font-size: 0.9rem;
+        }
+
+        .student-progress-detail-summary-item strong {
+            color: var(--green-900);
         }
 
         .student-progress-detail-item {
@@ -9910,14 +9944,42 @@ Buono studio!</textarea>
             `;
         }
 
-        function renderProgressDetail(student) {
+        function renderProgressDetail(student, students = [], summary = {}) {
             const container = document.getElementById('sp-student-detail');
             if (!container) return;
             if (!student) {
-                container.innerHTML = '<div class="empty-state" style="margin: 0;">Seleziona uno studente per vedere il dettaglio.</div>';
+                const items = Array.isArray(students) ? students : [];
+                const avgOverall = items.length
+                    ? Math.round(items.reduce((sum, item) => sum + Number(item.overallPercent || 0), 0) / items.length)
+                    : 0;
+                const avgLesson = summary.avgLessonProgress ?? 0;
+                const avgQuiz = summary.avgQuizBestScore === null || summary.avgQuizBestScore === undefined ? '—' : `${summary.avgQuizBestScore}%`;
+                const totalQuestions = summary.questionsAsked ?? 0;
+                const totalReplies = summary.repliesReceived ?? 0;
+                const latestActivity = items.reduce((latest, item) => {
+                    const current = item?.lastActivityAt ? new Date(item.lastActivityAt).getTime() : 0;
+                    return current > latest.ts ? { ts: current, value: item.lastActivityAt } : latest;
+                }, { ts: 0, value: null }).value;
+                container.classList.add('is-summary');
+                container.innerHTML = `
+                    <div>
+                        <div class="student-progress-detail-title">Tutti gli studenti</div>
+                        <div class="student-progress-detail-meta">${items.length ? `${items.length} studenti monitorati` : 'Nessun dato disponibile'}</div>
+                    </div>
+                    <div class="student-progress-detail-summary">
+                        <div class="student-progress-detail-summary-grid">
+                            <div class="student-progress-detail-summary-item"><span>Media complessiva</span><strong>${avgOverall}%</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Media lezioni</span><strong>${avgLesson}%</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Media quiz</span><strong>${avgQuiz}</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Domande / feedback</span><strong>${totalQuestions} / ${totalReplies}</strong></div>
+                        </div>
+                        <div class="student-progress-detail-summary-item"><span>Ultima attività</span><strong>${escapeHtml(formatProgressDate(latestActivity))}</strong></div>
+                    </div>
+                `;
                 return;
             }
 
+            container.classList.remove('is-summary');
             const name = [student.lastName, student.firstName].filter(Boolean).join(' ') || student.email || 'Studente';
             container.innerHTML = `
                 <div>
@@ -9974,7 +10036,7 @@ Buono studio!</textarea>
             if (!students.length) {
                 if (empty) empty.style.display = '';
                 if (content) content.style.display = 'none';
-                renderProgressDetail(null);
+                renderProgressDetail(null, [], {});
                 renderProgressTable([]);
                 return;
             }
@@ -9985,7 +10047,7 @@ Buono studio!</textarea>
             const previousSelected = state.studentProgress.selectedStudentId;
             const selectedStudentId = previousSelected && students.some((student) => student.userId === previousSelected)
                 ? previousSelected
-                : (students[0]?.userId || '');
+                : '';
             state.studentProgress = {
                 ...data,
                 students,
@@ -10003,7 +10065,7 @@ Buono studio!</textarea>
             renderProgressOverviewChart(students);
             renderProgressMiniMetrics(data.summary || {});
             renderProgressTable(students);
-            renderProgressDetail(students.find((student) => student.userId === selectedStudentId) || students[0] || null);
+            renderProgressDetail(students.find((student) => student.userId === selectedStudentId) || null, students, data.summary || {});
         }
 
         async function loadStudentProgress(courseEditionId) {
@@ -10022,7 +10084,7 @@ Buono studio!</textarea>
                 if (content) content.style.display = 'none';
                 document.getElementById('sp-table-body').innerHTML = '<tr><td colspan="10" class="empty-state">Seleziona un\'edizione per visualizzare i progressi.</td></tr>';
                 document.getElementById('sp-student-select').innerHTML = '<option value="">-- Tutti gli studenti --</option>';
-                renderProgressDetail(null);
+                renderProgressDetail(null, [], {});
                 return;
             }
             try {
@@ -10034,9 +10096,10 @@ Buono studio!</textarea>
 
         document.getElementById('sp-student-select').addEventListener('change', () => {
             state.studentProgress.selectedStudentId = document.getElementById('sp-student-select').value || '';
-            const student = (state.studentProgress.students || []).find((row) => row.userId === state.studentProgress.selectedStudentId) || null;
+            const students = state.studentProgress.students || [];
+            const student = students.find((row) => row.userId === state.studentProgress.selectedStudentId) || null;
             renderProgressTable(state.studentProgress.students || []);
-            renderProgressDetail(student);
+            renderProgressDetail(student, students, state.studentProgress.summary || {});
         });
 
         document.getElementById('sp-refresh').addEventListener('click', async () => {
@@ -10061,7 +10124,7 @@ Buono studio!</textarea>
             const select = document.getElementById('sp-student-select');
             if (select) select.value = studentId;
             renderProgressTable(state.studentProgress.students || []);
-            renderProgressDetail((state.studentProgress.students || []).find((student) => student.userId === studentId) || null);
+            renderProgressDetail((state.studentProgress.students || []).find((student) => student.userId === studentId) || null, state.studentProgress.students || [], state.studentProgress.summary || {});
         });
 
         // Import CSV Teams/Zoom

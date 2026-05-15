@@ -1,8 +1,12 @@
 require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
+const fsp = require('fs/promises');
+const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
@@ -20,19 +24,69 @@ const {
 
 const app = express();
 const port = process.env.PORT || 3000;
+const execFileAsync = promisify(execFile);
+const ALLOWED_UPLOAD_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt', '.md', '.srt', '.vtt', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
+const ALLOWED_UPLOAD_EXTENSIONS_LABEL = ALLOWED_UPLOAD_EXTENSIONS.join(', ');
+const RESOURCE_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
+const MATERIALS_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
+const PDF_COMPRESSION_THRESHOLD_BYTES = RESOURCE_UPLOAD_MAX_BYTES;
+const PDF_COMPRESSION_PRESETS = ['/ebook', '/screen'];
+
+async function compressPdfWithGhostscript(buffer) {
+  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'unitus-pdf-'));
+  const inputPath = path.join(tempDir, 'input.pdf');
+  const outputPath = path.join(tempDir, 'output.pdf');
+
+  try {
+    await fsp.writeFile(inputPath, buffer);
+
+    let bestBuffer = buffer;
+    let bestPreset = null;
+
+    for (const preset of PDF_COMPRESSION_PRESETS) {
+      await execFileAsync('gs', [
+        '-sDEVICE=pdfwrite',
+        '-dCompatibilityLevel=1.4',
+        `-dPDFSETTINGS=${preset}`,
+        '-dNOPAUSE',
+        '-dBATCH',
+        '-dQUIET',
+        `-sOutputFile=${outputPath}`,
+        inputPath
+      ], { maxBuffer: 10 * 1024 * 1024 });
+
+      const candidate = await fsp.readFile(outputPath);
+      if (candidate.length < bestBuffer.length) {
+        bestBuffer = candidate;
+        bestPreset = preset;
+      }
+
+      if (bestBuffer.length <= PDF_COMPRESSION_THRESHOLD_BYTES) {
+        break;
+      }
+    }
+
+    return {
+      buffer: bestBuffer,
+      compressed: bestBuffer.length < buffer.length,
+      preset: bestPreset
+    };
+  } finally {
+    await fsp.rm(tempDir, { recursive: true, force: true });
+  }
+}
 
 // Configurazione multer per upload in memoria (per Vercel Blob)
 // Upload per risorse generali (limite 4MB)
 const uploadSmall = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 4 * 1024 * 1024 }, // 4MB max per Vercel Functions
+  limits: { fileSize: RESOURCE_UPLOAD_MAX_BYTES }, // 4MB max per Vercel Functions
   fileFilter: (req, file, cb) => {
-    const allowed = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt', '.md', '.srt', '.vtt', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
     const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) {
+    if (ALLOWED_UPLOAD_EXTENSIONS.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Tipo file non supportato'));
+      cb(new Error(`Tipo file non supportato. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}`));
     }
   }
 });
@@ -40,14 +94,13 @@ const uploadSmall = multer({
 // Upload per materiali lezioni (limite 20MB)
 const uploadMaterials = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB max per materiali lezioni
+  limits: { fileSize: MATERIALS_UPLOAD_MAX_BYTES }, // 20MB max per materiali lezioni
   fileFilter: (req, file, cb) => {
-    const allowed = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt', '.md', '.srt', '.vtt', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
     const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) {
+    if (ALLOWED_UPLOAD_EXTENSIONS.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Tipo file non supportato'));
+      cb(new Error(`Tipo file non supportato. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}`));
     }
   }
 });
@@ -6059,8 +6112,10 @@ app.post('/api/materials/upload', requireAdmin, uploadMaterials.single('file'), 
     mimetype: req.file.mimetype
   });
 
-  if (req.file.size > 20 * 1024 * 1024) {
-    return res.status(413).json({ error: 'File troppo grande (max 20MB per materiali lezioni)' });
+  if (req.file.size > MATERIALS_UPLOAD_MAX_BYTES) {
+    return res.status(413).json({
+      error: `File troppo grande (max 20MB per materiali lezioni). Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}`
+    });
   }
 
   try {
@@ -6101,20 +6156,34 @@ app.post('/api/resources/upload', requireAdmin, uploadMaterials.single('file'), 
     mimetype: req.file.mimetype
   });
 
-  if (req.file.size > 4 * 1024 * 1024) {
-    return res.status(413).json({ error: 'File troppo grande (max 4MB). Comprimi ulteriormente il PDF.' });
-  }
-
   try {
     // Sanitizza il nome file
     let fileBuffer = req.file.buffer;
     const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    
-    // Comprimi PDF se >5MB usando approccio semplificato
-    if (req.file.mimetype === 'application/pdf' && req.file.size > 5 * 1024 * 1024) {
-      console.log('📦 Comprimendo PDF grande...');
-      // Per ora manteniamo originale - compressione richiede librerie esterne
-      // TODO: implementare compressione PDF reale
+
+    // Se il PDF supera i 4MB proviamo a comprimerlo con Ghostscript prima di rifiutarlo.
+    if (req.file.mimetype === 'application/pdf' && req.file.size > RESOURCE_UPLOAD_MAX_BYTES) {
+      console.log('📦 Comprimendo PDF risorsa con Ghostscript...');
+      try {
+        const result = await compressPdfWithGhostscript(req.file.buffer);
+        if (result.buffer.length <= RESOURCE_UPLOAD_MAX_BYTES) {
+          fileBuffer = result.buffer;
+          console.log(`✅ PDF compresso con preset ${result.preset || 'unknown'}: ${req.file.size} -> ${fileBuffer.length} bytes`);
+        } else {
+          return res.status(413).json({
+            error: `Il PDF supera ancora i 4MB anche dopo la compressione automatica. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}.`
+          });
+        }
+      } catch (compressionError) {
+        console.error('Compressione PDF fallita:', compressionError);
+        return res.status(500).json({
+          error: `Impossibile comprimere automaticamente il PDF. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}.`
+        });
+      }
+    } else if (req.file.size > RESOURCE_UPLOAD_MAX_BYTES) {
+      return res.status(413).json({
+        error: `File troppo grande (max 4MB). Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}.`
+      });
     }
     
     // Upload su Vercel Blob
@@ -12208,7 +12277,19 @@ async function handler(req, res) {
 
 app.use((err, req, res, next) => {
   if (err && err.name === 'MulterError') {
-    if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File troppo grande.' });
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      if (req && req.path === '/api/resources/upload') {
+        return res.status(413).json({
+          error: `File troppo grande. Limite effettivo 4MB dopo compressione automatica dei PDF. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}.`
+        });
+      }
+      if (req && (req.path === '/api/materials/upload' || req.path === '/api/teachers/upload')) {
+        return res.status(413).json({
+          error: `File troppo grande. Limite 20MB per materiali lezioni. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}.`
+        });
+      }
+      return res.status(413).json({ error: `File troppo grande. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}.` });
+    }
     return res.status(400).json({ error: 'Errore upload: ' + err.message });
   }
   if (err) return res.status(500).json({ error: err.message || 'Errore interno' });

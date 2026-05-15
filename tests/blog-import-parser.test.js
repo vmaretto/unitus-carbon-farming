@@ -23,6 +23,7 @@ test('parseBlogPostsFromDocxBuffer estrae 5 articoli dal fixture Word', async ()
   assert.match(result.posts[0].coverImagePrompt, /campi agricoli europei/i);
   assert.equal(result.posts[0].sources.length, 2);
   assert.equal(result.posts[0].sources[0].url, 'https://climate.ec.europa.eu/eu-action/carbon-farming_en');
+  assert.equal(result.posts[0].sources[0].title, 'Carbon farming in the EU');
   assert.ok(result.posts[0].content.includes('<h2>Perche conta adesso</h2>'));
   assert.ok(Array.isArray(result.conversionMessages));
 });
@@ -60,6 +61,8 @@ test('parseBlogPostsFromHtml gestisce metadati e prompt AI compattati nella stes
   assert.equal(result.posts[0].publishedAt, '2026-04-19T09:00:00.000Z');
   assert.equal(result.posts[0].sourceModule, 'M2 - Policy');
   assert.equal(result.posts[0].coverImagePrompt, 'paesaggio agricolo con dati climatici');
+  assert.equal(result.posts[0].sources.length, 1);
+  assert.equal(result.posts[0].sources[0].url, 'https://example.com/fonte');
 });
 
 test('parseBlogPostsFromDocxBuffer usa il fallback raw docx quando metadata e prompt non emergono bene dall HTML', async () => {

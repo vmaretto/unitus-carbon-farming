@@ -1670,6 +1670,10 @@
                         <input type="url" id="blog-cover" name="coverImageUrl" placeholder="https://...">
                     </label>
                     <label>
+                        Modulo collegato
+                        <input type="text" id="blog-source-module" name="sourceModule" placeholder="Es. M2 - Politiche e mercati del carbonio">
+                    </label>
+                    <label>
                         Docente revisore
                         <select id="blog-reviewer" name="reviewerTeacherId">
                             <option value="">Nessun docente assegnato</option>
@@ -1685,6 +1689,14 @@
                 <label style="margin-top: 18px;">
                     Contenuto completo
                     <textarea id="blog-content" name="content" placeholder="Inserisci il contenuto completo dell'articolo" rows="8"></textarea>
+                </label>
+
+                <label style="margin-top: 18px;">
+                    Fonti
+                    <textarea id="blog-sources" name="sources" placeholder="Una fonte per riga. Formato consigliato: Titolo | URL"></textarea>
+                    <small style="color: var(--gray-500); font-size: 0.85rem; font-weight: 400; margin-top: 4px;">
+                        Le fonti importate dal Word vengono mantenute anche in modifica. Se vuoi aggiungerne altre, usa una riga per fonte.
+                    </small>
                 </label>
 
                 <div class="actions">
@@ -1732,6 +1744,7 @@
                             <tr>
                                 <th>Titolo</th>
                                 <th>Data</th>
+                                <th>Fonte</th>
                                 <th>Revisore</th>
                                 <th>Ha immagine?</th>
                                 <th style="width: 260px;">Azioni</th>
@@ -1739,7 +1752,7 @@
                         </thead>
                         <tbody id="blog-import-table-body">
                             <tr class="empty-state" data-empty-blog-import>
-                                <td colspan="5">Nessuna bozza importata in questa sessione.</td>
+                                <td colspan="6">Nessuna bozza importata in questa sessione.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1752,6 +1765,7 @@
                         <tr>
                             <th>Titolo</th>
                             <th>Pubblicazione</th>
+                            <th>Fonte</th>
                             <th>Revisore</th>
                             <th>Stato</th>
                             <th style="width: 180px;">Azioni</th>
@@ -1759,7 +1773,7 @@
                     </thead>
                     <tbody id="blog-table-body">
                         <tr class="empty-state" data-empty-blog>
-                            <td colspan="5">Non ci sono articoli pubblicati o in bozza. Usa il modulo per crearne uno nuovo.</td>
+                            <td colspan="6">Non ci sono articoli pubblicati o in bozza. Usa il modulo per crearne uno nuovo.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -3116,6 +3130,7 @@ Buono studio!</textarea>
         <tr>
             <td data-title></td>
             <td data-date></td>
+            <td data-source></td>
             <td data-reviewer></td>
             <td data-status></td>
             <td>
@@ -3133,6 +3148,7 @@ Buono studio!</textarea>
         <tr>
             <td data-title></td>
             <td data-date></td>
+            <td data-source></td>
             <td data-reviewer></td>
             <td data-cover></td>
             <td>
@@ -3575,6 +3591,8 @@ Buono studio!</textarea>
             const form = document.getElementById('blog-form');
             form.reset();
             document.getElementById('blog-published').checked = false;
+            document.getElementById('blog-source-module').value = '';
+            document.getElementById('blog-sources').value = '';
             document.getElementById('blog-reset').hidden = true;
             state.editingPostId = null;
             const button = form.querySelector('button.primary');
@@ -3633,6 +3651,58 @@ Buono studio!</textarea>
             return current?.name || current?.email || 'Docente assegnato';
         }
 
+        function normalizeBlogSourceLine(line) {
+            const trimmed = String(line || '').trim();
+            if (!trimmed) return null;
+
+            const separator = trimmed.includes(' | ') ? ' | ' : (trimmed.includes(' - ') ? ' - ' : null);
+            if (separator) {
+                const [title, ...rest] = trimmed.split(separator);
+                const url = rest.join(separator).trim();
+                if (title.trim() && url) {
+                    return { title: title.trim(), url };
+                }
+            }
+
+            if (/^https?:\/\//i.test(trimmed)) {
+                return { title: trimmed, url: trimmed };
+            }
+
+            return { title: trimmed, url: null };
+        }
+
+        function parseBlogSourcesInput(value) {
+            return String(value || '')
+                .split('\n')
+                .map(normalizeBlogSourceLine)
+                .filter(Boolean);
+        }
+
+        function formatBlogSourcesInput(sources) {
+            if (!Array.isArray(sources) || !sources.length) return '';
+            return sources
+                .map((source) => {
+                    const title = String(source?.title || '').trim();
+                    const url = String(source?.url || '').trim();
+                    if (!title && !url) return '';
+                    if (title && url && title !== url) return `${title} | ${url}`;
+                    return url || title;
+                })
+                .filter(Boolean)
+                .join('\n');
+        }
+
+        function formatBlogSourceSummary(post) {
+            const sourceModule = String(post?.sourceModule || '').trim();
+            const sources = Array.isArray(post?.sources) ? post.sources : [];
+            if (sourceModule && sources.length) {
+                return `${sourceModule} · ${sources.length} fonti`;
+            }
+            if (sourceModule) return sourceModule;
+            if (sources.length) return `${sources.length} fonti`;
+            return '—';
+        }
+
         function updateBlogReviewerSelect() {
             const select = document.getElementById('blog-reviewer');
             if (!select) return;
@@ -3658,6 +3728,7 @@ Buono studio!</textarea>
                 clone.dataset.id = post.id;
                 clone.querySelector('[data-title]').textContent = post.title;
                 clone.querySelector('[data-date]').textContent = formatDate(post.publishedAt);
+                clone.querySelector('[data-source]').textContent = formatBlogSourceSummary(post);
                 clone.querySelector('[data-reviewer]').textContent = getFacultyDisplayNameById(post.reviewerTeacherId);
 
                 const coverCell = clone.querySelector('[data-cover]');
@@ -3691,6 +3762,8 @@ Buono studio!</textarea>
             document.getElementById('blog-excerpt').value = current.excerpt || '';
             document.getElementById('blog-content').value = current.content || '';
             document.getElementById('blog-cover').value = current.coverImageUrl || '';
+            document.getElementById('blog-source-module').value = current.sourceModule || '';
+            document.getElementById('blog-sources').value = formatBlogSourcesInput(current.sources || []);
             document.getElementById('blog-reviewer').value = current.reviewerTeacherId || '';
             document.getElementById('blog-published').checked = Boolean(current.isPublished);
             document.getElementById('blog-published-at').value = current.publishedAt
@@ -3728,6 +3801,8 @@ Buono studio!</textarea>
                 showToast('Articolo non trovato', 'error');
                 return;
             }
+
+            const sources = Array.isArray(post.sources) ? post.sources : [];
 
             const modal = document.createElement('div');
             modal.id = 'blog-preview-modal';
@@ -3779,8 +3854,8 @@ Buono studio!</textarea>
                                         <div class="value">${escapeHtml(post.slug || '—')}</div>
                                     </div>
                                     <div class="blog-preview-meta">
-                                        <div class="label">Cover</div>
-                                        <div class="value">${post.coverImageUrl ? 'Presente' : 'Assente'}</div>
+                                        <div class="label">Fonte</div>
+                                        <div class="value">${escapeHtml(formatBlogSourceSummary(post))}</div>
                                     </div>
                                 </div>
                             </div>
@@ -3791,6 +3866,22 @@ Buono studio!</textarea>
                                     ${renderPreviewBody(post.content)}
                                 </div>
                             </div>
+
+                            ${(post.sourceModule || sources.length) ? `
+                                <div class="blog-preview-content">
+                                    <h4>Fonti</h4>
+                                    ${post.sourceModule ? `<p style="margin: 0 0 10px; color: var(--gray-700);"><strong>Modulo collegato:</strong> ${escapeHtml(post.sourceModule)}</p>` : ''}
+                                    ${sources.length ? `
+                                        <ul style="margin: 0; padding-left: 18px; color: var(--gray-700);">
+                                            ${sources.map((source) => {
+                                                const safeUrl = /^https?:\/\//i.test(String(source.url || '')) ? source.url : null;
+                                                const label = escapeHtml(source.title || source.url || 'Fonte');
+                                                return `<li style="margin-bottom: 8px;">${safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${label}</a>` : label}</li>`;
+                                            }).join('')}
+                                        </ul>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
 
@@ -6162,6 +6253,7 @@ Buono studio!</textarea>
                     clone.dataset.id = post.id;
                     clone.querySelector('[data-title]').textContent = post.title;
                     clone.querySelector('[data-date]').textContent = formatDate(post.publishedAt);
+                    clone.querySelector('[data-source]').textContent = formatBlogSourceSummary(post);
                     clone.querySelector('[data-reviewer]').textContent = getFacultyDisplayNameById(post.reviewerTeacherId);
                     const generateButton = clone.querySelector('[data-generate-cover]');
                     generateButton.disabled = Boolean(post.coverImageUrl);
@@ -6322,6 +6414,8 @@ Buono studio!</textarea>
                 excerpt: document.getElementById('blog-excerpt').value.trim() || null,
                 content: document.getElementById('blog-content').value.trim() || null,
                 coverImageUrl: document.getElementById('blog-cover').value.trim() || null,
+                sourceModule: document.getElementById('blog-source-module').value.trim() || null,
+                sources: parseBlogSourcesInput(document.getElementById('blog-sources').value),
                 reviewerTeacherId: document.getElementById('blog-reviewer').value || null,
                 publishedAt: publishedAtInput ? new Date(publishedAtInput).toISOString() : null,
                 isPublished: document.getElementById('blog-published').checked

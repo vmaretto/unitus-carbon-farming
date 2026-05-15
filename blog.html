@@ -441,6 +441,34 @@
             font-weight: 600;
         }
 
+        .article-sources {
+            margin-top: 26px;
+            padding: 18px 20px;
+            border: 1px solid rgba(74, 124, 89, 0.2);
+            border-radius: 18px;
+            background: #f8fbf7;
+        }
+
+        .article-sources h3 {
+            margin: 0 0 12px;
+            color: #2d5016;
+            font-size: 1.02rem;
+        }
+
+        .article-sources p {
+            margin: 0 0 10px;
+            color: #555;
+        }
+
+        .article-sources ul {
+            margin: 0;
+            padding-left: 18px;
+        }
+
+        .article-sources li {
+            margin-bottom: 8px;
+        }
+
         .article-actions {
             margin-top: 18px;
             display: flex;
@@ -747,6 +775,51 @@
                 return article;
             };
 
+            const renderSourcesBlock = (post) => {
+                const sources = Array.isArray(post.sources) ? post.sources : [];
+                if (!post.sourceModule && sources.length === 0) {
+                    return null;
+                }
+
+                const block = document.createElement('section');
+                block.className = 'article-sources';
+
+                const title = document.createElement('h3');
+                title.textContent = 'Fonti';
+                block.appendChild(title);
+
+                if (post.sourceModule) {
+                    const moduleLine = document.createElement('p');
+                    const strong = document.createElement('strong');
+                    strong.textContent = 'Modulo collegato:';
+                    moduleLine.appendChild(strong);
+                    moduleLine.appendChild(document.createTextNode(` ${post.sourceModule}`));
+                    block.appendChild(moduleLine);
+                }
+
+                if (sources.length) {
+                    const list = document.createElement('ul');
+                    sources.forEach((source) => {
+                        const item = document.createElement('li');
+                        const safeUrl = /^https?:\/\//i.test(String(source.url || '')) ? source.url : null;
+                        if (safeUrl) {
+                            const link = document.createElement('a');
+                            link.href = safeUrl;
+                            link.target = '_blank';
+                            link.rel = 'noopener';
+                            link.textContent = source.title || source.url || 'Fonte';
+                            item.appendChild(link);
+                        } else {
+                            item.textContent = source.title || source.url || 'Fonte';
+                        }
+                        list.appendChild(item);
+                    });
+                    block.appendChild(list);
+                }
+
+                return block;
+            };
+
             const renderListView = (posts) => {
                 const fragment = document.createDocumentFragment();
 
@@ -818,6 +891,11 @@
                     content.appendChild(fallback);
                 }
                 article.appendChild(content);
+
+                const sourcesBlock = renderSourcesBlock(post);
+                if (sourcesBlock) {
+                    article.appendChild(sourcesBlock);
+                }
 
                 const actions = document.createElement('div');
                 actions.className = 'article-actions';

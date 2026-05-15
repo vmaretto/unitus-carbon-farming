@@ -4267,6 +4267,18 @@ Buono studio!</textarea>
                 null;
         }
 
+        function syncBlogPostCoverState(postId, coverImageUrl) {
+            if (!postId) return;
+            const normalizedUrl = String(coverImageUrl || '').trim();
+            [state.blogPosts, state.importedBlogPosts].forEach((collection) => {
+                (collection || []).forEach((post) => {
+                    if (post && post.id === postId) {
+                        post.coverImageUrl = normalizedUrl || post.coverImageUrl || null;
+                    }
+                });
+            });
+        }
+
         function renderPreviewBody(htmlLikeValue) {
             const raw = String(htmlLikeValue || '').trim();
             if (!raw) {
@@ -4476,6 +4488,7 @@ Buono studio!</textarea>
             const result = await apiRequest(`/api/blog-posts/${postId}/generate-cover`, {
                 method: 'POST'
             });
+            syncBlogPostCoverState(postId, result.coverImageUrl);
             if (!silent) {
                 showToast(result.reused ? 'Cover già presente' : 'Cover generata con successo');
             }
@@ -4486,6 +4499,7 @@ Buono studio!</textarea>
         async function generateBlogCoverWithFeedback(postId, button, { silent = false } = {}) {
             const hadButton = Boolean(button);
             const originalLabel = hadButton ? button.textContent : '';
+            let result = null;
 
             if (hadButton) {
                 button.disabled = true;
@@ -4497,11 +4511,13 @@ Buono studio!</textarea>
             }
 
             try {
-                return await generateBlogCover(postId, { silent });
+                result = await generateBlogCover(postId, { silent });
+                return result;
             } finally {
                 if (hadButton && document.body.contains(button)) {
-                    button.disabled = false;
-                    button.textContent = originalLabel;
+                    const hasCover = Boolean(result && result.coverImageUrl);
+                    button.disabled = hasCover;
+                    button.textContent = hasCover ? 'Cover presente' : originalLabel;
                 }
             }
         }

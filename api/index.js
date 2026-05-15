@@ -28,7 +28,8 @@ const execFileAsync = promisify(execFile);
 const ALLOWED_UPLOAD_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt', '.md', '.srt', '.vtt', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
 const ALLOWED_UPLOAD_EXTENSIONS_LABEL = ALLOWED_UPLOAD_EXTENSIONS.join(', ');
 const RESOURCE_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
-const MATERIALS_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
+const MATERIALS_UPLOAD_FINAL_MAX_BYTES = 20 * 1024 * 1024;
+const MATERIALS_UPLOAD_INGEST_MAX_BYTES = 50 * 1024 * 1024;
 const PDF_COMPRESSION_THRESHOLD_BYTES = RESOURCE_UPLOAD_MAX_BYTES;
 const PDF_COMPRESSION_PRESETS = ['/ebook', '/screen'];
 
@@ -76,6 +77,41 @@ async function compressPdfWithGhostscript(buffer) {
   }
 }
 
+async function prepareCompressibleMaterialUpload(file, finalLimitBytes, uploadLabel) {
+  let fileBuffer = file.buffer;
+  let compressed = false;
+
+  if (file.mimetype === 'application/pdf' && file.size > finalLimitBytes) {
+    console.log(`📦 Comprimendo PDF ${uploadLabel} con Ghostscript...`);
+    try {
+      const result = await compressPdfWithGhostscript(file.buffer);
+      if (result.buffer.length <= finalLimitBytes) {
+        fileBuffer = result.buffer;
+        compressed = result.buffer.length < file.buffer.length;
+        console.log(`✅ PDF compresso per ${uploadLabel}: ${file.size} -> ${fileBuffer.length} bytes`);
+      } else {
+        return {
+          tooLarge: true,
+          error: `Il PDF supera ancora i ${Math.round(finalLimitBytes / (1024 * 1024))}MB anche dopo la compressione automatica. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}.`
+        };
+      }
+    } catch (compressionError) {
+      console.error(`Compressione PDF fallita per ${uploadLabel}:`, compressionError);
+      return {
+        tooLarge: true,
+        error: `Impossibile comprimere automaticamente il PDF. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}.`
+      };
+    }
+  } else if (file.size > finalLimitBytes) {
+    return {
+      tooLarge: true,
+      error: `File troppo grande (max ${Math.round(finalLimitBytes / (1024 * 1024))}MB). Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}.`
+    };
+  }
+
+  return { buffer: fileBuffer, compressed };
+}
+
 // Configurazione multer per upload in memoria (per Vercel Blob)
 // Upload per risorse generali (limite 4MB)
 const uploadSmall = multer({ 
@@ -91,10 +127,10 @@ const uploadSmall = multer({
   }
 });
 
-// Upload per materiali lezioni (limite 20MB)
+// Upload per materiali lezioni e docenti: accetta file più grandi per permettere la compressione PDF
 const uploadMaterials = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: MATERIALS_UPLOAD_MAX_BYTES }, // 20MB max per materiali lezioni
+  limits: { fileSize: MATERIALS_UPLOAD_INGEST_MAX_BYTES }, // ingest fino a 50MB per consentire la compressione PDF
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (ALLOWED_UPLOAD_EXTENSIONS.includes(ext)) {
@@ -1727,9 +1763,14 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
       console.log('403 - No matching lesson. Teacher faculty_id:', req.teacher.id, 'Lesson data:', lessonRows[0] || null);
       return res.status(403).json({ error: 'Non hai accesso a questa lezione' });
     }
+
+    const materialUpload = await prepareCompressibleMaterialUpload(file, MATERIALS_UPLOAD_FINAL_MAX_BYTES, 'materiali docente');
+    if (materialUpload.tooLarge) {
+      return res.status(413).json({ error: materialUpload.error });
+    }
     
     // Upload to Vercel Blob
-    const { url, pathname } = await put(file.originalname, file.buffer, {
+    const { url, pathname } = await put(file.originalname, materialUpload.buffer, {
       access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN
     });
@@ -6112,13 +6153,12 @@ app.post('/api/materials/upload', requireAdmin, uploadMaterials.single('file'), 
     mimetype: req.file.mimetype
   });
 
-  if (req.file.size > MATERIALS_UPLOAD_MAX_BYTES) {
-    return res.status(413).json({
-      error: `File troppo grande (max 20MB per materiali lezioni). Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}`
-    });
-  }
-
   try {
+    const materialUpload = await prepareCompressibleMaterialUpload(req.file, MATERIALS_UPLOAD_FINAL_MAX_BYTES, 'materiali lezione');
+    if (materialUpload.tooLarge) {
+      return res.status(413).json({ error: materialUpload.error });
+    }
+
     // Sanitizza il nome file
     const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
     
@@ -6129,7 +6169,7 @@ app.post('/api/materials/upload', requireAdmin, uploadMaterials.single('file'), 
       return res.status(500).json({ error: 'Storage non configurato (BLOB_READ_WRITE_TOKEN mancante).' });
     }
 
-    const blob = await put(safeName, req.file.buffer, {
+    const blob = await put(safeName, materialUpload.buffer, {
       access: 'public',
       addRandomSuffix: true,
       contentType: req.file.mimetype,
@@ -12285,7 +12325,7 @@ app.use((err, req, res, next) => {
       }
       if (req && (req.path === '/api/materials/upload' || req.path === '/api/teachers/upload')) {
         return res.status(413).json({
-          error: `File troppo grande. Limite 20MB per materiali lezioni. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}.`
+          error: `File troppo grande. Limite tecnico di caricamento 50MB; il limite finale resta 20MB dopo eventuale compressione PDF. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}.`
         });
       }
       return res.status(413).json({ error: `File troppo grande. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}.` });

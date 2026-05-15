@@ -6786,9 +6786,8 @@ Buono studio!</textarea>
                     if (res.status === 413) {
                         showUploadModal({
                             title: 'File troppo grande',
-                            message: 'Il file supera il limite di caricamento.',
+                            message: errorMsg,
                             details: [
-                                'Limite massimo: 20 MB per i materiali lezione.',
                                 'Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif.'
                             ]
                         });
@@ -8509,7 +8508,7 @@ Buono studio!</textarea>
                             </label>
                             <button type="button" class="secondary" data-add-material>+ Aggiungi alla lezione</button>
                         </div>
-                        <small style="color: var(--gray-500); margin-top: 4px; display: block;">Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif. Limite finale 20 MB per materiali lezione.</small>
+                        <small style="color: var(--gray-500); margin-top: 4px; display: block;">Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif. Limite finale 20 MB per materiali lezione; i PDF più grandi vengono compressi automaticamente se possibile.</small>
                         <small data-material-upload-status style="color: var(--gray-500); margin-top: 4px; display: block;"></small>
                     </div>
                     <input type="hidden" data-field="materials" value="[]">
@@ -8648,9 +8647,8 @@ Buono studio!</textarea>
                         if (res.status === 413) {
                             showUploadModal({
                                 title: 'File troppo grande',
-                                message: 'Il file supera il limite consentito per i materiali della lezione.',
+                                message: errorMsg,
                                 details: [
-                                    'Limite massimo: 20 MB.',
                                     'Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif.'
                                 ]
                             });

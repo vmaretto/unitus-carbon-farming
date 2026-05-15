@@ -1431,6 +1431,10 @@
                 <a href="#workflow" data-section="workflow">🎬 Produzione contenuti</a>
             </div>
             <div class="sidebar-group">
+                <div class="sidebar-group-title">Eventi</div>
+                <a href="#conference-registrations" data-section="conference-registrations">📨 Conferenza 26/5</a>
+            </div>
+            <div class="sidebar-group">
                 <div class="sidebar-group-title">Sito Pubblico</div>
                 <a href="#blog" data-section="blog">📝 Blog</a>
                 <a href="#partners" data-section="partners">🤝 Partner</a>
@@ -3223,6 +3227,44 @@ Buono studio!</textarea>
                 </div>
             </div>
         </section>
+
+        <section id="conference-registrations">
+            <header>
+                <h2>📨 Conferenza 26/5</h2>
+                <p class="section-description">Tracking delle registrazioni inviate dal form della conferenza: qui vedi lo stato degli invii e gli eventuali errori.</p>
+            </header>
+
+            <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:16px;">
+                <button type="button" class="secondary" id="conference-registrations-refresh">Aggiorna elenco</button>
+                <a class="secondary" href="/conferenza-26-maggio-2026.html" target="_blank" rel="noopener" style="text-decoration:none; display:inline-flex; align-items:center;">Apri pagina pubblica</a>
+            </div>
+
+            <div class="subsection-card" style="margin-bottom:18px;">
+                <strong>Stato tracciamento</strong>
+                <p style="margin:8px 0 0; color: var(--gray-600);">Le nuove registrazioni vengono salvate nella tabella <code>conference_registrations</code> con stato per email organizzatore e conferma partecipante.</p>
+            </div>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Nome</th>
+                            <th>Email</th>
+                            <th>Organizzatore</th>
+                            <th>Conferma</th>
+                            <th>Stato</th>
+                            <th style="width: 220px;">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="conference-registrations-table-body">
+                        <tr class="empty-state" data-empty-conference-registrations>
+                            <td colspan="7">Nessuna registrazione ancora tracciata.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </main>
 
     <template id="faculty-row-template">
@@ -3370,7 +3412,8 @@ Buono studio!</textarea>
                     () => typeof loadTeacherDocs === 'function' ? loadTeacherDocs() : Promise.resolve(),
                     () => typeof loadTeacherPendingMaterials === 'function' ? loadTeacherPendingMaterials() : Promise.resolve(),
                     () => typeof loadStudentQuestions === 'function' ? loadStudentQuestions() : Promise.resolve(),
-                    () => typeof loadSurveysSection === 'function' ? loadSurveysSection() : Promise.resolve()
+                    () => typeof loadSurveysSection === 'function' ? loadSurveysSection() : Promise.resolve(),
+                    () => typeof loadConferenceRegistrations === 'function' ? loadConferenceRegistrations() : Promise.resolve()
                 ];
 
                 for (const task of startupTasks) {
@@ -3554,6 +3597,7 @@ Buono studio!</textarea>
             faculty: [],
             blogPosts: [],
             importedBlogPosts: [],
+            conferenceRegistrations: [],
             partners: [],
             resources: [],
             modules: [],
@@ -4425,6 +4469,83 @@ Buono studio!</textarea>
                 scheduleBlogDuplicationBannerUpdate(current);
             } else if (document.getElementById('blog-title').value.trim() || document.getElementById('blog-excerpt').value.trim() || document.getElementById('blog-content').value.trim()) {
                 scheduleBlogDuplicationBannerUpdate();
+            }
+        }
+
+        function renderConferenceRegistrationStatus(status) {
+            const normalized = String(status || 'pending').toLowerCase();
+            const labelMap = {
+                sent: 'Inviata',
+                pending: 'In attesa',
+                partial: 'Parziale',
+                failed: 'Errore'
+            };
+            const colorMap = {
+                sent: 'published',
+                pending: 'draft',
+                partial: 'draft',
+                failed: 'draft'
+            };
+            return `<span class="status-pill" data-status="${colorMap[normalized] || 'draft'}">${labelMap[normalized] || 'In attesa'}</span>`;
+        }
+
+        function renderConferenceRegistrations() {
+            const tableBody = document.getElementById('conference-registrations-table-body');
+            if (!tableBody) return;
+            tableBody.querySelectorAll('tr:not([data-empty-conference-registrations])').forEach((row) => row.remove());
+
+            const rows = state.conferenceRegistrations || [];
+            if (!rows.length) {
+                toggleEmptyState(tableBody, false, '[data-empty-conference-registrations]');
+                return;
+            }
+
+            rows.forEach((item) => {
+                const row = document.createElement('tr');
+                row.dataset.id = item.id;
+                row.innerHTML = `
+                    <td>${escapeHtml(formatDate(item.createdAt))}</td>
+                    <td>
+                        <strong>${escapeHtml(item.fullName || '—')}</strong>
+                        ${item.role ? `<div style="color: var(--gray-500); font-size: 0.85rem;">${escapeHtml(item.role)}</div>` : ''}
+                    </td>
+                    <td>${escapeHtml(item.email || '—')}</td>
+                    <td>
+                        ${renderConferenceRegistrationStatus(item.organizerEmailStatus)}
+                        <div style="color: var(--gray-500); font-size: 0.82rem; margin-top: 4px;">${escapeHtml(item.organizerEmailProvider || '—')}</div>
+                    </td>
+                    <td>
+                        ${renderConferenceRegistrationStatus(item.confirmationEmailStatus)}
+                        <div style="color: var(--gray-500); font-size: 0.82rem; margin-top: 4px;">${escapeHtml(item.confirmationEmailProvider || '—')}</div>
+                    </td>
+                    <td>
+                        ${renderConferenceRegistrationStatus(item.overallStatus)}
+                        ${item.finalError ? `<div style="color: #b91c1c; font-size: 0.82rem; margin-top: 4px;">${escapeHtml(item.finalError)}</div>` : ''}
+                    </td>
+                    <td>
+                        <div class="actions" style="margin:0;">
+                            <button type="button" class="secondary" data-copy-email="${escapeHtml(item.email || '')}">Copia email</button>
+                        </div>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            toggleEmptyState(tableBody, rows.length > 0, '[data-empty-conference-registrations]');
+        }
+
+        async function loadConferenceRegistrations() {
+            const tableBody = document.getElementById('conference-registrations-table-body');
+            if (!tableBody) return;
+            tableBody.querySelectorAll('tr:not([data-empty-conference-registrations])').forEach((row) => row.remove());
+
+            try {
+                const items = await apiRequest('/api/admin/conference-registrations?limit=100');
+                state.conferenceRegistrations = items;
+                renderConferenceRegistrations();
+            } catch (error) {
+                state.conferenceRegistrations = [];
+                toggleEmptyState(tableBody, false, '[data-empty-conference-registrations]');
             }
         }
 
@@ -6892,6 +7013,29 @@ Buono studio!</textarea>
 
         document.getElementById('blog-form').addEventListener('change', () => {
             scheduleBlogDuplicationBannerUpdate();
+        });
+
+        document.getElementById('conference-registrations-refresh').addEventListener('click', () => {
+            loadConferenceRegistrations();
+        });
+
+        document.getElementById('conference-registrations-table-body').addEventListener('click', async (event) => {
+            const copyButton = event.target.closest('button[data-copy-email]');
+            if (!copyButton) return;
+            const email = String(copyButton.dataset.copyEmail || '').trim();
+            if (!email) return;
+            try {
+                await navigator.clipboard.writeText(email);
+                const original = copyButton.textContent;
+                copyButton.textContent = 'Email copiata';
+                setTimeout(() => {
+                    if (document.body.contains(copyButton)) {
+                        copyButton.textContent = original;
+                    }
+                }, 1400);
+            } catch (_error) {
+                showToast('Impossibile copiare l\'email', 'error');
+            }
         });
 
         document.getElementById('blog-table-body').addEventListener('click', async (event) => {

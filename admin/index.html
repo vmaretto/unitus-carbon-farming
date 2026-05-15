@@ -4006,7 +4006,6 @@ Buono studio!</textarea>
                     post,
                     comparison: computeBlogSimilarity(draft, post)
                 }))
-                .filter(({ comparison }) => comparison.percent >= 25)
                 .sort((a, b) => b.comparison.score - a.comparison.score)
                 .slice(0, 3);
         }
@@ -4043,7 +4042,7 @@ Buono studio!</textarea>
                 ? 'Possibile duplicato forte'
                 : top.level === 'medium'
                     ? 'Possibile sovrapposizione'
-                    : 'Somiglianza bassa ma presente';
+                    : 'Sovrapposizione debole';
 
             banner.hidden = false;
             banner.dataset.level = top.level;
@@ -4053,7 +4052,7 @@ Buono studio!</textarea>
                     <span class="blog-duplication-score">${top.percent}%</span>
                 </div>
                 <p class="blog-duplication-banner-summary">
-                    Confronto automatico con ${candidates.length} articolo${candidates.length === 1 ? '' : 'i'} già presenti nel blog.
+                    Confronto automatico con gli articoli già presenti nel blog.
                     Livelli guida: basso sotto 40%, medio tra 40% e 69%, alto da 70% in su.
                 </p>
                 <div class="blog-duplication-list">

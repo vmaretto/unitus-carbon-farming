@@ -64,6 +64,19 @@ const uploadBlogDocx = multer({
     cb(new Error('Carica un file .docx valido'));
   }
 });
+
+const uploadConferenceExcel = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (ext === '.xlsx') {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Carica un file .xlsx valido'));
+  }
+});
 const BUILD_VERSION = '2026-04-10-v25-QUIZ-CONTENT-EXTRACTION'; // Per debug deploy
 
 // Health check
@@ -170,6 +183,211 @@ function truncateText(value, limit = 220) {
 function normalizeConferenceRegistrationError(error) {
   const message = String(error?.message || 'Errore sconosciuto').trim();
   return message.length > 500 ? `${message.slice(0, 497)}...` : message;
+}
+
+function normalizeConferenceExcelHeader(text = '') {
+  return normalizeExtractedText(text)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function excelColumnIndexFromRef(cellRef = '') {
+  const match = String(cellRef).match(/^[A-Z]+/i);
+  if (!match) return -1;
+  let index = 0;
+  for (const char of match[0].toUpperCase()) {
+    index = index * 26 + (char.charCodeAt(0) - 64);
+  }
+  return index - 1;
+}
+
+function normalizeConferenceEmail(value = '') {
+  return normalizeExtractedText(value).toLowerCase();
+}
+
+function getConferenceImportField(row, candidates) {
+  for (const candidate of candidates) {
+    const value = row[candidate];
+    if (value && String(value).trim()) {
+      return String(value).trim();
+    }
+  }
+  return '';
+}
+
+function buildConferenceImportRow(row, rowNumber, sourceFileName) {
+  const fullName = getConferenceImportField(row, [
+    'nome completo',
+    'full name',
+    'nominativo',
+    'nome e cognome',
+    'participant name',
+    'registrant name'
+  ]);
+  const firstName = getConferenceImportField(row, [
+    'nome',
+    'first name',
+    'given name'
+  ]);
+  const lastName = getConferenceImportField(row, [
+    'cognome',
+    'last name',
+    'surname'
+  ]);
+  const email = normalizeConferenceEmail(getConferenceImportField(row, [
+    'email',
+    'e mail',
+    'e-mail',
+    'mail'
+  ]));
+  const phone = getConferenceImportField(row, [
+    'telefono',
+    'cellulare',
+    'mobile',
+    'phone'
+  ]);
+  const organization = getConferenceImportField(row, [
+    'ente',
+    'organizzazione',
+    'azienda',
+    'company',
+    'organization',
+    'istituzione',
+    'affiliation'
+  ]);
+  const role = getConferenceImportField(row, [
+    'ruolo',
+    'position',
+    'job title',
+    'incarico'
+  ]);
+  const note = getConferenceImportField(row, [
+    'note',
+    'messaggio',
+    'commenti',
+    'comments',
+    'osservazioni'
+  ]);
+
+  const mergedName = fullName || [firstName, lastName].filter(Boolean).join(' ').trim() || firstName || lastName;
+  if (!email || !mergedName) return null;
+
+  return {
+    fullName: mergedName,
+    email,
+    phone: phone || null,
+    organization: organization || null,
+    role: role || null,
+    note: note || null,
+    sourceFileName,
+    sourceRowNumber: rowNumber
+  };
+}
+
+async function parseConferenceRegistrationsFromXlsx(buffer, sourceFileName = 'import.xlsx') {
+  const zip = await JSZip.loadAsync(buffer);
+  const sharedStringsXml = zip.file('xl/sharedStrings.xml')
+    ? await zip.file('xl/sharedStrings.xml').async('string')
+    : '';
+  const sharedStrings = [];
+  let sharedMatch;
+  const sharedRegex = /<t[^>]*>([\s\S]*?)<\/t>/g;
+  while ((sharedMatch = sharedRegex.exec(sharedStringsXml)) !== null) {
+    sharedStrings.push(decodeXmlEntities(sharedMatch[1]));
+  }
+
+  const sheetFiles = Object.keys(zip.files)
+    .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+    .sort((a, b) => {
+      const left = Number(a.match(/sheet(\d+)\.xml$/)?.[1] || 0);
+      const right = Number(b.match(/sheet(\d+)\.xml$/)?.[1] || 0);
+      return left - right;
+    });
+
+  if (!sheetFiles.length) {
+    return { rows: [], warnings: ['Il file Excel non contiene fogli leggibili.'] };
+  }
+
+  const xml = await zip.file(sheetFiles[0]).async('string');
+  const parsedRows = [];
+  const rowRegex = /<row\b[^>]*r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g;
+  let rowMatch;
+
+  while ((rowMatch = rowRegex.exec(xml)) !== null) {
+    const rowNumber = Number(rowMatch[1]);
+    const rowXml = rowMatch[2];
+    const cells = [];
+    const cellRegex = /<c\b([^>]*)>([\s\S]*?)<\/c>/g;
+    let cellMatch;
+
+    while ((cellMatch = cellRegex.exec(rowXml)) !== null) {
+      const attrs = cellMatch[1];
+      const body = cellMatch[2];
+      const ref = attrs.match(/r="([A-Z]+[0-9]+)"/i)?.[1];
+      if (!ref) continue;
+
+      const cellType = attrs.match(/t="([^"]+)"/i)?.[1] || '';
+      let value = '';
+
+      if (cellType === 'inlineStr') {
+        const inlineTexts = [];
+        const inlineRegex = /<t[^>]*>([\s\S]*?)<\/t>/g;
+        let inlineMatch;
+        while ((inlineMatch = inlineRegex.exec(body)) !== null) {
+          inlineTexts.push(decodeXmlEntities(inlineMatch[1]));
+        }
+        value = inlineTexts.join('');
+      } else {
+        const vMatch = body.match(/<v>([\s\S]*?)<\/v>/);
+        if (vMatch) {
+          value = decodeXmlEntities(vMatch[1]);
+          if (cellType === 's') {
+            const idx = Number(value);
+            value = Number.isInteger(idx) && sharedStrings[idx] ? sharedStrings[idx] : '';
+          } else if (cellType === 'b') {
+            value = value === '1' ? 'TRUE' : 'FALSE';
+          }
+        }
+      }
+
+      const index = excelColumnIndexFromRef(ref);
+      if (index >= 0) {
+        cells[index] = normalizeExtractedText(value || '');
+      }
+    }
+
+    if (cells.some((cell) => String(cell || '').trim())) {
+      parsedRows.push({ rowNumber, cells });
+    }
+  }
+
+  const headerRow = parsedRows[0];
+  if (!headerRow) {
+    return { rows: [], warnings: ['Il file Excel non contiene righe importabili.'] };
+  }
+
+  const headers = headerRow.cells.map((header, index) => normalizeConferenceExcelHeader(header || `col_${index + 1}`));
+  const importRows = [];
+  const warnings = [];
+
+  parsedRows.slice(1).forEach((row) => {
+    const rowValues = {};
+    headers.forEach((header, index) => {
+      if (!header) return;
+      rowValues[header] = normalizeExtractedText(row.cells[index] || '');
+    });
+    const parsedRow = buildConferenceImportRow(rowValues, row.rowNumber, sourceFileName);
+    if (parsedRow) {
+      importRows.push(parsedRow);
+    } else if (Object.values(rowValues).some((value) => String(value || '').trim())) {
+      warnings.push(`Riga ${row.rowNumber} saltata: manca nome o email.`);
+    }
+  });
+
+  return { rows: importRows, warnings };
 }
 
 async function createConferenceRegistrationTracking(data) {
@@ -348,31 +566,138 @@ app.get('/api/admin/conference-registrations', requireAdmin, async (req, res) =>
 
   try {
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
-    const { rows } = await pool.query(
-      `
-      SELECT id, full_name AS "fullName", email, phone, organization, role, note,
-             organizer_email_status AS "organizerEmailStatus",
-             organizer_email_provider AS "organizerEmailProvider",
-             organizer_email_error AS "organizerEmailError",
-             organizer_email_sent_at AS "organizerEmailSentAt",
-             confirmation_email_status AS "confirmationEmailStatus",
-             confirmation_email_provider AS "confirmationEmailProvider",
-             confirmation_email_error AS "confirmationEmailError",
-             confirmation_email_sent_at AS "confirmationEmailSentAt",
-             overall_status AS "overallStatus",
-             final_error AS "finalError",
-             created_at AS "createdAt",
-             updated_at AS "updatedAt"
-      FROM conference_registrations
-      ORDER BY created_at DESC
-      LIMIT $1
-      `,
-      [limit]
-    );
+    const [trackedResult, importedResult] = await Promise.all([
+      pool.query(
+        `
+        SELECT id, full_name AS "fullName", email, phone, organization, role, note,
+               organizer_email_status AS "organizerEmailStatus",
+               organizer_email_provider AS "organizerEmailProvider",
+               organizer_email_error AS "organizerEmailError",
+               organizer_email_sent_at AS "organizerEmailSentAt",
+               confirmation_email_status AS "confirmationEmailStatus",
+               confirmation_email_provider AS "confirmationEmailProvider",
+               confirmation_email_error AS "confirmationEmailError",
+               confirmation_email_sent_at AS "confirmationEmailSentAt",
+               overall_status AS "overallStatus",
+               final_error AS "finalError",
+               created_at AS "createdAt",
+               updated_at AS "updatedAt",
+               'tracked'::text AS "recordType",
+               'Registrazione da form'::text AS "sourceLabel"
+        FROM conference_registrations
+        ORDER BY created_at DESC
+        LIMIT $1
+        `,
+        [limit]
+      ),
+      pool.query(
+        `
+        SELECT id, full_name AS "fullName", email, phone, organization, role, note,
+               NULL::text AS "organizerEmailStatus",
+               NULL::text AS "organizerEmailProvider",
+               NULL::text AS "organizerEmailError",
+               NULL::timestamptz AS "organizerEmailSentAt",
+               NULL::text AS "confirmationEmailStatus",
+               NULL::text AS "confirmationEmailProvider",
+               NULL::text AS "confirmationEmailError",
+               NULL::timestamptz AS "confirmationEmailSentAt",
+               'imported'::text AS "overallStatus",
+               NULL::text AS "finalError",
+               created_at AS "createdAt",
+               updated_at AS "updatedAt",
+               'imported'::text AS "recordType",
+               source_file_name AS "sourceLabel"
+        FROM conference_registration_imports
+        ORDER BY created_at DESC
+        LIMIT $1
+        `,
+        [limit]
+      )
+    ]);
+    const rows = [...trackedResult.rows, ...importedResult.rows]
+      .sort((a, b) => {
+        const left = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const right = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return right - left;
+      })
+      .slice(0, limit);
     res.json(rows);
   } catch (error) {
     console.error('Error fetching conference registrations', error);
     res.status(500).json({ error: 'Unable to retrieve conference registrations' });
+  }
+});
+
+app.post('/api/admin/conference-registrations/import-xlsx', requireAdmin, uploadConferenceExcel.single('file'), async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ error: 'Carica un file .xlsx valido' });
+    }
+
+    const sourceFileName = req.file.originalname || 'import.xlsx';
+    const parsed = await parseConferenceRegistrationsFromXlsx(req.file.buffer, sourceFileName);
+    const warnings = [...(parsed.warnings || [])];
+    if (!parsed.rows.length) {
+      return res.status(400).json({ error: 'Il file Excel non contiene righe importabili', warnings });
+    }
+
+    const [trackedEmailsResult, importedEmailsResult] = await Promise.all([
+      pool.query('SELECT LOWER(email) AS email FROM conference_registrations WHERE email IS NOT NULL'),
+      pool.query('SELECT LOWER(email) AS email FROM conference_registration_imports WHERE email IS NOT NULL')
+    ]);
+    const knownEmails = new Set([
+      ...trackedEmailsResult.rows.map((row) => normalizeConferenceEmail(row.email)).filter(Boolean),
+      ...importedEmailsResult.rows.map((row) => normalizeConferenceEmail(row.email)).filter(Boolean)
+    ]);
+
+    let importedCount = 0;
+    const skippedRows = [];
+
+    for (const row of parsed.rows) {
+      if (!row.email) {
+        skippedRows.push({ rowNumber: row.sourceRowNumber, reason: 'missing_email' });
+        continue;
+      }
+      if (knownEmails.has(row.email)) {
+        skippedRows.push({ rowNumber: row.sourceRowNumber, email: row.email, reason: 'duplicate_email' });
+        continue;
+      }
+
+      const id = uuidv4();
+      await pool.query(
+        `
+        INSERT INTO conference_registration_imports
+          (id, full_name, email, phone, organization, role, note, source_file_name, source_row_number, created_at, updated_at)
+        VALUES
+          ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+        `,
+        [
+          id,
+          row.fullName,
+          row.email,
+          row.phone,
+          row.organization,
+          row.role,
+          row.note,
+          row.sourceFileName,
+          row.sourceRowNumber
+        ]
+      );
+      knownEmails.add(row.email);
+      importedCount += 1;
+    }
+
+    res.json({
+      imported: importedCount,
+      skipped: skippedRows.length,
+      warnings,
+      skippedRows
+    });
+  } catch (error) {
+    console.error('Error importing conference registrations from xlsx', error);
+    res.status(500).json({ error: 'Unable to import conference registrations', detail: error.message });
   }
 });
 
@@ -2638,6 +2963,22 @@ async function initDatabase() {
   await pool.query(`
     ALTER TABLE conference_registrations
     ADD COLUMN IF NOT EXISTS final_error TEXT;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS conference_registration_imports (
+      id UUID PRIMARY KEY,
+      full_name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT,
+      organization TEXT,
+      role TEXT,
+      note TEXT,
+      source_file_name TEXT,
+      source_row_number INTEGER,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
   const { rows: facultyCountRows } = await pool.query('SELECT COUNT(*)::INT AS count FROM faculty;');

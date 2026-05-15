@@ -1,12 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const JSZip = require('jszip');
 
 const { FakeBlogPool } = require('./helpers');
 const apiModule = require('../api/index.js');
 
-function findPostRoute(path) {
+function findRoute(path, method = 'post') {
   return apiModule.app._router.stack.find((entry) => {
-    return entry?.route?.path === path && entry.route.methods.post;
+    return entry?.route?.path === path && entry.route.methods[method];
   });
 }
 
@@ -34,6 +35,10 @@ function createRes() {
         this.redirectLocation = statusOrUrl;
       }
       return this;
+    },
+    json(payload) {
+      this.body = payload;
+      return this;
     }
   };
 }
@@ -51,7 +56,7 @@ test('POST /api/conference-registration invia le email e reindirizza alla confer
     apiModule.__setConferenceRegistrationEmailSender(null);
   });
 
-  const layer = findPostRoute('/api/conference-registration');
+  const layer = findRoute('/api/conference-registration', 'post');
   assert.ok(layer, 'route /api/conference-registration non trovata');
 
   const req = {
@@ -87,4 +92,104 @@ test('POST /api/conference-registration invia le email e reindirizza alla confer
   assert.equal(tracking.organizer_email_status, 'sent');
   assert.equal(tracking.confirmation_email_status, 'sent');
   assert.equal(tracking.overall_status, 'sent');
+});
+
+async function buildConferenceXlsxBuffer() {
+  const zip = new JSZip();
+  const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1">
+      <c r="A1" t="inlineStr"><is><t>Nome</t></is></c>
+      <c r="B1" t="inlineStr"><is><t>Cognome</t></is></c>
+      <c r="C1" t="inlineStr"><is><t>Email</t></is></c>
+      <c r="D1" t="inlineStr"><is><t>Telefono</t></is></c>
+      <c r="E1" t="inlineStr"><is><t>Ente</t></is></c>
+      <c r="F1" t="inlineStr"><is><t>Ruolo</t></is></c>
+      <c r="G1" t="inlineStr"><is><t>Note</t></is></c>
+    </row>
+    <row r="2">
+      <c r="A2" t="inlineStr"><is><t>Maria</t></is></c>
+      <c r="B2" t="inlineStr"><is><t>Rossi</t></is></c>
+      <c r="C2" t="inlineStr"><is><t>maria.rossi@example.com</t></is></c>
+      <c r="D2" t="inlineStr"><is><t>3331112222</t></is></c>
+      <c r="E2" t="inlineStr"><is><t>Universita</t></is></c>
+      <c r="F2" t="inlineStr"><is><t>Ricercatrice</t></is></c>
+      <c r="G2" t="inlineStr"><is><t>Importata da Excel</t></is></c>
+    </row>
+    <row r="3">
+      <c r="A3" t="inlineStr"><is><t>Virgilio</t></is></c>
+      <c r="B3" t="inlineStr"><is><t>Maretto</t></is></c>
+      <c r="C3" t="inlineStr"><is><t>vmaretto@example.com</t></is></c>
+      <c r="D3" t="inlineStr"><is><t>123456789</t></is></c>
+      <c r="E3" t="inlineStr"><is><t>UNITUS</t></is></c>
+      <c r="F3" t="inlineStr"><is><t>CEO</t></is></c>
+      <c r="G3" t="inlineStr"><is><t>Duplicata del tracking</t></is></c>
+    </row>
+  </sheetData>
+</worksheet>`;
+  zip.file('xl/worksheets/sheet1.xml', xml);
+  return zip.generateAsync({ type: 'nodebuffer' });
+}
+
+test('POST /api/admin/conference-registrations/import-xlsx importa righe nuove e salta i duplicati', async (t) => {
+  const pool = new FakeBlogPool();
+  apiModule.__setPool(pool);
+  t.after(() => {
+    apiModule.__setPool(null);
+  });
+
+  pool.conferenceRegistrations.push({
+    id: 'tracked-1',
+    full_name: 'Virgilio Maretto',
+    email: 'vmaretto@example.com',
+    phone: '123456789',
+    organization: 'UNITUS',
+    role: 'CEO',
+    note: 'Tracciata dal form',
+    organizer_email_status: 'sent',
+    organizer_email_provider: 'resend',
+    organizer_email_error: null,
+    organizer_email_sent_at: new Date().toISOString(),
+    confirmation_email_status: 'sent',
+    confirmation_email_provider: 'resend',
+    confirmation_email_error: null,
+    confirmation_email_sent_at: new Date().toISOString(),
+    overall_status: 'sent',
+    final_error: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  });
+
+  const buffer = await buildConferenceXlsxBuffer();
+  const layer = findRoute('/api/admin/conference-registrations/import-xlsx', 'post');
+  assert.ok(layer, 'route /api/admin/conference-registrations/import-xlsx non trovata');
+
+  const req = {
+    method: 'POST',
+    url: '/api/admin/conference-registrations/import-xlsx',
+    file: {
+      originalname: 'registrazioni.xlsx',
+      buffer
+    },
+    headers: {}
+  };
+  const res = createRes();
+
+  await layer.route.stack[layer.route.stack.length - 1].handle(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.imported, 1);
+  assert.equal(res.body.skipped, 1);
+  assert.equal(pool.conferenceRegistrationImports.length, 1);
+  assert.equal(pool.conferenceRegistrationImports[0].email, 'maria.rossi@example.com');
+
+  const listLayer = findRoute('/api/admin/conference-registrations', 'get');
+  assert.ok(listLayer, 'route /api/admin/conference-registrations non trovata');
+  const listRes = createRes();
+  await listLayer.route.stack[listLayer.route.stack.length - 1].handle({ method: 'GET', url: '/api/admin/conference-registrations', query: { limit: '50' }, headers: {} }, listRes);
+  assert.equal(listRes.statusCode, 200);
+  assert.equal(listRes.body.length, 2);
+  assert.ok(listRes.body.some((row) => row.recordType === 'tracked'));
+  assert.ok(listRes.body.some((row) => row.recordType === 'imported'));
 });

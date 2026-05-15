@@ -3237,11 +3237,25 @@ Buono studio!</textarea>
             <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:16px;">
                 <button type="button" class="secondary" id="conference-registrations-refresh">Aggiorna elenco</button>
                 <a class="secondary" href="/conferenza-26-maggio-2026.html" target="_blank" rel="noopener" style="text-decoration:none; display:inline-flex; align-items:center;">Apri pagina pubblica</a>
+                <a class="secondary" href="https://resend.com" target="_blank" rel="noopener" style="text-decoration:none; display:inline-flex; align-items:center;">Apri Resend</a>
+                <a class="secondary" href="https://app.brevo.com" target="_blank" rel="noopener" style="text-decoration:none; display:inline-flex; align-items:center;">Apri Brevo</a>
             </div>
 
             <div class="subsection-card" style="margin-bottom:18px;">
                 <strong>Stato tracciamento</strong>
                 <p style="margin:8px 0 0; color: var(--gray-600);">Le nuove registrazioni vengono salvate nella tabella <code>conference_registrations</code> con stato per email organizzatore e conferma partecipante.</p>
+            </div>
+
+            <div class="subsection-card" style="margin-bottom:18px;">
+                <strong>Importa da Excel</strong>
+                <p style="margin:8px 0 0; color: var(--gray-600);">Carica un file <code>.xlsx</code> con colonne tipo nome, cognome, email, telefono, ente, ruolo e note. Le righe importate si aggiungono alla lista accanto a quelle tracciate dal form.</p>
+                <form id="conference-registrations-import-form" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-top:16px;">
+                    <label style="min-width:280px;">
+                        File Excel
+                        <input type="file" id="conference-registrations-import-file" accept=".xlsx" required>
+                    </label>
+                    <button type="submit" class="primary" id="conference-registrations-import-submit">Importa elenco</button>
+                </form>
             </div>
 
             <div class="table-wrapper">
@@ -3251,6 +3265,7 @@ Buono studio!</textarea>
                             <th>Data</th>
                             <th>Nome</th>
                             <th>Email</th>
+                            <th>Fonte</th>
                             <th>Organizzatore</th>
                             <th>Conferma</th>
                             <th>Stato</th>
@@ -3259,7 +3274,7 @@ Buono studio!</textarea>
                     </thead>
                     <tbody id="conference-registrations-table-body">
                         <tr class="empty-state" data-empty-conference-registrations>
-                            <td colspan="7">Nessuna registrazione ancora tracciata.</td>
+                            <td colspan="8">Nessuna registrazione ancora tracciata.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -4478,15 +4493,36 @@ Buono studio!</textarea>
                 sent: 'Inviata',
                 pending: 'In attesa',
                 partial: 'Parziale',
-                failed: 'Errore'
+                failed: 'Errore',
+                imported: 'Importata'
             };
             const colorMap = {
                 sent: 'published',
                 pending: 'draft',
                 partial: 'draft',
-                failed: 'draft'
+                failed: 'draft',
+                imported: 'draft'
             };
             return `<span class="status-pill" data-status="${colorMap[normalized] || 'draft'}">${labelMap[normalized] || 'In attesa'}</span>`;
+        }
+
+        function renderConferenceRegistrationSource(item) {
+            const isImported = String(item.recordType || '') === 'imported';
+            const label = isImported ? 'Excel' : 'Tracciata';
+            const description = isImported
+                ? (item.sourceLabel || 'Importazione manuale')
+                : (item.sourceLabel || 'Registrazione da form');
+            return `
+                <span class="status-pill" data-status="${isImported ? 'draft' : 'published'}">${label}</span>
+                <div style="color: var(--gray-500); font-size: 0.82rem; margin-top: 4px;">${escapeHtml(description)}</div>
+            `;
+        }
+
+        function renderConferenceRegistrationOverallStatus(item) {
+            if (String(item.recordType || '') === 'imported') {
+                return renderConferenceRegistrationStatus('imported');
+            }
+            return renderConferenceRegistrationStatus(item.overallStatus);
         }
 
         function renderConferenceRegistrations() {
@@ -4511,15 +4547,20 @@ Buono studio!</textarea>
                     </td>
                     <td>${escapeHtml(item.email || '—')}</td>
                     <td>
-                        ${renderConferenceRegistrationStatus(item.organizerEmailStatus)}
-                        <div style="color: var(--gray-500); font-size: 0.82rem; margin-top: 4px;">${escapeHtml(item.organizerEmailProvider || '—')}</div>
+                        ${renderConferenceRegistrationSource(item)}
                     </td>
                     <td>
-                        ${renderConferenceRegistrationStatus(item.confirmationEmailStatus)}
-                        <div style="color: var(--gray-500); font-size: 0.82rem; margin-top: 4px;">${escapeHtml(item.confirmationEmailProvider || '—')}</div>
+                        ${String(item.recordType || '') === 'imported'
+                            ? '—'
+                            : `${renderConferenceRegistrationStatus(item.organizerEmailStatus)}<div style="color: var(--gray-500); font-size: 0.82rem; margin-top: 4px;">${escapeHtml(item.organizerEmailProvider || '—')}</div>`}
                     </td>
                     <td>
-                        ${renderConferenceRegistrationStatus(item.overallStatus)}
+                        ${String(item.recordType || '') === 'imported'
+                            ? '—'
+                            : `${renderConferenceRegistrationStatus(item.confirmationEmailStatus)}<div style="color: var(--gray-500); font-size: 0.82rem; margin-top: 4px;">${escapeHtml(item.confirmationEmailProvider || '—')}</div>`}
+                    </td>
+                    <td>
+                        ${renderConferenceRegistrationOverallStatus(item)}
                         ${item.finalError ? `<div style="color: #b91c1c; font-size: 0.82rem; margin-top: 4px;">${escapeHtml(item.finalError)}</div>` : ''}
                     </td>
                     <td>
@@ -7017,6 +7058,46 @@ Buono studio!</textarea>
 
         document.getElementById('conference-registrations-refresh').addEventListener('click', () => {
             loadConferenceRegistrations();
+        });
+
+        document.getElementById('conference-registrations-import-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const fileInput = document.getElementById('conference-registrations-import-file');
+            const submitButton = document.getElementById('conference-registrations-import-submit');
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) {
+                showToast('Seleziona un file Excel', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            submitButton.disabled = true;
+
+            try {
+                const response = await fetch('/api/admin/conference-registrations/import-xlsx', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + adminToken
+                    },
+                    body: formData
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error || 'Import Excel fallito');
+                }
+
+                showToast(`Importate ${data.imported || 0} righe${data.skipped ? `, saltate ${data.skipped}` : ''}`);
+                if (Array.isArray(data.warnings)) {
+                    data.warnings.forEach((warning) => showToast(warning, 'error'));
+                }
+                fileInput.value = '';
+                await loadConferenceRegistrations();
+            } catch (error) {
+                showToast(error.message || 'Import Excel fallito', 'error');
+            } finally {
+                submitButton.disabled = false;
+            }
         });
 
         document.getElementById('conference-registrations-table-body').addEventListener('click', async (event) => {

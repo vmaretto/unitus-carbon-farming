@@ -2,6 +2,7 @@ class FakeBlogPool {
   constructor() {
     this.posts = [];
     this.conferenceRegistrations = [];
+    this.conferenceRegistrationImports = [];
     this.columns = new Set([
       'id',
       'title',
@@ -76,6 +77,19 @@ class FakeBlogPool {
       return { rows: [{ ...row }] };
     }
 
+    if (normalized.startsWith('INSERT INTO conference_registration_imports')) {
+      const columnMatch = normalized.match(/INSERT INTO conference_registration_imports \(([^)]+)\)/i);
+      const columns = columnMatch[1].split(',').map((item) => item.trim());
+      const row = {};
+      columns.forEach((column, index) => {
+        row[column] = params[index];
+      });
+      row.created_at = row.created_at || new Date().toISOString();
+      row.updated_at = row.updated_at || new Date().toISOString();
+      this.conferenceRegistrationImports.push(row);
+      return { rows: [{ ...row }] };
+    }
+
     if (normalized.startsWith('UPDATE conference_registrations SET')) {
       const whereMatch = normalized.match(/WHERE id = \$(\d+)/i);
       const id = whereMatch ? params[Number(whereMatch[1]) - 1] : params[params.length - 1];
@@ -93,6 +107,22 @@ class FakeBlogPool {
       });
       row.updated_at = new Date().toISOString();
       return { rows: [{ ...row }] };
+    }
+
+    if (normalized.startsWith('SELECT LOWER(email) AS email FROM conference_registrations')) {
+      return {
+        rows: this.conferenceRegistrations
+          .filter((row) => row.email)
+          .map((row) => ({ email: String(row.email).toLowerCase() }))
+      };
+    }
+
+    if (normalized.startsWith('SELECT LOWER(email) AS email FROM conference_registration_imports')) {
+      return {
+        rows: this.conferenceRegistrationImports
+          .filter((row) => row.email)
+          .map((row) => ({ email: String(row.email).toLowerCase() }))
+      };
     }
 
     if (normalized.startsWith('SELECT id, full_name AS "fullName"') && normalized.includes('FROM conference_registrations')) {
@@ -122,7 +152,43 @@ class FakeBlogPool {
           overallStatus: row.overall_status,
           finalError: row.final_error,
           createdAt: row.created_at,
-          updatedAt: row.updated_at
+          updatedAt: row.updated_at,
+          recordType: 'tracked',
+          sourceLabel: 'Registrazione da form'
+        }))
+      };
+    }
+
+    if (normalized.startsWith('SELECT id, full_name AS "fullName"') && normalized.includes('FROM conference_registration_imports')) {
+      const rows = [...this.conferenceRegistrationImports].sort((a, b) => {
+        const left = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const right = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return right - left;
+      });
+      const limit = Number(params[0]) || rows.length;
+      return {
+        rows: rows.slice(0, limit).map((row) => ({
+          id: row.id,
+          fullName: row.full_name,
+          email: row.email,
+          phone: row.phone,
+          organization: row.organization,
+          role: row.role,
+          note: row.note,
+          organizerEmailStatus: null,
+          organizerEmailProvider: null,
+          organizerEmailError: null,
+          organizerEmailSentAt: null,
+          confirmationEmailStatus: null,
+          confirmationEmailProvider: null,
+          confirmationEmailError: null,
+          confirmationEmailSentAt: null,
+          overallStatus: 'imported',
+          finalError: null,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          recordType: 'imported',
+          sourceLabel: row.source_file_name
         }))
       };
     }

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pannello Amministrazione - Master in Carbon Farming</title>
     <!-- Cache buster per fix teachers system -->
-    <meta name="cache-version" content="2026-04-29-v24-MANUAL-QUIZ">
+    <meta name="cache-version" content="2026-05-15-v27-BLOB-DIRECT-UPLOAD">
     <!-- Prevent extension conflicts -->
     <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; object-src 'none';">
     <!-- Force cache refresh -->
@@ -2110,7 +2110,7 @@
                                 <input type="file" id="resource-file-input" style="display: none;" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.srt,.vtt,.mp3,.mp4,.m4a,.jpg,.jpeg,.png,.gif">
                             </label>
                         </div>
-                        <small style="color: var(--gray-500); margin-top: 4px; display: block;">Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif. Limite finale 4 MB; i PDF oltre soglia vengono compressi automaticamente se possibile.</small>
+                        <small style="color: var(--gray-500); margin-top: 4px; display: block;">Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif. Limite finale 4 MB. L'upload passa direttamente allo storage per evitare il blocco del serverless.</small>
                         <small id="upload-status" style="color: var(--gray-500); margin-top: 4px; display: block;"></small>
                     </label>
                     <label style="grid-column: 1 / -1;">
@@ -3821,6 +3821,62 @@ Buono studio!</textarea>
             modal.querySelector('[data-upload-modal-close]').addEventListener('click', close);
             document.addEventListener('keydown', escHandler);
             document.body.appendChild(modal);
+        }
+
+        function buildBlobUploadPath(prefix, fileName) {
+            const safeName = (fileName || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+            const extensionMatch = safeName.match(/(\.[^.]+)$/);
+            const extension = extensionMatch ? extensionMatch[1].toLowerCase() : '';
+            const baseName = extension ? safeName.slice(0, -extension.length) : safeName;
+            const randomId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+                ? crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            return `${prefix}/${randomId}-${baseName}${extension}`;
+        }
+
+        async function uploadFileDirectToBlob(file, { prefix, maxSizeBytes, contentType }) {
+            const pathname = buildBlobUploadPath(prefix, file.name);
+            const tokenResponse = await apiRequest('/api/blob/client-token', {
+                method: 'POST',
+                body: JSON.stringify({
+                    pathname,
+                    maximumSizeInBytes: maxSizeBytes,
+                    contentType: contentType || file.type || 'application/octet-stream'
+                })
+            });
+
+            const uploadUrl = tokenResponse.uploadUrl || 'https://vercel.com/api/blob';
+            const requestId = `${pathname}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
+            const response = await fetch(`${uploadUrl}/?pathname=${encodeURIComponent(pathname)}`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${tokenResponse.clientToken}`,
+                    'x-api-version': '12',
+                    'x-api-blob-request-id': requestId,
+                    'x-content-length': String(file.size),
+                    'x-vercel-blob-access': 'public',
+                    'x-content-type': contentType || file.type || 'application/octet-stream'
+                },
+                body: file
+            });
+
+            if (!response.ok) {
+                let errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error?.message || errorData.error || errorMsg;
+                } catch (e) {
+                    // ignore non-JSON responses
+                }
+                throw new Error(errorMsg);
+            }
+
+            const blob = await response.json();
+            return {
+                url: blob.url,
+                pathname: blob.pathname || pathname,
+                filename: file.name
+            };
         }
 
         async function apiRequest(url, options = {}) {
@@ -6748,65 +6804,23 @@ Buono studio!</textarea>
             statusEl.textContent = 'Caricamento in corso...';
             statusEl.style.color = 'var(--orange-500)';
 
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const uploadToken = adminToken || localStorage.getItem('adminToken');
-            if (!uploadToken) {
-                statusEl.textContent = '❌ Sessione scaduta. Ricarica la pagina.';
-                statusEl.style.color = '#dc3545';
-                return;
-            }
-
             try {
-                async function doUpload() {
-                    return await fetch('/api/materials/upload', {
-                        method: 'POST',
-                        headers: { 'Authorization': 'Bearer ' + uploadToken },
-                        body: formData
+                if (file.size > 4 * 1024 * 1024) {
+                    showUploadModal({
+                        title: 'File troppo grande',
+                        message: 'Per le risorse il limite è 4 MB.',
+                        details: [
+                            'Se si tratta di un PDF, prova a comprimerlo prima del caricamento.',
+                            'Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif.'
+                        ]
                     });
+                    throw new Error('File troppo grande (max 4MB).');
                 }
 
-                let res = await doUpload();
-
-                // Retry once on 401/403
-                if (res.status === 401 || res.status === 403) {
-                    await new Promise(r => setTimeout(r, 1000));
-                    res = await doUpload();
-                }
-
-                if (!res.ok) {
-                    let errorMsg = 'Upload fallito';
-                    try {
-                        const errorData = await res.json();
-                        errorMsg = errorData.error || errorMsg;
-                    } catch (e) {
-                        errorMsg = `HTTP ${res.status}: ${res.statusText}`;
-                    }
-                    if (res.status === 413) {
-                        showUploadModal({
-                            title: 'File troppo grande',
-                            message: errorMsg,
-                            details: [
-                                'Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif.'
-                            ]
-                        });
-                        throw new Error(errorMsg);
-                    }
-                    if (errorMsg.toLowerCase().includes('tipo file non supportato')) {
-                        showUploadModal({
-                            title: 'Formato non supportato',
-                            message: 'Il tipo di file selezionato non è consentito.',
-                            details: [
-                                'Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif.'
-                            ]
-                        });
-                        throw new Error(errorMsg);
-                    }
-                    if (res.status === 403) errorMsg = 'Ricarica la pagina e riprova.';
-                    throw new Error(errorMsg);
-                }
-                const data = await res.json();
+                const data = await uploadFileDirectToBlob(file, {
+                    prefix: 'resource-uploads',
+                    maxSizeBytes: 4 * 1024 * 1024
+                });
                 document.getElementById('resource-url').value = data.url;
                 statusEl.textContent = '✅ File caricato: ' + data.filename;
                 statusEl.style.color = 'var(--green-500)';
@@ -8508,7 +8522,7 @@ Buono studio!</textarea>
                             </label>
                             <button type="button" class="secondary" data-add-material>+ Aggiungi alla lezione</button>
                         </div>
-                        <small style="color: var(--gray-500); margin-top: 4px; display: block;">Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif. Limite finale 20 MB per materiali lezione; i PDF più grandi vengono compressi automaticamente se possibile.</small>
+                        <small style="color: var(--gray-500); margin-top: 4px; display: block;">Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif. Limite finale 20 MB per materiali lezione. L'upload passa direttamente allo storage per evitare il blocco del serverless.</small>
                         <small data-material-upload-status style="color: var(--gray-500); margin-top: 4px; display: block;"></small>
                     </div>
                     <input type="hidden" data-field="materials" value="[]">
@@ -8627,46 +8641,23 @@ Buono studio!</textarea>
                 statusEl.textContent = 'Caricamento in corso...';
                 statusEl.style.color = 'var(--orange-500)';
                 addBtn.disabled = true;
-                const formData = new FormData();
-                formData.append('file', file);
                 try {
-                    const res = await fetch('/api/materials/upload', {
-                        method: 'POST',
-                        headers: { 'Authorization': 'Bearer ' + (adminToken || localStorage.getItem('adminToken')) },
-                        body: formData
-                    });
-                    if (!res.ok) {
-                        let errorMsg = 'Upload fallito';
-                        try {
-                            const errorData = await res.json();
-                            errorMsg = errorData.error || errorMsg;
-                        } catch (e) {
-                            // Response is not JSON, use status text
-                            errorMsg = `HTTP ${res.status}: ${res.statusText}`;
-                        }
-                        if (res.status === 413) {
-                            showUploadModal({
-                                title: 'File troppo grande',
-                                message: errorMsg,
-                                details: [
-                                    'Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif.'
-                                ]
-                            });
-                            throw new Error(errorMsg);
-                        }
-                        if (errorMsg.toLowerCase().includes('tipo file non supportato')) {
-                            showUploadModal({
-                                title: 'Formato non supportato',
-                                message: 'Il tipo di file selezionato non è consentito.',
-                                details: [
-                                    'Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif.'
-                                ]
-                            });
-                            throw new Error(errorMsg);
-                        }
-                        throw new Error(errorMsg);
+                    if (file.size > 20 * 1024 * 1024) {
+                        showUploadModal({
+                            title: 'File troppo grande',
+                            message: 'Per i materiali della lezione il limite è 20 MB.',
+                            details: [
+                                'Se il file è un PDF, puoi provare a comprimerlo prima del caricamento.',
+                                'Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif.'
+                            ]
+                        });
+                        throw new Error('File troppo grande (max 20MB).');
                     }
-                    const data = await res.json();
+
+                    const data = await uploadFileDirectToBlob(file, {
+                        prefix: 'lesson-materials',
+                        maxSizeBytes: 20 * 1024 * 1024
+                    });
                     form.querySelector('[data-material-url]').value = data.url;
                     
                     const materialName = data.filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');

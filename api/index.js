@@ -10,7 +10,7 @@ const { promisify } = require('util');
 const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
-const { put } = require('@vercel/blob');
+const { put, generateClientTokenFromReadWriteToken } = require('@vercel/blob');
 const JSZip = require('jszip');
 const { OpenAI } = require('openai');
 const { v2: cloudinary } = require('cloudinary');
@@ -111,6 +111,43 @@ async function prepareCompressibleMaterialUpload(file, finalLimitBytes, uploadLa
 
   return { buffer: fileBuffer, compressed };
 }
+
+app.post('/api/blob/client-token', requireAdminOrTeacher, async (req, res) => {
+  try {
+    const pathname = String(req.body?.pathname || '').trim().replace(/^\/+/, '');
+    if (!pathname) {
+      return res.status(400).json({ error: 'pathname mancante' });
+    }
+
+    const requestedMaxSize = Number(req.body?.maximumSizeInBytes || 0);
+    const maximumSizeInBytes = Number.isFinite(requestedMaxSize) && requestedMaxSize > 0
+      ? Math.min(requestedMaxSize, 50 * 1024 * 1024)
+      : MATERIALS_UPLOAD_FINAL_MAX_BYTES;
+
+    const contentType = String(req.body?.contentType || '').trim() || null;
+    const allowedContentTypes = contentType ? [contentType] : undefined;
+
+    const clientToken = await generateClientTokenFromReadWriteToken({
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+      pathname,
+      maximumSizeInBytes,
+      allowedContentTypes,
+      validUntil: Date.now() + 30 * 60 * 1000,
+      addRandomSuffix: false,
+      allowOverwrite: false
+    });
+
+    res.json({
+      clientToken,
+      uploadUrl: 'https://vercel.com/api/blob',
+      pathname,
+      maximumSizeInBytes
+    });
+  } catch (error) {
+    console.error('Error generating blob client token:', error);
+    res.status(500).json({ error: error.message || 'Impossibile generare il token upload' });
+  }
+});
 
 // Configurazione multer per upload in memoria (per Vercel Blob)
 // Upload per risorse generali (limite 4MB)
@@ -1040,6 +1077,37 @@ function getOptionalAdmin(req) {
 
   const payload = verifyToken(token);
   return payload && payload.role === 'admin' ? payload : null;
+}
+
+function getOptionalTeacher(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = authHeader.slice(7);
+  const payload = verifyToken(token);
+  return payload && payload.role === 'teacher' ? payload : null;
+}
+
+function requireAdminOrTeacher(req, res, next) {
+  if (!ADMIN_PASSWORD) {
+    return res.status(503).json({ error: 'Authentication not configured.' });
+  }
+
+  const admin = getOptionalAdmin(req);
+  if (admin) {
+    req.admin = admin;
+    return next();
+  }
+
+  const teacher = getOptionalTeacher(req);
+  if (teacher) {
+    req.teacher = teacher;
+    return next();
+  }
+
+  return res.status(401).json({ error: 'Authentication required' });
 }
 
 function requireStudent(req, res, next) {

@@ -221,6 +221,35 @@ function dedupeSources(sources = []) {
   });
 }
 
+function buildSourceTitleFromUrl(url = '') {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./i, '');
+    const path = normalizeWhitespace(parsed.pathname).replace(/^\/+|\/+$/g, '');
+    if (!path) return host;
+
+    const segments = path.split('/').filter(Boolean);
+    const lastSegment = segments[segments.length - 1] || '';
+    const readable = lastSegment
+      .replace(/\.(html?|php|aspx?)$/i, '')
+      .replace(/[-_]+/g, ' ')
+      .replace(/%[0-9a-f]{2}/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!readable) return host;
+    if (readable.length > 80) return `${host} / ${readable.slice(0, 80).trim()}`;
+    return `${host} / ${readable}`;
+  } catch (_error) {
+    return normalizeWhitespace(url) || 'Fonte';
+  }
+}
+
+function collectUrlsFromText(value = '') {
+  return String(value)
+    .match(/https?:\/\/[^\s<>"']+/gi) || [];
+}
+
 function extractSources($, nodes = []) {
   const sources = [];
 
@@ -231,6 +260,21 @@ function extractSources($, nodes = []) {
       if (title && url) {
         sources.push({ title, url });
       }
+    });
+
+    const text = normalizeWhitespace($(node).text());
+    if (!text) return;
+
+    const urls = collectUrlsFromText(text);
+    urls.forEach((url) => {
+      const title = normalizeWhitespace(text.replace(url, ''))
+        .replace(/^[•\-–—:]+\s*/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      sources.push({
+        title: title || buildSourceTitleFromUrl(url),
+        url
+      });
     });
   });
 

@@ -65,6 +65,29 @@ test('parseBlogPostsFromHtml gestisce metadati e prompt AI compattati nella stes
   assert.equal(result.posts[0].sources[0].url, 'https://example.com/fonte');
 });
 
+test('parseBlogPostsFromHtml estrae fonti anche quando il Word converte i link in testo semplice', () => {
+  const html = `
+    <p>ARTICOLO 1/1</p>
+    <h1>Test fonti plain text</h1>
+    <h3>Corpo articolo</h3>
+    <p>Contenuto di prova.</p>
+    <h3>Fonti da linkare nell'articolo</h3>
+    <p>• https://example.com/fonte-principale</p>
+    <p>• https://www.example.org/another-source.html</p>
+  `;
+
+  const result = parseBlogPostsFromHtml(html, {
+    now: new Date('2026-05-10T08:00:00.000Z')
+  });
+
+  assert.equal(result.posts.length, 1);
+  assert.equal(result.posts[0].sources.length, 2);
+  assert.equal(result.posts[0].sources[0].url, 'https://example.com/fonte-principale');
+  assert.equal(result.posts[0].sources[0].title, 'example.com / fonte principale');
+  assert.equal(result.posts[0].sources[1].url, 'https://www.example.org/another-source.html');
+  assert.equal(result.posts[0].sources[1].title, 'example.org / another source');
+});
+
 test('parseBlogPostsFromDocxBuffer usa il fallback raw docx quando metadata e prompt non emergono bene dall HTML', async () => {
   const JSZip = require('jszip');
   const zip = new JSZip();

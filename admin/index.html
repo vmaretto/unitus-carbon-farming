@@ -703,6 +703,118 @@
             height: auto;
         }
 
+        .blog-duplication-banner {
+            margin-top: 18px;
+            padding: 16px;
+            border-radius: 18px;
+            border: 1px solid #d1d5db;
+            background: #f8fafc;
+        }
+
+        .blog-duplication-banner[data-level="high"] {
+            border-color: #fca5a5;
+            background: #fef2f2;
+        }
+
+        .blog-duplication-banner[data-level="medium"] {
+            border-color: #fcd34d;
+            background: #fffbeb;
+        }
+
+        .blog-duplication-banner[data-level="low"] {
+            border-color: #93c5fd;
+            background: #eff6ff;
+        }
+
+        .blog-duplication-banner-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .blog-duplication-banner-title {
+            margin: 0;
+            font-size: 0.98rem;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .blog-duplication-score {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 5px 10px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: #1f2937;
+            background: white;
+            border: 1px solid rgba(0,0,0,0.08);
+        }
+
+        .blog-duplication-banner[data-level="high"] .blog-duplication-score {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .blog-duplication-banner[data-level="medium"] .blog-duplication-score {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .blog-duplication-banner[data-level="low"] .blog-duplication-score {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .blog-duplication-banner-summary {
+            margin: 0 0 12px;
+            color: #374151;
+            font-size: 0.92rem;
+            line-height: 1.5;
+        }
+
+        .blog-duplication-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .blog-duplication-item {
+            background: white;
+            border: 1px solid rgba(17, 24, 39, 0.08);
+            border-radius: 14px;
+            padding: 12px 14px;
+        }
+
+        .blog-duplication-item-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 6px;
+        }
+
+        .blog-duplication-item-title {
+            margin: 0;
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: #111827;
+        }
+
+        .blog-duplication-item-meta {
+            font-size: 0.82rem;
+            color: #6b7280;
+        }
+
+        .blog-duplication-item-text {
+            margin: 0;
+            font-size: 0.88rem;
+            color: #374151;
+            line-height: 1.45;
+        }
+
         .blog-preview-footer {
             display: flex;
             justify-content: flex-end;
@@ -1698,6 +1810,8 @@
                         Le fonti importate dal Word vengono mantenute anche in modifica. Se vuoi aggiungerne altre, usa una riga per fonte.
                     </small>
                 </label>
+
+                <div id="blog-duplication-banner" class="blog-duplication-banner" hidden></div>
 
                 <div class="actions">
                     <label class="switch">
@@ -3597,6 +3711,7 @@ Buono studio!</textarea>
             state.editingPostId = null;
             const button = form.querySelector('button.primary');
             button.textContent = button.dataset.defaultText || 'Salva articolo';
+            renderBlogDuplicationBanner({});
         }
 
         function setSelectedBlogImportFile(file) {
@@ -3703,6 +3818,283 @@ Buono studio!</textarea>
             return '—';
         }
 
+        const BLOG_SIMILARITY_STOPWORDS = new Set([
+            'a', 'ad', 'al', 'allo', 'ai', 'agli', 'alla', 'alle', 'di', 'del', 'della', 'dei', 'degli', 'delle',
+            'e', 'ed', 'o', 'od', 'il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'una', 'uno', 'che', 'chi', 'con',
+            'su', 'per', 'tra', 'fra', 'in', 'da', 'dal', 'dalla', 'dai', 'dagli', 'dalle', 'nel', 'nella', 'nei',
+            'nelle', 'nel', 'sul', 'sulla', 'sui', 'sulle', 'nel', 'non', 'piu', 'più', 'del', 'dell', 'dello',
+            'the', 'and', 'for', 'with', 'from', 'via', 'vs'
+        ]);
+
+        function normalizeSimilarityText(value = '') {
+            return String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function tokenizeSimilarityText(value = '') {
+            return normalizeSimilarityText(value)
+                .split(' ')
+                .filter((token) => token.length > 2 && !BLOG_SIMILARITY_STOPWORDS.has(token));
+        }
+
+        function jaccardSimilarity(leftTokens = [], rightTokens = []) {
+            if (!leftTokens.length || !rightTokens.length) return 0;
+            const left = new Set(leftTokens);
+            const right = new Set(rightTokens);
+            let intersection = 0;
+            left.forEach((token) => {
+                if (right.has(token)) intersection += 1;
+            });
+            const union = new Set([...left, ...right]).size;
+            return union ? intersection / union : 0;
+        }
+
+        function htmlToPlainText(value = '') {
+            const container = document.createElement('div');
+            container.innerHTML = String(value || '');
+            return normalizeSimilarityText(container.textContent || container.innerText || '');
+        }
+
+        function normalizeBlogSourceUrl(url = '') {
+            const raw = String(url || '').trim();
+            if (!raw) return '';
+
+            try {
+                const parsed = new URL(raw);
+                parsed.hash = '';
+                parsed.search = '';
+                return parsed.href.replace(/\/$/, '').toLowerCase();
+            } catch (_error) {
+                return raw
+                    .replace(/[#?].*$/, '')
+                    .replace(/\/$/, '')
+                    .toLowerCase();
+            }
+        }
+
+        function extractSourceUrls(post = {}) {
+            return Array.isArray(post.sources)
+                ? post.sources
+                    .map((source) => normalizeBlogSourceUrl(source?.url || ''))
+                    .filter(Boolean)
+                : [];
+        }
+
+        function extractSourceDomains(post = {}) {
+            return extractSourceUrls(post).map((url) => {
+                try {
+                    return new URL(url).hostname.replace(/^www\./i, '').toLowerCase();
+                } catch (_error) {
+                    return normalizeSimilarityText(url);
+                }
+            }).filter(Boolean);
+        }
+
+        function collectBlogSimilarityTokens(post = {}) {
+            const sourceTexts = Array.isArray(post.sources)
+                ? post.sources.flatMap((source) => [source?.title || '', source?.url || ''])
+                : [];
+            return tokenizeSimilarityText([
+                post.title || '',
+                post.excerpt || '',
+                htmlToPlainText(post.content || ''),
+                post.sourceModule || '',
+                Array.isArray(post.tags) ? post.tags.join(' ') : '',
+                ...sourceTexts,
+                ...extractSourceDomains(post)
+            ].join(' '));
+        }
+
+        function collectSharedSources(candidate = {}, existing = {}) {
+            const candidateSources = Array.isArray(candidate.sources) ? candidate.sources : [];
+            const existingSources = Array.isArray(existing.sources) ? existing.sources : [];
+            const candidateUrls = new Map();
+            const candidateDomains = new Map();
+
+            candidateSources.forEach((source) => {
+                const url = normalizeBlogSourceUrl(source?.url || '');
+                const title = String(source?.title || url || 'Fonte').trim();
+                if (url) candidateUrls.set(url, title);
+                try {
+                    const domain = new URL(url).hostname.replace(/^www\./i, '').toLowerCase();
+                    if (domain) candidateDomains.set(domain, title);
+                } catch (_error) {
+                    // ignore malformed URLs
+                }
+            });
+
+            const sharedUrls = [];
+            const sharedDomains = [];
+            existingSources.forEach((source) => {
+                const url = normalizeBlogSourceUrl(source?.url || '');
+                if (url && candidateUrls.has(url)) {
+                    sharedUrls.push(candidateUrls.get(url) || source.title || url);
+                }
+                try {
+                    const domain = new URL(url).hostname.replace(/^www\./i, '').toLowerCase();
+                    if (domain && candidateDomains.has(domain) && !sharedDomains.includes(domain)) {
+                        sharedDomains.push(domain);
+                    }
+                } catch (_error) {
+                    // ignore malformed URLs
+                }
+            });
+
+            return {
+                sharedUrls: Array.from(new Set(sharedUrls)).slice(0, 4),
+                sharedDomains: sharedDomains.slice(0, 4)
+            };
+        }
+
+        function computeBlogSimilarity(candidate = {}, existing = {}) {
+            const titleScore = jaccardSimilarity(
+                tokenizeSimilarityText(candidate.title || ''),
+                tokenizeSimilarityText(existing.title || '')
+            );
+            const excerptScore = jaccardSimilarity(
+                tokenizeSimilarityText(candidate.excerpt || ''),
+                tokenizeSimilarityText(existing.excerpt || '')
+            );
+            const bodyScore = jaccardSimilarity(
+                tokenizeSimilarityText(htmlToPlainText(candidate.content || '')),
+                tokenizeSimilarityText(htmlToPlainText(existing.content || ''))
+            );
+            const tagScore = jaccardSimilarity(
+                tokenizeSimilarityText(Array.isArray(candidate.tags) ? candidate.tags.join(' ') : ''),
+                tokenizeSimilarityText(Array.isArray(existing.tags) ? existing.tags.join(' ') : '')
+            );
+            const sourceTextScore = jaccardSimilarity(
+                collectBlogSimilarityTokens({ ...candidate, content: '', excerpt: '' }),
+                collectBlogSimilarityTokens({ ...existing, content: '', excerpt: '' })
+            );
+
+            const { sharedUrls, sharedDomains } = collectSharedSources(candidate, existing);
+            const exactSourceBoost = sharedUrls.length ? Math.min(1, sharedUrls.length / Math.max(extractSourceUrls(candidate).length || 1, extractSourceUrls(existing).length || 1)) : 0;
+            const domainBoost = sharedDomains.length ? Math.min(0.6, sharedDomains.length * 0.2) : 0;
+            const sourceScore = Math.max(sourceTextScore, exactSourceBoost, domainBoost);
+
+            const weighted = (titleScore * 0.36) + (excerptScore * 0.14) + (bodyScore * 0.22) + (tagScore * 0.1) + (sourceScore * 0.18);
+            const score = Math.max(0, Math.min(1, weighted));
+
+            return {
+                score,
+                percent: Math.round(score * 100),
+                level: score >= 0.7 ? 'high' : score >= 0.4 ? 'medium' : 'low',
+                sharedUrls,
+                sharedDomains
+            };
+        }
+
+        function getBlogDuplicationMatches(draft = {}) {
+            const meaningfulDraft = Boolean(
+                draft &&
+                (draft.title || draft.excerpt || draft.content || draft.sourceModule || (Array.isArray(draft.sources) && draft.sources.length))
+            );
+
+            if (!meaningfulDraft) {
+                return [];
+            }
+
+            return (state.blogPosts || [])
+                .filter((post) => post && post.id !== draft.id)
+                .map((post) => ({
+                    post,
+                    comparison: computeBlogSimilarity(draft, post)
+                }))
+                .filter(({ comparison }) => comparison.percent >= 25)
+                .sort((a, b) => b.comparison.score - a.comparison.score)
+                .slice(0, 3);
+        }
+
+        function buildBlogDraftFromForm() {
+            return {
+                id: state.editingPostId || null,
+                title: document.getElementById('blog-title').value.trim(),
+                slug: document.getElementById('blog-slug').value.trim() || null,
+                excerpt: document.getElementById('blog-excerpt').value.trim() || null,
+                content: document.getElementById('blog-content').value.trim() || null,
+                sourceModule: document.getElementById('blog-source-module').value.trim() || null,
+                sources: parseBlogSourcesInput(document.getElementById('blog-sources').value),
+                tags: [],
+                reviewerTeacherId: document.getElementById('blog-reviewer').value || null
+            };
+        }
+
+        function renderBlogDuplicationBanner(candidate = null, { target = 'form' } = {}) {
+            const banner = document.getElementById('blog-duplication-banner');
+            if (!banner) return [];
+
+            const draft = candidate || buildBlogDraftFromForm();
+            const candidates = getBlogDuplicationMatches(draft);
+
+            if (!candidates.length) {
+                banner.hidden = true;
+                banner.innerHTML = '';
+                return [];
+            }
+
+            const top = candidates[0].comparison;
+            const title = top.level === 'high'
+                ? 'Possibile duplicato forte'
+                : top.level === 'medium'
+                    ? 'Possibile sovrapposizione'
+                    : 'Somiglianza bassa ma presente';
+
+            banner.hidden = false;
+            banner.dataset.level = top.level;
+            banner.innerHTML = `
+                <div class="blog-duplication-banner-head">
+                    <h4 class="blog-duplication-banner-title">${title}</h4>
+                    <span class="blog-duplication-score">${top.percent}%</span>
+                </div>
+                <p class="blog-duplication-banner-summary">
+                    Confronto automatico con ${candidates.length} articolo${candidates.length === 1 ? '' : 'i'} già presenti nel blog.
+                    Livelli guida: basso sotto 40%, medio tra 40% e 69%, alto da 70% in su.
+                </p>
+                <div class="blog-duplication-list">
+                    ${candidates.map(({ post, comparison }) => {
+                        const sharedSources = comparison.sharedUrls.length
+                            ? comparison.sharedUrls
+                            : comparison.sharedDomains.length
+                                ? comparison.sharedDomains.map((domain) => `Dominio: ${domain}`)
+                                : [];
+                        const statusLabel = post.isPublished ? 'Pubblicato' : 'Bozza';
+                        return `
+                            <div class="blog-duplication-item">
+                                <div class="blog-duplication-item-head">
+                                    <div>
+                                        <p class="blog-duplication-item-title">${escapeHtml(post.title || 'Articolo senza titolo')}</p>
+                                        <div class="blog-duplication-item-meta">${escapeHtml(statusLabel)} · ${escapeHtml(formatDate(post.publishedAt))}</div>
+                                    </div>
+                                    <span class="blog-duplication-score">${comparison.percent}%</span>
+                                </div>
+                                ${sharedSources.length ? `<p class="blog-duplication-item-text"><strong>Fonti in comune:</strong> ${escapeHtml(sharedSources.join(' · '))}</p>` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+
+            return candidates;
+        }
+
+        let blogDuplicationTimer = null;
+
+        function scheduleBlogDuplicationBannerUpdate(candidate = null) {
+            if (blogDuplicationTimer) {
+                clearTimeout(blogDuplicationTimer);
+            }
+            blogDuplicationTimer = setTimeout(() => {
+                renderBlogDuplicationBanner(candidate);
+                blogDuplicationTimer = null;
+            }, candidate ? 0 : 120);
+        }
+
         function updateBlogReviewerSelect() {
             const select = document.getElementById('blog-reviewer');
             if (!select) return;
@@ -3772,6 +4164,7 @@ Buono studio!</textarea>
             document.getElementById('blog-reset').hidden = false;
             document.getElementById('blog-form').querySelector('button.primary').textContent = 'Aggiorna articolo';
             state.editingPostId = current.id;
+            scheduleBlogDuplicationBannerUpdate(current);
             document.getElementById('blog-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
             return true;
         }
@@ -3803,6 +4196,7 @@ Buono studio!</textarea>
             }
 
             const sources = Array.isArray(post.sources) ? post.sources : [];
+            const duplicationMatches = getBlogDuplicationMatches(post);
 
             const modal = document.createElement('div');
             modal.id = 'blog-preview-modal';
@@ -3880,6 +4274,34 @@ Buono studio!</textarea>
                                             }).join('')}
                                         </ul>
                                     ` : ''}
+                                </div>
+                            ` : ''}
+
+                            ${duplicationMatches.length ? `
+                                <div class="blog-preview-content">
+                                    <h4>Sovrapposizioni</h4>
+                                    <div class="blog-duplication-list">
+                                        ${duplicationMatches.map(({ post: match, comparison }) => {
+                                            const sharedSources = comparison.sharedUrls.length
+                                                ? comparison.sharedUrls
+                                                : comparison.sharedDomains.length
+                                                    ? comparison.sharedDomains.map((domain) => `Dominio: ${domain}`)
+                                                    : [];
+                                            const statusLabel = match.isPublished ? 'Pubblicato' : 'Bozza';
+                                            return `
+                                                <div class="blog-duplication-item">
+                                                    <div class="blog-duplication-item-head">
+                                                        <div>
+                                                            <p class="blog-duplication-item-title">${escapeHtml(match.title || 'Articolo senza titolo')}</p>
+                                                            <div class="blog-duplication-item-meta">${escapeHtml(statusLabel)} · ${escapeHtml(formatDate(match.publishedAt))}</div>
+                                                        </div>
+                                                        <span class="blog-duplication-score">${comparison.percent}%</span>
+                                                    </div>
+                                                    ${sharedSources.length ? `<p class="blog-duplication-item-text"><strong>Fonti in comune:</strong> ${escapeHtml(sharedSources.join(' · '))}</p>` : ''}
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
                                 </div>
                             ` : ''}
                         </div>
@@ -3988,6 +4410,12 @@ Buono studio!</textarea>
             const importedIds = new Set(state.importedBlogPosts.map((post) => post.id));
             state.importedBlogPosts = allPosts.filter((post) => importedIds.has(post.id));
             renderImportedBlogPosts();
+            if (state.editingPostId) {
+                const current = getBlogPostById(state.editingPostId) || buildBlogDraftFromForm();
+                scheduleBlogDuplicationBannerUpdate(current);
+            } else if (document.getElementById('blog-title').value.trim() || document.getElementById('blog-excerpt').value.trim() || document.getElementById('blog-content').value.trim()) {
+                scheduleBlogDuplicationBannerUpdate();
+            }
         }
 
         function resetPartnerForm() {
@@ -6269,9 +6697,16 @@ Buono studio!</textarea>
                 });
 
                 toggleEmptyState(tableBody, visiblePosts.length > 0, '[data-empty-blog]');
+                if (state.editingPostId) {
+                    const current = getBlogPostById(state.editingPostId) || buildBlogDraftFromForm();
+                    scheduleBlogDuplicationBannerUpdate(current);
+                } else if (document.getElementById('blog-title').value.trim() || document.getElementById('blog-excerpt').value.trim() || document.getElementById('blog-content').value.trim()) {
+                    scheduleBlogDuplicationBannerUpdate();
+                }
             } catch (error) {
                 state.blogPosts = [];
                 toggleEmptyState(tableBody, false, '[data-empty-blog]');
+                renderBlogDuplicationBanner({});
             }
         }
 
@@ -6439,6 +6874,14 @@ Buono studio!</textarea>
             } catch (error) {
                 // handled
             }
+        });
+
+        document.getElementById('blog-form').addEventListener('input', () => {
+            scheduleBlogDuplicationBannerUpdate();
+        });
+
+        document.getElementById('blog-form').addEventListener('change', () => {
+            scheduleBlogDuplicationBannerUpdate();
         });
 
         document.getElementById('blog-table-body').addEventListener('click', async (event) => {

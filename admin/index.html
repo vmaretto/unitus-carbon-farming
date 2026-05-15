@@ -1919,13 +1919,14 @@
                             <th>Pubblicazione</th>
                             <th>Fonte</th>
                             <th>Revisore</th>
+                            <th>Copertina</th>
                             <th>Stato</th>
                             <th style="width: 180px;">Azioni</th>
                         </tr>
                     </thead>
                     <tbody id="blog-table-body">
                         <tr class="empty-state" data-empty-blog>
-                            <td colspan="6">Non ci sono articoli pubblicati o in bozza. Usa il modulo per crearne uno nuovo.</td>
+                            <td colspan="7">Non ci sono articoli pubblicati o in bozza. Usa il modulo per crearne uno nuovo.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -3337,6 +3338,7 @@ Buono studio!</textarea>
             <td data-date></td>
             <td data-source></td>
             <td data-reviewer></td>
+            <td data-cover></td>
             <td data-status></td>
             <td>
                 <div class="actions">
@@ -4232,6 +4234,18 @@ Buono studio!</textarea>
 
             wrapper.hidden = false;
             toggleEmptyState(tableBody, state.importedBlogPosts.length > 0, '[data-empty-blog-import]');
+        }
+
+        function renderBlogCoverStatus(post = {}) {
+            const hasCover = Boolean(post.coverImageUrl);
+            const hasPrompt = Boolean(String(post.coverImagePrompt || '').trim());
+            if (hasCover) {
+                return '<span class="status-pill" data-status="published">Copertina presente</span>';
+            }
+            if (hasPrompt) {
+                return '<span class="status-pill" data-status="draft">Da generare</span>';
+            }
+            return '<span class="status-pill" data-status="draft">Mancante</span>';
         }
 
         function populateBlogForm(postId) {
@@ -6905,6 +6919,10 @@ Buono studio!</textarea>
                     clone.querySelector('[data-date]').textContent = formatDate(post.publishedAt);
                     clone.querySelector('[data-source]').textContent = formatBlogSourceSummary(post);
                     clone.querySelector('[data-reviewer]').textContent = getFacultyDisplayNameById(post.reviewerTeacherId);
+                    const coverCell = clone.querySelector('[data-cover]');
+                    if (coverCell) {
+                        coverCell.innerHTML = renderBlogCoverStatus(post);
+                    }
                     const generateButton = clone.querySelector('[data-generate-cover]');
                     generateButton.disabled = Boolean(post.coverImageUrl);
                     generateButton.textContent = post.coverImageUrl ? 'Cover presente' : 'Genera cover AI';

@@ -23,6 +23,7 @@ test('il menu admin separa Area riservata / Piattaforma e Sito pubblico', () => 
   assert.match(html, /href="#blog" data-section="blog">📝 Blog</);
   assert.match(html, /href="#partners" data-section="partners">🤝 Partner</);
   assert.match(html, /<th>Ruolo<\/th>/);
+  assert.match(html, /<th>Copertina<\/th>/);
   assert.match(html, /👁️ Ospite \(solo consultazione\)/);
   assert.match(html, /Domande inviate/);
   assert.match(html, /Feedback ricevuti/);

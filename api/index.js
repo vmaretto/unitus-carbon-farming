@@ -165,6 +165,50 @@ const uploadSmall = multer({
   }
 });
 
+const compressPdfUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MATERIALS_UPLOAD_INGEST_MAX_BYTES },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_UPLOAD_EXTENSIONS.includes(ext)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error(`Tipo file non supportato. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}`));
+  }
+});
+
+app.post('/api/files/compress-pdf', requireAdminOrTeacher, compressPdfUpload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Nessun file caricato' });
+  }
+
+  if (req.file.mimetype !== 'application/pdf') {
+    return res.status(400).json({ error: 'La compressione è disponibile solo per file PDF.' });
+  }
+
+  try {
+    const result = await compressPdfWithGhostscript(req.file.buffer);
+    const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const compressedName = safeName.replace(/\.pdf$/i, '') + '-compressed.pdf';
+    const outputBuffer = result.buffer;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${compressedName}"`);
+    res.setHeader('X-Original-Size', String(req.file.size));
+    res.setHeader('X-Compressed-Size', String(outputBuffer.length));
+    res.setHeader('X-Compressed-Filename', compressedName);
+    res.setHeader('X-Compression-Applied', outputBuffer.length < req.file.size ? '1' : '0');
+    if (result.preset) {
+      res.setHeader('X-Compression-Preset', result.preset);
+    }
+    return res.send(outputBuffer);
+  } catch (error) {
+    console.error('Error compressing PDF:', error);
+    return res.status(500).json({ error: `Impossibile comprimere il PDF: ${error.message || 'errore sconosciuto'}` });
+  }
+});
+
 // Upload per materiali lezioni e docenti: accetta file più grandi per permettere la compressione PDF
 const uploadMaterials = multer({ 
   storage: multer.memoryStorage(),

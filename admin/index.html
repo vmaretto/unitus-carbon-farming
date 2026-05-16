@@ -2110,7 +2110,7 @@
                                 <input type="file" id="resource-file-input" style="display: none;" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.srt,.vtt,.mp3,.mp4,.m4a,.jpg,.jpeg,.png,.gif">
                             </label>
                         </div>
-                        <small style="color: var(--gray-500); margin-top: 4px; display: block;">Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif. Limite finale 4 MB. L'upload passa direttamente allo storage per evitare il blocco del serverless.</small>
+                        <small style="color: var(--gray-500); margin-top: 4px; display: block;">Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif. Limite finale 4 MB. Se il file è un PDF troppo grande, il sistema può comprimerlo e mostrarti il risultato prima del caricamento.</small>
                         <small id="upload-status" style="color: var(--gray-500); margin-top: 4px; display: block;"></small>
                     </label>
                     <label style="grid-column: 1 / -1;">
@@ -3503,6 +3503,19 @@ Buono studio!</textarea>
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
+        function formatBytes(bytes) {
+            const size = Number(bytes) || 0;
+            if (size < 1024) return `${size} B`;
+            const units = ['KB', 'MB', 'GB'];
+            let value = size / 1024;
+            let unitIndex = 0;
+            while (value >= 1024 && unitIndex < units.length - 1) {
+                value /= 1024;
+                unitIndex += 1;
+            }
+            return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
+        }
+
         function isAuthTransitionError(error) {
             if (!error) return false;
             return error.status === 401 ||
@@ -3823,6 +3836,53 @@ Buono studio!</textarea>
             document.body.appendChild(modal);
         }
 
+        function showChoiceModal({ title, message, details = [], actions = [] }) {
+            return new Promise((resolve) => {
+                const existing = document.getElementById('upload-modal');
+                if (existing) existing.remove();
+                const modal = document.createElement('div');
+                modal.id = 'upload-modal';
+                modal.className = 'upload-modal';
+                const buttons = actions.length ? actions.map((action, index) => `
+                    <button type="button" class="${action.variant === 'primary' ? '' : 'secondary'}" data-upload-modal-action="${index}">
+                        ${escapeHtml(action.label)}
+                    </button>
+                `).join('') : `<button type="button" class="secondary" data-upload-modal-close>Chiudi</button>`;
+                modal.innerHTML = `
+                    <div class="upload-modal-card" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title">
+                        <h3 id="upload-modal-title">${escapeHtml(title)}</h3>
+                        <p>${escapeHtml(message)}</p>
+                        ${details.length ? `<ul>${details.map((detail) => `<li>${escapeHtml(detail)}</li>`).join('')}</ul>` : ''}
+                        <div class="upload-modal-actions">
+                            ${buttons}
+                        </div>
+                    </div>
+                `;
+                const close = (result = null) => {
+                    document.removeEventListener('keydown', escHandler);
+                    modal.remove();
+                    resolve(result);
+                };
+                function escHandler(event) {
+                    if (event.key === 'Escape' && document.body.contains(modal)) {
+                        close(null);
+                    }
+                }
+                modal.addEventListener('click', (event) => {
+                    if (event.target === modal) close(null);
+                });
+                if (actions.length) {
+                    modal.querySelectorAll('[data-upload-modal-action]').forEach((button, index) => {
+                        button.addEventListener('click', () => close(actions[index]?.id || null));
+                    });
+                } else {
+                    modal.querySelector('[data-upload-modal-close]').addEventListener('click', () => close(null));
+                }
+                document.addEventListener('keydown', escHandler);
+                document.body.appendChild(modal);
+            });
+        }
+
         function buildBlobUploadPath(prefix, fileName) {
             const safeName = (fileName || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
             const extensionMatch = safeName.match(/(\.[^.]+)$/);
@@ -3877,6 +3937,148 @@ Buono studio!</textarea>
                 pathname: blob.pathname || pathname,
                 filename: file.name
             };
+        }
+
+        function createFileFromBlob(blob, fileName, mimeType) {
+            if (typeof File !== 'undefined') {
+                return new File([blob], fileName, { type: mimeType || blob.type || 'application/octet-stream' });
+            }
+            const file = blob;
+            file.name = fileName;
+            return file;
+        }
+
+        function downloadBlobFile(blob, fileName) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        async function compressPdfForUpload(file) {
+            const formData = new FormData();
+            formData.append('file', file, file.name);
+            const response = await fetch('/api/files/compress-pdf', {
+                method: 'POST',
+                headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {},
+                body: formData
+            });
+
+            if (!response.ok) {
+                let errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || errorData.message || errorMsg;
+                } catch (e) {
+                    try {
+                        const text = await response.text();
+                        if (text) errorMsg = text;
+                    } catch (err) {
+                        // ignore
+                    }
+                }
+                throw new Error(errorMsg);
+            }
+
+            const blob = await response.blob();
+            const originalSize = Number(response.headers.get('x-original-size') || file.size);
+            const compressedSize = Number(response.headers.get('x-compressed-size') || blob.size);
+            const compressedName = response.headers.get('x-compressed-filename')
+                || file.name.replace(/\.pdf$/i, '-compressed.pdf');
+            const compressedFile = createFileFromBlob(blob, compressedName, 'application/pdf');
+            return {
+                file: compressedFile,
+                originalSize,
+                compressedSize,
+                compressedName,
+                preset: response.headers.get('x-compression-preset') || ''
+            };
+        }
+
+        async function preparePdfUploadCandidate(file, { limitBytes, label }) {
+            const isPdf = (file.type === 'application/pdf') || /\.pdf$/i.test(file.name || '');
+            if (file.size <= limitBytes) {
+                return file;
+            }
+
+            if (!isPdf) {
+                await showUploadModal({
+                    title: 'File troppo grande',
+                    message: `Per ${label} il limite è ${formatBytes(limitBytes)}.`,
+                    details: [
+                        `Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif.`
+                    ]
+                });
+                return null;
+            }
+
+            const action = await showChoiceModal({
+                title: 'PDF troppo grande',
+                message: `Il file supera il limite di ${formatBytes(limitBytes)}. Possiamo comprimerlo e poi decidere se caricare la versione ridotta.`,
+                details: [
+                    'La compressione usa Ghostscript lato server.',
+                    'Se la versione compressa rientra nel limite, puoi caricarla subito.'
+                ],
+                actions: [
+                    { id: 'compress', label: 'Comprimi PDF', variant: 'primary' },
+                    { id: 'cancel', label: 'Annulla', variant: 'secondary' }
+                ]
+            });
+
+            if (action !== 'compress') {
+                return null;
+            }
+
+            const result = await compressPdfForUpload(file);
+
+            if (result.compressedSize <= limitBytes) {
+                const confirm = await showChoiceModal({
+                    title: 'PDF compresso',
+                    message: `Da ${formatBytes(result.originalSize)} a ${formatBytes(result.compressedSize)}.`,
+                    details: [
+                        'Puoi caricare la versione compressa oppure scaricarla sul computer.'
+                    ],
+                    actions: [
+                        { id: 'upload', label: 'Carica PDF compresso', variant: 'primary' },
+                        { id: 'download', label: 'Scarica copia compressa', variant: 'secondary' },
+                        { id: 'cancel', label: 'Annulla', variant: 'secondary' }
+                    ]
+                });
+
+                if (confirm === 'download') {
+                    downloadBlobFile(result.file, result.compressedName || file.name.replace(/\.pdf$/i, '-compressed.pdf'));
+                    return null;
+                }
+
+                if (confirm === 'upload') {
+                    return result.file;
+                }
+
+                return null;
+            }
+
+            await showChoiceModal({
+                title: 'Compressione completata',
+                message: `Il PDF è passato da ${formatBytes(result.originalSize)} a ${formatBytes(result.compressedSize)}, ma resta sopra il limite di ${formatBytes(limitBytes)}.`,
+                details: [
+                    'Non è possibile caricarlo in questa forma.',
+                    'Puoi però scaricare la copia compressa per un controllo manuale.'
+                ],
+                actions: [
+                    { id: 'download', label: 'Scarica copia compressa', variant: 'primary' },
+                    { id: 'close', label: 'Chiudi', variant: 'secondary' }
+                ]
+            }).then((choice) => {
+                if (choice === 'download') {
+                    downloadBlobFile(result.file, result.compressedName || file.name.replace(/\.pdf$/i, '-compressed.pdf'));
+                }
+            });
+
+            return null;
         }
 
         async function apiRequest(url, options = {}) {
@@ -6805,19 +7007,17 @@ Buono studio!</textarea>
             statusEl.style.color = 'var(--orange-500)';
 
             try {
-                if (file.size > 4 * 1024 * 1024) {
-                    showUploadModal({
-                        title: 'File troppo grande',
-                        message: 'Per le risorse il limite è 4 MB.',
-                        details: [
-                            'Se si tratta di un PDF, prova a comprimerlo prima del caricamento.',
-                            'Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif.'
-                        ]
-                    });
-                    throw new Error('File troppo grande (max 4MB).');
+                const uploadCandidate = await preparePdfUploadCandidate(file, {
+                    limitBytes: 4 * 1024 * 1024,
+                    label: 'le risorse'
+                });
+                if (!uploadCandidate) {
+                    statusEl.textContent = '';
+                    statusEl.style.color = 'var(--gray-500)';
+                    return;
                 }
 
-                const data = await uploadFileDirectToBlob(file, {
+                const data = await uploadFileDirectToBlob(uploadCandidate, {
                     prefix: 'resource-uploads',
                     maxSizeBytes: 4 * 1024 * 1024
                 });
@@ -8522,7 +8722,7 @@ Buono studio!</textarea>
                             </label>
                             <button type="button" class="secondary" data-add-material>+ Aggiungi alla lezione</button>
                         </div>
-                        <small style="color: var(--gray-500); margin-top: 4px; display: block;">Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif. Limite finale 20 MB per materiali lezione. L'upload passa direttamente allo storage per evitare il blocco del serverless.</small>
+                        <small style="color: var(--gray-500); margin-top: 4px; display: block;">Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif. Limite finale 20 MB per materiali lezione. Se il PDF supera la soglia, puoi comprimerlo e decidere se caricare la versione compressa.</small>
                         <small data-material-upload-status style="color: var(--gray-500); margin-top: 4px; display: block;"></small>
                     </div>
                     <input type="hidden" data-field="materials" value="[]">
@@ -8634,27 +8834,26 @@ Buono studio!</textarea>
             
             // Upload file per materiali lezione
             form.querySelector('[data-material-file]').addEventListener('change', async (event) => {
-                const file = event.target.files[0];
-                if (!file) return;
-                const statusEl = form.querySelector('[data-material-upload-status]');
-                const addBtn = form.querySelector('[data-add-material]');
-                statusEl.textContent = 'Caricamento in corso...';
-                statusEl.style.color = 'var(--orange-500)';
-                addBtn.disabled = true;
-                try {
-                    if (file.size > 20 * 1024 * 1024) {
-                        showUploadModal({
-                            title: 'File troppo grande',
-                            message: 'Per i materiali della lezione il limite è 20 MB.',
-                            details: [
-                                'Se il file è un PDF, puoi provare a comprimerlo prima del caricamento.',
-                                'Formati ammessi: .pdf, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .txt, .md, .srt, .vtt, .mp3, .mp4, .m4a, .jpg, .jpeg, .png, .gif.'
-                            ]
-                        });
-                        throw new Error('File troppo grande (max 20MB).');
+            const file = event.target.files[0];
+            if (!file) return;
+            const statusEl = form.querySelector('[data-material-upload-status]');
+            const addBtn = form.querySelector('[data-add-material]');
+            statusEl.textContent = 'Caricamento in corso...';
+            statusEl.style.color = 'var(--orange-500)';
+            addBtn.disabled = true;
+            try {
+                    const uploadCandidate = await preparePdfUploadCandidate(file, {
+                        limitBytes: 20 * 1024 * 1024,
+                        label: 'i materiali della lezione'
+                    });
+                    if (!uploadCandidate) {
+                        statusEl.textContent = '';
+                        statusEl.style.color = 'var(--gray-500)';
+                        addBtn.disabled = false;
+                        return;
                     }
 
-                    const data = await uploadFileDirectToBlob(file, {
+                    const data = await uploadFileDirectToBlob(uploadCandidate, {
                         prefix: 'lesson-materials',
                         maxSizeBytes: 20 * 1024 * 1024
                     });

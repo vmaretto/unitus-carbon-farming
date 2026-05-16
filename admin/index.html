@@ -3499,6 +3499,8 @@ Buono studio!</textarea>
         const mobileHeaderEl = document.querySelector('.mobile-header');
         const sidebarLinks = Array.from(document.querySelectorAll('.sidebar-nav a[data-section]'));
         let adminBootstrapPromise = null;
+        let runtimeConfigPromise = null;
+        let runtimeConfig = null;
 
         function sleep(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
@@ -3518,6 +3520,22 @@ Buono studio!</textarea>
                 if (!Number.isFinite(mb) || mb <= 0) return `${value} bytes`;
                 return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
             });
+        }
+
+        async function getRuntimeConfig() {
+            if (runtimeConfig) return runtimeConfig;
+            if (!runtimeConfigPromise) {
+                runtimeConfigPromise = apiRequest('/api/storage/status', { suppressErrors: true })
+                    .then((data) => {
+                        runtimeConfig = data || {};
+                        return runtimeConfig;
+                    })
+                    .catch(() => {
+                        runtimeConfig = {};
+                        return runtimeConfig;
+                    });
+            }
+            return runtimeConfigPromise;
         }
 
         function isAuthTransitionError(error) {
@@ -3963,7 +3981,63 @@ Buono studio!</textarea>
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
 
+        async function compressPdfWithWorker(file, workerUrl) {
+            const normalizedBase = String(workerUrl || '').trim().replace(/\/+$/, '');
+            if (!normalizedBase) {
+                throw new Error('Worker PDF non configurato.');
+            }
+
+            const formData = new FormData();
+            formData.append('file', file, file.name);
+
+            const response = await fetch(`${normalizedBase}/compress-pdf`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                let errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || errorData.message || errorMsg;
+                } catch (e) {
+                    try {
+                        const text = await response.text();
+                        if (text) errorMsg = text;
+                    } catch (err) {
+                        // ignore
+                    }
+                }
+                throw new Error(normalizeUploadErrorMessage(errorMsg));
+            }
+
+            const blob = await response.blob();
+            const originalSize = Number(response.headers.get('x-original-size') || file.size);
+            const compressedSize = Number(response.headers.get('x-compressed-size') || blob.size);
+            const compressedName = response.headers.get('x-compressed-filename')
+                || file.name.replace(/\.pdf$/i, '-compressed.pdf');
+            const compressedFile = createFileFromBlob(blob, compressedName, 'application/pdf');
+            return {
+                file: compressedFile,
+                originalSize,
+                compressedSize,
+                compressedName,
+                preset: response.headers.get('x-compression-preset') || 'ghostscript-worker'
+            };
+        }
+
         async function compressPdfForUpload(file) {
+            const config = await getRuntimeConfig();
+            const workerUrl = config.pdfCompressionWorkerUrl || '';
+
+            if (workerUrl) {
+                try {
+                    return await compressPdfWithWorker(file, workerUrl);
+                } catch (workerError) {
+                    console.warn('PDF worker compression failed, falling back to browser PDF compression:', workerError);
+                }
+            }
+
             if (!window.PDFLib || !window.PDFLib.PDFDocument) {
                 throw new Error('Compressione PDF non disponibile nel browser.');
             }

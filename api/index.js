@@ -157,63 +157,6 @@ const uploadMaterials = multer({
   }
 });
 
-app.post('/api/files/compress-pdf', requireAdminOrTeacher, uploadMaterials.single('file'), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'Nessun file caricato' });
-  }
-
-  try {
-    const result = await compressPdfWithPdfLib(req.file.buffer);
-    const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const compressedName = safeName.replace(/\.pdf$/i, '') + '-compressed.pdf';
-    const tempPathname = `temp-pdf-compression/${uuidv4()}-${compressedName}`;
-
-    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!blobToken) {
-      return res.status(500).json({ error: 'Storage non configurato (BLOB_READ_WRITE_TOKEN mancante).' });
-    }
-
-    const blob = await put(tempPathname, result.buffer, {
-      access: 'public',
-      addRandomSuffix: false,
-      contentType: 'application/pdf',
-      token: blobToken
-    });
-
-    return res.json({
-      tempUrl: blob.url,
-      tempPathname: blob.pathname,
-      filename: req.file.originalname,
-      compressedName,
-      originalSize: req.file.size,
-      compressedSize: result.buffer.length,
-      compressionApplied: result.buffer.length < req.file.size,
-      compressionEngine: result.preset
-    });
-  } catch (error) {
-    console.error('Error compressing PDF:', error);
-    return res.status(500).json({ error: `Impossibile comprimere il PDF: ${error.message || 'errore sconosciuto'}` });
-  }
-});
-
-app.post('/api/files/compress-pdf/cleanup', requireAdminOrTeacher, async (req, res) => {
-  const pathname = String(req.body?.pathname || '').trim();
-  if (!pathname) {
-    return res.status(400).json({ error: 'pathname mancante' });
-  }
-
-  try {
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      return res.status(500).json({ error: 'Storage non configurato (BLOB_READ_WRITE_TOKEN mancante).' });
-    }
-    await del(pathname, { token: process.env.BLOB_READ_WRITE_TOKEN });
-    return res.status(204).send();
-  } catch (error) {
-    console.error('Error cleaning compressed temp blob:', error);
-    return res.status(500).json({ error: `Impossibile eliminare il file temporaneo: ${error.message || 'errore sconosciuto'}` });
-  }
-});
-
 const uploadBlogDocx = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -6361,7 +6304,8 @@ app.get('/api/storage/status', requireAdmin, (_req, res) => {
   res.json({
     blobConfigured: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
     resendConfigured: Boolean(RESEND_API_KEY),
-    brevoConfigured: Boolean(BREVO_API_KEY)
+    brevoConfigured: Boolean(BREVO_API_KEY),
+    pdfCompressionWorkerUrl: process.env.PDF_COMPRESSION_WORKER_URL || null
   });
 });
 

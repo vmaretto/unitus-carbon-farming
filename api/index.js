@@ -32,7 +32,8 @@ const RESOURCE_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
 const MATERIALS_UPLOAD_FINAL_MAX_BYTES = 20 * 1024 * 1024;
 const MATERIALS_UPLOAD_INGEST_MAX_BYTES = 50 * 1024 * 1024;
 const PDF_COMPRESSION_THRESHOLD_BYTES = RESOURCE_UPLOAD_MAX_BYTES;
-const PDF_COMPRESSION_PRESETS = ['/ebook', '/screen'];
+// Proviamo prima il preset più aggressivo per massimizzare la riduzione.
+const PDF_COMPRESSION_PRESETS = ['/screen', '/ebook'];
 
 async function compressPdfWithGhostscript(buffer) {
   const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'unitus-pdf-'));
@@ -130,6 +131,7 @@ app.post('/api/blob/client-token', requireAdminOrTeacher, async (req, res) => {
 
     const clientToken = await generateClientTokenFromReadWriteToken({
       token: process.env.BLOB_READ_WRITE_TOKEN,
+      access: 'public',
       pathname,
       maximumSizeInBytes,
       allowedContentTypes,

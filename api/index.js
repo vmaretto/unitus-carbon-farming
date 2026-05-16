@@ -6365,6 +6365,10 @@ app.get('/api/storage/status', requireAdmin, (_req, res) => {
   });
 });
 
+app.get('/vendor/pdf-lib.min.js', (_req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'node_modules', 'pdf-lib', 'dist', 'pdf-lib.min.js'));
+});
+
 // Invio email di TEST (solo a un indirizzo specifico per anteprima)
 app.post('/api/resources/notify-test', requireAdmin, async (req, res) => {
   const { subject, message, testEmail } = req.body;

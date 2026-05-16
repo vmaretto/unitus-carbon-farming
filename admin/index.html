@@ -3962,16 +3962,23 @@ Buono studio!</textarea>
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
 
-        async function compressPdfForUpload(file) {
-            const tempUpload = await uploadFileDirectToBlob(file, {
-                prefix: 'temp-pdf-compression',
-                maxSizeBytes: 200 * 1024 * 1024,
-                contentType: 'application/pdf'
-            });
+        async function cleanupCompressedPdfTempFile(pathname) {
+            if (!pathname) return;
+            try {
+                await apiRequest('/api/files/compress-pdf/cleanup', {
+                    method: 'POST',
+                    body: JSON.stringify({ pathname })
+                });
+            } catch (error) {
+                console.warn('Cleanup temp PDF failed:', error);
+            }
+        }
 
-            const headers = {
-                'Content-Type': 'application/json'
-            };
+        async function compressPdfForUpload(file) {
+            const formData = new FormData();
+            formData.append('file', file, file.name);
+
+            const headers = {};
             if (adminToken) {
                 headers.Authorization = `Bearer ${adminToken}`;
             }
@@ -3979,11 +3986,7 @@ Buono studio!</textarea>
             const response = await fetch('/api/files/compress-pdf', {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({
-                    blobUrl: tempUpload.url,
-                    pathname: tempUpload.pathname,
-                    filename: file.name
-                })
+                body: formData
             });
 
             if (!response.ok) {
@@ -4002,18 +4005,21 @@ Buono studio!</textarea>
                 throw new Error(normalizeUploadErrorMessage(errorMsg));
             }
 
-            const blob = await response.blob();
-            const originalSize = Number(response.headers.get('x-original-size') || file.size);
-            const compressedSize = Number(response.headers.get('x-compressed-size') || blob.size);
-            const compressedName = response.headers.get('x-compressed-filename')
+            const data = await response.json();
+            const tempUrl = data.tempUrl || '';
+            const tempPathname = data.tempPathname || '';
+            const originalSize = Number(data.originalSize || file.size);
+            const compressedSize = Number(data.compressedSize || file.size);
+            const compressedName = data.compressedName
                 || file.name.replace(/\.pdf$/i, '-compressed.pdf');
-            const compressedFile = createFileFromBlob(blob, compressedName, 'application/pdf');
             return {
-                file: compressedFile,
+                tempUrl,
+                tempPathname,
+                file: null,
                 originalSize,
                 compressedSize,
                 compressedName,
-                preset: response.headers.get('x-compression-preset') || ''
+                preset: data.compressionEngine || ''
             };
         }
 
@@ -4038,7 +4044,7 @@ Buono studio!</textarea>
                 title: 'PDF troppo grande',
                 message: `Il file supera il limite di ${formatBytes(limitBytes)}. Possiamo comprimerlo e poi decidere se caricare la versione ridotta.`,
                 details: [
-                    'La compressione usa Ghostscript lato server.',
+                    'La compressione usa un motore PDF JS lato server.',
                     'Se la versione compressa rientra nel limite, puoi caricarla subito.'
                 ],
                 actions: [
@@ -4068,14 +4074,20 @@ Buono studio!</textarea>
                 });
 
                 if (confirm === 'download') {
-                    downloadBlobFile(result.file, result.compressedName || file.name.replace(/\.pdf$/i, '-compressed.pdf'));
+                    const compressedBlob = await (await fetch(result.tempUrl)).blob();
+                    downloadBlobFile(compressedBlob, result.compressedName || file.name.replace(/\.pdf$/i, '-compressed.pdf'));
+                    await cleanupCompressedPdfTempFile(result.tempPathname);
                     return null;
                 }
 
                 if (confirm === 'upload') {
-                    return result.file;
+                    const compressedBlob = await (await fetch(result.tempUrl)).blob();
+                    const compressedFile = createFileFromBlob(compressedBlob, result.compressedName || file.name.replace(/\.pdf$/i, '-compressed.pdf'), 'application/pdf');
+                    await cleanupCompressedPdfTempFile(result.tempPathname);
+                    return compressedFile;
                 }
 
+                await cleanupCompressedPdfTempFile(result.tempPathname);
                 return null;
             }
 
@@ -4096,6 +4108,7 @@ Buono studio!</textarea>
                 }
             });
 
+            await cleanupCompressedPdfTempFile(result.tempPathname);
             return null;
         }
 

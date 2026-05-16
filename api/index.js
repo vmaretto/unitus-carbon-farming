@@ -5,8 +5,6 @@ const fsp = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { execFile } = require('child_process');
-const { promisify } = require('util');
 const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
@@ -14,6 +12,7 @@ const { put, del } = require('@vercel/blob');
 const { generateClientTokenFromReadWriteToken } = require('@vercel/blob/client');
 const JSZip = require('jszip');
 const { OpenAI } = require('openai');
+const { PDFDocument } = require('pdf-lib');
 const { v2: cloudinary } = require('cloudinary');
 const { parseBlogPostsFromDocxBuffer, slugify } = require('./blog-import');
 const { buildCalendarFeed } = require('./calendar-ics');
@@ -25,7 +24,6 @@ const {
 
 const app = express();
 const port = process.env.PORT || 3000;
-const execFileAsync = promisify(execFile);
 const ALLOWED_UPLOAD_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt', '.md', '.srt', '.vtt', '.mp3', '.mp4', '.m4a', '.jpg', '.jpeg', '.png', '.gif'];
 const ALLOWED_UPLOAD_EXTENSIONS_LABEL = ALLOWED_UPLOAD_EXTENSIONS.join(', ');
 const RESOURCE_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
@@ -33,51 +31,28 @@ const MATERIALS_UPLOAD_FINAL_MAX_BYTES = 20 * 1024 * 1024;
 const MATERIALS_UPLOAD_INGEST_MAX_BYTES = 50 * 1024 * 1024;
 const BLOB_CLIENT_TOKEN_MAX_BYTES = 250 * 1024 * 1024;
 const PDF_COMPRESSION_THRESHOLD_BYTES = RESOURCE_UPLOAD_MAX_BYTES;
-// Proviamo prima il preset più aggressivo per massimizzare la riduzione.
-const PDF_COMPRESSION_PRESETS = ['/screen', '/ebook'];
+async function compressPdfWithPdfLib(buffer) {
+  const sourceDoc = await PDFDocument.load(buffer, {
+    updateMetadata: false,
+    ignoreEncryption: false
+  });
 
-async function compressPdfWithGhostscript(buffer) {
-  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'unitus-pdf-'));
-  const inputPath = path.join(tempDir, 'input.pdf');
-  const outputPath = path.join(tempDir, 'output.pdf');
+  const compressedDoc = await PDFDocument.create();
+  const pageIndices = sourceDoc.getPageIndices();
+  const copiedPages = await compressedDoc.copyPages(sourceDoc, pageIndices);
+  copiedPages.forEach((page) => compressedDoc.addPage(page));
 
-  try {
-    await fsp.writeFile(inputPath, buffer);
+  const outputBuffer = await compressedDoc.save({
+    useObjectStreams: true,
+    addDefaultPage: false,
+    updateFieldAppearances: false
+  });
 
-    let bestBuffer = buffer;
-    let bestPreset = null;
-
-    for (const preset of PDF_COMPRESSION_PRESETS) {
-      await execFileAsync('gs', [
-        '-sDEVICE=pdfwrite',
-        '-dCompatibilityLevel=1.4',
-        `-dPDFSETTINGS=${preset}`,
-        '-dNOPAUSE',
-        '-dBATCH',
-        '-dQUIET',
-        `-sOutputFile=${outputPath}`,
-        inputPath
-      ], { maxBuffer: 10 * 1024 * 1024 });
-
-      const candidate = await fsp.readFile(outputPath);
-      if (candidate.length < bestBuffer.length) {
-        bestBuffer = candidate;
-        bestPreset = preset;
-      }
-
-      if (bestBuffer.length <= PDF_COMPRESSION_THRESHOLD_BYTES) {
-        break;
-      }
-    }
-
-    return {
-      buffer: bestBuffer,
-      compressed: bestBuffer.length < buffer.length,
-      preset: bestPreset
-    };
-  } finally {
-    await fsp.rm(tempDir, { recursive: true, force: true });
-  }
+  return {
+    buffer: Buffer.from(outputBuffer),
+    compressed: outputBuffer.length < buffer.length,
+    preset: 'pdf-lib'
+  };
 }
 
 async function prepareCompressibleMaterialUpload(file, finalLimitBytes, uploadLabel) {
@@ -85,9 +60,9 @@ async function prepareCompressibleMaterialUpload(file, finalLimitBytes, uploadLa
   let compressed = false;
 
   if (file.mimetype === 'application/pdf' && file.size > finalLimitBytes) {
-    console.log(`📦 Comprimendo PDF ${uploadLabel} con Ghostscript...`);
+    console.log(`📦 Comprimendo PDF ${uploadLabel} con pdf-lib...`);
     try {
-      const result = await compressPdfWithGhostscript(file.buffer);
+      const result = await compressPdfWithPdfLib(file.buffer);
       if (result.buffer.length <= finalLimitBytes) {
         fileBuffer = result.buffer;
         compressed = result.buffer.length < file.buffer.length;
@@ -168,51 +143,6 @@ const uploadSmall = multer({
   }
 });
 
-app.post('/api/files/compress-pdf', requireAdminOrTeacher, async (req, res) => {
-  const blobUrl = String(req.body?.blobUrl || '').trim();
-  const pathname = String(req.body?.pathname || '').trim();
-  const filename = String(req.body?.filename || '').trim();
-
-  if (!blobUrl || !pathname) {
-    return res.status(400).json({ error: 'blobUrl e pathname sono obbligatori' });
-  }
-
-  try {
-    const sourceResponse = await fetch(blobUrl);
-    if (!sourceResponse.ok) {
-      return res.status(502).json({ error: `Impossibile scaricare il PDF sorgente: HTTP ${sourceResponse.status}` });
-    }
-    const sourceBuffer = Buffer.from(await sourceResponse.arrayBuffer());
-    const result = await compressPdfWithGhostscript(sourceBuffer);
-    const safeName = (filename || path.basename(pathname) || 'file.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
-    const compressedName = safeName.replace(/\.pdf$/i, '') + '-compressed.pdf';
-    const outputBuffer = result.buffer;
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${compressedName}"`);
-    res.setHeader('X-Original-Size', String(sourceBuffer.length));
-    res.setHeader('X-Compressed-Size', String(outputBuffer.length));
-    res.setHeader('X-Compressed-Filename', compressedName);
-    res.setHeader('X-Compression-Applied', outputBuffer.length < sourceBuffer.length ? '1' : '0');
-    if (result.preset) {
-      res.setHeader('X-Compression-Preset', result.preset);
-    }
-
-    try {
-      if (process.env.BLOB_READ_WRITE_TOKEN) {
-        await del(pathname, { token: process.env.BLOB_READ_WRITE_TOKEN });
-      }
-    } catch (cleanupError) {
-      console.warn('Temp blob cleanup failed:', cleanupError);
-    }
-
-    return res.send(outputBuffer);
-  } catch (error) {
-    console.error('Error compressing PDF:', error);
-    return res.status(500).json({ error: `Impossibile comprimere il PDF: ${error.message || 'errore sconosciuto'}` });
-  }
-});
-
 // Upload per materiali lezioni e docenti: accetta file più grandi per permettere la compressione PDF
 const uploadMaterials = multer({ 
   storage: multer.memoryStorage(),
@@ -224,6 +154,63 @@ const uploadMaterials = multer({
     } else {
       cb(new Error(`Tipo file non supportato. Formati ammessi: ${ALLOWED_UPLOAD_EXTENSIONS_LABEL}`));
     }
+  }
+});
+
+app.post('/api/files/compress-pdf', requireAdminOrTeacher, uploadMaterials.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Nessun file caricato' });
+  }
+
+  try {
+    const result = await compressPdfWithPdfLib(req.file.buffer);
+    const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const compressedName = safeName.replace(/\.pdf$/i, '') + '-compressed.pdf';
+    const tempPathname = `temp-pdf-compression/${uuidv4()}-${compressedName}`;
+
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+    if (!blobToken) {
+      return res.status(500).json({ error: 'Storage non configurato (BLOB_READ_WRITE_TOKEN mancante).' });
+    }
+
+    const blob = await put(tempPathname, result.buffer, {
+      access: 'public',
+      addRandomSuffix: false,
+      contentType: 'application/pdf',
+      token: blobToken
+    });
+
+    return res.json({
+      tempUrl: blob.url,
+      tempPathname: blob.pathname,
+      filename: req.file.originalname,
+      compressedName,
+      originalSize: req.file.size,
+      compressedSize: result.buffer.length,
+      compressionApplied: result.buffer.length < req.file.size,
+      compressionEngine: result.preset
+    });
+  } catch (error) {
+    console.error('Error compressing PDF:', error);
+    return res.status(500).json({ error: `Impossibile comprimere il PDF: ${error.message || 'errore sconosciuto'}` });
+  }
+});
+
+app.post('/api/files/compress-pdf/cleanup', requireAdminOrTeacher, async (req, res) => {
+  const pathname = String(req.body?.pathname || '').trim();
+  if (!pathname) {
+    return res.status(400).json({ error: 'pathname mancante' });
+  }
+
+  try {
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return res.status(500).json({ error: 'Storage non configurato (BLOB_READ_WRITE_TOKEN mancante).' });
+    }
+    await del(pathname, { token: process.env.BLOB_READ_WRITE_TOKEN });
+    return res.status(204).send();
+  } catch (error) {
+    console.error('Error cleaning compressed temp blob:', error);
+    return res.status(500).json({ error: `Impossibile eliminare il file temporaneo: ${error.message || 'errore sconosciuto'}` });
   }
 });
 
@@ -6318,11 +6305,11 @@ app.post('/api/resources/upload', requireAdmin, uploadMaterials.single('file'), 
     let fileBuffer = req.file.buffer;
     const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
 
-    // Se il PDF supera i 4MB proviamo a comprimerlo con Ghostscript prima di rifiutarlo.
+    // Se il PDF supera i 4MB proviamo a comprimerlo con pdf-lib prima di rifiutarlo.
     if (req.file.mimetype === 'application/pdf' && req.file.size > RESOURCE_UPLOAD_MAX_BYTES) {
-      console.log('📦 Comprimendo PDF risorsa con Ghostscript...');
+      console.log('📦 Comprimendo PDF risorsa con pdf-lib...');
       try {
-        const result = await compressPdfWithGhostscript(req.file.buffer);
+        const result = await compressPdfWithPdfLib(req.file.buffer);
         if (result.buffer.length <= RESOURCE_UPLOAD_MAX_BYTES) {
           fileBuffer = result.buffer;
           console.log(`✅ PDF compresso con preset ${result.preset || 'unknown'}: ${req.file.size} -> ${fileBuffer.length} bytes`);

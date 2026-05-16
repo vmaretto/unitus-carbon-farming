@@ -3960,12 +3960,27 @@ Buono studio!</textarea>
         }
 
         async function compressPdfForUpload(file) {
-            const formData = new FormData();
-            formData.append('file', file, file.name);
+            const tempUpload = await uploadFileDirectToBlob(file, {
+                prefix: 'temp-pdf-compression',
+                maxSizeBytes: 50 * 1024 * 1024,
+                contentType: 'application/pdf'
+            });
+
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (adminToken) {
+                headers.Authorization = `Bearer ${adminToken}`;
+            }
+
             const response = await fetch('/api/files/compress-pdf', {
                 method: 'POST',
-                headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {},
-                body: formData
+                headers,
+                body: JSON.stringify({
+                    blobUrl: tempUpload.url,
+                    pathname: tempUpload.pathname,
+                    filename: file.name
+                })
             });
 
             if (!response.ok) {

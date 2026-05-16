@@ -31,6 +31,7 @@ const ALLOWED_UPLOAD_EXTENSIONS_LABEL = ALLOWED_UPLOAD_EXTENSIONS.join(', ');
 const RESOURCE_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
 const MATERIALS_UPLOAD_FINAL_MAX_BYTES = 20 * 1024 * 1024;
 const MATERIALS_UPLOAD_INGEST_MAX_BYTES = 50 * 1024 * 1024;
+const BLOB_CLIENT_TOKEN_MAX_BYTES = 250 * 1024 * 1024;
 const PDF_COMPRESSION_THRESHOLD_BYTES = RESOURCE_UPLOAD_MAX_BYTES;
 // Proviamo prima il preset più aggressivo per massimizzare la riduzione.
 const PDF_COMPRESSION_PRESETS = ['/screen', '/ebook'];
@@ -123,7 +124,7 @@ app.post('/api/blob/client-token', requireAdminOrTeacher, async (req, res) => {
 
     const requestedMaxSize = Number(req.body?.maximumSizeInBytes || 0);
     const maximumSizeInBytes = Number.isFinite(requestedMaxSize) && requestedMaxSize > 0
-      ? Math.min(requestedMaxSize, 50 * 1024 * 1024)
+      ? Math.min(requestedMaxSize, BLOB_CLIENT_TOKEN_MAX_BYTES)
       : MATERIALS_UPLOAD_FINAL_MAX_BYTES;
 
     const contentType = String(req.body?.contentType || '').trim() || null;

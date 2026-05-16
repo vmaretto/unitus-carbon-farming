@@ -3510,6 +3510,15 @@ Buono studio!</textarea>
             return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
         }
 
+        function normalizeUploadErrorMessage(message) {
+            const raw = String(message || '');
+            return raw.replace(/(\d{5,}) bytes/gi, (_match, value) => {
+                const mb = Number(value) / (1024 * 1024);
+                if (!Number.isFinite(mb) || mb <= 0) return `${value} bytes`;
+                return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
+            });
+        }
+
         function isAuthTransitionError(error) {
             if (!error) return false;
             return error.status === 401 ||
@@ -3922,7 +3931,7 @@ Buono studio!</textarea>
                 } catch (e) {
                     // ignore non-JSON responses
                 }
-                throw new Error(errorMsg);
+                throw new Error(normalizeUploadErrorMessage(errorMsg));
             }
 
             const blob = await response.json();
@@ -3956,7 +3965,7 @@ Buono studio!</textarea>
         async function compressPdfForUpload(file) {
             const tempUpload = await uploadFileDirectToBlob(file, {
                 prefix: 'temp-pdf-compression',
-                maxSizeBytes: 50 * 1024 * 1024,
+                maxSizeBytes: 200 * 1024 * 1024,
                 contentType: 'application/pdf'
             });
 
@@ -3990,7 +3999,7 @@ Buono studio!</textarea>
                         // ignore
                     }
                 }
-                throw new Error(errorMsg);
+                throw new Error(normalizeUploadErrorMessage(errorMsg));
             }
 
             const blob = await response.blob();

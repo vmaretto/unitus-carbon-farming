@@ -7,3 +7,4 @@ api/uploads/
 tmp_*.js
 *.srt
 .claude/
+seo.patch

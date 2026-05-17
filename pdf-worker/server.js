@@ -3,7 +3,6 @@ const multer = require('multer');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 
@@ -25,7 +24,20 @@ app.use((req, res, next) => {
 });
 
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: async (_req, _file, cb) => {
+      try {
+        const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pdf-worker-upload-'));
+        cb(null, tempDir);
+      } catch (error) {
+        cb(error);
+      }
+    },
+    filename: (_req, file, cb) => {
+      const safeName = (file.originalname || 'file.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
+      cb(null, safeName);
+    }
+  }),
   limits: { fileSize: MAX_UPLOAD_BYTES },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
@@ -37,15 +49,13 @@ const upload = multer({
   }
 });
 
-async function compressPdfWithGhostscript(buffer) {
+async function compressPdfWithGhostscript(inputPath) {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pdf-worker-'));
-  const inputPath = path.join(tempDir, 'input.pdf');
   const outputPath = path.join(tempDir, 'output.pdf');
 
   try {
-    await fs.writeFile(inputPath, buffer);
-
-    let bestBuffer = buffer;
+    const inputBuffer = await fs.readFile(inputPath);
+    let bestBuffer = inputBuffer;
     let bestPreset = null;
 
     for (const preset of PDF_COMPRESSION_PRESETS) {
@@ -66,14 +76,14 @@ async function compressPdfWithGhostscript(buffer) {
         bestPreset = preset;
       }
 
-      if (bestBuffer.length <= buffer.length * 0.9) {
+      if (bestBuffer.length <= inputBuffer.length * 0.9) {
         break;
       }
     }
 
     return {
       buffer: bestBuffer,
-      compressed: bestBuffer.length < buffer.length,
+      compressed: bestBuffer.length < inputBuffer.length,
       preset: bestPreset || 'ghostscript'
     };
   } finally {
@@ -95,21 +105,29 @@ app.post('/compress-pdf', upload.single('file'), async (req, res) => {
   }
 
   try {
-    const result = await compressPdfWithGhostscript(req.file.buffer);
+    const result = await compressPdfWithGhostscript(req.file.path);
     const safeName = (req.file.originalname || 'file.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
     const compressedName = safeName.replace(/\.pdf$/i, '') + '-compressed.pdf';
+    const originalSize = req.file.size;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${compressedName}"`);
-    res.setHeader('X-Original-Size', String(req.file.size));
+    res.setHeader('X-Original-Size', String(originalSize));
     res.setHeader('X-Compressed-Size', String(result.buffer.length));
     res.setHeader('X-Compressed-Filename', compressedName);
-    res.setHeader('X-Compression-Applied', result.buffer.length < req.file.size ? '1' : '0');
+    res.setHeader('X-Compression-Applied', result.buffer.length < originalSize ? '1' : '0');
     res.setHeader('X-Compression-Preset', result.preset || 'ghostscript');
     return res.send(result.buffer);
   } catch (error) {
     console.error('Error compressing PDF:', error);
     return res.status(500).json({ error: `Impossibile comprimere il PDF: ${error.message || 'errore sconosciuto'}` });
+  } finally {
+    if (req.file?.path) {
+      await fs.rm(req.file.path, { force: true }).catch(() => {});
+    }
+    if (req.file?.destination) {
+      await fs.rm(req.file.destination, { recursive: true, force: true }).catch(() => {});
+    }
   }
 });
 

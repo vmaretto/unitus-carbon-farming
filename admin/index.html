@@ -4121,6 +4121,22 @@ Buono studio!</textarea>
 
                 if (confirm === 'download') {
                     downloadBlobFile(result.file, result.compressedName || file.name.replace(/\.pdf$/i, '-compressed.pdf'));
+                    const afterDownload = await showChoiceModal({
+                        title: 'Copia compressa disponibile',
+                        message: `La copia compressa è pronta. Vuoi caricarla sul portale oppure chiudere?`,
+                        details: [
+                            'Il file già compresso resta disponibile per il caricamento immediato.'
+                        ],
+                        actions: [
+                            { id: 'upload', label: 'Carica PDF compresso', variant: 'primary' },
+                            { id: 'close', label: 'Chiudi', variant: 'secondary' }
+                        ]
+                    });
+
+                    if (afterDownload === 'upload') {
+                        return result.file;
+                    }
+
                     return null;
                 }
 

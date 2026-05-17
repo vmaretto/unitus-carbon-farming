@@ -6309,13 +6309,22 @@ app.get('/api/storage/status', requireAdmin, (_req, res) => {
   });
 });
 
-app.get('/api/vendor/pdf-lib.min.js', (_req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'node_modules', 'pdf-lib', 'dist', 'pdf-lib.min.js'));
-});
+function servePdfLibBundle(_req, res) {
+  try {
+    const pdfLibPath = require.resolve('pdf-lib/dist/pdf-lib.min.js');
+    const pdfLibCode = fs.readFileSync(pdfLibPath, 'utf8');
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.send(pdfLibCode);
+  } catch (error) {
+    console.error('Error serving pdf-lib bundle:', error);
+    return res.status(500).json({ error: 'Impossibile caricare la libreria PDF' });
+  }
+}
 
-app.get('/vendor/pdf-lib.min.js', (_req, res) => {
-  res.redirect(302, '/api/vendor/pdf-lib.min.js');
-});
+app.get('/api/vendor/pdf-lib.min.js', servePdfLibBundle);
+
+app.get('/vendor/pdf-lib.min.js', servePdfLibBundle);
 
 // Invio email di TEST (solo a un indirizzo specifico per anteprima)
 app.post('/api/resources/notify-test', requireAdmin, async (req, res) => {

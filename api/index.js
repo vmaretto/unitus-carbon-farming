@@ -3177,7 +3177,14 @@ async function initDatabase() {
     ADD COLUMN IF NOT EXISTS cover_image_prompt TEXT,
     ADD COLUMN IF NOT EXISTS reviewer_teacher_id UUID REFERENCES faculty(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS sources JSONB DEFAULT '[]'::jsonb,
-    ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb;
+    ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb,
+    ADD COLUMN IF NOT EXISTS seo_title VARCHAR(80),
+    ADD COLUMN IF NOT EXISTS meta_description VARCHAR(200),
+    ADD COLUMN IF NOT EXISTS focus_keyword VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS pillar_slug VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS cover_alt VARCHAR(200),
+    ADD COLUMN IF NOT EXISTS internal_links JSONB,
+    ADD COLUMN IF NOT EXISTS last_reviewed_at TIMESTAMPTZ;
   `);
 
   await pool.query(`
@@ -3596,7 +3603,12 @@ function buildBlogPostPayload(row, columns = null) {
     ...(has('cover_image_prompt') ? { coverImagePrompt: row.cover_image_prompt } : {}),
     ...(has('reviewer_teacher_id') ? { reviewerTeacherId: row.reviewer_teacher_id } : {}),
     ...(has('sources') ? { sources: Array.isArray(row.sources) ? row.sources : [] } : {}),
-    ...(has('tags') ? { tags: Array.isArray(row.tags) ? row.tags : [] } : {})
+    ...(has('tags') ? { tags: Array.isArray(row.tags) ? row.tags : [] } : {}),
+    ...(has('seo_title') ? { seoTitle: row.seo_title } : {}),
+    ...(has('meta_description') ? { metaDescription: row.meta_description } : {}),
+    ...(has('focus_keyword') ? { focusKeyword: row.focus_keyword } : {}),
+    ...(has('pillar_slug') ? { pillarSlug: row.pillar_slug } : {}),
+    ...(has('cover_alt') ? { coverAlt: row.cover_alt } : {})
   };
 }
 
@@ -3618,6 +3630,11 @@ function pickBlogInsertColumns(columns, post) {
   if (columns.has('reviewer_teacher_id')) mappings.push(['reviewer_teacher_id', post.reviewerTeacherId || null]);
   if (columns.has('sources')) mappings.push(['sources', JSON.stringify(Array.isArray(post.sources) ? post.sources : [])]);
   if (columns.has('tags')) mappings.push(['tags', JSON.stringify(Array.isArray(post.tags) ? post.tags : [])]);
+  if (columns.has('seo_title')) mappings.push(['seo_title', post.seoTitle || null]);
+  if (columns.has('meta_description')) mappings.push(['meta_description', post.metaDescription || null]);
+  if (columns.has('focus_keyword')) mappings.push(['focus_keyword', post.focusKeyword || null]);
+  if (columns.has('pillar_slug')) mappings.push(['pillar_slug', post.pillarSlug || null]);
+  if (columns.has('cover_alt')) mappings.push(['cover_alt', post.coverAlt || null]);
 
   const insertColumns = mappings.map(([column]) => column);
   const placeholders = mappings.map((_, index) => `$${index + 1}`);
@@ -4997,7 +5014,7 @@ app.post('/api/blog-posts', requireAdmin, async (req, res) => {
     return;
   }
 
-  const { title, slug, excerpt, content, coverImageUrl, publishedAt, isPublished, author, sourceModule, coverImagePrompt, reviewerTeacherId, sources, tags } = req.body;
+  const { title, slug, excerpt, content, coverImageUrl, publishedAt, isPublished, author, sourceModule, coverImagePrompt, reviewerTeacherId, sources, tags, seoTitle, metaDescription, focusKeyword, pillarSlug, coverAlt } = req.body;
 
   if (!title) {
     return res.status(400).json({ error: 'Title is required' });
@@ -5020,7 +5037,12 @@ app.post('/api/blog-posts', requireAdmin, async (req, res) => {
       coverImagePrompt,
       reviewerTeacherId,
       sources,
-      tags
+      tags,
+      seoTitle,
+      metaDescription,
+      focusKeyword,
+      pillarSlug,
+      coverAlt
     });
     const insert = `
       INSERT INTO blog_posts (${insertColumns.join(', ')})
@@ -5046,7 +5068,7 @@ app.put('/api/blog-posts/:id', requireAdmin, async (req, res) => {
   }
 
   const { id } = req.params;
-  const { title, slug, excerpt, content, coverImageUrl, publishedAt, isPublished, author, sourceModule, coverImagePrompt, reviewerTeacherId, sources, tags } = req.body;
+  const { title, slug, excerpt, content, coverImageUrl, publishedAt, isPublished, author, sourceModule, coverImagePrompt, reviewerTeacherId, sources, tags, seoTitle, metaDescription, focusKeyword, pillarSlug, coverAlt } = req.body;
 
   try {
     const updateFields = {
@@ -5063,7 +5085,12 @@ app.put('/api/blog-posts/:id', requireAdmin, async (req, res) => {
       tags: Array.isArray(tags) ? JSON.stringify(tags) : undefined,
       published_at:
         publishedAt === undefined ? undefined : publishedAt ? new Date(publishedAt) : null,
-      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined,
+      seo_title: seoTitle,
+      meta_description: metaDescription,
+      focus_keyword: focusKeyword,
+      pillar_slug: pillarSlug,
+      cover_alt: coverAlt
     };
 
     const blogColumns = await getTableColumns('blog_posts');
@@ -5494,7 +5521,12 @@ app.put('/api/partners/:id', requireAdmin, async (req, res) => {
       description,
       website_url: websiteUrl,
       sort_order: sortOrder,
-      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined,
+      seo_title: seoTitle,
+      meta_description: metaDescription,
+      focus_keyword: focusKeyword,
+      pillar_slug: pillarSlug,
+      cover_alt: coverAlt
     };
 
     const { query, values } = buildUpdateQuery('partners', updateFields, id);
@@ -7150,7 +7182,12 @@ app.put('/api/lms/courses/:id', requireAdmin, async (req, res) => {
     const { query, values } = buildUpdateQuery('courses', {
       title, slug, description,
       cover_image_url: coverImageUrl,
-      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined,
+      seo_title: seoTitle,
+      meta_description: metaDescription,
+      focus_keyword: focusKeyword,
+      pillar_slug: pillarSlug,
+      cover_alt: coverAlt
     }, req.params.id);
     const { rows } = await pool.query(query, values);
     if (!rows.length) return res.status(404).json({ error: 'Course not found' });
@@ -7410,7 +7447,12 @@ app.put('/api/lms/modules/:id', requireAdmin, async (req, res) => {
     const { query, values } = buildUpdateQuery('modules', {
       course_id: courseId, name: title, description,
       sort_order: sortOrder,
-      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined,
+      seo_title: seoTitle,
+      meta_description: metaDescription,
+      focus_keyword: focusKeyword,
+      pillar_slug: pillarSlug,
+      cover_alt: coverAlt
     }, req.params.id);
     const { rows } = await pool.query(query, values);
     if (!rows.length) return res.status(404).json({ error: 'Module not found' });
@@ -9029,7 +9071,12 @@ app.put('/api/lms/quizzes/:id', requireAdmin, async (req, res) => {
       passing_score: passingScore,
       max_attempts: maxAttempts,
       time_limit_minutes: timeLimitMinutes,
-      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined,
+      seo_title: seoTitle,
+      meta_description: metaDescription,
+      focus_keyword: focusKeyword,
+      pillar_slug: pillarSlug,
+      cover_alt: coverAlt
     }, req.params.id);
     const { rows } = await pool.query(query, values);
     if (!rows.length) return res.status(404).json({ error: 'Quiz not found' });

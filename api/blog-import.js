@@ -1,6 +1,7 @@
 const mammoth = require('mammoth');
 const cheerio = require('cheerio');
 const JSZip = require('jszip');
+const { parseMetadataBlock, extractCoverAltFromMediaBlock, truncate: truncateSeo } = require('./seo-helpers');
 
 const ITALIAN_MONTHS = {
   gennaio: 0,
@@ -587,6 +588,11 @@ function parseBlogPostsFromHtml(html, options = {}) {
       coverImageUrl: parsed.coverImageUrl,
       coverImagePrompt: parsed.coverImagePrompt,
       sources: parsed.sources,
+      seoTitle: parsed.seoTitle,
+      metaDescription: parsed.metaDescription,
+      focusKeyword: parsed.focusKeyword,
+      pillarSlug: parsed.pillarSlug,
+      coverAlt: parsed.coverAlt,
       published: false
     });
     warnings.push(...parsed.warnings);
@@ -621,7 +627,12 @@ async function parseBlogPostsFromDocxBuffer(buffer, options = {}) {
       coverImagePrompt: post.coverImagePrompt || fallback.coverImagePrompt || null,
       coverImageUrl: post.coverImageUrl || fallback.coverImageUrl || null,
       excerpt: post.excerpt || fallback.excerpt || post.excerpt,
-      content: post.content || fallback.content || post.content
+      content: post.content || fallback.content || post.content,
+      seoTitle: post.seoTitle || fallback.seoTitle || truncateSeo(post.title, 60),
+      metaDescription: post.metaDescription || fallback.metaDescription || truncateSeo(post.excerpt || '', 160),
+      focusKeyword: post.focusKeyword || fallback.focusKeyword || null,
+      pillarSlug: post.pillarSlug || fallback.pillarSlug || null,
+      coverAlt: post.coverAlt || fallback.coverAlt || null
     };
   });
 
@@ -637,6 +648,11 @@ async function parseBlogPostsFromDocxBuffer(buffer, options = {}) {
     coverImageUrl: post.coverImageUrl || null,
     coverImagePrompt: post.coverImagePrompt || null,
     sources: [],
+    seoTitle: post.seoTitle || truncateSeo(post.title, 60),
+    metaDescription: post.metaDescription || truncateSeo(post.excerpt || '', 160),
+    focusKeyword: post.focusKeyword || null,
+    pillarSlug: post.pillarSlug || null,
+    coverAlt: post.coverAlt || null,
     published: false
   }));
 

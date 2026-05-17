@@ -118,7 +118,7 @@ app.post('/api/blob/client-token', requireAdminOrTeacher, async (req, res) => {
 
     res.json({
       clientToken,
-      uploadUrl: 'https://vercel.com/api/blob',
+      uploadUrl: 'https://blob.vercel-storage.com',
       pathname,
       maximumSizeInBytes
     });

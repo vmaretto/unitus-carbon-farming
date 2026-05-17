@@ -3927,7 +3927,7 @@ Buono studio!</textarea>
                 })
             });
 
-            const uploadUrl = tokenResponse.uploadUrl || 'https://vercel.com/api/blob';
+            const uploadUrl = tokenResponse.uploadUrl || 'https://blob.vercel-storage.com';
             const requestId = `${pathname}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
             const response = await fetch(`${uploadUrl}/?pathname=${encodeURIComponent(pathname)}`, {
                 method: 'PUT',

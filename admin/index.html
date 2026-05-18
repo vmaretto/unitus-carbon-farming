@@ -1955,6 +1955,43 @@
                     </small>
                 </label>
 
+                <fieldset style="margin-top: 24px; padding: 16px 18px; border: 1px solid var(--gray-200); border-radius: 12px;">
+                    <legend style="padding: 0 8px; font-weight: 600; color: var(--gray-700);">SEO &amp; Metadati Google</legend>
+                    <small style="display:block; color: var(--gray-500); font-size: 0.85rem; margin-bottom: 12px;">
+                        Questi campi alimentano i meta tag e l'anteprima nei motori di ricerca. Sono popolati automaticamente dalla routine di scouting; puoi modificarli a mano se preferisci una versione editoriale diversa.
+                    </small>
+                    <div class="form-grid">
+                        <label>
+                            SEO title <span id="blog-seo-title-counter" style="color: var(--gray-500); font-weight: 400;">(0/60)</span>
+                            <input type="text" id="blog-seo-title" name="seoTitle" maxlength="80" placeholder="Es. Carbon Farming Italia: registro CREA 2026">
+                        </label>
+                        <label>
+                            Focus keyword
+                            <input type="text" id="blog-focus-keyword" name="focusKeyword" maxlength="120" placeholder="Es. registro crediti carbonio">
+                        </label>
+                        <label>
+                            Pillar page collegata
+                            <select id="blog-pillar-slug" name="pillarSlug">
+                                <option value="">— Nessuna pillar collegata —</option>
+                                <option value="crcf-regolamento-2024-3012">CRCF · Regolamento 2024/3012</option>
+                                <option value="biochar-sequestro-suolo">Biochar &amp; sequestro nel suolo</option>
+                                <option value="mercato-volontario-crediti-carbonio">Mercato volontario crediti</option>
+                                <option value="mrv-carbon-farming">MRV per il carbon farming</option>
+                                <option value="agroforestazione-italia-europa">Agroforestazione Italia/Europa</option>
+                                <option value="sequestro-carbonio-suoli-agricoli">Sequestro nei suoli agricoli</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label style="margin-top: 14px;">
+                        Meta description <span id="blog-meta-desc-counter" style="color: var(--gray-500); font-weight: 400;">(0/160)</span>
+                        <textarea id="blog-meta-description" name="metaDescription" maxlength="200" rows="2" placeholder="Descrizione 140-160 caratteri con la focus keyword e un verbo d'azione."></textarea>
+                    </label>
+                    <label style="margin-top: 14px;">
+                        Cover alt text <span id="blog-cover-alt-counter" style="color: var(--gray-500); font-weight: 400;">(0/200)</span>
+                        <textarea id="blog-cover-alt" name="coverAlt" maxlength="200" rows="2" placeholder="Descrizione accessibile dell'immagine di copertina, ~100-150 caratteri."></textarea>
+                    </label>
+                </fieldset>
+
                 <div id="blog-duplication-banner" class="blog-duplication-banner" hidden></div>
 
                 <div class="actions">
@@ -4285,11 +4322,32 @@ Buono studio!</textarea>
             document.getElementById('blog-published').checked = false;
             document.getElementById('blog-source-module').value = '';
             document.getElementById('blog-sources').value = '';
+            document.getElementById('blog-seo-title').value = '';
+            document.getElementById('blog-meta-description').value = '';
+            document.getElementById('blog-focus-keyword').value = '';
+            document.getElementById('blog-pillar-slug').value = '';
+            document.getElementById('blog-cover-alt').value = '';
+            updateSeoCounters();
             document.getElementById('blog-reset').hidden = true;
             state.editingPostId = null;
             const button = form.querySelector('button.primary');
             button.textContent = button.dataset.defaultText || 'Salva articolo';
             renderBlogDuplicationBanner({});
+        }
+
+        function updateSeoCounter(inputId, counterId, idealMax) {
+            const input = document.getElementById(inputId);
+            const counter = document.getElementById(counterId);
+            if (!input || !counter) return;
+            const len = (input.value || '').length;
+            counter.textContent = `(${len}/${idealMax})`;
+            counter.style.color = len > idealMax ? 'var(--danger, #c0392b)' : 'var(--gray-500)';
+        }
+
+        function updateSeoCounters() {
+            updateSeoCounter('blog-seo-title', 'blog-seo-title-counter', 60);
+            updateSeoCounter('blog-meta-description', 'blog-meta-desc-counter', 160);
+            updateSeoCounter('blog-cover-alt', 'blog-cover-alt-counter', 200);
         }
 
         function setSelectedBlogImportFile(file) {
@@ -4746,6 +4804,12 @@ Buono studio!</textarea>
             document.getElementById('blog-source-module').value = current.sourceModule || '';
             document.getElementById('blog-sources').value = formatBlogSourcesInput(current.sources || []);
             document.getElementById('blog-reviewer').value = current.reviewerTeacherId || '';
+            document.getElementById('blog-seo-title').value = current.seoTitle || '';
+            document.getElementById('blog-meta-description').value = current.metaDescription || '';
+            document.getElementById('blog-focus-keyword').value = current.focusKeyword || '';
+            document.getElementById('blog-pillar-slug').value = current.pillarSlug || '';
+            document.getElementById('blog-cover-alt').value = current.coverAlt || '';
+            updateSeoCounters();
             document.getElementById('blog-published').checked = Boolean(current.isPublished);
             document.getElementById('blog-published-at').value = current.publishedAt
                 ? new Date(current.publishedAt).toISOString().slice(0, 16)
@@ -7551,7 +7615,12 @@ Buono studio!</textarea>
                 sources: parseBlogSourcesInput(document.getElementById('blog-sources').value),
                 reviewerTeacherId: document.getElementById('blog-reviewer').value || null,
                 publishedAt: publishedAtInput ? new Date(publishedAtInput).toISOString() : null,
-                isPublished: document.getElementById('blog-published').checked
+                isPublished: document.getElementById('blog-published').checked,
+                seoTitle: document.getElementById('blog-seo-title').value.trim() || null,
+                metaDescription: document.getElementById('blog-meta-description').value.trim() || null,
+                focusKeyword: document.getElementById('blog-focus-keyword').value.trim() || null,
+                pillarSlug: document.getElementById('blog-pillar-slug').value || null,
+                coverAlt: document.getElementById('blog-cover-alt').value.trim() || null
             };
 
             if (!payload.title) {
@@ -7576,6 +7645,7 @@ Buono studio!</textarea>
 
         document.getElementById('blog-form').addEventListener('input', () => {
             scheduleBlogDuplicationBannerUpdate();
+            updateSeoCounters();
         });
 
         document.getElementById('blog-form').addEventListener('change', () => {

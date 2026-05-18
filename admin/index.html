@@ -972,7 +972,7 @@
             color: var(--gray-700);
         }
 
-        .progress-track {
+        .student-progress-track {
             height: 12px;
             background: rgba(107, 114, 128, 0.12);
             border-radius: 999px;
@@ -10344,7 +10344,7 @@ Buono studio!</textarea>
                             <span>${item.label}</span>
                             <strong>${item.count || 0} (${pct}%)</strong>
                         </div>
-                        <div class="progress-track"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div>
+                        <div class="student-progress-track"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div>
                     </div>
                 `;
             }).join('');
@@ -10366,7 +10366,7 @@ Buono studio!</textarea>
                             <span>${escapeHtml(name)}</span>
                             <strong>${student.overallPercent || 0}%</strong>
                         </div>
-                        <div class="progress-track"><div class="progress-fill" style="width:${student.overallPercent || 0}%"></div></div>
+                        <div class="student-progress-track"><div class="progress-fill" style="width:${student.overallPercent || 0}%"></div></div>
                     </div>
                 `;
             }).join('');

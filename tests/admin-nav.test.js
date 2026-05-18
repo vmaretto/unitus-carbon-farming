@@ -47,6 +47,15 @@ test('la sezione LMS admin non contiene debug temporanei e usa cache lezioni per
   assert.match(html, /document\.querySelectorAll\('\.admin-main section'\)/);
 });
 
+test('i grafici progressi studenti usano barre visibili dedicate', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'admin', 'index.html'), 'utf8');
+
+  assert.match(html, /\.student-progress-track\s*\{/);
+  assert.match(html, /class="student-progress-track"><div class="progress-fill/);
+  assert.equal((html.match(/class="progress-track"/g) || []).length, 1);
+  assert.match(html, /id="blog-import-progress-track"/);
+});
+
 test('la lezione usa il flusso quiz-attempts e le risorse non espongono quiz', () => {
   const lessonHtml = fs.readFileSync(path.join(__dirname, '..', 'learn', 'lesson.html'), 'utf8');
   const courseHtml = fs.readFileSync(path.join(__dirname, '..', 'learn', 'course.html'), 'utf8');

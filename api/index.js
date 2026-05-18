@@ -4761,7 +4761,7 @@ async function removeQuizFromLessonMaterials(quizId) {
 // Whitelist colonne aggiornabili per tabella (sicurezza)
 const ALLOWED_UPDATE_FIELDS = {
   faculty: ['name', 'first_name', 'last_name', 'role', 'email', 'bio', 'photo_url', 'profile_link', 'sort_order', 'is_published', 'is_active', 'can_view_all_materials'],
-  blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'source_module', 'cover_image_prompt', 'reviewer_teacher_id', 'sources', 'tags', 'is_published', 'published_at'],
+  blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'source_module', 'cover_image_prompt', 'reviewer_teacher_id', 'sources', 'tags', 'is_published', 'published_at', 'seo_title', 'meta_description', 'focus_keyword', 'pillar_slug', 'cover_alt'],
   partners: ['name', 'logo_url', 'website_url', 'category', 'sort_order', 'is_visible'],
   modules: ['name', 'ssd', 'cfu', 'hours', 'description', 'sort_order', 'course_id', 'is_published'],
   lessons: ['title', 'module_id', 'teacher_id', 'external_teacher_name', 'start_datetime', 'duration_minutes', 'location_physical', 'location_remote', 'status', 'notes', 'materials'],

@@ -54,6 +54,10 @@ test('i grafici progressi studenti usano barre visibili dedicate', () => {
   assert.match(html, /class="student-progress-track"><div class="progress-fill/);
   assert.equal((html.match(/class="progress-track"/g) || []).length, 1);
   assert.match(html, /id="blog-import-progress-track"/);
+  assert.match(html, /#student-progress\s*\{[^}]*max-width:\s*none/s);
+  assert.match(html, /#sp-content\s*\{[^}]*min-width:\s*0/s);
+  assert.match(html, /\.progress-toolbar\s*\{[^}]*display:\s*grid/s);
+  assert.match(html, /\.progress-toolbar\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*1fr\)\s*auto/s);
   assert.match(html, /\.student-progress-detail-list\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
   assert.match(html, /\.student-progress-detail-item strong\s*\{[^}]*display:\s*inline-block/s);
 });

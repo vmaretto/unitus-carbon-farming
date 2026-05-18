@@ -1061,6 +1061,7 @@
         .student-progress-detail-list {
             display: grid;
             gap: 8px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             margin-top: 10px;
         }
 
@@ -1077,9 +1078,7 @@
         }
 
         .student-progress-detail-summary-item {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            gap: 12px;
+            display: block;
             padding: 10px 12px;
             border-radius: 10px;
             background: var(--gray-100);
@@ -1090,19 +1089,20 @@
 
         .student-progress-detail-summary-item span,
         .student-progress-detail-item span {
+            display: block;
             min-width: 0;
             overflow-wrap: anywhere;
         }
 
         .student-progress-detail-summary-item strong {
+            display: inline-block;
+            margin-top: 4px;
             color: var(--green-900);
-            white-space: nowrap;
+            overflow-wrap: anywhere;
         }
 
         .student-progress-detail-item {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            gap: 12px;
+            display: block;
             padding: 10px 12px;
             border-radius: 10px;
             background: var(--gray-100);
@@ -1112,8 +1112,10 @@
         }
 
         .student-progress-detail-item strong {
+            display: inline-block;
+            margin-top: 4px;
             color: var(--green-900);
-            white-space: nowrap;
+            overflow-wrap: anywhere;
         }
 
         @media (max-width: 1500px) {
@@ -1136,6 +1138,10 @@
         @media (max-width: 900px) {
             .attendance-toolbar-controls {
                 width: 100%;
+            }
+
+            .student-progress-detail-list {
+                grid-template-columns: 1fr;
             }
 
             #att-filter-lesson,

@@ -54,6 +54,8 @@ test('i grafici progressi studenti usano barre visibili dedicate', () => {
   assert.match(html, /class="student-progress-track"><div class="progress-fill/);
   assert.equal((html.match(/class="progress-track"/g) || []).length, 1);
   assert.match(html, /id="blog-import-progress-track"/);
+  assert.match(html, /\.student-progress-detail-list\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(html, /\.student-progress-detail-item strong\s*\{[^}]*display:\s*inline-block/s);
 });
 
 test('la lezione usa il flusso quiz-attempts e le risorse non espongono quiz', () => {

@@ -5188,6 +5188,160 @@ app.post('/api/blog-posts/:id/generate-cover', requireAdmin, async (req, res) =>
   }
 });
 
+// Static-ish list of high-priority public pages of the marketing site. Keep in
+// sync with the actual files served at the root of the project.
+const SITEMAP_STATIC_PAGES = [
+  { path: '/', priority: '1.0', changefreq: 'weekly' },
+  { path: '/blog.html', priority: '0.9', changefreq: 'daily' },
+  { path: '/calendario.html', priority: '0.7', changefreq: 'weekly' },
+  { path: '/iscrizioni.html', priority: '0.8', changefreq: 'weekly' },
+  { path: '/sponsorship.html', priority: '0.5', changefreq: 'monthly' },
+  { path: '/faq.html', priority: '0.5', changefreq: 'monthly' },
+  { path: '/richiedi-informazioni.html', priority: '0.5', changefreq: 'monthly' }
+];
+
+function buildSitemapXml(entries) {
+  const items = entries.map((e) => `  <url>
+    <loc>${escapeHtml(e.loc)}</loc>${e.lastmod ? `\n    <lastmod>${escapeHtml(e.lastmod)}</lastmod>` : ''}${e.changefreq ? `\n    <changefreq>${escapeHtml(e.changefreq)}</changefreq>` : ''}${e.priority ? `\n    <priority>${escapeHtml(e.priority)}</priority>` : ''}
+  </url>`).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${items}
+</urlset>
+`;
+}
+
+async function buildSitemapEntries(baseUrl) {
+  const entries = [];
+  const now = new Date().toISOString();
+
+  for (const page of SITEMAP_STATIC_PAGES) {
+    entries.push({
+      loc: new URL(page.path, baseUrl).toString(),
+      lastmod: now.slice(0, 10),
+      changefreq: page.changefreq,
+      priority: page.priority
+    });
+  }
+
+  if (pool) {
+    try {
+      const { rows } = await pool.query(
+        'SELECT slug, updated_at, published_at FROM blog_posts WHERE is_published = true AND slug IS NOT NULL ORDER BY published_at DESC NULLS LAST LIMIT 5000'
+      );
+      for (const row of rows) {
+        const lastmodSource = row.updated_at || row.published_at;
+        entries.push({
+          loc: new URL(`/share/blog/${encodeURIComponent(row.slug)}`, baseUrl).toString(),
+          lastmod: lastmodSource ? new Date(lastmodSource).toISOString().slice(0, 10) : now.slice(0, 10),
+          changefreq: 'monthly',
+          priority: '0.7'
+        });
+      }
+    } catch (error) {
+      console.error('Sitemap: unable to read blog_posts', error);
+    }
+  }
+
+  return entries;
+}
+
+app.get(['/sitemap.xml', '/sitemap'], async (req, res) => {
+  try {
+    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const entries = await buildSitemapEntries(baseUrl);
+    const xml = buildSitemapXml(entries);
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=600, s-maxage=600');
+    res.send(xml);
+  } catch (error) {
+    console.error('Error generating sitemap', error);
+    res.status(500).send('Sitemap generation failed');
+  }
+});
+
+app.get('/robots.txt', (req, res) => {
+  const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+  const sitemapUrl = new URL('/sitemap.xml', baseUrl).toString();
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+  res.send(`User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Disallow: /learn/
+Disallow: /teachers/
+
+Sitemap: ${sitemapUrl}
+`);
+});
+
+// SEO pings: rebuild sitemap (no-op cache buster) + IndexNow notification for
+// fast URL discovery by Bing, Yandex and the IndexNow consortium (Google does
+// not consume IndexNow; for Google we rely on the sitemap + organic crawl).
+app.post('/api/seo/sitemap-rebuild', requireAdmin, async (req, res) => {
+  try {
+    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const entries = await buildSitemapEntries(baseUrl);
+    res.json({
+      ok: true,
+      urls: entries.length,
+      sitemap: new URL('/sitemap.xml', baseUrl).toString(),
+      note: 'Sitemap is regenerated on every request from the DB; this endpoint just verifies the build succeeds.'
+    });
+  } catch (error) {
+    console.error('Sitemap rebuild failed', error);
+    res.status(500).json({ error: 'Sitemap rebuild failed' });
+  }
+});
+
+app.post('/api/seo/indexnow', requireAdmin, async (req, res) => {
+  try {
+    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const indexNowKey = process.env.INDEXNOW_KEY || '';
+    const urls = Array.isArray(req.body && req.body.urls) && req.body.urls.length
+      ? req.body.urls
+      : null;
+
+    if (!urls) {
+      return res.status(400).json({ error: 'Missing "urls" array in body' });
+    }
+
+    if (!indexNowKey) {
+      return res.json({
+        ok: false,
+        skipped: true,
+        urls: urls.length,
+        note: 'INDEXNOW_KEY env var not set. Configure it on Vercel and expose /<key>.txt with the key content to enable Bing/Yandex IndexNow pings.'
+      });
+    }
+
+    const host = new URL(baseUrl).host;
+    const payload = {
+      host,
+      key: indexNowKey,
+      keyLocation: `${baseUrl.replace(/\/$/, '')}/${indexNowKey}.txt`,
+      urlList: urls
+    };
+
+    const upstream = await fetch('https://api.indexnow.org/IndexNow', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    res.json({
+      ok: upstream.ok,
+      status: upstream.status,
+      urls: urls.length,
+      indexNowHost: host
+    });
+  } catch (error) {
+    console.error('IndexNow ping failed', error);
+    res.status(500).json({ error: 'IndexNow ping failed' });
+  }
+});
+
 app.get('/share/blog/:slug', async (req, res) => {
   if (!ensurePool(res)) {
     return;
@@ -5234,12 +5388,27 @@ app.get('/share/blog/:slug', async (req, res) => {
     const coverImageUrl = resolveAbsoluteUrl(post.coverImageUrl, baseUrl);
     const excerpt = truncateText(post.excerpt || post.content || 'Leggi l\'articolo pubblicato dal Master in Carbon Farming.');
     const title = post.title || 'Articolo blog';
+
+    // SEO-optimized meta tags: prefer dedicated SEO fields when present, fall
+    // back to editorial title / excerpt / title-as-alt for legacy posts.
+    const seoTitleRaw = (post.seoTitle && post.seoTitle.trim()) || title;
+    // If the editor already appended a brand suffix, don't double-append it.
+    const seoTitleHasBrand = /master.*carbon.*farming/i.test(seoTitleRaw);
+    const seoTitleFull = seoTitleHasBrand ? seoTitleRaw : `${seoTitleRaw} - Master in Carbon Farming`;
+    const metaDescriptionRaw = (post.metaDescription && post.metaDescription.trim()) || excerpt;
+    const coverAltRaw = (post.coverAlt && post.coverAlt.trim()) || title;
+    const focusKeywordRaw = (post.focusKeyword && post.focusKeyword.trim()) || '';
+    const articlePublishedTime = post.publishedAt ? new Date(post.publishedAt).toISOString() : '';
+
     const ogImageTags = coverImageUrl ? `
       <meta property="og:image" content="${escapeHtml(coverImageUrl)}">
       <meta property="og:image:secure_url" content="${escapeHtml(coverImageUrl)}">
-      <meta property="og:image:alt" content="${escapeHtml(title)}">
+      <meta property="og:image:alt" content="${escapeHtml(coverAltRaw)}">
       <meta name="twitter:image" content="${escapeHtml(coverImageUrl)}">
+      <meta name="twitter:image:alt" content="${escapeHtml(coverAltRaw)}">
     ` : '';
+    const keywordsTag = focusKeywordRaw ? `<meta name="keywords" content="${escapeHtml(focusKeywordRaw)}">` : '';
+    const publishedTimeTag = articlePublishedTime ? `<meta property="article:published_time" content="${escapeHtml(articlePublishedTime)}">` : '';
 
     res.send(`
       <!DOCTYPE html>
@@ -5247,17 +5416,21 @@ app.get('/share/blog/:slug', async (req, res) => {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${escapeHtml(title)} - Master in Carbon Farming</title>
-        <meta name="description" content="${escapeHtml(excerpt)}">
+        <title>${escapeHtml(seoTitleFull)}</title>
+        <meta name="description" content="${escapeHtml(metaDescriptionRaw)}">
+        <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+        ${keywordsTag}
+        ${publishedTimeTag}
         <meta property="og:type" content="article">
         <meta property="og:site_name" content="Master in Carbon Farming">
-        <meta property="og:title" content="${escapeHtml(title)}">
-        <meta property="og:description" content="${escapeHtml(excerpt)}">
+        <meta property="og:title" content="${escapeHtml(seoTitleRaw)}">
+        <meta property="og:description" content="${escapeHtml(metaDescriptionRaw)}">
         <meta property="og:url" content="${escapeHtml(sharePageUrl)}">
+        <meta property="og:locale" content="it_IT">
         ${ogImageTags}
         <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:title" content="${escapeHtml(title)}">
-        <meta name="twitter:description" content="${escapeHtml(excerpt)}">
+        <meta name="twitter:title" content="${escapeHtml(seoTitleRaw)}">
+        <meta name="twitter:description" content="${escapeHtml(metaDescriptionRaw)}">
         <link rel="canonical" href="${escapeHtml(sharePageUrl)}">
         <style>
           body {
@@ -5375,7 +5548,7 @@ app.get('/share/blog/:slug', async (req, res) => {
       <body>
         <main class="shell">
           <section class="card">
-            ${coverImageUrl ? `<img class="cover" src="${escapeHtml(coverImageUrl)}" alt="${escapeHtml(title)}">` : `<div class="cover-fallback">Copertina articolo non disponibile</div>`}
+            ${coverImageUrl ? `<img class="cover" src="${escapeHtml(coverImageUrl)}" alt="${escapeHtml(coverAltRaw)}" loading="eager">` : `<div class="cover-fallback">Copertina articolo non disponibile</div>`}
             <div class="hero">
               <div>
                 <div class="eyebrow">Master in Carbon Farming</div>

@@ -3702,10 +3702,20 @@ async function generateBlogCoverImage(prompt) {
   }
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  // Quality and size are env-tunable so we can change cost/quality from Vercel
+  // without a redeploy. Defaults chosen for cost-efficiency: medium quality at
+  // landscape ~1.5:1 is plenty for blog covers and costs ~3x less than high.
+  // gpt-image-1 listino approssimativo (output):
+  //   low    1536x1024 ~$0.016 / img
+  //   medium 1536x1024 ~$0.063 / img   <- default
+  //   high   1536x1024 ~$0.250 / img   (old default)
+  const quality = process.env.OPENAI_IMAGE_QUALITY || 'medium';
+  const size = process.env.OPENAI_IMAGE_SIZE || '1536x1024';
   const response = await client.images.generate({
     model: 'gpt-image-1',
     prompt,
-    size: '1536x1024'
+    size,
+    quality
   });
 
   const image = response.data && response.data[0];

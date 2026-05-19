@@ -1645,6 +1645,34 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', database: hasDatabaseUrl });
 });
 
+// =============================================================================
+// Prof. Carbonio — AI Tutor del Master in Carbon Farming
+// Modulo separato in api/prof-carbonio-*.js, registriamo qui le route.
+// =============================================================================
+try {
+  const Anthropic = require('@anthropic-ai/sdk').default;
+  const { registerProfCarbonioRoutes } = require('./prof-carbonio-routes');
+
+  const profCarbonioAnthropic = process.env.ANTHROPIC_API_KEY
+    ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    : null;
+
+  const profCarbonioOpenAI = process.env.OPENAI_API_KEY
+    ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    : null;
+
+  registerProfCarbonioRoutes(app, {
+    pool,
+    anthropic: profCarbonioAnthropic,
+    openai: profCarbonioOpenAI,
+    requireStudent,
+    requireNonGuest
+  });
+  console.log('[prof-carbonio] Routes registered');
+} catch (err) {
+  console.error('[prof-carbonio] Failed to register routes:', err.message);
+}
+
 // PDF Proxy endpoint to handle CORS issues
 app.get('/api/pdf-proxy', async (req, res) => {
     try {

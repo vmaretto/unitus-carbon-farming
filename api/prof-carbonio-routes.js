@@ -52,7 +52,7 @@ function registerProfCarbonioRoutes(app, deps) {
     try {
       const { firstMessage = null, language = 'it' } = req.body || {};
       const session = await createSession(pool, {
-        userId: req.user.id,
+        userId: req.user.userId,
         language,
         firstMessage
       });
@@ -76,7 +76,7 @@ function registerProfCarbonioRoutes(app, deps) {
           WHERE user_id = $1 AND audience = 'student'
           ORDER BY last_message_at DESC
           LIMIT 50`,
-        [req.user.id]
+        [req.user.userId]
       );
       res.json({ sessions: rows });
     } catch (err) {
@@ -91,7 +91,7 @@ function registerProfCarbonioRoutes(app, deps) {
   app.get('/api/tutor/sessions/:id', requireStudent, async (req, res) => {
     if (!ensureDb(res)) return;
     try {
-      const session = await getSession(pool, req.params.id, req.user.id);
+      const session = await getSession(pool, req.params.id, req.user.userId);
       if (!session) return res.status(404).json({ error: 'Session not found' });
 
       const { rows: messages } = await pool.query(
@@ -123,7 +123,7 @@ function registerProfCarbonioRoutes(app, deps) {
         { pool, anthropic, openai },
         {
           sessionId: req.params.id,
-          userId: req.user.id,
+          userId: req.user.userId,
           userMessage: message,
           language: language || 'it'
         }
@@ -148,7 +148,7 @@ function registerProfCarbonioRoutes(app, deps) {
       const { lmsLessonId = null, moduleId = null } = req.body || {};
       const question = await escalateToTeacher(pool, {
         messageId: req.params.id,
-        userId: req.user.id,
+        userId: req.user.userId,
         lmsLessonId,
         moduleId
       });
@@ -190,7 +190,7 @@ function registerProfCarbonioRoutes(app, deps) {
 
       const result = await chatTurn(
         { pool, anthropic, openai },
-        { sessionId, userId: req.user.id, userMessage: message, language }
+        { sessionId, userId: req.user.userId, userMessage: message, language }
       );
 
       const { spoken } = stripCitationMarkers(result.reply);
@@ -221,7 +221,7 @@ function registerProfCarbonioRoutes(app, deps) {
         `SELECT message_count, tokens_in, tokens_out, cost_cents
            FROM tutor_usage_daily
           WHERE user_id = $1 AND day = $2`,
-        [req.user.id, today]
+        [req.user.userId, today]
       );
       const limit = parseInt(process.env.TUTOR_DAILY_LIMIT || '50', 10);
       const row = rows[0] || { message_count: 0, tokens_in: 0, tokens_out: 0, cost_cents: 0 };

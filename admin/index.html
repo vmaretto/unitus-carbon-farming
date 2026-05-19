@@ -10409,15 +10409,20 @@ Buono studio!</textarea>
         function renderProgressSummary(summary) {
             const grid = document.getElementById('sp-summary-grid');
             if (!grid) return;
+            const activeTotal = summary.studentsCount || 0;
+            const studentCount = summary.studentRoleCount ?? activeTotal;
+            const guestCount = summary.guestRoleCount || 0;
+            const otherCount = summary.otherRoleCount || 0;
+            const roleBreakdown = `${studentCount} studenti reali${guestCount ? `, ${guestCount} ospiti` : ''}${otherCount ? `, ${otherCount} altri ruoli` : ''}`;
             grid.innerHTML = `
                 <div class="progress-summary-card">
                     <div class="label">Studenti monitorati</div>
-                    <div class="value">${summary.studentsCount || 0}</div>
-                    <div class="subvalue">Iscrizioni attive nell'edizione</div>
+                    <div class="value">${studentCount}</div>
+                    <div class="subvalue">${roleBreakdown}${activeTotal !== studentCount ? ` (${activeTotal} iscrizioni attive)` : ''}</div>
                 </div>
                 <div class="progress-summary-card">
                     <div class="label">Lezioni completate</div>
-                    <div class="value">${summary.lessonsCompleted || 0}</div>
+                    <div class="value">${summary.cohortCompletedLessons || 0}/${summary.totalLessons || 0}</div>
                     <div class="subvalue">${summary.totalLessons || 0} lezioni pubblicate</div>
                 </div>
                 <div class="progress-summary-card">
@@ -10444,12 +10449,13 @@ Buono studio!</textarea>
             const total = (breakdown || []).reduce((sum, item) => sum + Number(item.count || 0), 0);
             container.innerHTML = (breakdown || []).map((item) => {
                 const pct = total > 0 ? Math.round((Number(item.count || 0) / total) * 100) : 0;
+                const pctLabel = total > 0 && Number(item.count || 0) > 0 && pct === 0 ? '<1' : String(pct);
                 const cls = item.key === 'inPerson' ? '' : item.key === 'remoteLive' ? 'alt' : item.key === 'remotePartial' ? 'warn' : 'purple';
                 return `
                     <div class="progress-bar-row">
                         <div class="progress-bar-head">
                             <span>${item.label}</span>
-                            <strong>${item.count || 0} (${pct}%)</strong>
+                            <strong>${item.count || 0} (${pctLabel}%)</strong>
                         </div>
                         <div class="student-progress-track"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div>
                     </div>

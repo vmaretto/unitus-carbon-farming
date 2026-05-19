@@ -468,13 +468,15 @@ test('GET /api/admin/student-progress aggrega frequenza, quiz, materiali e doman
               userId: 'student-1',
               firstName: 'Anna',
               lastName: 'Rossi',
-              email: 'anna@example.com'
+              email: 'anna@example.com',
+              role: 'student'
             },
             {
               userId: 'student-2',
               firstName: 'Luca',
               lastName: 'Bianchi',
-              email: 'luca@example.com'
+              email: 'luca@example.com',
+              role: 'guest'
             }
           ]
         };
@@ -503,6 +505,11 @@ test('GET /api/admin/student-progress aggrega frequenza, quiz, materiali e doman
             lastAttendanceAt: '2026-05-06T08:00:00.000Z'
           }]
         };
+      }
+
+      if (statement.includes('SELECT COUNT(DISTINCT ll.id)::int AS total') && statement.includes('FROM lms_lessons ll')) {
+        assert.deepEqual(params, [['lesson-1']]);
+        return { rows: [{ total: 1 }] };
       }
 
       if (statement.includes('FROM lesson_progress lp')) {
@@ -602,6 +609,9 @@ test('GET /api/admin/student-progress aggrega frequenza, quiz, materiali e doman
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.edition.id, 'edition-1');
   assert.equal(res.body.summary.studentsCount, 2);
+  assert.equal(res.body.summary.studentRoleCount, 1);
+  assert.equal(res.body.summary.guestRoleCount, 1);
+  assert.equal(res.body.summary.cohortCompletedLessons, 1);
   assert.equal(res.body.summary.totalLessons, 1);
   assert.equal(res.body.summary.totalResources, 4);
   assert.equal(res.body.summary.quizPassRate, 50);

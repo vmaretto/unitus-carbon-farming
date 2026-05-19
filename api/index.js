@@ -10781,7 +10781,8 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
       SELECT e.user_id AS "userId",
              u.first_name AS "firstName",
              u.last_name AS "lastName",
-             u.email
+             u.email,
+             COALESCE(u.role, 'student') AS role
       FROM enrollments e
       JOIN users u ON u.id = e.user_id
       WHERE e.course_edition_id = $1
@@ -10812,6 +10813,7 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
     let resourceRows = [];
     let questionRows = [];
     let totalResourceRows = [{ total: 0 }];
+    let completedLessonRows = [{ total: 0 }];
 
     if (studentIds.length) {
       if (calendarLessonIds.length || lessonIds.length) {
@@ -10840,6 +10842,26 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
             AND lp.lms_lesson_id = ANY($2::uuid[])
           GROUP BY lp.user_id
         `, [studentIds, lessonIds]));
+
+        ({ rows: completedLessonRows } = await pool.query(`
+          SELECT COUNT(DISTINCT ll.id)::int AS total
+          FROM lms_lessons ll
+          WHERE ll.id = ANY($1::uuid[])
+            AND (
+              EXISTS (
+                SELECT 1
+                FROM attendance a
+                WHERE a.lesson_id = ll.calendar_lesson_id
+                  AND a.attendance_type IN ('in_person', 'remote_live', 'remote_partial', 'async')
+              )
+              OR EXISTS (
+                SELECT 1
+                FROM lesson_progress lp
+                WHERE lp.lms_lesson_id = ll.id
+                  AND lp.completed_at IS NOT NULL
+              )
+            )
+        `, [lessonIds]));
 
         ({ rows: totalResourceRows } = await pool.query(`
           SELECT COUNT(DISTINCT r.id)::int AS total
@@ -10909,6 +10931,7 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
 
     const totalLessons = lessonRows.length;
     const totalResources = Number(totalResourceRows[0]?.total || 0);
+    const cohortCompletedLessons = Number(completedLessonRows[0]?.total || 0);
 
     const students = studentRows.map((student) => {
       const attendance = attendanceMap.get(student.userId) || {};
@@ -10918,7 +10941,7 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
       const questions = questionMap.get(student.userId) || {};
 
       const attendanceTotal = Number(attendance.total || 0);
-      const completedLessons = Number(progress.completedLessons || 0);
+      const completedLessons = Math.min(totalLessons, Math.max(Number(progress.completedLessons || 0), attendanceTotal));
       const lessonProgressPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
       const attendancePercent = totalLessons > 0 ? Math.round((attendanceTotal / totalLessons) * 100) : 0;
       const quizBestScore = quiz.bestScore === null || quiz.bestScore === undefined ? null : Number(quiz.bestScore);
@@ -10979,6 +11002,9 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
 
     const summary = students.reduce((acc, student) => {
       acc.studentsCount += 1;
+      if (student.role === 'student') acc.studentRoleCount += 1;
+      else if (student.role === 'guest') acc.guestRoleCount += 1;
+      else acc.otherRoleCount += 1;
       acc.lessonsCompleted += student.lessons.completed;
       acc.lessonProgressPercentTotal += student.lessons.percent;
       acc.inPerson += student.attendance.inPerson;
@@ -10997,6 +11023,9 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
       return acc;
     }, {
       studentsCount: 0,
+      studentRoleCount: 0,
+      guestRoleCount: 0,
+      otherRoleCount: 0,
       lessonsCompleted: 0,
       lessonProgressPercentTotal: 0,
       inPerson: 0,
@@ -11013,6 +11042,7 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
     });
 
     summary.totalLessons = totalLessons;
+    summary.cohortCompletedLessons = cohortCompletedLessons;
     summary.totalResources = totalResources;
     summary.avgLessonProgress = summary.studentsCount ? Math.round(summary.lessonProgressPercentTotal / summary.studentsCount) : 0;
     summary.avgQuizBestScore = summary.quizBestScoreCount ? Math.round(summary.quizBestScoreTotal / summary.quizBestScoreCount) : null;

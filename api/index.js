@@ -439,6 +439,12 @@ function getAttendanceCreditMinutes(attendance = {}) {
   return lessonMinutes;
 }
 
+function calculateOverlapMinutes(startA, endA, startB, endB) {
+  const start = Math.max(startA.getTime(), startB.getTime());
+  const end = Math.min(endA.getTime(), endB.getTime());
+  return end > start ? Math.round((end - start) / 60000) : 0;
+}
+
 function findAttendanceHeaderIndex(headers, predicates) {
   return headers.findIndex((header) => predicates.some((predicate) => predicate(header)));
 }
@@ -10299,6 +10305,20 @@ app.put('/api/attendance/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// Admin: delete attendance record
+app.delete('/api/attendance/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { id } = req.params;
+  try {
+    const { rows } = await pool.query('DELETE FROM attendance WHERE id = $1 RETURNING id', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Attendance not found' });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting attendance', error);
+    res.status(500).json({ error: 'Unable to delete attendance' });
+  }
+});
+
 async function importAttendanceParticipants(lessonId, participants) {
   try {
     // Load all active enrolled students (simple and robust)
@@ -10389,17 +10409,114 @@ async function importAttendanceParticipants(lessonId, participants) {
   }
 }
 
+async function importAttendanceParticipantsAcrossLessons(lessonIds, participants) {
+  const { rows: lessons } = await pool.query(
+    `SELECT id, title, start_datetime, COALESCE(duration_minutes, 0) AS duration_minutes
+     FROM lessons
+     WHERE id = ANY($1::uuid[])
+     ORDER BY start_datetime ASC`,
+    [lessonIds]
+  );
+
+  if (lessons.length !== lessonIds.length) {
+    throw new Error('Una o più lezioni selezionate non sono valide.');
+  }
+
+  const lessonWindows = lessons.map((lesson) => {
+    const start = new Date(lesson.start_datetime);
+    const durationMinutes = Number(lesson.duration_minutes || 0);
+    return {
+      ...lesson,
+      start,
+      end: new Date(start.getTime() + durationMinutes * 60000),
+      durationMinutes
+    };
+  }).filter((lesson) => lesson.durationMinutes > 0);
+
+  if (!lessonWindows.length) {
+    throw new Error('Le lezioni selezionate non hanno una durata valida.');
+  }
+
+  const result = {
+    imported: 0,
+    updated: 0,
+    skippedExisting: 0,
+    partial: 0,
+    notFound: 0,
+    matched: [],
+    unmatched: [],
+    lessons: []
+  };
+
+  for (const lesson of lessonWindows) {
+    const lessonParticipants = [];
+    for (const participant of participants) {
+      const joinTime = parseAttendanceDate(participant.joinTime);
+      const durationMinutes = Number(participant.durationMinutes || 0);
+      const leaveTime = parseAttendanceDate(participant.leaveTime) ||
+        (joinTime && durationMinutes ? new Date(new Date(joinTime).getTime() + durationMinutes * 60000).toISOString() : null);
+
+      if (!joinTime || !leaveTime) {
+        if (!result.unmatched.includes(`${participant.name || participant.email || '?'} (ingresso/uscita mancanti)`)) {
+          result.unmatched.push(`${participant.name || participant.email || '?'} (ingresso/uscita mancanti)`);
+        }
+        continue;
+      }
+
+      const overlapMinutes = calculateOverlapMinutes(new Date(joinTime), new Date(leaveTime), lesson.start, lesson.end);
+      if (overlapMinutes <= 0) continue;
+
+      lessonParticipants.push({
+        ...participant,
+        joinTime: new Date(Math.max(new Date(joinTime).getTime(), lesson.start.getTime())).toISOString(),
+        leaveTime: new Date(Math.min(new Date(leaveTime).getTime(), lesson.end.getTime())).toISOString(),
+        durationMinutes: overlapMinutes
+      });
+    }
+
+    const lessonResult = await importAttendanceParticipants(lesson.id, lessonParticipants);
+    result.imported += lessonResult.imported;
+    result.updated += lessonResult.updated;
+    result.skippedExisting += lessonResult.skippedExisting || 0;
+    result.partial += lessonResult.partial;
+    result.notFound += lessonResult.notFound;
+    result.matched.push(...lessonResult.matched.map((name) => `${lesson.title}: ${name}`));
+    result.unmatched.push(...lessonResult.unmatched.map((name) => `${lesson.title}: ${name}`));
+    result.lessons.push({
+      lessonId: lesson.id,
+      title: lesson.title,
+      parsed: lessonParticipants.length,
+      imported: lessonResult.imported,
+      updated: lessonResult.updated,
+      skippedExisting: lessonResult.skippedExisting || 0,
+      partial: lessonResult.partial
+    });
+  }
+
+  return result;
+}
+
 // Admin: import file report partecipanti Zoom/Teams
 app.post('/api/attendance/import-file', requireAdmin, uploadAttendanceFile.single('file'), async (req, res) => {
   if (!ensurePool(res)) return;
-  const lessonId = req.body.lessonId;
-  if (!lessonId || !req.file) {
-    return res.status(400).json({ error: 'lessonId and file are required' });
+  let lessonIds = [];
+  try {
+    lessonIds = req.body.lessonIds ? JSON.parse(req.body.lessonIds) : [];
+  } catch (_error) {
+    lessonIds = [];
+  }
+  if (!lessonIds.length && req.body.lessonId) lessonIds = [req.body.lessonId];
+  lessonIds = [...new Set(lessonIds.map((id) => String(id || '').trim()).filter(Boolean))];
+
+  if (!lessonIds.length || !req.file) {
+    return res.status(400).json({ error: 'lessonIds and file are required' });
   }
 
   try {
     const participants = await parseAttendanceImportFile(req.file);
-    const result = await importAttendanceParticipants(lessonId, participants);
+    const result = lessonIds.length > 1
+      ? await importAttendanceParticipantsAcrossLessons(lessonIds, participants)
+      : await importAttendanceParticipants(lessonIds[0], participants);
     res.json({ ...result, parsed: participants.length });
   } catch (error) {
     console.error('Error importing attendance file', error);

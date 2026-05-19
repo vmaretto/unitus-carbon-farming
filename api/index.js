@@ -182,6 +182,19 @@ const uploadConferenceExcel = multer({
     cb(new Error('Carica un file .xlsx valido'));
   }
 });
+
+const uploadAttendanceFile = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (ext === '.csv' || ext === '.xlsx') {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Carica un file .csv o .xlsx valido'));
+  }
+});
 const BUILD_VERSION = '2026-04-10-v25-QUIZ-CONTENT-EXTRACTION'; // Per debug deploy
 
 // Health check
@@ -322,6 +335,248 @@ function excelColumnIndexFromRef(cellRef = '') {
     index = index * 26 + (char.charCodeAt(0) - 64);
   }
   return index - 1;
+}
+
+function normalizeAttendanceImportHeader(text = '') {
+  return normalizeExtractedText(text)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function parseDelimitedLine(line, separator = ',') {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const next = line[i + 1];
+    if (char === '"' && inQuotes && next === '"') {
+      current += '"';
+      i++;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === separator && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+function parseAttendanceDurationMinutes(value) {
+  const text = String(value || '').trim();
+  if (!text) return 0;
+  const timeMatch = text.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (timeMatch) {
+    const hours = Number(timeMatch[1] || 0);
+    const minutes = Number(timeMatch[2] || 0);
+    const seconds = Number(timeMatch[3] || 0);
+    return Math.round(hours * 60 + minutes + seconds / 60);
+  }
+  const numberMatch = text.replace(',', '.').match(/(\d+(?:\.\d+)?)/);
+  return numberMatch ? Math.round(Number(numberMatch[1])) : 0;
+}
+
+function excelSerialDateToIso(value) {
+  const serial = Number(value);
+  if (!Number.isFinite(serial) || serial < 20000 || serial > 80000) return null;
+  const epoch = Date.UTC(1899, 11, 30);
+  return new Date(epoch + serial * 86400000).toISOString();
+}
+
+function parseAttendanceDate(value) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const serialIso = excelSerialDateToIso(text);
+  if (serialIso) return serialIso;
+
+  const dmy = text.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i);
+  if (dmy) {
+    let [, day, month, year, hours, mins, secsRaw, ampm] = dmy;
+    let yearNum = Number(year);
+    if (yearNum < 100) yearNum += 2000;
+    let hourNum = Number(hours);
+    if (ampm && ampm.toUpperCase() === 'PM' && hourNum < 12) hourNum += 12;
+    if (ampm && ampm.toUpperCase() === 'AM' && hourNum === 12) hourNum = 0;
+    return `${yearNum}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hourNum).padStart(2, '0')}:${mins}:${secsRaw || '00'}`;
+  }
+
+  const ymd = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (ymd) {
+    const [, year, month, day, hours, mins, secsRaw] = ymd;
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${mins}:${secsRaw || '00'}`;
+  }
+
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function getImportedAttendanceMinutes(attendance = {}) {
+  const notesMatch = String(attendance.notes || '').match(/zoom_duration_minutes=(\d+)/);
+  if (notesMatch) return Number(notesMatch[1]) || 0;
+  if (attendance.check_in_at && attendance.check_out_at) {
+    const start = new Date(attendance.check_in_at).getTime();
+    const end = new Date(attendance.check_out_at).getTime();
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+      return Math.round((end - start) / 60000);
+    }
+  }
+  return 0;
+}
+
+function getAttendanceCreditMinutes(attendance = {}) {
+  const lessonMinutes = Number(attendance.duration_minutes || 0);
+  if (attendance.attendance_type === 'remote_partial') {
+    const importedMinutes = getImportedAttendanceMinutes(attendance);
+    return importedMinutes > 0 && lessonMinutes > 0 ? Math.min(importedMinutes, lessonMinutes) : importedMinutes;
+  }
+  return lessonMinutes;
+}
+
+function findAttendanceHeaderIndex(headers, predicates) {
+  return headers.findIndex((header) => predicates.some((predicate) => predicate(header)));
+}
+
+function rowsToAttendanceParticipants(rawRows) {
+  const headerRowIndex = rawRows.findIndex((row) => {
+    const headers = row.map(normalizeAttendanceImportHeader);
+    return headers.some((h) => h.includes('name') || h.includes('nome')) &&
+      headers.some((h) => h.includes('duration') || h.includes('durata') || h.includes('minutes') || h.includes('minuti'));
+  });
+  if (headerRowIndex < 0) {
+    throw new Error('Header non riconosciuto: servono almeno nome e durata/minuti.');
+  }
+
+  const headers = rawRows[headerRowIndex].map(normalizeAttendanceImportHeader);
+  const colName = findAttendanceHeaderIndex(headers, [
+    (h) => h === 'nome' || h === 'name' || h.includes('participant name') || h.includes('original name') || h.includes('display name') || h.includes('nome visualizzato')
+  ]);
+  const colEmail = findAttendanceHeaderIndex(headers, [
+    (h) => h.includes('email') || h.includes('e mail') || h.includes('mail')
+  ]);
+  const colJoin = findAttendanceHeaderIndex(headers, [
+    (h) => h.includes('join time') || h.includes('joined') || h.includes('ingresso') || h.includes('entrata') || h.includes('ora di accesso')
+  ]);
+  const colLeave = findAttendanceHeaderIndex(headers, [
+    (h) => h.includes('leave time') || h.includes('left') || h.includes('uscita') || h.includes('ora di uscita')
+  ]);
+  const colDuration = findAttendanceHeaderIndex(headers, [
+    (h) => h.includes('duration') || h.includes('durata') || h.includes('minutes') || h.includes('minuti')
+  ]);
+
+  if (colName < 0 || colDuration < 0) {
+    throw new Error('Colonne obbligatorie non trovate: nome e durata/minuti.');
+  }
+
+  const byKey = new Map();
+  for (const row of rawRows.slice(headerRowIndex + 1)) {
+    const rawName = String(row[colName] || '')
+      .replace(/\s*[\|–—-]\s*[A-Z].*$/i, '')
+      .trim();
+    const email = colEmail >= 0 ? String(row[colEmail] || '').trim().toLowerCase() : '';
+    if (!rawName && !email) continue;
+
+    const durationMinutes = parseAttendanceDurationMinutes(row[colDuration]);
+    if (!durationMinutes) continue;
+
+    const joinTime = colJoin >= 0 ? parseAttendanceDate(row[colJoin]) : null;
+    const leaveTime = colLeave >= 0 ? parseAttendanceDate(row[colLeave]) : null;
+    const key = email || rawName.toLowerCase();
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { name: rawName, email, joinTime, leaveTime, durationMinutes });
+    } else {
+      existing.durationMinutes += durationMinutes;
+      if (email && !existing.email) existing.email = email;
+      if (joinTime && (!existing.joinTime || joinTime < existing.joinTime)) existing.joinTime = joinTime;
+      if (leaveTime && (!existing.leaveTime || leaveTime > existing.leaveTime)) existing.leaveTime = leaveTime;
+    }
+  }
+
+  const participants = Array.from(byKey.values());
+  if (!participants.length) {
+    throw new Error('Nessun partecipante con durata valida trovato nel file.');
+  }
+  return participants;
+}
+
+function parseAttendanceCsvBuffer(buffer) {
+  const text = buffer.toString('utf8').replace(/^\uFEFF/, '');
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 2) throw new Error('CSV vuoto o incompleto.');
+  const sample = lines.slice(0, 10).join('\n');
+  const separator = ((sample.match(/;/g) || []).length > (sample.match(/,/g) || []).length) ? ';' : ',';
+  return rowsToAttendanceParticipants(lines.map((line) => parseDelimitedLine(line, separator)));
+}
+
+async function parseAttendanceXlsxBuffer(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const sharedStringsXml = zip.file('xl/sharedStrings.xml')
+    ? await zip.file('xl/sharedStrings.xml').async('string')
+    : '';
+  const sharedStrings = [];
+  let sharedMatch;
+  const sharedRegex = /<t[^>]*>([\s\S]*?)<\/t>/g;
+  while ((sharedMatch = sharedRegex.exec(sharedStringsXml)) !== null) {
+    sharedStrings.push(decodeXmlEntities(sharedMatch[1]));
+  }
+
+  const sheetName = Object.keys(zip.files)
+    .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+    .sort()[0];
+  if (!sheetName) throw new Error('Il file Excel non contiene fogli leggibili.');
+
+  const xml = await zip.file(sheetName).async('string');
+  const rawRows = [];
+  const rowRegex = /<row\b[^>]*r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g;
+  let rowMatch;
+  while ((rowMatch = rowRegex.exec(xml)) !== null) {
+    const cells = [];
+    const cellRegex = /<c\b([^>]*)>([\s\S]*?)<\/c>/g;
+    let cellMatch;
+    while ((cellMatch = cellRegex.exec(rowMatch[2])) !== null) {
+      const attrs = cellMatch[1];
+      const body = cellMatch[2];
+      const ref = attrs.match(/r="([A-Z]+[0-9]+)"/i)?.[1];
+      if (!ref) continue;
+      const cellType = attrs.match(/t="([^"]+)"/i)?.[1] || '';
+      let value = '';
+      if (cellType === 'inlineStr') {
+        const inlineTexts = [];
+        const inlineRegex = /<t[^>]*>([\s\S]*?)<\/t>/g;
+        let inlineMatch;
+        while ((inlineMatch = inlineRegex.exec(body)) !== null) {
+          inlineTexts.push(decodeXmlEntities(inlineMatch[1]));
+        }
+        value = inlineTexts.join('');
+      } else {
+        const vMatch = body.match(/<v>([\s\S]*?)<\/v>/);
+        if (vMatch) {
+          value = decodeXmlEntities(vMatch[1]);
+          if (cellType === 's') {
+            const idx = Number(value);
+            value = Number.isInteger(idx) && sharedStrings[idx] ? sharedStrings[idx] : '';
+          }
+        }
+      }
+      const index = excelColumnIndexFromRef(ref);
+      if (index >= 0) cells[index] = normalizeExtractedText(value || '');
+    }
+    if (cells.some((cell) => String(cell || '').trim())) rawRows.push(cells);
+  }
+  return rowsToAttendanceParticipants(rawRows);
+}
+
+async function parseAttendanceImportFile(file) {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  if (ext === '.xlsx') return parseAttendanceXlsxBuffer(file.buffer);
+  return parseAttendanceCsvBuffer(file.buffer);
 }
 
 function normalizeConferenceEmail(value = '') {
@@ -10044,30 +10299,7 @@ app.put('/api/attendance/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// Admin: import CSV report partecipanti Zoom/Teams
-app.post('/api/attendance/import-csv', requireAdmin, async (req, res) => {
-  if (!ensurePool(res)) return;
-  const { lessonId, participants } = req.body;
-  if (!lessonId || !Array.isArray(participants)) {
-    return res.status(400).json({ error: 'lessonId and participants array are required' });
-  }
-
-  // Parse Zoom date format DD/MM/YYYY HH:MM:SS AM/PM → ISO
-  function parseZoomDate(dateStr) {
-    if (!dateStr) return null;
-    const match = dateStr.match(/(\d{2})\/(\d{2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i);
-    if (!match) return dateStr; // fallback
-    let [, day, month, year, hours, mins, secsRaw, ampm] = match;
-    let yearNum = parseInt(year);
-    if (yearNum < 100) yearNum += 2000;
-    year = String(yearNum);
-    const secs = secsRaw || '00';
-    hours = parseInt(hours);
-    if (ampm && ampm.toUpperCase() === 'PM' && hours < 12) hours += 12;
-    if (ampm && ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
-    return `${year}-${month}-${day}T${String(hours).padStart(2,'0')}:${mins}:${secs}`;
-  }
-
+async function importAttendanceParticipants(lessonId, participants) {
   try {
     // Load all active enrolled students (simple and robust)
     const { rows: enrolledStudents } = await pool.query(`
@@ -10088,6 +10320,7 @@ app.post('/api/attendance/import-csv', requireAdmin, async (req, res) => {
     let imported = 0;
     let updated = 0;
     let partial = 0;
+    let skippedExisting = 0;
     const unmatched = [];
     const matched = [];
 
@@ -10119,31 +10352,73 @@ app.post('/api/attendance/import-csv', requireAdmin, async (req, res) => {
 
       // Calculate attendance type based on duration
       const participantMinutes = p.durationMinutes || 0;
+      if (!participantMinutes) { unmatched.push(`${name || email || '?'} (durata mancante)`); continue; }
       const attendancePercent = lessonDuration > 0 ? (participantMinutes / lessonDuration) * 100 : 100;
       const attendanceType = attendancePercent >= 80 ? 'remote_live' : 'remote_partial';
 
-      const joinISO = parseZoomDate(p.joinTime) || new Date().toISOString();
-      const leaveISO = parseZoomDate(p.leaveTime) || null;
+      const joinISO = parseAttendanceDate(p.joinTime);
+      const leaveISO = parseAttendanceDate(p.leaveTime);
 
+      const importNotes = `zoom_duration_minutes=${participantMinutes}`;
       const { rows: insertRows } = await pool.query(`
-        INSERT INTO attendance (id, user_id, lesson_id, attendance_type, method, check_in_at, check_out_at)
-        VALUES ($1, $2, $3, $4, 'csv_import', $5, $6)
+        INSERT INTO attendance (id, user_id, lesson_id, attendance_type, method, check_in_at, check_out_at, notes)
+        VALUES ($1, $2, $3, $4, 'csv_import', $5, $6, $7)
         ON CONFLICT (user_id, lesson_id) DO UPDATE SET
           attendance_type = EXCLUDED.attendance_type,
           check_in_at = EXCLUDED.check_in_at,
-          check_out_at = EXCLUDED.check_out_at
+          check_out_at = EXCLUDED.check_out_at,
+          notes = EXCLUDED.notes
+        WHERE attendance.method = 'csv_import'
         RETURNING (xmax = 0) AS is_new
-      `, [uuidv4(), userId, lessonId, attendanceType, joinISO, leaveISO]);
+      `, [uuidv4(), userId, lessonId, attendanceType, joinISO, leaveISO, importNotes]);
 
+      if (!insertRows.length) {
+        skippedExisting++;
+        continue;
+      }
       const isNew = insertRows[0]?.is_new;
       if (isNew) { imported++; } else { updated++; }
       if (attendanceType === 'remote_partial') partial++;
       matched.push(name + (attendanceType === 'remote_partial' ? ' (parziale)' : ''));
     }
 
-    res.json({ imported, updated, partial, notFound: unmatched.length, matched, unmatched });
+    return { imported, updated, skippedExisting, partial, notFound: unmatched.length, matched, unmatched };
   } catch (error) {
-    console.error('Error importing attendance CSV', error);
+    console.error('Error importing attendance participants', error);
+    throw error;
+  }
+}
+
+// Admin: import file report partecipanti Zoom/Teams
+app.post('/api/attendance/import-file', requireAdmin, uploadAttendanceFile.single('file'), async (req, res) => {
+  if (!ensurePool(res)) return;
+  const lessonId = req.body.lessonId;
+  if (!lessonId || !req.file) {
+    return res.status(400).json({ error: 'lessonId and file are required' });
+  }
+
+  try {
+    const participants = await parseAttendanceImportFile(req.file);
+    const result = await importAttendanceParticipants(lessonId, participants);
+    res.json({ ...result, parsed: participants.length });
+  } catch (error) {
+    console.error('Error importing attendance file', error);
+    res.status(400).json({ error: error.message || 'Unable to import attendance file' });
+  }
+});
+
+// Admin: import CSV report partecipanti Zoom/Teams
+app.post('/api/attendance/import-csv', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { lessonId, participants } = req.body;
+  if (!lessonId || !Array.isArray(participants)) {
+    return res.status(400).json({ error: 'lessonId and participants array are required' });
+  }
+
+  try {
+    const result = await importAttendanceParticipants(lessonId, participants);
+    res.json(result);
+  } catch (error) {
     res.status(500).json({ error: 'Unable to import attendance' });
   }
 });
@@ -10194,7 +10469,7 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
 
     // Build filters for attendance query
     let attendanceQuery = `
-      SELECT a.id, a.user_id, a.lesson_id, a.lms_lesson_id, a.attendance_type, a.method,
+      SELECT a.id, a.user_id, a.lesson_id, a.lms_lesson_id, a.attendance_type, a.method, a.notes,
              a.check_in_at, a.check_out_at, COALESCE(les.duration_minutes, 0) AS duration_minutes
       FROM attendance a
       LEFT JOIN lessons les ON les.id = a.lesson_id
@@ -10229,7 +10504,7 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
       const total = inPerson + remoteLive + remotePartial + asyncCount;
       const attendedMinutes = filteredAttendances
         .filter(a => ['in_person', 'remote_live', 'remote_partial'].includes(a.attendance_type))
-        .reduce((sum, a) => sum + Number(a.duration_minutes || 0), 0);
+        .reduce((sum, a) => sum + getAttendanceCreditMinutes(a), 0);
       const attendedHours = attendedMinutes / 60.0;
       const percentage = totalPlannedHours > 0 ? Math.round((attendedHours / totalPlannedHours) * 100) : 0;
 
@@ -10295,7 +10570,7 @@ app.get('/api/attendance/export/:courseEditionId', requireAdmin, async (req, res
     const studentIds = students.map(s => s.id);
 
     const { rows: attendances } = await pool.query(
-      `SELECT a.user_id, a.attendance_type, COALESCE(les.duration_minutes, 0) AS duration_minutes
+      `SELECT a.user_id, a.attendance_type, a.notes, a.check_in_at, a.check_out_at, COALESCE(les.duration_minutes, 0) AS duration_minutes
        FROM attendance a
        LEFT JOIN lessons les ON les.id = a.lesson_id
        WHERE a.user_id = ANY($1)`,
@@ -10318,7 +10593,7 @@ app.get('/api/attendance/export/:courseEditionId', requireAdmin, async (req, res
       const total = inPerson + remoteLive + remotePartial + asyncCount;
       const attendedMinutes = sa
         .filter(a => ['in_person', 'remote_live', 'remote_partial'].includes(a.attendance_type))
-        .reduce((sum, a) => sum + Number(a.duration_minutes || 0), 0);
+        .reduce((sum, a) => sum + getAttendanceCreditMinutes(a), 0);
       const attendedHours = (attendedMinutes / 60.0).toFixed(2);
       const pct = totalPlannedHours > 0 ? Math.round((Number(attendedHours) / totalPlannedHours) * 100) : 0;
       csv += `"${s.last_name}","${s.first_name}","${s.email}",${inPerson},${remoteLive},${remotePartial},${asyncCount},${total},${attendedHours},${totalPlannedHours},${pct}%\n`;

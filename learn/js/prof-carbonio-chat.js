@@ -21,8 +21,13 @@
   const API_BASE = '/api/tutor';
   const HEYGEN_AVATAR_ID = '1402006ac8c7459d97ae9e1dce024fb7';
   // SDK HeyGen Streaming Avatar (NON LiveAvatar). Compatibile con la chiave
-  // del piano HeyGen Team Unlimited.
-  const HEYGEN_SDK_URL = 'https://esm.sh/@heygen/streaming-avatar@latest';
+  // del piano HeyGen Team Unlimited. Versione esplicita per evitare 404 dei CDN
+  // su "@latest" per scoped packages.
+  const HEYGEN_SDK_URLS = [
+    'https://cdn.jsdelivr.net/npm/@heygen/streaming-avatar@2.1.1/+esm',
+    'https://esm.sh/@heygen/streaming-avatar@2.1.1',
+    'https://esm.run/@heygen/streaming-avatar@2.1.1'
+  ];
   const TOKEN_KEYS = ['learnToken', 'token'];
   const PERSIST_KEY = 'profCarbonio.openSessionId';
   const PERSIST_PANEL_KEY = 'profCarbonio.panelOpen';
@@ -823,15 +828,29 @@
     async loadHeyGenSDK() {
       if (this.state.avatar.sdkLoaded) return this.state.avatar.sdk;
       this.refs.content.innerHTML = `<div class="empty"><p>Carico l'avatar...</p></div>`;
-      try {
-        const mod = await import(HEYGEN_SDK_URL);
-        this.state.avatar.sdk = mod;
-        this.state.avatar.sdkLoaded = true;
-        return mod;
-      } catch (err) {
-        console.error('HeyGen SDK load failed', err);
-        throw new Error('Impossibile caricare l\'SDK dell\'avatar. Riprova piu\' tardi.');
+
+      // Prova ogni CDN in sequenza, fallback su quello successivo se uno fallisce
+      const errors = [];
+      for (const url of HEYGEN_SDK_URLS) {
+        try {
+          console.log('[prof-carbonio] Loading HeyGen SDK from', url);
+          const mod = await import(/* @vite-ignore */ url);
+          // Verifica che esporti effettivamente StreamingAvatar
+          if (!mod || (!mod.default && !mod.StreamingAvatar)) {
+            throw new Error('SDK module missing StreamingAvatar export');
+          }
+          this.state.avatar.sdk = mod;
+          this.state.avatar.sdkLoaded = true;
+          console.log('[prof-carbonio] HeyGen SDK loaded successfully');
+          return mod;
+        } catch (err) {
+          console.warn(`[prof-carbonio] CDN ${url} failed:`, err.message);
+          errors.push(`${url}: ${err.message}`);
+        }
       }
+
+      console.error('[prof-carbonio] All HeyGen SDK CDNs failed:', errors);
+      throw new Error('Impossibile caricare l\'SDK dell\'avatar da nessun CDN. Controlla la connessione o riprova piu\' tardi.');
     }
 
     async startAvatar() {

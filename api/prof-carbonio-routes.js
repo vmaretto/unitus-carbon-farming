@@ -15,6 +15,11 @@ const {
   escalateToTeacher
 } = require('./prof-carbonio-chat');
 
+const {
+  getLiveAvatarSessionToken,
+  stripCitationMarkers
+} = require('./prof-carbonio-avatar');
+
 function registerProfCarbonioRoutes(app, deps) {
   const { pool, anthropic, openai, requireStudent, requireNonGuest } = deps;
 
@@ -152,6 +157,56 @@ function registerProfCarbonioRoutes(app, deps) {
       const status = err.status || 500;
       console.error('[tutor] escalate error:', err.message);
       res.status(status).json({ error: err.message || 'Escalate failed' });
+    }
+  });
+
+  // ===========================================================================
+  // POST /api/tutor/avatar/session — token LiveAvatar per modalita' voce/avatar
+  // ===========================================================================
+  app.post('/api/tutor/avatar/session', requireStudent, requireNonGuest, async (req, res) => {
+    try {
+      const { language = 'it' } = req.body || {};
+      const result = await getLiveAvatarSessionToken({ language });
+      res.json(result);
+    } catch (err) {
+      const status = err.status || 500;
+      console.error('[tutor] avatar session error:', err.message);
+      res.status(status).json({ error: err.message });
+    }
+  });
+
+  // ===========================================================================
+  // POST /api/tutor/avatar/turn — turno conversazionale ottimizzato per voce
+  // Differenze rispetto a /sessions/:id/messages:
+  //  - rimuove i marker [^N] dal testo da pronunciare
+  //  - ritorna "spoken" (per session.repeat) e "citations" (per pannello UI)
+  // ===========================================================================
+  app.post('/api/tutor/avatar/turn', requireStudent, requireNonGuest, async (req, res) => {
+    if (!ensureDb(res)) return;
+    try {
+      const { sessionId, message, language = 'it' } = req.body || {};
+      if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+      if (!message?.trim()) return res.status(400).json({ error: 'message required' });
+
+      const result = await chatTurn(
+        { pool, anthropic, openai },
+        { sessionId, userId: req.user.id, userMessage: message, language }
+      );
+
+      const { spoken } = stripCitationMarkers(result.reply);
+
+      res.json({
+        ...result,
+        spoken,            // testo "pulito" da passare a LiveAvatar.repeat()
+        replyWithMarkers: result.reply
+      });
+    } catch (err) {
+      const status = err.status || 500;
+      console.error('[tutor] avatar turn error:', err.message);
+      if (status === 429) {
+        return res.status(429).json({ error: err.message, usage: err.usage });
+      }
+      res.status(status).json({ error: err.message });
     }
   });
 

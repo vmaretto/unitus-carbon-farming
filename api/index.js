@@ -285,6 +285,21 @@ function truncateText(value, limit = 220) {
   return `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
 }
 
+// Resolve the canonical public base URL for the current request.
+// Priority: explicit env > x-forwarded-proto from the edge proxy > req.protocol.
+// Behind Vercel/Cloudflare the inner Express sees req.protocol === 'http' because
+// TLS is terminated at the edge; relying on the x-forwarded-proto header restores
+// the correct scheme so absolute URLs in sitemap, canonical and og:url are https.
+function getPublicBaseUrl(req) {
+  if (process.env.PUBLIC_BASE_URL) {
+    return process.env.PUBLIC_BASE_URL.replace(/\/$/, '');
+  }
+  const forwardedProto = (req.headers['x-forwarded-proto'] || '').toString().split(',')[0].trim();
+  const proto = forwardedProto || req.protocol || 'https';
+  const host = req.get('host');
+  return `${proto}://${host}`;
+}
+
 function normalizeConferenceRegistrationError(error) {
   const message = String(error?.message || 'Errore sconosciuto').trim();
   return message.length > 500 ? `${message.slice(0, 497)}...` : message;
@@ -5248,7 +5263,7 @@ async function buildSitemapEntries(baseUrl) {
 
 app.get(['/sitemap.xml', '/sitemap'], async (req, res) => {
   try {
-    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const baseUrl = getPublicBaseUrl(req);
     const entries = await buildSitemapEntries(baseUrl);
     const xml = buildSitemapXml(entries);
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
@@ -5261,7 +5276,7 @@ app.get(['/sitemap.xml', '/sitemap'], async (req, res) => {
 });
 
 app.get('/robots.txt', (req, res) => {
-  const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+  const baseUrl = getPublicBaseUrl(req);
   const sitemapUrl = new URL('/sitemap.xml', baseUrl).toString();
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
@@ -5281,7 +5296,7 @@ Sitemap: ${sitemapUrl}
 // not consume IndexNow; for Google we rely on the sitemap + organic crawl).
 app.post('/api/seo/sitemap-rebuild', requireAdmin, async (req, res) => {
   try {
-    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const baseUrl = getPublicBaseUrl(req);
     const entries = await buildSitemapEntries(baseUrl);
     res.json({
       ok: true,
@@ -5297,7 +5312,7 @@ app.post('/api/seo/sitemap-rebuild', requireAdmin, async (req, res) => {
 
 app.post('/api/seo/indexnow', requireAdmin, async (req, res) => {
   try {
-    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const baseUrl = getPublicBaseUrl(req);
     const indexNowKey = process.env.INDEXNOW_KEY || '';
     const urls = Array.isArray(req.body && req.body.urls) && req.body.urls.length
       ? req.body.urls
@@ -5382,7 +5397,7 @@ app.get('/share/blog/:slug', async (req, res) => {
     }
 
     const post = buildBlogPostPayload(rows[0], blogColumns);
-    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const baseUrl = getPublicBaseUrl(req);
     const sharePageUrl = new URL(`/share/blog/${encodeURIComponent(post.slug)}`, baseUrl).toString();
     const articleUrl = new URL(`/blog.html#${encodeURIComponent(post.slug)}`, baseUrl).toString();
     const coverImageUrl = resolveAbsoluteUrl(post.coverImageUrl, baseUrl);
@@ -5399,6 +5414,7 @@ app.get('/share/blog/:slug', async (req, res) => {
     const coverAltRaw = (post.coverAlt && post.coverAlt.trim()) || title;
     const focusKeywordRaw = (post.focusKeyword && post.focusKeyword.trim()) || '';
     const articlePublishedTime = post.publishedAt ? new Date(post.publishedAt).toISOString() : '';
+    const authorName = (post.author && post.author.trim()) || 'Redazione Master Carbon Farming';
 
     const ogImageTags = coverImageUrl ? `
       <meta property="og:image" content="${escapeHtml(coverImageUrl)}">
@@ -5409,6 +5425,8 @@ app.get('/share/blog/:slug', async (req, res) => {
     ` : '';
     const keywordsTag = focusKeywordRaw ? `<meta name="keywords" content="${escapeHtml(focusKeywordRaw)}">` : '';
     const publishedTimeTag = articlePublishedTime ? `<meta property="article:published_time" content="${escapeHtml(articlePublishedTime)}">` : '';
+    const authorTag = `<meta name="author" content="${escapeHtml(authorName)}">
+        <meta property="article:author" content="${escapeHtml(authorName)}">`;
 
     res.send(`
       <!DOCTYPE html>
@@ -5419,6 +5437,7 @@ app.get('/share/blog/:slug', async (req, res) => {
         <title>${escapeHtml(seoTitleFull)}</title>
         <meta name="description" content="${escapeHtml(metaDescriptionRaw)}">
         <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+        ${authorTag}
         ${keywordsTag}
         ${publishedTimeTag}
         <meta property="og:type" content="article">
@@ -8237,7 +8256,7 @@ app.post('/api/auth/magic-link', async (req, res) => {
       [tokenHash, expiresAt, user.id]
     );
 
-    const baseUrl = req.protocol + '://' + req.get('host');
+    const baseUrl = getPublicBaseUrl(req);
     const magicLink = `${baseUrl}/api/auth/verify-magic/${rawToken}`;
 
     // Invio email con Resend

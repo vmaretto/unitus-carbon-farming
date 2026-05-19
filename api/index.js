@@ -390,11 +390,42 @@ function excelSerialDateToIso(value) {
   return new Date(epoch + serial * 86400000).toISOString();
 }
 
+function getTimeZoneOffsetMs(date, timeZone = 'Europe/Rome') {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).formatToParts(date).reduce((acc, part) => {
+    if (part.type !== 'literal') acc[part.type] = Number(part.value);
+    return acc;
+  }, {});
+  const asUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  return asUtc - date.getTime();
+}
+
+function europeRomeDateTimeToIso(year, month, day, hour, minute, second = 0) {
+  const utcGuess = Date.UTC(year, month - 1, day, hour, minute, second);
+  const firstOffset = getTimeZoneOffsetMs(new Date(utcGuess), 'Europe/Rome');
+  const firstUtc = utcGuess - firstOffset;
+  const secondOffset = getTimeZoneOffsetMs(new Date(firstUtc), 'Europe/Rome');
+  return new Date(utcGuess - secondOffset).toISOString();
+}
+
 function parseAttendanceDate(value) {
   const text = String(value || '').trim();
   if (!text) return null;
   const serialIso = excelSerialDateToIso(text);
   if (serialIso) return serialIso;
+
+  if (/([zZ]|[+-]\d{2}:?\d{2})$/.test(text)) {
+    const parsedWithZone = new Date(text);
+    if (!Number.isNaN(parsedWithZone.getTime())) return parsedWithZone.toISOString();
+  }
 
   const dmy = text.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i);
   if (dmy) {
@@ -404,13 +435,13 @@ function parseAttendanceDate(value) {
     let hourNum = Number(hours);
     if (ampm && ampm.toUpperCase() === 'PM' && hourNum < 12) hourNum += 12;
     if (ampm && ampm.toUpperCase() === 'AM' && hourNum === 12) hourNum = 0;
-    return `${yearNum}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hourNum).padStart(2, '0')}:${mins}:${secsRaw || '00'}`;
+    return europeRomeDateTimeToIso(yearNum, Number(month), Number(day), hourNum, Number(mins), Number(secsRaw || 0));
   }
 
   const ymd = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
   if (ymd) {
     const [, year, month, day, hours, mins, secsRaw] = ymd;
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${mins}:${secsRaw || '00'}`;
+    return europeRomeDateTimeToIso(Number(year), Number(month), Number(day), Number(hours), Number(mins), Number(secsRaw || 0));
   }
 
   const parsed = new Date(text);

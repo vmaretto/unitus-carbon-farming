@@ -12,6 +12,7 @@
     { "source": "/share/(.*)", "destination": "/api" },
     { "source": "/sitemap.xml", "destination": "/api" },
     { "source": "/sitemap", "destination": "/api" },
-    { "source": "/robots.txt", "destination": "/api" }
+    { "source": "/robots.txt", "destination": "/api" },
+    { "source": "/:key([a-f0-9]{8,128}).txt", "destination": "/api" }
   ]
 }

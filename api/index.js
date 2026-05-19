@@ -5275,6 +5275,20 @@ app.get(['/sitemap.xml', '/sitemap'], async (req, res) => {
   }
 });
 
+// IndexNow proof-of-ownership: Bing/Yandex fetch /{KEY}.txt and expect the body
+// to contain exactly the key. We serve dynamically from the env var so no key
+// is committed to git. Set INDEXNOW_KEY on Vercel to any 8-128 hex chars
+// (e.g. `openssl rand -hex 16`).
+app.get(/^\/[a-f0-9]{8,128}\.txt$/, (req, res, next) => {
+  const indexNowKey = process.env.INDEXNOW_KEY || '';
+  if (!indexNowKey) return next();
+  const requestedKey = req.path.replace(/^\//, '').replace(/\.txt$/, '');
+  if (requestedKey !== indexNowKey) return next();
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.send(indexNowKey);
+});
+
 app.get('/robots.txt', (req, res) => {
   const baseUrl = getPublicBaseUrl(req);
   const sitemapUrl = new URL('/sitemap.xml', baseUrl).toString();
@@ -5416,13 +5430,58 @@ app.get('/share/blog/:slug', async (req, res) => {
     const articlePublishedTime = post.publishedAt ? new Date(post.publishedAt).toISOString() : '';
     const authorName = (post.author && post.author.trim()) || 'Redazione Master Carbon Farming';
 
+    // gpt-image-1 covers are generated at 1536x1024 (env-tunable). Hard-code
+    // those dimensions in og:image tags so social scrapers (Facebook/LinkedIn)
+    // don't have to fetch the image just to learn its size. Stops the FB
+    // Debugger warning "Le proprietà og:image fornite non sono ancora
+    // disponibili perché le nuove immagini vengono elaborate in modo asincrono".
+    const coverWidth = process.env.OPENAI_IMAGE_WIDTH || '1536';
+    const coverHeight = process.env.OPENAI_IMAGE_HEIGHT || '1024';
     const ogImageTags = coverImageUrl ? `
       <meta property="og:image" content="${escapeHtml(coverImageUrl)}">
       <meta property="og:image:secure_url" content="${escapeHtml(coverImageUrl)}">
+      <meta property="og:image:type" content="image/png">
+      <meta property="og:image:width" content="${escapeHtml(coverWidth)}">
+      <meta property="og:image:height" content="${escapeHtml(coverHeight)}">
       <meta property="og:image:alt" content="${escapeHtml(coverAltRaw)}">
       <meta name="twitter:image" content="${escapeHtml(coverImageUrl)}">
       <meta name="twitter:image:alt" content="${escapeHtml(coverAltRaw)}">
     ` : '';
+
+    // Schema.org Article JSON-LD: unlocks Google rich snippets (article badge,
+    // publish date, author and large thumbnail in search results).
+    const articleModifiedTime = post.publishedAt
+      ? new Date(post.publishedAt).toISOString()
+      : articlePublishedTime;
+    const logoUrl = new URL('/assets/img/logo-tuscia.png', baseUrl).toString();
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'NewsArticle',
+      mainEntityOfPage: { '@type': 'WebPage', '@id': sharePageUrl },
+      headline: (seoTitleRaw || title).slice(0, 110),
+      description: metaDescriptionRaw,
+      ...(coverImageUrl ? {
+        image: [{
+          '@type': 'ImageObject',
+          url: coverImageUrl,
+          width: Number(coverWidth),
+          height: Number(coverHeight)
+        }]
+      } : {}),
+      ...(articlePublishedTime ? { datePublished: articlePublishedTime } : {}),
+      ...(articleModifiedTime ? { dateModified: articleModifiedTime } : {}),
+      author: { '@type': 'Organization', name: authorName },
+      publisher: {
+        '@type': 'Organization',
+        name: 'Master in Carbon Farming - Università della Tuscia',
+        logo: { '@type': 'ImageObject', url: logoUrl }
+      },
+      ...(focusKeywordRaw ? { keywords: focusKeywordRaw } : {}),
+      inLanguage: 'it-IT'
+    };
+    // Use a JSON serializer that closes </script> safely.
+    const jsonLdText = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
+    const jsonLdTag = `<script type="application/ld+json">${jsonLdText}</script>`;
     const keywordsTag = focusKeywordRaw ? `<meta name="keywords" content="${escapeHtml(focusKeywordRaw)}">` : '';
     const publishedTimeTag = articlePublishedTime ? `<meta property="article:published_time" content="${escapeHtml(articlePublishedTime)}">` : '';
     const authorTag = `<meta name="author" content="${escapeHtml(authorName)}">
@@ -5451,6 +5510,7 @@ app.get('/share/blog/:slug', async (req, res) => {
         <meta name="twitter:title" content="${escapeHtml(seoTitleRaw)}">
         <meta name="twitter:description" content="${escapeHtml(metaDescriptionRaw)}">
         <link rel="canonical" href="${escapeHtml(sharePageUrl)}">
+        ${jsonLdTag}
         <style>
           body {
             margin: 0;

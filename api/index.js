@@ -461,7 +461,7 @@ function rowsToAttendanceParticipants(rawRows) {
 
   const headers = rawRows[headerRowIndex].map(normalizeAttendanceImportHeader);
   const colName = findAttendanceHeaderIndex(headers, [
-    (h) => h === 'nome' || h === 'name' || h.includes('participant name') || h.includes('original name') || h.includes('display name') || h.includes('nome visualizzato')
+    (h) => h === 'nome' || h === 'name' || h.includes('nome') || h.includes('participant name') || h.includes('original name') || h.includes('display name') || h.includes('nome visualizzato')
   ]);
   const colEmail = findAttendanceHeaderIndex(headers, [
     (h) => h.includes('email') || h.includes('e mail') || h.includes('mail')
@@ -514,7 +514,7 @@ function rowsToAttendanceParticipants(rawRows) {
 
 function parseAttendanceCsvBuffer(buffer) {
   const text = buffer.toString('utf8').replace(/^\uFEFF/, '');
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const lines = text.split(/\r\n|\n|\r/).map((line) => line.trim()).filter(Boolean);
   if (lines.length < 2) throw new Error('CSV vuoto o incompleto.');
   const sample = lines.slice(0, 10).join('\n');
   const separator = ((sample.match(/;/g) || []).length > (sample.match(/,/g) || []).length) ? ';' : ',';

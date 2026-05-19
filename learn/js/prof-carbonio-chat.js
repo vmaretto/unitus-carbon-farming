@@ -20,7 +20,9 @@
   // =========================================================================
   const API_BASE = '/api/tutor';
   const HEYGEN_AVATAR_ID = '1402006ac8c7459d97ae9e1dce024fb7';
-  const HEYGEN_SDK_URL = 'https://esm.sh/@heygen/liveavatar-web-sdk@^0.0.10';
+  // SDK HeyGen Streaming Avatar (NON LiveAvatar). Compatibile con la chiave
+  // del piano HeyGen Team Unlimited.
+  const HEYGEN_SDK_URL = 'https://esm.sh/@heygen/streaming-avatar@latest';
   const TOKEN_KEYS = ['learnToken', 'token'];
   const PERSIST_KEY = 'profCarbonio.openSessionId';
   const PERSIST_PANEL_KEY = 'profCarbonio.panelOpen';
@@ -798,8 +800,16 @@
           </div>
         `;
         this.avatarVideoEl = this.refs.content.querySelector('video');
-        if (this.state.avatar.session && this.avatarVideoEl) {
-          try { this.state.avatar.session.attach(this.avatarVideoEl); } catch (_) {}
+        // Streaming Avatar SDK: assegna il MediaStream ricevuto dall'evento STREAM_READY
+        if (this.state.avatar.stream && this.avatarVideoEl) {
+          try {
+            // Il payload puo' essere o lo stream direttamente, o un wrapper con .stream
+            const stream = this.state.avatar.stream.getTracks
+              ? this.state.avatar.stream
+              : (this.state.avatar.stream.stream || this.state.avatar.stream);
+            this.avatarVideoEl.srcObject = stream;
+            this.avatarVideoEl.play().catch(() => {});
+          } catch (e) { console.warn('video attach error', e); }
         }
         this.refs.content.querySelector('[data-action="avatar-mute"]')
           .addEventListener('click', () => this.toggleAvatarMute());
@@ -827,81 +837,109 @@
     async startAvatar() {
       try {
         const sdk = await this.loadHeyGenSDK();
-        const { LiveAvatarSession, SessionEvent, SessionState, AgentEventsEnum } = sdk;
+        // L'SDK esporta StreamingAvatar come default, piu' enum di supporto.
+        const StreamingAvatar = sdk.default || sdk.StreamingAvatar;
+        const StreamingEvents = sdk.StreamingEvents || {
+          STREAM_READY: 'stream_ready',
+          STREAM_DISCONNECTED: 'stream_disconnected',
+          AVATAR_START_TALKING: 'avatar_start_talking',
+          AVATAR_STOP_TALKING: 'avatar_stop_talking',
+          AVATAR_TALKING_MESSAGE: 'avatar_talking_message',
+          AVATAR_END_MESSAGE: 'avatar_end_message',
+          USER_TALKING_MESSAGE: 'user_talking_message',
+          USER_END_MESSAGE: 'user_end_message',
+          USER_START: 'user_start',
+          USER_STOP: 'user_stop'
+        };
+        const AvatarQuality = sdk.AvatarQuality || { Low: 'low', Medium: 'medium', High: 'high' };
+        const TaskType = sdk.TaskType || { REPEAT: 'repeat', TALK: 'talk' };
+        this.state.avatar._enums = { StreamingEvents, AvatarQuality, TaskType };
 
-        // Get session token dal nostro backend
-        const { sessionToken } = await this.api('/avatar/session', {
+        // 1) Token dal nostro backend (chiama HeyGen con la nostra HEYGEN_API_KEY)
+        const { sessionToken, avatarId } = await this.api('/avatar/session', {
           method: 'POST',
           body: JSON.stringify({ language: 'it' })
         });
 
-        // Assicura una sessione chat per persistere i messaggi
+        // 2) Assicura sessione chat per persistere messaggi e tracking costi
         await this.ensureSession();
 
-        const av = new LiveAvatarSession(sessionToken, {
-          voiceChat: { defaultMuted: false }
-        });
+        // 3) Inizializza SDK
+        const av = new StreamingAvatar({ token: sessionToken });
         this.state.avatar.session = av;
 
-        // Setup event listeners
-        av.on(SessionEvent.SESSION_STATE_CHANGED, (state) => {
-          if (state === SessionState.CONNECTED) {
-            this.state.avatar.connected = true;
-            this.renderAvatarStage();
-            setTimeout(() => av.startListening?.(), 500);
-          }
-        });
-
-        av.on(SessionEvent.SESSION_STREAM_READY, () => {
-          setTimeout(() => {
+        // 4) Event listeners
+        av.on(StreamingEvents.STREAM_READY, (event) => {
+          this.state.avatar.connected = true;
+          this.state.avatar.stream = event?.detail || event;
+          this.renderAvatarStage();
+          // Saluto iniziale
+          setTimeout(async () => {
             try {
-              av.repeat('Ciao, sono Prof. Carbonio. Chiedimi qualsiasi cosa sul Master in Carbon Farming.');
-            } catch (_) {}
-          }, 800);
+              await av.speak({
+                text: 'Ciao, sono Prof. Carbonio. Chiedimi qualsiasi cosa sul Master in Carbon Farming.',
+                task_type: TaskType.REPEAT
+              });
+            } catch (e) { console.warn('welcome speak error', e); }
+            // Avvia il voice chat dopo il saluto
+            try { await av.startVoiceChat(); } catch (e) { console.warn('startVoiceChat error', e); }
+          }, 600);
         });
 
-        av.on(SessionEvent.SESSION_DISCONNECTED, () => {
+        av.on(StreamingEvents.STREAM_DISCONNECTED, () => {
           this.state.avatar.connected = false;
           this.renderAvatarStage();
         });
 
-        av.on(AgentEventsEnum.AVATAR_SPEAK_STARTED, () => {
+        av.on(StreamingEvents.AVATAR_START_TALKING, () => {
           this.state.avatar.talking = true;
           if (this.refs.statusText) this.refs.statusText.textContent = 'Prof. Carbonio parla...';
         });
-        av.on(AgentEventsEnum.AVATAR_SPEAK_ENDED, () => {
+        av.on(StreamingEvents.AVATAR_STOP_TALKING, () => {
           this.state.avatar.talking = false;
           if (this.refs.statusText) this.refs.statusText.textContent = 'In ascolto...';
         });
 
-        av.on(AgentEventsEnum.USER_SPEAK_STARTED, () => {
+        // L'SDK Streaming Avatar emette USER_TALKING_MESSAGE con frammenti di
+        // trascrizione, poi USER_END_MESSAGE quando l'utente smette di parlare.
+        av.on(StreamingEvents.USER_START, () => {
           if (this.refs.statusText) this.refs.statusText.textContent = 'Ti ascolto...';
           this.userBuffer = '';
         });
 
-        let processingDelay = null;
-        av.on(AgentEventsEnum.USER_TRANSCRIPTION, (ev) => {
-          const txt = ev?.text || ev?.transcript;
+        av.on(StreamingEvents.USER_TALKING_MESSAGE, (event) => {
+          const txt = event?.detail?.message || event?.detail?.text || event?.message || event?.text;
           if (!txt) return;
-          // Interrupt: se sta gia' parlando, fermalo per processare nuovo input
-          try { av.interrupt(); } catch (_) {}
+          // Interrompi eventuale risposta in corso
+          try { av.interrupt && av.interrupt(); } catch (_) {}
           this.userBuffer = ((this.userBuffer || '') + ' ' + txt).trim();
-          // Debounce 1.5s dopo l'ultimo frammento
-          if (processingDelay) clearTimeout(processingDelay);
-          processingDelay = setTimeout(() => this.processAvatarTurn(av), 1500);
         });
 
-        av.on(AgentEventsEnum.USER_SPEAK_ENDED, () => {
+        let processingDelay = null;
+        av.on(StreamingEvents.USER_END_MESSAGE, () => {
           if (processingDelay) clearTimeout(processingDelay);
           processingDelay = setTimeout(() => this.processAvatarTurn(av), 800);
         });
+        av.on(StreamingEvents.USER_STOP, () => {
+          if (processingDelay) clearTimeout(processingDelay);
+          processingDelay = setTimeout(() => this.processAvatarTurn(av), 1200);
+        });
 
-        await av.start();
+        // 5) Avvia sessione streaming
+        await av.createStartAvatar({
+          quality: AvatarQuality.Low,   // Low e' piu' che sufficiente per chat tutor
+          avatarName: avatarId || HEYGEN_AVATAR_ID,
+          language: 'it',
+          disableIdleTimeout: false
+        });
+
       } catch (err) {
         console.error('startAvatar error', err);
         this.state.avatar.connected = false;
-        this.refs.content.innerHTML = `<div class="error-banner">${escapeHtml(err.message)}</div>` +
-          `<div class="empty"><button onclick="this.getRootNode().host.switchMode('text')">Torna alla chat</button></div>`;
+        this.refs.content.innerHTML = `<div class="error-banner">Errore avatar: ${escapeHtml(err.message)}</div>` +
+          `<div class="empty"><button id="btn-back-text">Torna alla chat scritta</button></div>`;
+        const back = this.refs.content.querySelector('#btn-back-text');
+        if (back) back.addEventListener('click', () => this.switchMode('text'));
       }
     }
 
@@ -923,9 +961,20 @@
         });
         const spoken = result.spoken || result.reply || '';
         this.appendTranscript('assistant', spoken, result.citations);
-        try { av.repeat(spoken); } catch (_) {}
+        const TaskType = this.state.avatar._enums?.TaskType || { REPEAT: 'repeat' };
+        try {
+          await av.speak({ text: spoken, task_type: TaskType.REPEAT });
+        } catch (e) {
+          console.warn('avatar speak error', e);
+        }
       } catch (err) {
-        try { av.repeat('Scusami, non sono riuscito a rispondere. Puoi ripetere?'); } catch (_) {}
+        const TaskType = this.state.avatar._enums?.TaskType || { REPEAT: 'repeat' };
+        try {
+          await av.speak({
+            text: 'Scusami, non sono riuscito a rispondere. Puoi ripetere?',
+            task_type: TaskType.REPEAT
+          });
+        } catch (_) {}
         console.error(err);
       } finally {
         this.state.avatar.processing = false;
@@ -950,10 +999,11 @@
       if (!av) return;
       try {
         if (this.state.avatar.muted) {
-          await av.voiceChat.unmute();
+          if (typeof av.startVoiceChat === 'function') await av.startVoiceChat();
           this.state.avatar.muted = false;
         } else {
-          await av.voiceChat.mute();
+          if (typeof av.closeVoiceChat === 'function') await av.closeVoiceChat();
+          else if (typeof av.stopVoiceChat === 'function') await av.stopVoiceChat();
           this.state.avatar.muted = true;
         }
         this.renderAvatarStage();
@@ -965,9 +1015,13 @@
     async stopAvatar() {
       const av = this.state.avatar.session;
       if (!av) return;
-      try { await av.stop(); } catch (_) {}
+      try {
+        if (typeof av.stopAvatar === 'function') await av.stopAvatar();
+        else if (typeof av.disconnect === 'function') await av.disconnect();
+      } catch (_) {}
       this.state.avatar.session = null;
       this.state.avatar.connected = false;
+      this.state.avatar.stream = null;
       if (this.state.mode === 'avatar' && this.state.open) {
         this.renderAvatarStage();
       }

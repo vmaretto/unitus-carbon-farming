@@ -1668,7 +1668,15 @@ try {
     requireStudent,
     requireNonGuest
   });
-  console.log('[prof-carbonio] Routes registered');
+
+  const { registerProfCarbonioAdminRoutes } = require('./prof-carbonio-admin');
+  registerProfCarbonioAdminRoutes(app, {
+    pool,
+    openai: profCarbonioOpenAI,
+    requireAdmin,
+    requireStudent
+  });
+  console.log('[prof-carbonio] Routes registered (student + admin)');
 } catch (err) {
   console.error('[prof-carbonio] Failed to register routes:', err.message);
 }

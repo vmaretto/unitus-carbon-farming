@@ -23,10 +23,14 @@
   // SDK HeyGen Streaming Avatar (NON LiveAvatar). Compatibile con la chiave
   // del piano HeyGen Team Unlimited. Versione esplicita per evitare 404 dei CDN
   // su "@latest" per scoped packages.
+  // SDK bundled localmente. Usiamo @heygen/streaming-avatar@2.0.16: il package
+  // npm e' marcato deprecated da HeyGen per spingere all'upsell LiveAvatar,
+  // MA l'API server api.heygen.com che usa e' ufficialmente supportata fino al
+  // 31 ottobre 2026 (docs.heygen.com). Compatibile con la chiave HeyGen del
+  // piano Team Unlimited senza subscription extra. Migrazione a client custom
+  // (opzione 3) prevista come step successivo.
   const HEYGEN_SDK_URLS = [
-    'https://cdn.jsdelivr.net/npm/@heygen/streaming-avatar@2.1.1/+esm',
-    'https://esm.sh/@heygen/streaming-avatar@2.1.1',
-    'https://esm.run/@heygen/streaming-avatar@2.1.1'
+    '/learn/js/vendor/heygen-bundle.mjs'
   ];
   const TOKEN_KEYS = ['learnToken', 'token'];
   const PERSIST_KEY = 'profCarbonio.openSessionId';
@@ -856,43 +860,36 @@
     async startAvatar() {
       try {
         const sdk = await this.loadHeyGenSDK();
-        // L'SDK esporta StreamingAvatar come default, piu' enum di supporto.
+        // Pattern HeyGen Streaming Avatar (api.heygen.com, chiave HeyGen Team).
         const StreamingAvatar = sdk.default || sdk.StreamingAvatar;
-        const StreamingEvents = sdk.StreamingEvents || {
-          STREAM_READY: 'stream_ready',
-          STREAM_DISCONNECTED: 'stream_disconnected',
-          AVATAR_START_TALKING: 'avatar_start_talking',
-          AVATAR_STOP_TALKING: 'avatar_stop_talking',
-          AVATAR_TALKING_MESSAGE: 'avatar_talking_message',
-          AVATAR_END_MESSAGE: 'avatar_end_message',
-          USER_TALKING_MESSAGE: 'user_talking_message',
-          USER_END_MESSAGE: 'user_end_message',
-          USER_START: 'user_start',
-          USER_STOP: 'user_stop'
-        };
+        const StreamingEvents = sdk.StreamingEvents;
         const AvatarQuality = sdk.AvatarQuality || { Low: 'low', Medium: 'medium', High: 'high' };
         const TaskType = sdk.TaskType || { REPEAT: 'repeat', TALK: 'talk' };
+        const VoiceChatTransport = sdk.VoiceChatTransport;
+        if (!StreamingAvatar || !StreamingEvents) {
+          throw new Error('SDK non espone StreamingAvatar/StreamingEvents');
+        }
         this.state.avatar._enums = { StreamingEvents, AvatarQuality, TaskType };
 
-        // 1) Token dal nostro backend (chiama HeyGen con la nostra HEYGEN_API_KEY)
+        // 1) Token dal nostro backend (chiama api.heygen.com/v1/streaming.create_token)
         const { sessionToken, avatarId } = await this.api('/avatar/session', {
           method: 'POST',
           body: JSON.stringify({ language: 'it' })
         });
 
-        // 2) Assicura sessione chat per persistere messaggi e tracking costi
+        // 2) Assicura sessione chat per persistere messaggi
         await this.ensureSession();
 
         // 3) Inizializza SDK
         const av = new StreamingAvatar({ token: sessionToken });
         this.state.avatar.session = av;
 
-        // 4) Event listeners
+        // 4) Event listeners — stream
         av.on(StreamingEvents.STREAM_READY, (event) => {
           this.state.avatar.connected = true;
           this.state.avatar.stream = event?.detail || event;
           this.renderAvatarStage();
-          // Saluto iniziale
+          // Saluto iniziale + avvia voice chat
           setTimeout(async () => {
             try {
               await av.speak({
@@ -900,7 +897,6 @@
                 task_type: TaskType.REPEAT
               });
             } catch (e) { console.warn('welcome speak error', e); }
-            // Avvia il voice chat dopo il saluto
             try { await av.startVoiceChat(); } catch (e) { console.warn('startVoiceChat error', e); }
           }, 600);
         });
@@ -910,6 +906,7 @@
           this.renderAvatarStage();
         });
 
+        // 5) Event listeners — avatar
         av.on(StreamingEvents.AVATAR_START_TALKING, () => {
           this.state.avatar.talking = true;
           if (this.refs.statusText) this.refs.statusText.textContent = 'Prof. Carbonio parla...';
@@ -919,34 +916,36 @@
           if (this.refs.statusText) this.refs.statusText.textContent = 'In ascolto...';
         });
 
-        // L'SDK Streaming Avatar emette USER_TALKING_MESSAGE con frammenti di
-        // trascrizione, poi USER_END_MESSAGE quando l'utente smette di parlare.
+        // 6) Event listeners — utente (l'SDK emette USER_TALKING_MESSAGE/USER_END_MESSAGE)
         av.on(StreamingEvents.USER_START, () => {
+          if (this.state.avatar.muted) return;
           if (this.refs.statusText) this.refs.statusText.textContent = 'Ti ascolto...';
           this.userBuffer = '';
         });
 
         av.on(StreamingEvents.USER_TALKING_MESSAGE, (event) => {
+          if (this.state.avatar.muted) return;
           const txt = event?.detail?.message || event?.detail?.text || event?.message || event?.text;
           if (!txt) return;
-          // Interrompi eventuale risposta in corso
           try { av.interrupt && av.interrupt(); } catch (_) {}
           this.userBuffer = ((this.userBuffer || '') + ' ' + txt).trim();
         });
 
         let processingDelay = null;
         av.on(StreamingEvents.USER_END_MESSAGE, () => {
+          if (this.state.avatar.muted) return;
           if (processingDelay) clearTimeout(processingDelay);
           processingDelay = setTimeout(() => this.processAvatarTurn(av), 800);
         });
         av.on(StreamingEvents.USER_STOP, () => {
+          if (this.state.avatar.muted) return;
           if (processingDelay) clearTimeout(processingDelay);
           processingDelay = setTimeout(() => this.processAvatarTurn(av), 1200);
         });
 
-        // 5) Avvia sessione streaming
+        // 7) Avvia sessione streaming
         await av.createStartAvatar({
-          quality: AvatarQuality.Low,   // Low e' piu' che sufficiente per chat tutor
+          quality: AvatarQuality.Low,
           avatarName: avatarId || HEYGEN_AVATAR_ID,
           language: 'it',
           disableIdleTimeout: false
@@ -967,6 +966,11 @@
       this.userBuffer = '';
       if (!msg || msg.length < 3) return;
       if (this.state.avatar.processing) return;
+      if (this.state.avatar.talking) {
+        this.userBuffer = msg;
+        setTimeout(() => this.processAvatarTurn(av), 1000);
+        return;
+      }
       this.state.avatar.processing = true;
       if (this.refs.statusText) this.refs.statusText.textContent = 'Sto pensando...';
 
@@ -983,9 +987,7 @@
         const TaskType = this.state.avatar._enums?.TaskType || { REPEAT: 'repeat' };
         try {
           await av.speak({ text: spoken, task_type: TaskType.REPEAT });
-        } catch (e) {
-          console.warn('avatar speak error', e);
-        }
+        } catch (e) { console.warn('avatar speak error', e); }
       } catch (err) {
         const TaskType = this.state.avatar._enums?.TaskType || { REPEAT: 'repeat' };
         try {

@@ -3466,6 +3466,117 @@ Buono studio!</textarea>
 
         <!-- ==================== PROF. CARBONIO ==================== -->
         <section id="prof-carbonio">
+            <style>
+                #prof-carbonio .pc-settings-group {
+                    background: #fff;
+                    border: 1px solid var(--gray-200);
+                    border-radius: 12px;
+                    overflow: hidden;
+                }
+                #prof-carbonio .pc-settings-group + .pc-settings-group { margin-top: 14px; }
+                #prof-carbonio .pc-settings-group-title {
+                    padding: 12px 16px;
+                    background: linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 100%);
+                    border-bottom: 1px solid var(--gray-200);
+                    font-weight: 600;
+                    font-size: 13px;
+                    color: var(--green-800, #166534);
+                    letter-spacing: 0.3px;
+                }
+                #prof-carbonio .pc-settings-list { display: flex; flex-direction: column; }
+                #prof-carbonio .pc-setting-row {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 14px 16px;
+                    gap: 16px;
+                    border-bottom: 1px solid #f3f4f6;
+                    transition: background .15s;
+                }
+                #prof-carbonio .pc-setting-row:last-child { border-bottom: none; }
+                #prof-carbonio .pc-setting-row:hover { background: #fafafa; }
+                #prof-carbonio .pc-setting-left { display: flex; align-items: flex-start; gap: 12px; flex: 1; min-width: 0; }
+                #prof-carbonio .pc-setting-icon {
+                    font-size: 20px;
+                    width: 36px;
+                    height: 36px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: #f0fdf4;
+                    border-radius: 8px;
+                    flex-shrink: 0;
+                }
+                #prof-carbonio .pc-setting-label {
+                    font-weight: 600;
+                    font-size: 14px;
+                    color: var(--gray-900, #111827);
+                    margin-bottom: 2px;
+                }
+                #prof-carbonio .pc-setting-hint {
+                    font-size: 12px;
+                    color: var(--gray-500, #6b7280);
+                    line-height: 1.4;
+                }
+                #prof-carbonio .pc-setting-right { flex-shrink: 0; }
+                #prof-carbonio .pc-input {
+                    padding: 7px 12px;
+                    border: 1px solid var(--gray-200);
+                    border-radius: 8px;
+                    font-size: 13px;
+                    background: white;
+                    min-width: 220px;
+                    font-family: inherit;
+                }
+                #prof-carbonio .pc-input:focus { outline: none; border-color: var(--green-600, #16a34a); box-shadow: 0 0 0 3px rgba(22,163,74,0.1); }
+                #prof-carbonio .pc-input-num { min-width: 90px; max-width: 110px; text-align: right; }
+
+                /* Toggle switch iOS-style */
+                #prof-carbonio .pc-switch {
+                    position: relative;
+                    display: inline-block;
+                    width: 50px;
+                    height: 28px;
+                    cursor: pointer;
+                }
+                #prof-carbonio .pc-switch input {
+                    opacity: 0;
+                    width: 0;
+                    height: 0;
+                    position: absolute;
+                }
+                #prof-carbonio .pc-switch-slider {
+                    position: absolute;
+                    inset: 0;
+                    background-color: #cbd5e1;
+                    border-radius: 28px;
+                    transition: .25s;
+                }
+                #prof-carbonio .pc-switch-slider:before {
+                    position: absolute;
+                    content: "";
+                    height: 22px;
+                    width: 22px;
+                    left: 3px;
+                    top: 3px;
+                    background-color: white;
+                    border-radius: 50%;
+                    transition: .25s;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                }
+                #prof-carbonio .pc-switch input:checked + .pc-switch-slider {
+                    background: linear-gradient(135deg, #16a34a, #15803d);
+                }
+                #prof-carbonio .pc-switch input:checked + .pc-switch-slider:before {
+                    transform: translateX(22px);
+                }
+
+                @media (max-width: 700px) {
+                    #prof-carbonio .pc-setting-row { flex-direction: column; align-items: stretch; }
+                    #prof-carbonio .pc-setting-right { width: 100%; }
+                    #prof-carbonio .pc-input { width: 100%; min-width: 0; }
+                }
+            </style>
             <div class="section-header">
                 <h2>🌱 Prof. Carbonio — AI Tutor</h2>
                 <button class="btn btn-secondary" onclick="profCarbonioLoadAll()">🔄 Aggiorna</button>
@@ -3496,10 +3607,10 @@ Buono studio!</textarea>
             </div>
 
             <!-- Feature flags -->
-            <div style="background:#fff; padding:20px; border-radius:12px; border:1px solid var(--gray-200); margin-bottom:20px;">
-                <h3 style="margin:0 0 14px; font-size:1.05rem; color:var(--green-700);">⚙️ Attivazione e configurazione</h3>
-                <div style="display:grid; gap:12px;" id="pc-settings-container">
-                    <div style="color:var(--gray-500); font-size:13px;">Caricamento impostazioni…</div>
+            <div style="margin-bottom:20px;">
+                <h3 style="margin:0 0 14px; font-size:1.05rem; color:var(--green-700); display:flex; align-items:center; gap:8px;">⚙️ Attivazione e configurazione</h3>
+                <div id="pc-settings-container">
+                    <div style="padding:14px; background:#fff; border-radius:12px; border:1px solid var(--gray-200); color:var(--gray-500); font-size:13px;">Caricamento impostazioni…</div>
                 </div>
             </div>
 
@@ -11871,34 +11982,131 @@ Buono studio!</textarea>
             }[c]));
         }
 
+        // Mappa etichette belle + raggruppamento per i settings di Prof. Carbonio
+        const PC_SETTINGS_META = {
+            chat_enabled: {
+                label: 'Chat testuale',
+                icon: '💬',
+                group: 'modes',
+                hint: 'Attiva il widget Prof. Carbonio in /learn/ in modalita\' chat scritta',
+                type: 'toggle'
+            },
+            avatar_enabled: {
+                label: 'Modalita\' avatar',
+                icon: '🎙️',
+                group: 'modes',
+                hint: 'Mostra il toggle "Voce + Avatar" nel widget. Richiede provider configurato.',
+                type: 'toggle'
+            },
+            avatar_provider: {
+                label: 'Provider avatar',
+                icon: '🎬',
+                group: 'modes',
+                hint: 'none | heygen (v1/v2 sunset 03/2026) | liveavatar (subscription extra) | custom',
+                type: 'select',
+                options: ['none', 'heygen', 'liveavatar', 'custom']
+            },
+            chat_model: {
+                label: 'Modello Claude',
+                icon: '🧠',
+                group: 'engine',
+                hint: 'Modello LLM usato per generare le risposte',
+                type: 'select',
+                options: [
+                    'claude-haiku-4-5-20251001',
+                    'claude-sonnet-4-20250514'
+                ]
+            },
+            daily_limit_per_student: {
+                label: 'Limite giornaliero',
+                icon: '📊',
+                group: 'limits',
+                hint: 'Numero massimo di domande al giorno per ogni studente',
+                type: 'number',
+                suffix: 'domande/giorno'
+            },
+            monthly_budget_eur: {
+                label: 'Budget mensile',
+                icon: '💰',
+                group: 'limits',
+                hint: 'Cap di spesa mensile in EUR — alert al 80% del consumo',
+                type: 'number',
+                suffix: 'EUR/mese'
+            }
+        };
+
+        const PC_GROUPS = {
+            modes: { title: 'Modalita\' attivabili', icon: '🔧' },
+            engine: { title: 'Motore AI', icon: '⚙️' },
+            limits: { title: 'Limiti e controllo costi', icon: '🛡️' }
+        };
+
+        function pcRenderSettingRow(s) {
+            const meta = PC_SETTINGS_META[s.key] || { label: s.key, icon: '•', hint: s.description, type: 'text' };
+            let control;
+            if (meta.type === 'toggle') {
+                const on = s.value === 'true';
+                control = `
+                    <label class="pc-switch" title="${on ? 'Attivo' : 'Disattivo'}">
+                        <input type="checkbox" ${on ? 'checked' : ''} onchange="profCarbonioSetSetting('${s.key}', this.checked ? 'true' : 'false')">
+                        <span class="pc-switch-slider"></span>
+                    </label>`;
+            } else if (meta.type === 'select') {
+                const opts = (meta.options || []).map(o =>
+                    `<option value="${o}" ${o === s.value ? 'selected' : ''}>${o}</option>`
+                ).join('');
+                control = `<select class="pc-input" onchange="profCarbonioSetSetting('${s.key}', this.value)">${opts}</select>`;
+            } else if (meta.type === 'number') {
+                control = `<div style="display:flex; align-items:center; gap:8px;">
+                    <input type="number" class="pc-input pc-input-num" value="${escapeHtmlAdmin(s.value)}" onchange="profCarbonioSetSetting('${s.key}', this.value)">
+                    ${meta.suffix ? `<span style="font-size:12px; color:var(--gray-500); white-space:nowrap;">${meta.suffix}</span>` : ''}
+                </div>`;
+            } else {
+                control = `<input type="text" class="pc-input" value="${escapeHtmlAdmin(s.value)}" onchange="profCarbonioSetSetting('${s.key}', this.value)">`;
+            }
+            return `
+                <div class="pc-setting-row">
+                    <div class="pc-setting-left">
+                        <div class="pc-setting-icon">${meta.icon}</div>
+                        <div>
+                            <div class="pc-setting-label">${meta.label}</div>
+                            <div class="pc-setting-hint">${escapeHtmlAdmin(meta.hint || s.description || '')}</div>
+                        </div>
+                    </div>
+                    <div class="pc-setting-right">${control}</div>
+                </div>
+            `;
+        }
+
         async function profCarbonioLoadSettings() {
             try {
                 const { settings } = await profCarbonioApi('/settings');
                 const container = document.getElementById('pc-settings-container');
-                container.innerHTML = settings.map(s => {
-                    const isBool = s.value === 'true' || s.value === 'false';
-                    if (isBool) {
-                        const checked = s.value === 'true' ? 'checked' : '';
-                        return `<label style="display:flex; align-items:center; gap:12px; padding:10px; background:#f9fafb; border-radius:8px; cursor:pointer;">
-                            <input type="checkbox" ${checked} onchange="profCarbonioSetSetting('${s.key}', this.checked ? 'true' : 'false')" style="width:18px; height:18px;">
-                            <div style="flex:1;">
-                                <div style="font-weight:600; font-size:13px;">${s.key}</div>
-                                <div style="font-size:11px; color:var(--gray-500);">${escapeHtmlAdmin(s.description || '')}</div>
+
+                // Raggruppa
+                const byGroup = {};
+                settings.forEach(s => {
+                    const g = (PC_SETTINGS_META[s.key] || {}).group || 'other';
+                    (byGroup[g] = byGroup[g] || []).push(s);
+                });
+
+                const groupOrder = ['modes', 'engine', 'limits', 'other'];
+                container.innerHTML = groupOrder
+                    .filter(g => byGroup[g]?.length)
+                    .map(g => {
+                        const meta = PC_GROUPS[g] || { title: 'Altro', icon: '•' };
+                        return `
+                            <div class="pc-settings-group">
+                                <div class="pc-settings-group-title">${meta.icon} ${meta.title}</div>
+                                <div class="pc-settings-list">
+                                    ${byGroup[g].map(pcRenderSettingRow).join('')}
+                                </div>
                             </div>
-                        </label>`;
-                    } else {
-                        return `<label style="display:flex; align-items:center; gap:12px; padding:10px; background:#f9fafb; border-radius:8px;">
-                            <div style="flex:1;">
-                                <div style="font-weight:600; font-size:13px;">${s.key}</div>
-                                <div style="font-size:11px; color:var(--gray-500);">${escapeHtmlAdmin(s.description || '')}</div>
-                            </div>
-                            <input type="text" value="${escapeHtmlAdmin(s.value)}" data-key="${s.key}" onchange="profCarbonioSetSetting('${s.key}', this.value)" style="width:200px; padding:6px 10px; border:1px solid var(--gray-200); border-radius:6px;">
-                        </label>`;
-                    }
-                }).join('');
+                        `;
+                    }).join('');
             } catch (err) {
                 document.getElementById('pc-settings-container').innerHTML =
-                    '<div style="color:#dc2626;">Errore: ' + escapeHtmlAdmin(err.message) + '</div>';
+                    '<div style="color:#dc2626; padding:14px; background:#fef2f2; border-radius:8px;">Errore: ' + escapeHtmlAdmin(err.message) + '</div>';
             }
         }
 

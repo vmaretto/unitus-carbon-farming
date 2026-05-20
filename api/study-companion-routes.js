@@ -55,7 +55,7 @@ function registerStudyCompanionRoutes(app, deps) {
   async function computePlanProgress(planId) {
     const { rows } = await pool.query(
       `SELECT
-         COUNT(*) FILTER (WHERE scheduled_for <= CURRENT_DATE) AS due_so_far,
+         COUNT(*) FILTER (WHERE scheduled_for <= (NOW() AT TIME ZONE 'Europe/Rome')::date) AS due_so_far,
          COUNT(*) FILTER (WHERE consumed_at IS NOT NULL) AS consumed,
          COUNT(*) AS total
        FROM study_artifacts
@@ -150,7 +150,7 @@ function registerStudyCompanionRoutes(app, deps) {
           WHERE study_plan_id = $1
             AND status IN ('queued', 'ready')
             AND consumed_at IS NULL
-            AND scheduled_for >= CURRENT_DATE`,
+            AND scheduled_for >= (NOW() AT TIME ZONE 'Europe/Rome')::date`,
         [planId]
       );
 
@@ -519,7 +519,7 @@ function registerStudyCompanionRoutes(app, deps) {
            FROM study_artifacts
           WHERE study_plan_id = $1
             AND status IN ('ready', 'generating')
-            AND scheduled_for >= CURRENT_DATE - INTERVAL '1 day'
+            AND scheduled_for >= (NOW() AT TIME ZONE 'Europe/Rome')::date - INTERVAL '1 day'
           ORDER BY scheduled_for ASC, created_at ASC
           LIMIT 10`,
         [plan.id]
@@ -547,7 +547,7 @@ function registerStudyCompanionRoutes(app, deps) {
                 status, difficulty, consumed_at, time_spent_seconds, rating
            FROM study_artifacts
           WHERE study_plan_id = $1
-            AND scheduled_for = CURRENT_DATE
+            AND scheduled_for = (NOW() AT TIME ZONE 'Europe/Rome')::date
             AND status IN ('ready', 'generating')
           ORDER BY created_at ASC`,
         [plan.id]

@@ -333,13 +333,14 @@ async function runAgent(plan, deps) {
   if (!openai) throw new Error('OpenAI non configurato (serve per embeddings)');
 
   // Soft-replace artefatti futuri non consumati prima di rigenerare.
+  // Usiamo la data italiana, non UTC, per allinearci a quello che vede lo studente.
   await pool.query(
     `UPDATE study_artifacts
         SET status = 'stale'
       WHERE study_plan_id = $1
         AND status IN ('queued', 'ready')
         AND consumed_at IS NULL
-        AND scheduled_for >= CURRENT_DATE`,
+        AND scheduled_for >= (NOW() AT TIME ZONE 'Europe/Rome')::date`,
     [plan.id]
   );
 
@@ -350,8 +351,11 @@ async function runAgent(plan, deps) {
     artifactsSaved: 0
   };
 
-  // User prompt iniziale: tutto il contesto del piano
-  const today = new Date().toISOString().slice(0, 10);
+  // User prompt iniziale: tutto il contesto del piano.
+  // 'today' deve essere la data italiana, non UTC. Vercel gira in UTC, quindi
+  // dopo le 22:00 italiane Date()/toISOString() darebbero il giorno sbagliato.
+  const today = new Date()
+    .toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }); // formato YYYY-MM-DD
   const userContext = `Ecco il piano dello studente da realizzare:
 
 OBIETTIVO: ${plan.goal || '(non specificato)'}

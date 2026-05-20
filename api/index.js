@@ -1681,6 +1681,29 @@ try {
   console.error('[prof-carbonio] Failed to register routes:', err.message);
 }
 
+// ---------------------------------------------------------------------------
+// AI Study Companion (Sprint 1: persistenza piano + artefatti placeholder)
+// Docs: docs/study-companion/ARCHITETTURA.md
+// ---------------------------------------------------------------------------
+try {
+  const { registerStudyCompanionRoutes } = require('./study-companion-routes');
+  const studyCompanionAnthropic = process.env.ANTHROPIC_API_KEY
+    ? (() => {
+        const Anthropic = require('@anthropic-ai/sdk').default;
+        return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      })()
+    : null;
+
+  registerStudyCompanionRoutes(app, {
+    pool,
+    anthropic: studyCompanionAnthropic, // usato in Sprint 2 per l'agente; in Sprint 1 le route non lo richiedono
+    requireStudent,
+    requireNonGuest
+  });
+} catch (err) {
+  console.error('[study-companion] Failed to register routes:', err.message);
+}
+
 // PDF Proxy endpoint to handle CORS issues
 app.get('/api/pdf-proxy', async (req, res) => {
     try {

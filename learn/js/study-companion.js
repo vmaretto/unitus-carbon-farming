@@ -315,6 +315,7 @@
         this._state.plan = today.plan;
         this._state.artifacts = today.artifacts || [];
         this._state.progress = today.progress;
+        this._state.coherence = today.coherence || null;
         this._state.loading = false;
 
         if (today.plan && today.plan.status === 'generating') {
@@ -388,6 +389,24 @@
         ? Math.round((progress.progress_ratio || 0) * 100)
         : 0;
 
+      const coh = this._state.coherence;
+      let coherenceBanner = '';
+      if (coh && coh.warning) {
+        const isCritical = coh.level === 'critical';
+        const bg = isCritical ? '#fef2f2' : '#fffbeb';
+        const border = isCritical ? '#fecaca' : '#fde68a';
+        const fg = isCritical ? '#991b1b' : '#854d0e';
+        const sugg = (coh.suggestions || [])
+          .map(s => `<li style="margin-top:4px;">${escapeHtml(s)}</li>`).join('');
+        const bannerTitle = isCritical ? 'Obiettivo molto ambizioso' : 'Tempo un po&rsquo; tirato';
+        coherenceBanner = `
+          <div style="background:${bg}; border:1px solid ${border}; border-radius:8px; padding:10px 14px; margin-bottom:1rem; color:${fg}; font-size:13px; line-height:1.5;">
+            <strong>${bannerTitle}</strong> &middot; ${escapeHtml(coh.warning)}
+            ${sugg ? `<ul style="margin:6px 0 0 18px; padding:0;">${sugg}</ul>` : ''}
+          </div>
+        `;
+      }
+
       root.innerHTML = `
         <div class="row between" style="margin-bottom: 1rem;">
           <div>
@@ -396,6 +415,7 @@
           </div>
           <button class="btn" id="edit">Modifica obiettivo</button>
         </div>
+        ${coherenceBanner}
         <div id="artifacts"></div>
         <div class="progress">
           <span class="muted" style="min-width:90px;">Progresso piano</span>

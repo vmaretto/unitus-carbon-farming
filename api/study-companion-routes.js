@@ -194,6 +194,137 @@ function registerStudyCompanionRoutes(app, deps) {
   }
 
   /**
+   * Check euristico di coerenza obiettivo.
+   * Calcola un confronto deterministico tra "ore richieste dal Master per i
+   * moduli focus" e "ore disponibili nella finestra dichiarata dallo studente",
+   * tenendo conto del progresso già accumulato.
+   *
+   * Ritorna { ok, warning, suggestions, stats } da includere nella risposta
+   * del POST study-plan. NON blocca la generazione (lo studente è libero di
+   * procedere comunque) — è un nudge informativo.
+   *
+   * In Sprint 2 verrà sostituito da una valutazione narrativa dell'agente
+   * Claude che pesca anche cosa lo studente ha effettivamente fatto.
+   */
+  async function evaluateGoalCoherence(plan) {
+    try {
+      // 1. Ore necessarie: somma le ore dei moduli focus, o di tutti i moduli
+      //    pubblicati del corso se non c'è focus.
+      let modulesQuery, modulesParams;
+      const focusIds = plan.focus_module_ids || [];
+      if (focusIds.length > 0) {
+        modulesQuery = `
+          SELECT
+            COALESCE(SUM(COALESCE(hours_lectures,0) + COALESCE(hours_lab,0) + COALESCE(hours_study,0)), 0) AS total_hours,
+            COUNT(*) AS module_count
+          FROM modules
+          WHERE id = ANY($1::uuid[]) AND is_published = TRUE
+        `;
+        modulesParams = [focusIds];
+      } else {
+        modulesQuery = `
+          SELECT
+            COALESCE(SUM(COALESCE(hours_lectures,0) + COALESCE(hours_lab,0) + COALESCE(hours_study,0)), 0) AS total_hours,
+            COUNT(*) AS module_count
+          FROM modules
+          WHERE is_published = TRUE
+        `;
+        modulesParams = [];
+      }
+      const { rows: modRows } = await pool.query(modulesQuery, modulesParams);
+      const requiredHours = Number(modRows[0]?.total_hours || 0);
+      const moduleCount = Number(modRows[0]?.module_count || 0);
+
+      // 2. Progresso già consumato (in ore) dalle lezioni LMS
+      const { rows: progRows } = await pool.query(
+        `SELECT
+           COALESCE(SUM(COALESCE(l.duration_seconds, 0) * (lp.progress_percent::float / 100.0)), 0) AS consumed_seconds
+         FROM lesson_progress lp
+         JOIN lms_lessons l ON l.id = lp.lms_lesson_id
+         WHERE lp.user_id = $1`,
+        [plan.user_id]
+      );
+      const consumedHours = (Number(progRows[0]?.consumed_seconds || 0)) / 3600;
+
+      // 3. Ore disponibili nella finestra del piano
+      const today = new Date(); today.setHours(0,0,0,0);
+      const target = new Date(plan.target_date);
+      const totalDays = Math.max(1, Math.ceil((target - today) / 86400000));
+      const weeklyDaysSet = new Set((plan.weekly_days || []).map(Number));
+      let availableDays = 0;
+      const cursor = new Date(today);
+      while (cursor <= target) {
+        const isoDay = ((cursor.getDay() + 6) % 7) + 1;
+        if (weeklyDaysSet.has(isoDay)) availableDays++;
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      const availableHours = (availableDays * plan.daily_minutes) / 60;
+
+      // 4. Gap
+      const remainingHours = Math.max(0, requiredHours - consumedHours);
+      const coverageRatio = remainingHours > 0
+        ? availableHours / remainingHours
+        : Infinity;
+
+      const stats = {
+        required_hours: Math.round(requiredHours * 10) / 10,
+        consumed_hours: Math.round(consumedHours * 10) / 10,
+        remaining_hours: Math.round(remainingHours * 10) / 10,
+        available_hours: Math.round(availableHours * 10) / 10,
+        available_days: availableDays,
+        coverage_ratio: Number.isFinite(coverageRatio) ? Math.round(coverageRatio * 100) / 100 : null,
+        module_count: moduleCount
+      };
+
+      // 5. Valutazione + suggerimenti concreti
+      if (coverageRatio < 0.4) {
+        // Obiettivo MOLTO non fattibile
+        const neededDaily = remainingHours > 0
+          ? Math.ceil((remainingHours * 60) / availableDays)
+          : plan.daily_minutes;
+        const neededDaysExtra = Math.ceil((remainingHours - availableHours) * 60 / plan.daily_minutes);
+        return {
+          ok: false,
+          level: 'critical',
+          warning: `Obiettivo molto ambizioso: hai ~${stats.available_hours}h disponibili ma servono ~${stats.remaining_hours}h per coprire ${moduleCount} ${moduleCount === 1 ? 'modulo' : 'moduli'}.`,
+          suggestions: [
+            `Aumentare i minuti di studio a circa ${neededDaily}/giorno`,
+            `Spostare la deadline di ~${neededDaysExtra} giorni`,
+            focusIds.length === 0
+              ? 'Restringere il focus a 1-2 moduli prioritari invece di tutti'
+              : 'Considerare un focus ancora più ristretto'
+          ],
+          stats
+        };
+      }
+      if (coverageRatio < 0.8) {
+        return {
+          ok: true,
+          level: 'warning',
+          warning: `Tempo un po' tirato: ~${stats.available_hours}h disponibili vs ~${stats.remaining_hours}h consigliate. Il piano funzionerà ma sarà denso.`,
+          suggestions: [
+            `Potresti aggiungere 10-15 minuti al giorno`,
+            `Oppure spostare la deadline di 1-2 settimane`
+          ],
+          stats
+        };
+      }
+      return {
+        ok: true,
+        level: 'ok',
+        warning: null,
+        suggestions: [],
+        stats
+      };
+    } catch (err) {
+      // Se per qualche motivo il check fallisce (tabelle mancanti, ecc.),
+      // non blocchiamo la creazione del piano — è solo un nudge informativo.
+      console.warn('[study-companion] coherence check skipped:', err.message);
+      return { ok: true, level: 'unknown', warning: null, suggestions: [], stats: null };
+    }
+  }
+
+  /**
    * Wrapper async che lancia la generazione "fire-and-forget" dopo aver
    * marcato il piano come 'generating'. Lo studente vedrà lo stato evolvere
    * via polling lato client.
@@ -293,12 +424,24 @@ function registerStudyCompanionRoutes(app, deps) {
       // Sprint 1: generazione inline (placeholder veloce).
       const result = await triggerGenerationInline(plan);
 
+      // Check euristico di coerenza obiettivo: NON blocca la creazione,
+      // ritorna un warning + suggerimenti che il frontend mostra come banner.
+      // Persisto in metadata.coherence così anche i GET successivi lo vedono.
+      const coherence = await evaluateGoalCoherence(plan);
+      await pool.query(
+        `UPDATE study_plans
+            SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb
+          WHERE id = $1`,
+        [plan.id, JSON.stringify({ coherence })]
+      );
+
       const { rows: refreshed } = await pool.query(
         'SELECT * FROM study_plans WHERE id = $1', [plan.id]
       );
       res.status(201).json({
         plan: refreshed[0],
-        generation: result
+        generation: result,
+        coherence
       });
     } catch (err) {
       console.error('[study-companion] POST plan error:', err);
@@ -370,7 +513,8 @@ function registerStudyCompanionRoutes(app, deps) {
           status: plan.status
         },
         artifacts,
-        progress
+        progress,
+        coherence: (plan.metadata && plan.metadata.coherence) || null
       });
     } catch (err) {
       console.error('[study-companion] GET today error:', err);
@@ -591,36 +735,50 @@ function registerStudyCompanionRoutes(app, deps) {
 
   // ===========================================================================
   // GET /api/companion/lms-modules — modulo focus picker
-  // Ritorna i moduli LMS dell'edizione attiva dello studente, per popolare il
-  // multi-select del form. Pesca dall'enrollment + course_editions + lms_modules.
+  // Ritorna i moduli del Master per popolare il multi-select del form di setup.
   //
-  // Resilienza: se le tabelle LMS (lms_modules, enrollments, ...) non sono
-  // ancora state create — siamo in Fase 1 LMS — ritorniamo array vuoto invece
-  // di un 500. Il form lo gestisce mostrando "Nessun modulo disponibile" e
-  // lo studente può comunque creare il piano senza moduli focus.
+  // NOTA: il nome dell'endpoint è "lms-modules" per ragioni storiche. In realtà
+  // pesca dalla tabella unificata `modules` (la migrazione 020_unify_modules
+  // ha droppato lms_modules confluendo tutto in `modules`).
+  //
+  // Strategia: se lo studente ha un enrollment attivo, restituiamo i moduli del
+  // corso a cui è iscritto; in fallback, restituiamo tutti i moduli pubblicati
+  // (il Master è uno solo, quindi nel 99% dei casi si arriva qui).
   // ===========================================================================
   app.get('/api/companion/lms-modules', requireStudent, async (req, res) => {
     if (!ensureDb(res)) return;
     try {
       const { rows } = await pool.query(
-        `SELECT DISTINCT m.id, m.title, m.sort_order, c.title AS course_title
-           FROM enrollments e
-           JOIN course_editions ce ON ce.id = e.course_edition_id
-           JOIN courses c ON c.id = ce.course_id
-           JOIN lms_modules m ON m.course_id = c.id
-          WHERE e.user_id = $1
-            AND e.status = 'active'
-            AND m.is_published = TRUE
-          ORDER BY m.sort_order ASC, m.title ASC`,
+        `SELECT DISTINCT m.id,
+                m.name AS title,
+                m.sort_order,
+                m.cfu,
+                m.hours_lectures,
+                m.hours_lab,
+                m.hours_study,
+                m.description_short
+           FROM modules m
+          WHERE m.is_published = TRUE
+            AND (
+              m.course_id IN (
+                SELECT ce.course_id
+                  FROM enrollments e
+                  JOIN course_editions ce ON ce.id = e.course_edition_id
+                 WHERE e.user_id = $1 AND e.status = 'active'
+              )
+              OR NOT EXISTS (
+                SELECT 1 FROM enrollments e WHERE e.user_id = $1 AND e.status = 'active'
+              )
+            )
+          ORDER BY m.sort_order ASC, m.name ASC`,
         [req.user.userId]
       );
       res.json({ modules: rows });
     } catch (err) {
-      // 42P01 = undefined_table, 42703 = undefined_column.
-      // Capita quando la migrazione 002_lms_core (Fase 1 LMS) non è ancora
-      // stata applicata in produzione. Non è un errore per noi.
+      // 42P01 = undefined_table, 42703 = undefined_column. Tabelle ancora non
+      // create: ritorniamo lista vuota invece di un 500.
       if (err && (err.code === '42P01' || err.code === '42703')) {
-        console.warn('[study-companion] LMS tables not present yet, returning empty list:', err.message);
+        console.warn('[study-companion] modules table missing, returning []:', err.message);
         return res.json({ modules: [] });
       }
       console.error('[study-companion] GET modules error:', err);

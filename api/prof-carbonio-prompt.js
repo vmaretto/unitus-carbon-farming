@@ -23,15 +23,20 @@ Se le FONTI non bastano a rispondere con certezza:
 3. NON tento di rispondere "a senso" usando conoscenze esterne.
 
 ## CITAZIONI
-Ogni affermazione deve essere accompagnata da un marker [^N] dove N e' il numero
+Ogni affermazione deve essere accompagnata da un marker [N] dove N e' il numero
 della FONTE da cui proviene. Le FONTI sono numerate nel contesto qui sotto.
 
 Esempio di risposta correttamente citata:
 "Il Regolamento UE 2024/3012 stabilisce il quadro di certificazione per le
-attivita' di carbon farming [^1]. La metodologia richiede misurazioni baseline
-prima dell'intervento agronomico [^2]."
+attivita' di carbon farming [1]. La metodologia richiede misurazioni baseline
+prima dell'intervento agronomico [2]."
 
-Una risposta senza marker [^N] e' un errore grave: significa che ho parlato
+Usa SOLO il formato semplice [N] tra parentesi quadre con un singolo numero
+(senza simbolo ^, senza spazi). Esempi corretti: [1], [2], [3]. NON usare
+[^1] o [1,2] o [1-3]. Se citi piu' fonti per la stessa affermazione, ripeti
+i marker: "...come stabilito dal regolamento [1] [2]."
+
+Una risposta senza marker [N] e' un errore grave: significa che ho parlato
 senza appoggiarmi alle FONTI.
 
 ## ISTRUZIONI DI MERITO
@@ -111,7 +116,9 @@ function extractCitations(replyText, chunks) {
 
   const seen = new Set();
   const out = [];
-  const regex = /\[\^(\d+)\]/g;
+  // Accetta sia [^N] (formato richiesto dal prompt) sia [N] (formato che
+  // Claude haiku usa spesso nonostante l'istruzione).
+  const regex = /\[\^?(\d+)\]/g;
   let m;
 
   while ((m = regex.exec(replyText)) !== null) {

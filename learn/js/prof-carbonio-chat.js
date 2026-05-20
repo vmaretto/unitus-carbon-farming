@@ -61,13 +61,21 @@
     try { return JSON.stringify(err); } catch (_) { return String(err); }
   }
 
-  // Sostituisce i marker [^N] con chip cliccabili (data-cite="N")
+  // Sostituisce i marker [N] o [^N] con chip cliccabili (data-cite="N").
+  // Claude haiku spesso scrive [N] senza il caret nonostante il prompt, quindi
+  // accettiamo entrambi i formati.
   function renderCitations(text, citations) {
     const safe = escapeHtml(text);
-    return safe.replace(/\[\^(\d+)\]/g, (_, n) => {
-      const cit = citations?.find(c => c.n === Number(n));
-      const title = cit ? escapeHtml(cit.title || '') : '';
-      return `<a class="cite" data-cite="${n}" href="#" title="${title}">[${n}]</a>`;
+    const maxN = citations?.length || 0;
+    return safe.replace(/\[\^?(\d+)\]/g, (match, n) => {
+      const num = Number(n);
+      // Solo numeri che corrispondono a una citazione disponibile
+      if (!num || num < 1 || num > maxN) return match;
+      const cit = citations.find(c => c.n === num);
+      if (!cit) return match;
+      const title = escapeHtml(cit.title || '');
+      const url = buildCitationUrl(cit);
+      return `<a class="cite" data-cite="${num}" data-url="${url ? escapeHtml(url) : ''}" href="${url ? escapeHtml(url) : '#'}" target="_blank" rel="noopener" title="${title}">[${num}]</a>`;
     });
   }
 
@@ -183,11 +191,24 @@
       font-weight: 600;
     }
 
+    .content {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
     .messages {
-      flex: 1; overflow-y: auto;
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
       padding: 16px;
       display: flex; flex-direction: column; gap: 12px;
+      scrollbar-width: thin;
     }
+    .messages::-webkit-scrollbar { width: 6px; }
+    .messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
     .msg { max-width: 88%; padding: 10px 14px; border-radius: 14px; line-height: 1.45; font-size: 14px; }
     .msg.user {
       align-self: flex-end;
@@ -258,6 +279,27 @@
       border-top: 1px solid var(--pc-border);
       display: flex; flex-direction: column; gap: 8px;
     }
+    .quick-prompts {
+      display: flex; gap: 6px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 2px 0 6px;
+      scrollbar-width: none;
+    }
+    .quick-prompts::-webkit-scrollbar { display: none; }
+    .quick-prompts button {
+      flex-shrink: 0;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: var(--pc-primary-dark);
+      padding: 6px 10px;
+      border-radius: 14px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all .15s;
+    }
+    .quick-prompts button:hover { background: var(--pc-accent); border-color: var(--pc-primary); }
     .input-row { display: flex; gap: 8px; }
     .input-row textarea {
       flex: 1; border: 1px solid var(--pc-border); border-radius: 12px;
@@ -361,8 +403,9 @@
       <div class="avatar-icon">🌱</div>
       <div class="title">
         <h2>Prof. Carbonio</h2>
-        <div class="subtitle">Tutor del Master in Carbon Farming</div>
+        <div class="subtitle session-title">Tutor del Master in Carbon Farming</div>
       </div>
+      <button class="icon" data-action="new" title="Nuova conversazione">＋</button>
       <button class="icon" data-action="history" title="Sessioni precedenti">📚</button>
       <button class="icon" data-action="close" title="Chiudi">✕</button>
     </header>
@@ -375,6 +418,14 @@
     <div class="content"></div>
 
     <footer class="input-area" data-when="text">
+      <div class="quick-prompts">
+        <button data-prompt="Cosa stabilisce il Regolamento UE 2024/3012?">📜 Regolamento UE 2024/3012</button>
+        <button data-prompt="Cos'e' il carbon farming e come funziona?">🌱 Cos'è il carbon farming</button>
+        <button data-prompt="Come si misura il SOC nel suolo?">🔬 Misurare il SOC</button>
+        <button data-prompt="Quali pratiche generano piu' crediti CRCF?">📊 Pratiche e crediti</button>
+        <button data-prompt="Cos'e' il biochar e come si applica?">🪨 Biochar</button>
+        <button data-prompt="Che differenza c'e' tra DACCS, BioCCS e BCR?">⚗️ DACCS vs BioCCS</button>
+      </div>
       <div class="quota"></div>
       <div class="input-row">
         <textarea placeholder="Scrivi qui la tua domanda..." rows="1"></textarea>
@@ -418,7 +469,8 @@
         inputArea: sr.querySelector('.input-area'),
         textarea: sr.querySelector('textarea'),
         sendBtn: sr.querySelector('.send'),
-        quota: sr.querySelector('.quota')
+        quota: sr.querySelector('.quota'),
+        sessionTitle: sr.querySelector('.session-title')
       };
 
       // Nascondi il FAB finche' non abbiamo il config: evita "flash" se entrambi disabilitati
@@ -428,6 +480,16 @@
       this.refs.fab.addEventListener('click', () => this.openPanel());
       sr.querySelector('[data-action="close"]').addEventListener('click', () => this.closePanel());
       sr.querySelector('[data-action="history"]').addEventListener('click', () => this.showHistory());
+      const newBtn = sr.querySelector('[data-action="new"]');
+      if (newBtn) newBtn.addEventListener('click', () => this.startNewSession());
+
+      // Quick-prompts: scrivono nel textarea e mandano la domanda
+      sr.querySelectorAll('.quick-prompts button[data-prompt]').forEach(b => {
+        b.addEventListener('click', () => {
+          this.refs.textarea.value = b.dataset.prompt;
+          this.sendUserMessage();
+        });
+      });
 
       this.refs.modeButtons.forEach(b =>
         b.addEventListener('click', () => this.switchMode(b.dataset.mode))
@@ -593,9 +655,20 @@
       try {
         await this.ensureSession();
         await this.fetchUsage();
+        this.updateSessionTitle();
         this.renderMessages();
       } catch (err) {
-        this.showError(err.message);
+        this.showError(stringifyError(err));
+      }
+    }
+
+    updateSessionTitle() {
+      if (!this.refs.sessionTitle) return;
+      if (this.state.session?.title && this.state.messages.length > 0) {
+        const t = this.state.session.title;
+        this.refs.sessionTitle.textContent = t.length > 50 ? t.slice(0, 50) + '…' : t;
+      } else {
+        this.refs.sessionTitle.textContent = 'Tutor del Master in Carbon Farming';
       }
     }
 
@@ -773,12 +846,18 @@
           this.renderQuota();
         }
 
+        // Aggiorna titolo sessione (la prima domanda diventa il titolo lato server)
+        if (this.state.messages.filter(m => m.role === 'user').length === 1) {
+          this.state.session = { ...this.state.session, title: text.slice(0, 80) };
+          this.updateSessionTitle();
+        }
+
         this.renderMessages();
       } catch (err) {
         this.state.messages = this.state.messages.filter(m => !m._placeholder);
         const msg = err.status === 429
           ? `⚠️ Hai raggiunto il limite giornaliero di domande. Riprova domani.`
-          : `Errore: ${err.message}`;
+          : `Errore: ${stringifyError(err)}`;
         this.state.messages.push({
           role: 'assistant', content: msg,
           id: 'err-' + Date.now(), _error: true
@@ -844,12 +923,13 @@
               this.state.session = data.session;
               this.state.messages = data.messages || [];
               localStorage.setItem(PERSIST_KEY, data.session.id);
+              this.updateSessionTitle();
               this.renderMessages();
-            } catch (err) { alert(err.message); }
+            } catch (err) { alert(stringifyError(err)); }
           });
         });
       } catch (err) {
-        this.showError(err.message);
+        this.showError(stringifyError(err));
       }
     }
 
@@ -857,8 +937,15 @@
       localStorage.removeItem(PERSIST_KEY);
       this.state.session = null;
       this.state.messages = [];
-      await this.ensureSession();
-      this.renderMessages();
+      this.refs.content.innerHTML = '<div class="empty"><p>Carico...</p></div>';
+      try {
+        await this.ensureSession();
+        this.updateSessionTitle();
+        this.renderMessages();
+        this.refs.textarea.focus();
+      } catch (err) {
+        this.showError(stringifyError(err));
+      }
     }
 
     // =======================================================================

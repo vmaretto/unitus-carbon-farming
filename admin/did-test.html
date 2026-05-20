@@ -301,6 +301,21 @@
       return sdk;
     }
 
+    async function loadStatus() {
+      const status = await apiRequest('/api/admin/tutor/did/status');
+      if (status.defaultAgentId && !getAgentId()) {
+        agentIdInput.value = status.defaultAgentId;
+        agentSelect.value = '';
+        connectBtn.disabled = false;
+        log(`Agent predefinito da Vercel: ${status.defaultAgentId}`);
+      }
+      if (status.configured?.clientKey) {
+        log('D-ID client key configurata su Vercel.');
+      } else {
+        log('D-ID client key non configurata: aggiungi DID_CLIENT_KEY o DATA_CLIENT_KEY su Vercel.', 'error');
+      }
+    }
+
     async function loadAgents() {
       setStatus('Carico agenti...', 'busy');
       const data = await apiRequest('/api/admin/tutor/did/agents');
@@ -452,6 +467,11 @@
       loadAgentsBtn.disabled = true;
       connectBtn.disabled = true;
       log('Accedi prima da /admin/, poi torna su questa pagina.', 'error');
+    } else {
+      loadStatus().catch((err) => {
+        console.error(err);
+        log(err.message || String(err), 'error');
+      });
     }
   </script>
 </body>

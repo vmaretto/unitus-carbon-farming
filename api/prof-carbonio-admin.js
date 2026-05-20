@@ -19,6 +19,10 @@ function getDidAuthorizationHeader() {
   return key.toLowerCase().startsWith('basic ') ? key : `Basic ${key}`;
 }
 
+function getDidClientKey() {
+  return (process.env.DID_CLIENT_KEY || process.env.DATA_CLIENT_KEY || '').trim();
+}
+
 async function didRequest(path, opts = {}) {
   const { method = 'GET', body = null } = opts;
   const response = await fetch(`https://api.d-id.com${path}`, {
@@ -99,9 +103,10 @@ function registerProfCarbonioAdminRoutes(app, deps) {
   app.get('/api/admin/tutor/did/status', requireAdmin, async (_req, res) => {
     res.json({
       provider: 'd-id',
+      defaultAgentId: process.env.DID_AGENT_ID || null,
       configured: {
         apiKey: Boolean(process.env.DID_API_KEY),
-        clientKey: Boolean(process.env.DID_CLIENT_KEY)
+        clientKey: Boolean(getDidClientKey())
       }
     });
   });
@@ -131,8 +136,8 @@ function registerProfCarbonioAdminRoutes(app, deps) {
 
   app.post('/api/admin/tutor/did/client-key', requireAdmin, async (req, res) => {
     try {
-      const { agentId, allowedDomains = [] } = req.body || {};
-      const existingClientKey = (process.env.DID_CLIENT_KEY || '').trim();
+      const { agentId = process.env.DID_AGENT_ID || null, allowedDomains = [] } = req.body || {};
+      const existingClientKey = getDidClientKey();
       if (existingClientKey) {
         return res.json({
           provider: 'd-id',

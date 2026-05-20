@@ -143,10 +143,7 @@ function registerProfCarbonioAdminRoutes(app, deps) {
         return res.status(400).json({ error: 'allowedDomains required' });
       }
 
-      const path = agentId
-        ? `/agents/${encodeURIComponent(agentId)}/client-keys`
-        : '/agents/client-key';
-      const data = await didRequest(path, {
+      const data = await didRequest('/agents/client-key', {
         method: 'POST',
         body: {
           allowed_domains: uniqueDomains,

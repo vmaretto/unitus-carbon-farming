@@ -159,6 +159,7 @@
 
     .entry { border-bottom: 1px solid #edf2ee; padding-bottom: 8px; }
     .entry.error { color: var(--danger); }
+    .entry.muted { color: var(--muted); }
 
     .hint {
       display: none;
@@ -267,9 +268,23 @@
     function log(message, type = 'info') {
       const entry = document.createElement('div');
       entry.className = `entry ${type}`;
-      entry.textContent = `[${new Date().toLocaleTimeString()}] ${formatError(message)}`;
+      const text = formatError(message);
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${text.length > 420 ? `${text.slice(0, 420)}...` : text}`;
       logEl.prepend(entry);
+      while (logEl.children.length > 24) {
+        logEl.lastElementChild.remove();
+      }
     }
+
+    const originalConsoleError = console.error.bind(console);
+    console.error = (...args) => {
+      const text = args.map(formatError).join(' ');
+      if (/Analytics tracking error|Load failed/i.test(text)) {
+        log('Telemetria D-ID bloccata dal browser; lo stream non e\' influenzato.', 'muted');
+        return;
+      }
+      originalConsoleError(...args);
+    };
 
     function setStatus(text, state = '') {
       statusText.textContent = text;
@@ -308,6 +323,19 @@
     function getAgentLabel(agent) {
       const id = agent.id || agent.agent_id || '';
       return agent.preview_name || agent.name || agent.title || id;
+    }
+
+    function setDefaultAgentOption() {
+      if (!defaultAgentId) return;
+      let option = Array.from(agentSelect.options).find(opt => opt.value === defaultAgentId);
+      if (!option) {
+        option = document.createElement('option');
+        option.value = defaultAgentId;
+        option.textContent = `Prof. Carbonio (${defaultAgentId})`;
+        agentSelect.appendChild(option);
+      }
+      agentSelect.value = defaultAgentId;
+      agentIdInput.value = defaultAgentId;
     }
 
     function summarizeMessages(messages, type) {
@@ -356,9 +384,8 @@
     async function loadStatus() {
       const status = await apiRequest('/api/admin/tutor/did/status');
       defaultAgentId = status.defaultAgentId || '';
-      if (defaultAgentId && !agentIdInput.value.trim() && !agentSelect.value) {
-        agentIdInput.value = defaultAgentId;
-        agentSelect.value = '';
+      if (defaultAgentId) {
+        setDefaultAgentOption();
         log(`Agent predefinito da Vercel: ${defaultAgentId}`);
       }
       if (status.configured?.clientKey) {
@@ -384,14 +411,7 @@
       });
       if (agents.length) {
         if (defaultAgentId) {
-          if (!agents.some(agent => (agent.id || agent.agent_id) === defaultAgentId)) {
-            const option = document.createElement('option');
-            option.value = defaultAgentId;
-            option.textContent = `Prof. Carbonio (${defaultAgentId})`;
-            agentSelect.appendChild(option);
-          }
-          agentSelect.value = defaultAgentId;
-          agentIdInput.value = defaultAgentId;
+          setDefaultAgentOption();
         } else if (!getAgentId()) {
           agentSelect.value = agents[0].id || agents[0].agent_id || '';
         }
@@ -424,6 +444,7 @@
 
     connectBtn.addEventListener('click', async () => {
       try {
+        logEl.innerHTML = '';
         const agentId = getAgentId();
         if (!agentId) throw new Error('Seleziona o inserisci un Agent ID D-ID.');
         actionBusy = true;
@@ -550,6 +571,14 @@
     clearBtn.addEventListener('click', () => { logEl.innerHTML = ''; });
     window.addEventListener('beforeunload', () => {
       if (agentManager?.disconnect) agentManager.disconnect().catch(() => {});
+    });
+
+    window.addEventListener('unhandledrejection', (event) => {
+      const reason = formatError(event.reason);
+      if (/Analytics tracking error|Load failed/i.test(reason)) {
+        event.preventDefault();
+        log('Telemetria D-ID bloccata dal browser; lo stream non e\' influenzato.', 'muted');
+      }
     });
 
     if (!adminToken) {

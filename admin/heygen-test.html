@@ -253,8 +253,19 @@
     function log(message, type = 'info') {
       const entry = document.createElement('div');
       entry.className = `entry ${type}`;
-      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${formatError(message)}`;
       logEl.prepend(entry);
+    }
+
+    function formatError(value) {
+      if (!value) return 'Errore sconosciuto';
+      if (typeof value === 'string') return value;
+      if (value.message) return value.message;
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch (_) {
+        return String(value);
+      }
     }
 
     function setStatus(text, state = '') {
@@ -283,7 +294,13 @@
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}`);
+        const message = [
+          data.error || `HTTP ${response.status}`,
+          data.status ? `status=${data.status}` : '',
+          data.provider ? `provider=${data.provider}` : '',
+          data.details ? `details=${JSON.stringify(data.details)}` : ''
+        ].filter(Boolean).join(' | ');
+        throw new Error(message);
       }
       return data;
     }

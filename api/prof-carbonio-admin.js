@@ -37,7 +37,12 @@ function registerProfCarbonioAdminRoutes(app, deps) {
     } catch (err) {
       const status = err.status || 500;
       console.error('[admin/tutor] avatar session error:', err.message);
-      res.status(status).json({ error: err.message || 'Unable to create HeyGen session' });
+      res.status(status).json({
+        error: err.message || 'Unable to create HeyGen session',
+        provider: err.provider || 'heygen',
+        status,
+        details: err.details || null
+      });
     }
   });
 

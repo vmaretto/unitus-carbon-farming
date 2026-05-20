@@ -50,6 +50,17 @@
     }[c]));
   }
 
+  // Stringa "umana" di un errore: gestisce Error, Response, oggetti, stringhe.
+  // Evita il classico "[object Object]" quando si fa template literal su un oggetto.
+  function stringifyError(err) {
+    if (!err) return 'Errore sconosciuto';
+    if (typeof err === 'string') return err;
+    if (err.message) return err.message;
+    if (err.error) return typeof err.error === 'string' ? err.error : JSON.stringify(err.error);
+    if (err.statusText) return `${err.status} ${err.statusText}`;
+    try { return JSON.stringify(err); } catch (_) { return String(err); }
+  }
+
   // Sostituisce i marker [^N] con chip cliccabili (data-cite="N")
   function renderCitations(text, citations) {
     const safe = escapeHtml(text);
@@ -388,6 +399,7 @@
         messages: [],
         usage: null,
         sending: false,
+        config: null, // { chatEnabled, avatarEnabled, avatarProvider, dailyLimit }
         avatar: { sdkLoaded: false, session: null, connected: false, listening: false, talking: false }
       };
     }
@@ -396,14 +408,22 @@
       const sr = this.shadowRoot;
       this.refs = {
         fab: sr.querySelector('.fab'),
+        fabLabel: sr.querySelector('.fab-label'),
         panel: sr.querySelector('.panel'),
         content: sr.querySelector('.content'),
+        modeToggle: sr.querySelector('.mode-toggle'),
         modeButtons: sr.querySelectorAll('.mode-toggle button'),
+        modeChat: sr.querySelector('.mode-toggle button[data-mode="text"]'),
+        modeAvatar: sr.querySelector('.mode-toggle button[data-mode="avatar"]'),
         inputArea: sr.querySelector('.input-area'),
         textarea: sr.querySelector('textarea'),
         sendBtn: sr.querySelector('.send'),
         quota: sr.querySelector('.quota')
       };
+
+      // Nascondi il FAB finche' non abbiamo il config: evita "flash" se entrambi disabilitati
+      this.refs.fab.style.display = 'none';
+      if (this.refs.fabLabel) this.refs.fabLabel.style.display = 'none';
 
       this.refs.fab.addEventListener('click', () => this.openPanel());
       sr.querySelector('[data-action="close"]').addEventListener('click', () => this.closePanel());
@@ -421,6 +441,71 @@
       });
       this.refs.textarea.addEventListener('input', () => this.autoresize());
       this.refs.sendBtn.addEventListener('click', () => this.sendUserMessage());
+
+      // Carica feature flags PRIMA di decidere se mostrare il bottone
+      this.bootstrapConfig();
+    }
+
+    async bootstrapConfig() {
+      try {
+        // Endpoint pubblico (autenticato studente) che ritorna i flag attivi
+        const token = getAuthToken();
+        if (!token) {
+          // Non loggato: niente widget
+          return;
+        }
+        const res = await fetch(API_BASE + '/config', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        if (!res.ok) {
+          // Fallback prudente: se l'endpoint non esiste, assumiamo tutto OFF
+          this.state.config = { chatEnabled: false, avatarEnabled: false };
+        } else {
+          this.state.config = await res.json();
+        }
+      } catch (err) {
+        console.warn('[prof-carbonio] config load failed, hiding widget', err);
+        this.state.config = { chatEnabled: false, avatarEnabled: false };
+      }
+      this.applyConfig();
+    }
+
+    applyConfig() {
+      const c = this.state.config || {};
+      const anyEnabled = c.chatEnabled || c.avatarEnabled;
+
+      // Se nessuna modalita' attiva, NON mostriamo il bottone fluttuante
+      if (!anyEnabled) {
+        this.refs.fab.style.display = 'none';
+        if (this.refs.fabLabel) this.refs.fabLabel.style.display = 'none';
+        // Chiudi il pannello se per caso era stato lasciato aperto
+        this.closePanel();
+        return;
+      }
+
+      // Mostra il FAB (e l'etichetta)
+      this.refs.fab.style.display = '';
+      if (this.refs.fabLabel) this.refs.fabLabel.style.display = '';
+
+      // Mostra/nascondi i tab in base ai flag
+      if (this.refs.modeChat) this.refs.modeChat.style.display = c.chatEnabled ? '' : 'none';
+      if (this.refs.modeAvatar) this.refs.modeAvatar.style.display = c.avatarEnabled ? '' : 'none';
+
+      // Se uno solo dei due è attivo, nascondiamo proprio la barra dei tab (non serve scegliere)
+      if (c.chatEnabled !== c.avatarEnabled) {
+        this.refs.modeToggle.style.display = 'none';
+      } else {
+        this.refs.modeToggle.style.display = '';
+      }
+
+      // Scegli la modalita' di default coerente coi flag
+      if (this.state.mode === 'avatar' && !c.avatarEnabled) this.state.mode = 'text';
+      if (this.state.mode === 'text' && !c.chatEnabled && c.avatarEnabled) this.state.mode = 'avatar';
+
+      // Aggiorna stato visivo dei mode buttons
+      this.refs.modeButtons.forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === this.state.mode);
+      });
 
       // Reopen panel if it was open before page reload
       if (localStorage.getItem(PERSIST_PANEL_KEY) === '1') {
@@ -954,7 +1039,8 @@
       } catch (err) {
         console.error('startAvatar error', err);
         this.state.avatar.connected = false;
-        this.refs.content.innerHTML = `<div class="error-banner">Errore avatar: ${escapeHtml(err.message)}</div>` +
+        const msg = stringifyError(err);
+        this.refs.content.innerHTML = `<div class="error-banner">Errore avatar: ${escapeHtml(msg)}</div>` +
           `<div class="empty"><button id="btn-back-text">Torna alla chat scritta</button></div>`;
         const back = this.refs.content.querySelector('#btn-back-text');
         if (back) back.addEventListener('click', () => this.switchMode('text'));

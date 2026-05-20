@@ -29,6 +29,41 @@ function registerStudyCompanionRoutes(app, deps) {
     return true;
   }
 
+  /**
+   * Legge la flag companion_enabled da tutor_settings. Default true se assente.
+   * Risultato cached in memoria per 30 secondi per non martellare il DB.
+   */
+  let _featureCache = { value: true, fetchedAt: 0 };
+  async function isFeatureEnabled() {
+    const now = Date.now();
+    if (now - _featureCache.fetchedAt < 30000) return _featureCache.value;
+    try {
+      const { rows } = await pool.query(
+        `SELECT value FROM tutor_settings WHERE key = 'companion_enabled' LIMIT 1`
+      );
+      const enabled = rows[0] ? rows[0].value !== 'false' : true;
+      _featureCache = { value: enabled, fetchedAt: now };
+      return enabled;
+    } catch (err) {
+      // Se la tabella non esiste o errore, assumiamo enabled per non rompere.
+      return true;
+    }
+  }
+
+  // ===========================================================================
+  // GET /api/companion/feature-status — endpoint pubblico (no auth)
+  // Il widget lo chiama al boot per sapere se mostrarsi o nascondersi.
+  // ===========================================================================
+  app.get('/api/companion/feature-status', async (req, res) => {
+    try {
+      const enabled = await isFeatureEnabled();
+      res.json({ enabled });
+    } catch (err) {
+      console.error('[study-companion] feature-status error:', err);
+      res.json({ enabled: true }); // fail-open
+    }
+  });
+
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
@@ -411,6 +446,9 @@ function registerStudyCompanionRoutes(app, deps) {
   // ===========================================================================
   app.post('/api/companion/study-plan', requireStudent, requireNonGuest, async (req, res) => {
     if (!ensureDb(res)) return;
+    if (!(await isFeatureEnabled())) {
+      return res.status(403).json({ error: 'Study Companion non è attivo. Contatta l\'amministratore.' });
+    }
     try {
       const userId = req.user.userId;
       const {
@@ -610,6 +648,9 @@ function registerStudyCompanionRoutes(app, deps) {
   app.post('/api/companion/study-plan/regenerate',
     requireStudent, requireNonGuest, async (req, res) => {
       if (!ensureDb(res)) return;
+      if (!(await isFeatureEnabled())) {
+        return res.status(403).json({ error: 'Study Companion non è attivo.' });
+      }
       try {
         const plan = await findActivePlan(req.user.userId);
         if (!plan) return res.status(404).json({ error: 'No active plan' });

@@ -142,7 +142,26 @@
 
     connectedCallback() {
       this._renderShell();
-      this.refresh();
+      // Prima cosa: controlla se la feature è attiva. Se no, nasconde il widget
+      // (l'admin l'ha disabilitato dal pannello).
+      this._checkFeatureFlag().then(enabled => {
+        if (!enabled) {
+          this.style.display = 'none';
+          return;
+        }
+        this.refresh();
+      });
+    }
+
+    async _checkFeatureFlag() {
+      try {
+        const res = await fetch('/api/companion/feature-status', { method: 'GET' });
+        if (!res.ok) return true; // fail-open
+        const data = await res.json();
+        return data.enabled !== false;
+      } catch (e) {
+        return true; // fail-open: se la fetch fallisce, mostra comunque
+      }
     }
 
     disconnectedCallback() {

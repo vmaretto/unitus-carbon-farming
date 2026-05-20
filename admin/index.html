@@ -12032,13 +12032,21 @@ Buono studio!</textarea>
                 hint: 'Cap di spesa mensile in EUR — alert al 80% del consumo',
                 type: 'number',
                 suffix: 'EUR/mese'
+            },
+            companion_enabled: {
+                label: 'AI Study Companion',
+                icon: '📚',
+                group: 'companion',
+                hint: 'Attiva il widget piano di studio personalizzato nella dashboard /learn/. Lo studente può definire un obiettivo e ricevere materiali generati dall\'agente Claude.',
+                type: 'toggle'
             }
         };
 
         const PC_GROUPS = {
             modes: { title: 'Modalita\' attivabili', icon: '🔧' },
             engine: { title: 'Motore AI', icon: '⚙️' },
-            limits: { title: 'Limiti e controllo costi', icon: '🛡️' }
+            limits: { title: 'Limiti e controllo costi', icon: '🛡️' },
+            companion: { title: 'AI Study Companion', icon: '📚' }
         };
 
         function pcRenderSettingRow(s) {
@@ -12090,7 +12098,7 @@ Buono studio!</textarea>
                     (byGroup[g] = byGroup[g] || []).push(s);
                 });
 
-                const groupOrder = ['modes', 'engine', 'limits', 'other'];
+                const groupOrder = ['modes', 'engine', 'limits', 'companion', 'other'];
                 container.innerHTML = groupOrder
                     .filter(g => byGroup[g]?.length)
                     .map(g => {

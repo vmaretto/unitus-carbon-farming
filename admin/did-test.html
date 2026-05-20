@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test D-ID Agent - UNITUS</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --green: #166534;
+      --line: #d8e2dc;
+      --ink: #102018;
+      --muted: #5f6f66;
+      --bg: #f6f8f5;
+      --panel: #ffffff;
+      --danger: #991b1b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 32px auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    h1 { margin: 0 0 6px; font-size: 28px; line-height: 1.15; }
+    p { margin: 0; color: var(--muted); line-height: 1.5; }
+    a { color: var(--green); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.65fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: 0 10px 25px rgba(16, 32, 24, 0.05);
+    }
+
+    .stage {
+      aspect-ratio: 16 / 9;
+      background: #0f1f18;
+      border-radius: 8px;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #0f1f18;
+    }
+
+    .placeholder {
+      padding: 24px;
+      color: #d7e7dd;
+      text-align: center;
+      max-width: 460px;
+    }
+
+    .status {
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      background: rgba(255, 255, 255, 0.92);
+      border-radius: 999px;
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #9ca3af; }
+    .dot.ready { background: #16a34a; }
+    .dot.busy { background: #eab308; }
+    .dot.error { background: #dc2626; }
+
+    .controls { display: grid; gap: 12px; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font: inherit;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    textarea { min-height: 112px; resize: vertical; line-height: 1.45; }
+
+    input:focus, select:focus, textarea:focus {
+      outline: 3px solid rgba(22, 101, 52, 0.15);
+      border-color: var(--green);
+    }
+
+    button {
+      border: 1px solid var(--green);
+      background: var(--green);
+      color: #fff;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    button.secondary { background: #fff; color: var(--green); }
+    button.danger { background: #fff; border-color: #fecaca; color: var(--danger); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .log {
+      display: grid;
+      gap: 8px;
+      max-height: 360px;
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .entry { border-bottom: 1px solid #edf2ee; padding-bottom: 8px; }
+    .entry.error { color: var(--danger); }
+
+    @media (max-width: 860px) {
+      main { width: min(100% - 20px, 1120px); margin: 18px auto; }
+      header, .layout { grid-template-columns: 1fr; display: grid; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Test D-ID Agent</h1>
+        <p>Pagina admin isolata per verificare D-ID Agents, client key e stream WebRTC.</p>
+      </div>
+      <a href="/admin/#prof-carbonio">Torna ad admin</a>
+    </header>
+
+    <section class="layout">
+      <div class="panel">
+        <div class="stage">
+          <video id="agent-video" autoplay playsinline></video>
+          <div id="placeholder" class="placeholder">Carica un Agent D-ID, connettiti e invia un messaggio.</div>
+          <div class="status"><span id="status-dot" class="dot"></span><span id="status-text">Non connesso</span></div>
+        </div>
+      </div>
+
+      <aside class="panel controls">
+        <div class="row">
+          <button id="load-agents-btn">Carica agenti</button>
+          <button id="connect-btn" disabled>Connetti</button>
+          <button id="disconnect-btn" class="danger" disabled>Disconnetti</button>
+        </div>
+
+        <label>
+          Agent D-ID
+          <select id="agent-select">
+            <option value="">Carica agenti o inserisci ID manualmente</option>
+          </select>
+        </label>
+
+        <label>
+          Agent ID manuale
+          <input id="agent-id" placeholder="agt_..." autocomplete="off">
+        </label>
+
+        <textarea id="message-text">Ciao, sono Prof. Carbonio. Questa e' una prova tecnica dello streaming avatar D-ID per il Master in Carbon Farming.</textarea>
+
+        <div class="row">
+          <button id="chat-btn" disabled>Invia chat</button>
+          <button id="speak-btn" class="secondary" disabled>Solo speak</button>
+          <button id="clear-btn" class="secondary" type="button">Pulisci log</button>
+        </div>
+
+        <div id="log" class="log" aria-live="polite"></div>
+      </aside>
+    </section>
+  </main>
+
+  <script type="module">
+    const SDK_URL = 'https://esm.sh/@d-id/client-sdk';
+    const adminToken = localStorage.getItem('adminToken');
+    const loadAgentsBtn = document.getElementById('load-agents-btn');
+    const connectBtn = document.getElementById('connect-btn');
+    const disconnectBtn = document.getElementById('disconnect-btn');
+    const chatBtn = document.getElementById('chat-btn');
+    const speakBtn = document.getElementById('speak-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const agentSelect = document.getElementById('agent-select');
+    const agentIdInput = document.getElementById('agent-id');
+    const messageText = document.getElementById('message-text');
+    const video = document.getElementById('agent-video');
+    const placeholder = document.getElementById('placeholder');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const logEl = document.getElementById('log');
+
+    let sdk = null;
+    let agentManager = null;
+
+    function formatError(value) {
+      if (!value) return 'Errore sconosciuto';
+      if (typeof value === 'string') return value;
+      if (value.message) return value.message;
+      try { return JSON.stringify(value, null, 2); } catch (_) { return String(value); }
+    }
+
+    function log(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.className = `entry ${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${formatError(message)}`;
+      logEl.prepend(entry);
+    }
+
+    function setStatus(text, state = '') {
+      statusText.textContent = text;
+      statusDot.className = `dot ${state}`;
+    }
+
+    function setConnected(connected) {
+      connectBtn.disabled = connected || !getAgentId();
+      disconnectBtn.disabled = !connected;
+      chatBtn.disabled = !connected;
+      speakBtn.disabled = !connected;
+      placeholder.style.display = connected ? 'none' : 'block';
+    }
+
+    function getAgentId() {
+      return (agentIdInput.value || agentSelect.value || '').trim();
+    }
+
+    async function apiRequest(url, options = {}) {
+      if (!adminToken) throw new Error('Admin token assente. Accedi prima da /admin/.');
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+          ...(options.headers || {})
+        }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = [
+          data.error || `HTTP ${response.status}`,
+          data.status ? `status=${data.status}` : '',
+          data.provider ? `provider=${data.provider}` : '',
+          data.details ? `details=${JSON.stringify(data.details)}` : ''
+        ].filter(Boolean).join(' | ');
+        throw new Error(message);
+      }
+      return data;
+    }
+
+    async function loadSdk() {
+      if (sdk) return sdk;
+      log('Carico D-ID Client SDK...');
+      sdk = await import(SDK_URL);
+      if (!sdk.createAgentManager) {
+        throw new Error('D-ID SDK non valido: createAgentManager mancante.');
+      }
+      log('SDK D-ID caricato.');
+      return sdk;
+    }
+
+    async function loadAgents() {
+      setStatus('Carico agenti...', 'busy');
+      const data = await apiRequest('/api/admin/tutor/did/agents');
+      agentSelect.innerHTML = '<option value="">Seleziona un Agent</option>';
+      const agents = data.agents || [];
+      agents.forEach((agent) => {
+        const id = agent.id || agent.agent_id;
+        if (!id) return;
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = `${agent.preview_name || agent.name || id} (${id})`;
+        agentSelect.appendChild(option);
+      });
+      if (agents.length) {
+        agentSelect.value = agents[0].id || agents[0].agent_id || '';
+        log(`Trovati ${agents.length} agenti D-ID.`);
+        connectBtn.disabled = false;
+        setStatus('Agenti caricati', 'ready');
+      } else {
+        log('Nessun Agent trovato. Crea un Agent in D-ID Studio > Agents, poi riprova.', 'error');
+        setStatus('Nessun Agent', 'error');
+      }
+    }
+
+    agentSelect.addEventListener('change', () => {
+      if (agentSelect.value) agentIdInput.value = '';
+      connectBtn.disabled = !getAgentId();
+    });
+
+    agentIdInput.addEventListener('input', () => {
+      if (agentIdInput.value.trim()) agentSelect.value = '';
+      connectBtn.disabled = !getAgentId();
+    });
+
+    loadAgentsBtn.addEventListener('click', async () => {
+      try { await loadAgents(); } catch (err) {
+        console.error(err);
+        setStatus('Errore', 'error');
+        log(err.message || String(err), 'error');
+      }
+    });
+
+    connectBtn.addEventListener('click', async () => {
+      try {
+        const agentId = getAgentId();
+        if (!agentId) throw new Error('Seleziona o inserisci un Agent ID D-ID.');
+        setStatus('Creo client key...', 'busy');
+        connectBtn.disabled = true;
+        const keyResult = await apiRequest('/api/admin/tutor/did/client-key', {
+          method: 'POST',
+          body: JSON.stringify({
+            agentId,
+            allowedDomains: [window.location.origin]
+          })
+        });
+        if (!keyResult.clientKey) throw new Error('D-ID non ha restituito client_key.');
+        log(`Client key creata per ${agentId}.`);
+
+        const mod = await loadSdk();
+        const callbacks = {
+          onSrcObjectReady(value) {
+            video.srcObject = value;
+            video.play().catch((err) => log(`Autoplay bloccato: ${err.message}`, 'error'));
+            setConnected(true);
+            setStatus('Stream attivo', 'ready');
+            log('Stream WebRTC D-ID attivo.');
+          },
+          onConnectionStateChange(state) {
+            log(`Connection state: ${state}`);
+            if (state === 'connected') setStatus('Connesso', 'ready');
+            if (state === 'failed' || state === 'disconnected') setStatus(String(state), state === 'failed' ? 'error' : '');
+          },
+          onNewMessage(messages, type) {
+            log(`Messaggio ${type || ''}: ${JSON.stringify(messages)}`);
+          },
+          onError(error) {
+            log(error, 'error');
+          }
+        };
+        const auth = { type: 'key', clientKey: keyResult.clientKey };
+        agentManager = await mod.createAgentManager(agentId, {
+          auth,
+          callbacks,
+          streamOptions: { compatibilityMode: 'auto', streamWarmup: true }
+        });
+        setStatus('Connessione...', 'busy');
+        await agentManager.connect();
+        log(`Agent ${agentId} connesso.`);
+      } catch (err) {
+        console.error(err);
+        setConnected(false);
+        setStatus('Errore', 'error');
+        log(err.message || String(err), 'error');
+      } finally {
+        if (!agentManager) connectBtn.disabled = !getAgentId();
+      }
+    });
+
+    chatBtn.addEventListener('click', async () => {
+      const text = messageText.value.trim();
+      if (!agentManager || !text) return;
+      try {
+        setStatus('Invio chat...', 'busy');
+        await agentManager.chat(text);
+        log(`Chat inviata: ${text}`);
+      } catch (err) {
+        console.error(err);
+        log(err.message || String(err), 'error');
+      }
+    });
+
+    speakBtn.addEventListener('click', async () => {
+      const text = messageText.value.trim();
+      if (!agentManager || !text) return;
+      try {
+        setStatus('Invio speak...', 'busy');
+        if (!agentManager.speak) throw new Error('Questo SDK non espone speak(); usa Invia chat.');
+        await agentManager.speak(text);
+        log(`Speak inviato: ${text}`);
+      } catch (err) {
+        console.error(err);
+        log(err.message || String(err), 'error');
+      }
+    });
+
+    disconnectBtn.addEventListener('click', async () => {
+      try {
+        if (agentManager?.disconnect) await agentManager.disconnect();
+      } catch (err) {
+        log(err.message || String(err), 'error');
+      } finally {
+        agentManager = null;
+        video.srcObject = null;
+        setConnected(false);
+        setStatus('Non connesso');
+        log('Sessione terminata.');
+      }
+    });
+
+    clearBtn.addEventListener('click', () => { logEl.innerHTML = ''; });
+    window.addEventListener('beforeunload', () => {
+      if (agentManager?.disconnect) agentManager.disconnect().catch(() => {});
+    });
+
+    if (!adminToken) {
+      setStatus('Login admin richiesto', 'error');
+      loadAgentsBtn.disabled = true;
+      connectBtn.disabled = true;
+      log('Accedi prima da /admin/, poi torna su questa pagina.', 'error');
+    }
+  </script>
+</body>
+</html>

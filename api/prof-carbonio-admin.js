@@ -9,6 +9,53 @@
 const { ingestSource } = require('./prof-carbonio-ingest');
 const { getHeygenSessionToken } = require('./prof-carbonio-avatar');
 
+function getDidAuthorizationHeader() {
+  const key = (process.env.DID_API_KEY || '').trim();
+  if (!key) {
+    const err = new Error('DID_API_KEY not configured');
+    err.status = 503;
+    throw err;
+  }
+  return key.toLowerCase().startsWith('basic ') ? key : `Basic ${key}`;
+}
+
+async function didRequest(path, opts = {}) {
+  const { method = 'GET', body = null } = opts;
+  const response = await fetch(`https://api.d-id.com${path}`, {
+    method,
+    headers: {
+      Authorization: getDidAuthorizationHeader(),
+      'Content-Type': 'application/json'
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+
+  const rawText = await response.text();
+  let data = {};
+  try {
+    data = rawText ? JSON.parse(rawText) : {};
+  } catch (_) {
+    data = { raw: rawText };
+  }
+
+  if (!response.ok) {
+    const message = typeof data?.message === 'string'
+      ? data.message
+      : typeof data?.error === 'string'
+        ? data.error
+        : data?.error?.message
+          ? data.error.message
+          : `D-ID API error (${response.status})`;
+    const err = new Error(message);
+    err.status = response.status;
+    err.provider = 'd-id';
+    err.details = data;
+    throw err;
+  }
+
+  return data;
+}
+
 function registerProfCarbonioAdminRoutes(app, deps) {
   const { pool, openai, requireAdmin } = deps;
   if (!app) throw new Error('Express app required');
@@ -40,6 +87,86 @@ function registerProfCarbonioAdminRoutes(app, deps) {
       res.status(status).json({
         error: err.message || 'Unable to create HeyGen session',
         provider: err.provider || 'heygen',
+        status,
+        details: err.details || null
+      });
+    }
+  });
+
+  // ===========================================================================
+  // D-ID Agents test endpoints — realtime avatar via D-ID Client SDK
+  // ===========================================================================
+  app.get('/api/admin/tutor/did/status', requireAdmin, async (_req, res) => {
+    res.json({
+      provider: 'd-id',
+      configured: {
+        apiKey: Boolean(process.env.DID_API_KEY)
+      }
+    });
+  });
+
+  app.get('/api/admin/tutor/did/agents', requireAdmin, async (_req, res) => {
+    try {
+      const data = await didRequest('/agents');
+      const agents = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.agents)
+          ? data.agents
+          : Array.isArray(data?.items)
+            ? data.items
+            : [];
+      res.json({ provider: 'd-id', raw: data, agents });
+    } catch (err) {
+      const status = err.status || 500;
+      console.error('[admin/tutor] D-ID agents error:', err.message);
+      res.status(status).json({
+        error: err.message || 'Unable to list D-ID agents',
+        provider: err.provider || 'd-id',
+        status,
+        details: err.details || null
+      });
+    }
+  });
+
+  app.post('/api/admin/tutor/did/client-key', requireAdmin, async (req, res) => {
+    try {
+      const { agentId, allowedDomains = [] } = req.body || {};
+      const domains = Array.isArray(allowedDomains) ? allowedDomains.filter(Boolean) : [];
+      const origin = req.get('origin');
+      const host = req.get('host');
+      if (origin) domains.push(origin);
+      if (host) domains.push(`https://${host}`);
+      domains.push('https://unitus.carbonfarmingmaster.it');
+
+      const uniqueDomains = Array.from(new Set(domains.map(d => String(d).replace(/\/$/, ''))));
+      if (!uniqueDomains.length) {
+        return res.status(400).json({ error: 'allowedDomains required' });
+      }
+
+      const path = agentId
+        ? `/agents/${encodeURIComponent(agentId)}/client-keys`
+        : '/agents/client-key';
+      const data = await didRequest(path, {
+        method: 'POST',
+        body: {
+          allowed_domains: uniqueDomains,
+          name: `unitus-${Date.now()}`
+        }
+      });
+
+      res.status(201).json({
+        provider: 'd-id',
+        agentId: agentId || null,
+        allowedDomains: uniqueDomains,
+        clientKey: data.client_key || data.clientKey || data.key,
+        raw: data
+      });
+    } catch (err) {
+      const status = err.status || 500;
+      console.error('[admin/tutor] D-ID client key error:', err.message);
+      res.status(status).json({
+        error: err.message || 'Unable to create D-ID client key',
+        provider: err.provider || 'd-id',
         status,
         details: err.details || null
       });

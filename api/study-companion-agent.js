@@ -22,8 +22,11 @@
 const { searchKBChunks } = require('./prof-carbonio-search');
 
 const DEFAULT_MODEL = process.env.STUDY_COMPANION_MODEL || 'claude-sonnet-4-6';
-const MAX_TURNS = 24;
+const MAX_TURNS = 20;
 const MAX_TOKENS_PER_TURN = 4096;
+// Time budget interno: usciamo gracefully prima del timeout hard di Vercel
+// (maxDuration nel vercel.json). Lasciamo un margine di sicurezza di 30 sec.
+const TIME_BUDGET_MS = 240 * 1000;
 
 // ===========================================================================
 // SYSTEM PROMPT
@@ -277,6 +280,20 @@ async function toolSaveArtifact(args, ctx) {
   );
 
   ctx.artifactsSaved++;
+
+  // SALVATAGGIO INCREMENTALE DELLO STATO: dopo il primo artefatto, marca il
+  // piano come 'active'. Così se anche andassimo in timeout di Vercel più
+  // avanti, lo studente vede subito gli artefatti già generati.
+  if (ctx.artifactsSaved === 1) {
+    await ctx.pool.query(
+      `UPDATE study_plans
+          SET status = 'active',
+              generation_completed_at = NOW()
+        WHERE id = $1`,
+      [ctx.planId]
+    ).catch(e => console.warn('[agent] incremental status update warn:', e.message));
+  }
+
   return {
     ok: true,
     artifact: rows[0],
@@ -352,8 +369,18 @@ Procedi: usa i tool per esplorare la KB e il progresso dello studente, poi gener
 
   let turn = 0;
   let finalText = null;
+  const startedAt = Date.now();
 
   while (turn < MAX_TURNS) {
+    // Time budget interno: se siamo vicini al timeout di Vercel, esci con
+    // quello che hai generato finora. Gli artefatti già salvati restano.
+    const elapsed = Date.now() - startedAt;
+    if (elapsed > TIME_BUDGET_MS) {
+      console.warn(`[agent] time budget exhausted after ${turn} turns (${elapsed}ms), saved ${ctx.artifactsSaved} artifacts`);
+      finalText = `Generazione interrotta per limite di tempo. ${ctx.artifactsSaved} artefatti generati con successo.`;
+      break;
+    }
+
     turn++;
     const response = await anthropic.messages.create({
       model: DEFAULT_MODEL,

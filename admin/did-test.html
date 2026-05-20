@@ -254,6 +254,8 @@
     let sdk = null;
     let agentManager = null;
     let defaultAgentId = '';
+    let connectionState = 'idle';
+    let actionBusy = false;
 
     function formatError(value) {
       if (!value) return 'Errore sconosciuto';
@@ -274,12 +276,18 @@
       statusDot.className = `dot ${state}`;
     }
 
-    function setConnected(connected) {
-      connectBtn.disabled = connected || !getAgentId();
-      disconnectBtn.disabled = !connected;
-      chatBtn.disabled = !connected;
-      speakBtn.disabled = !connected;
+    function updateControls() {
+      const connected = connectionState === 'connected';
+      connectBtn.disabled = connected || actionBusy || !getAgentId();
+      disconnectBtn.disabled = !agentManager || actionBusy;
+      chatBtn.disabled = !connected || actionBusy;
+      speakBtn.disabled = !connected || actionBusy;
       placeholder.style.display = connected ? 'none' : 'block';
+    }
+
+    function setConnected(connected) {
+      connectionState = connected ? 'connected' : 'idle';
+      updateControls();
     }
 
     function activateVideo() {
@@ -294,12 +302,21 @@
     }
 
     function getAgentId() {
-      return (agentIdInput.value || agentSelect.value || '').trim();
+      return (defaultAgentId || agentIdInput.value || agentSelect.value || '').trim();
     }
 
     function getAgentLabel(agent) {
       const id = agent.id || agent.agent_id || '';
       return agent.preview_name || agent.name || agent.title || id;
+    }
+
+    function summarizeMessages(messages, type) {
+      const list = Array.isArray(messages) ? messages : [messages].filter(Boolean);
+      const last = list[list.length - 1];
+      const text = last?.content || last?.parts?.find(part => part.type === 'text')?.text || '';
+      return text
+        ? `Messaggio ${type || ''}: ${text}`
+        : `Messaggio ${type || ''}: ${JSON.stringify(messages)}`;
     }
 
     async function apiRequest(url, options = {}) {
@@ -339,10 +356,9 @@
     async function loadStatus() {
       const status = await apiRequest('/api/admin/tutor/did/status');
       defaultAgentId = status.defaultAgentId || '';
-      if (defaultAgentId && !getAgentId()) {
+      if (defaultAgentId && !agentIdInput.value.trim() && !agentSelect.value) {
         agentIdInput.value = defaultAgentId;
         agentSelect.value = '';
-        connectBtn.disabled = false;
         log(`Agent predefinito da Vercel: ${defaultAgentId}`);
       }
       if (status.configured?.clientKey) {
@@ -350,6 +366,7 @@
       } else {
         log('D-ID client key non configurata: aggiungi DID_CLIENT_KEY o DATA_CLIENT_KEY su Vercel.', 'error');
       }
+      updateControls();
     }
 
     async function loadAgents() {
@@ -366,15 +383,21 @@
         agentSelect.appendChild(option);
       });
       if (agents.length) {
-        if (defaultAgentId && agents.some(agent => (agent.id || agent.agent_id) === defaultAgentId)) {
+        if (defaultAgentId) {
+          if (!agents.some(agent => (agent.id || agent.agent_id) === defaultAgentId)) {
+            const option = document.createElement('option');
+            option.value = defaultAgentId;
+            option.textContent = `Prof. Carbonio (${defaultAgentId})`;
+            agentSelect.appendChild(option);
+          }
           agentSelect.value = defaultAgentId;
           agentIdInput.value = defaultAgentId;
         } else if (!getAgentId()) {
           agentSelect.value = agents[0].id || agents[0].agent_id || '';
         }
         log(`Trovati ${agents.length} agenti D-ID.`);
-        connectBtn.disabled = false;
         setStatus('Agenti caricati', 'ready');
+        updateControls();
       } else {
         log('Nessun Agent trovato. Crea un Agent in D-ID Studio > Agents, poi riprova.', 'error');
         setStatus('Nessun Agent', 'error');
@@ -383,12 +406,12 @@
 
     agentSelect.addEventListener('change', () => {
       if (agentSelect.value) agentIdInput.value = agentSelect.value;
-      connectBtn.disabled = !getAgentId();
+      updateControls();
     });
 
     agentIdInput.addEventListener('input', () => {
       if (agentIdInput.value.trim()) agentSelect.value = '';
-      connectBtn.disabled = !getAgentId();
+      updateControls();
     });
 
     loadAgentsBtn.addEventListener('click', async () => {
@@ -403,8 +426,10 @@
       try {
         const agentId = getAgentId();
         if (!agentId) throw new Error('Seleziona o inserisci un Agent ID D-ID.');
+        actionBusy = true;
+        connectionState = 'connecting';
+        updateControls();
         setStatus('Creo client key...', 'busy');
-        connectBtn.disabled = true;
         const keyResult = await apiRequest('/api/admin/tutor/did/client-key', {
           method: 'POST',
           body: JSON.stringify({
@@ -422,19 +447,24 @@
           onSrcObjectReady(value) {
             video.srcObject = value;
             activateVideo();
-            setConnected(true);
             setStatus('Stream attivo', 'ready');
             log('Stream WebRTC D-ID attivo.');
           },
           onConnectionStateChange(state) {
+            connectionState = state === 'fail' ? 'failed' : state;
             log(`Connection state: ${state}`);
-            if (state === 'connected') setStatus('Connesso', 'ready');
-            if (state === 'failed' || state === 'disconnected') setStatus(String(state), state === 'failed' ? 'error' : '');
+            if (connectionState === 'connected') setStatus('Connesso', 'ready');
+            if (connectionState === 'failed' || connectionState === 'disconnected') setStatus(String(state), connectionState === 'failed' ? 'error' : '');
+            updateControls();
           },
           onNewMessage(messages, type) {
-            log(`Messaggio ${type || ''}: ${JSON.stringify(messages)}`);
+            log(summarizeMessages(messages, type));
           },
           onError(error) {
+            if (error?.kind === 'SessionError' && /session_id/i.test(error.description || '')) {
+              log(`Sessione D-ID non ancora pronta: ${error.description}`, 'error');
+              return;
+            }
             log(error, 'error');
           }
         };
@@ -447,6 +477,7 @@
         setStatus('Connessione...', 'busy');
         await agentManager.connect();
         await activateVideo();
+        connectionState = 'connected';
         log(`Agent ${agentId} connesso.`);
       } catch (err) {
         console.error(err);
@@ -454,7 +485,8 @@
         setStatus('Errore', 'error');
         log(err.message || String(err), 'error');
       } finally {
-        if (!agentManager) connectBtn.disabled = !getAgentId();
+        actionBusy = false;
+        updateControls();
       }
     });
 
@@ -462,6 +494,8 @@
       const text = messageText.value.trim();
       if (!agentManager || !text) return;
       try {
+        actionBusy = true;
+        updateControls();
         setStatus('Invio chat...', 'busy');
         await activateVideo();
         await agentManager.chat(text);
@@ -470,6 +504,9 @@
       } catch (err) {
         console.error(err);
         log(err.message || String(err), 'error');
+      } finally {
+        actionBusy = false;
+        updateControls();
       }
     });
 
@@ -477,6 +514,8 @@
       const text = messageText.value.trim();
       if (!agentManager || !text) return;
       try {
+        actionBusy = true;
+        updateControls();
         setStatus('Invio speak...', 'busy');
         await activateVideo();
         if (!agentManager.speak) throw new Error('Questo SDK non espone speak(); usa Invia chat.');
@@ -486,6 +525,9 @@
       } catch (err) {
         console.error(err);
         log(err.message || String(err), 'error');
+      } finally {
+        actionBusy = false;
+        updateControls();
       }
     });
 
@@ -497,6 +539,8 @@
       } finally {
         agentManager = null;
         video.srcObject = null;
+        connectionState = 'idle';
+        actionBusy = false;
         setConnected(false);
         setStatus('Non connesso');
         log('Sessione terminata.');

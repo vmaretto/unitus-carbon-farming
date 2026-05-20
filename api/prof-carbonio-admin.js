@@ -7,6 +7,7 @@
 // Tutte le route richiedono requireAdmin (auth JWT con role=admin).
 
 const { ingestSource } = require('./prof-carbonio-ingest');
+const { getHeygenSessionToken } = require('./prof-carbonio-avatar');
 
 function registerProfCarbonioAdminRoutes(app, deps) {
   const { pool, openai, requireAdmin } = deps;
@@ -17,6 +18,28 @@ function registerProfCarbonioAdminRoutes(app, deps) {
     if (!pool) { res.status(503).json({ error: 'Database not configured' }); return false; }
     return true;
   }
+
+  // ===========================================================================
+  // POST /api/admin/tutor/avatar/session — test admin HeyGen Streaming Avatar
+  // ===========================================================================
+  app.post('/api/admin/tutor/avatar/session', requireAdmin, async (req, res) => {
+    try {
+      const { language = 'it' } = req.body || {};
+      const result = await getHeygenSessionToken({ language });
+      res.json({
+        ...result,
+        provider: 'heygen',
+        configured: {
+          apiKey: Boolean(process.env.HEYGEN_API_KEY),
+          avatarId: Boolean(process.env.HEYGEN_AVATAR_ID)
+        }
+      });
+    } catch (err) {
+      const status = err.status || 500;
+      console.error('[admin/tutor] avatar session error:', err.message);
+      res.status(status).json({ error: err.message || 'Unable to create HeyGen session' });
+    }
+  });
 
   // ===========================================================================
   // GET /api/admin/tutor/stats — dashboard overview

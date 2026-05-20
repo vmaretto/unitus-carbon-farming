@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test HeyGen Avatar - UNITUS</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --green: #166534;
+      --green-dark: #14532d;
+      --line: #d8e2dc;
+      --ink: #102018;
+      --muted: #5f6f66;
+      --bg: #f6f8f5;
+      --panel: #ffffff;
+      --danger: #991b1b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 32px auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      line-height: 1.15;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    a { color: var(--green); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: 0 10px 25px rgba(16, 32, 24, 0.05);
+    }
+
+    .stage {
+      aspect-ratio: 16 / 9;
+      background: #0f1f18;
+      border-radius: 8px;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #0f1f18;
+    }
+
+    .placeholder {
+      padding: 24px;
+      color: #d7e7dd;
+      text-align: center;
+      max-width: 460px;
+    }
+
+    .status {
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      background: rgba(255, 255, 255, 0.92);
+      border-radius: 999px;
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #9ca3af;
+    }
+
+    .dot.ready { background: #16a34a; }
+    .dot.busy { background: #eab308; }
+    .dot.error { background: #dc2626; }
+
+    .controls {
+      display: grid;
+      gap: 12px;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    button {
+      border: 1px solid var(--green);
+      background: var(--green);
+      color: #fff;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: #fff;
+      color: var(--green);
+    }
+
+    button.danger {
+      background: #fff;
+      border-color: #fecaca;
+      color: var(--danger);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 112px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      font: inherit;
+      line-height: 1.45;
+    }
+
+    textarea:focus {
+      outline: 3px solid rgba(22, 101, 52, 0.15);
+      border-color: var(--green);
+    }
+
+    .log {
+      display: grid;
+      gap: 8px;
+      max-height: 360px;
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .entry {
+      border-bottom: 1px solid #edf2ee;
+      padding-bottom: 8px;
+    }
+
+    .entry.error { color: var(--danger); }
+
+    @media (max-width: 860px) {
+      main { width: min(100% - 20px, 1120px); margin: 18px auto; }
+      header, .layout { grid-template-columns: 1fr; display: grid; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Test HeyGen Streaming Avatar</h1>
+        <p>Pagina admin isolata per verificare token, stream WebRTC e sintesi vocale dell'avatar UNITUS.</p>
+      </div>
+      <a href="/admin/#prof-carbonio">Torna ad admin</a>
+    </header>
+
+    <section class="layout">
+      <div class="panel">
+        <div class="stage">
+          <video id="avatar-video" autoplay playsinline></video>
+          <div id="placeholder" class="placeholder">Avvia una sessione per verificare lo stream HeyGen.</div>
+          <div class="status"><span id="status-dot" class="dot"></span><span id="status-text">Non connesso</span></div>
+        </div>
+      </div>
+
+      <aside class="panel controls">
+        <div class="row">
+          <button id="start-btn">Avvia sessione</button>
+          <button id="stop-btn" class="danger" disabled>Termina</button>
+        </div>
+
+        <textarea id="speak-text">Ciao, sono Prof. Carbonio. Questa e' una prova tecnica dello streaming avatar HeyGen per il Master in Carbon Farming.</textarea>
+
+        <div class="row">
+          <button id="speak-btn" disabled>Fai parlare avatar</button>
+          <button id="clear-btn" class="secondary" type="button">Pulisci log</button>
+        </div>
+
+        <div id="log" class="log" aria-live="polite"></div>
+      </aside>
+    </section>
+  </main>
+
+  <script type="module">
+    const adminToken = localStorage.getItem('adminToken');
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const speakBtn = document.getElementById('speak-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const speakText = document.getElementById('speak-text');
+    const video = document.getElementById('avatar-video');
+    const placeholder = document.getElementById('placeholder');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const logEl = document.getElementById('log');
+
+    let avatar = null;
+    let sdk = null;
+    let enums = {};
+
+    function log(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.className = `entry ${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logEl.prepend(entry);
+    }
+
+    function setStatus(text, state = '') {
+      statusText.textContent = text;
+      statusDot.className = `dot ${state}`;
+    }
+
+    function setConnected(connected) {
+      startBtn.disabled = connected;
+      stopBtn.disabled = !connected;
+      speakBtn.disabled = !connected;
+      placeholder.style.display = connected ? 'none' : 'block';
+    }
+
+    async function apiRequest(url, options = {}) {
+      if (!adminToken) {
+        throw new Error('Admin token assente. Accedi prima da /admin/.');
+      }
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+          ...(options.headers || {})
+        }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP ${response.status}`);
+      }
+      return data;
+    }
+
+    async function loadSdk() {
+      if (sdk) return sdk;
+      log('Carico SDK HeyGen locale...');
+      sdk = await import('/learn/js/vendor/heygen-bundle.mjs');
+      enums = {
+        StreamingEvents: sdk.StreamingEvents,
+        AvatarQuality: sdk.AvatarQuality || { Low: 'low' },
+        TaskType: sdk.TaskType || { REPEAT: 'repeat' }
+      };
+      if (!sdk.default && !sdk.StreamingAvatar) {
+        throw new Error('SDK HeyGen non valido: StreamingAvatar mancante.');
+      }
+      log('SDK HeyGen caricato.');
+      return sdk;
+    }
+
+    startBtn.addEventListener('click', async () => {
+      try {
+        setStatus('Creo token...', 'busy');
+        startBtn.disabled = true;
+        const { sessionToken, avatarId, configured } = await apiRequest('/api/admin/tutor/avatar/session', {
+          method: 'POST',
+          body: JSON.stringify({ language: 'it' })
+        });
+        log(`Token ricevuto. Env: apiKey=${configured?.apiKey ? 'ok' : 'missing'}, avatarId=${configured?.avatarId ? 'ok' : 'default'}.`);
+
+        const mod = await loadSdk();
+        const StreamingAvatar = mod.default || mod.StreamingAvatar;
+        avatar = new StreamingAvatar({ token: sessionToken });
+
+        avatar.on(enums.StreamingEvents.STREAM_READY, (event) => {
+          const stream = event?.detail || event;
+          video.srcObject = stream;
+          video.play().catch((err) => log(`Autoplay bloccato: ${err.message}`, 'error'));
+          setConnected(true);
+          setStatus('Stream attivo', 'ready');
+          log('Stream WebRTC attivo.');
+        });
+
+        avatar.on(enums.StreamingEvents.STREAM_DISCONNECTED, () => {
+          setConnected(false);
+          setStatus('Disconnesso');
+          log('Stream disconnesso.');
+        });
+
+        avatar.on(enums.StreamingEvents.AVATAR_START_TALKING, () => setStatus('Avatar parla...', 'busy'));
+        avatar.on(enums.StreamingEvents.AVATAR_STOP_TALKING, () => setStatus('Stream attivo', 'ready'));
+
+        setStatus('Avvio avatar...', 'busy');
+        await avatar.createStartAvatar({
+          quality: enums.AvatarQuality.Low,
+          avatarName: avatarId,
+          language: 'it',
+          disableIdleTimeout: false
+        });
+        log(`Sessione avviata con avatar ${avatarId}.`);
+      } catch (err) {
+        console.error(err);
+        setConnected(false);
+        setStatus('Errore', 'error');
+        log(err.message || String(err), 'error');
+      } finally {
+        if (!avatar) startBtn.disabled = false;
+      }
+    });
+
+    speakBtn.addEventListener('click', async () => {
+      const text = speakText.value.trim();
+      if (!avatar || !text) return;
+      try {
+        speakBtn.disabled = true;
+        setStatus('Invio testo...', 'busy');
+        await avatar.speak({
+          text,
+          task_type: enums.TaskType.REPEAT
+        });
+        log(`Speak inviato: ${text}`);
+      } catch (err) {
+        console.error(err);
+        log(err.message || String(err), 'error');
+      } finally {
+        speakBtn.disabled = false;
+      }
+    });
+
+    stopBtn.addEventListener('click', async () => {
+      try {
+        if (avatar?.stopAvatar) await avatar.stopAvatar();
+      } catch (err) {
+        log(err.message || String(err), 'error');
+      } finally {
+        avatar = null;
+        video.srcObject = null;
+        setConnected(false);
+        setStatus('Non connesso');
+        log('Sessione terminata.');
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      logEl.innerHTML = '';
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (avatar?.stopAvatar) avatar.stopAvatar().catch(() => {});
+    });
+
+    if (!adminToken) {
+      setStatus('Login admin richiesto', 'error');
+      startBtn.disabled = true;
+      speakBtn.disabled = true;
+      stopBtn.disabled = true;
+      log('Accedi prima da /admin/, poi torna su questa pagina.', 'error');
+    }
+  </script>
+</body>
+</html>

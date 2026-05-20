@@ -114,6 +114,8 @@
       font-weight: 650;
     }
 
+    label.hidden { display: none; }
+
     input, select, textarea {
       width: 100%;
       border: 1px solid var(--line);
@@ -174,6 +176,18 @@
 
     .hint.active { display: block; }
 
+    .agent-lock {
+      display: none;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f8faf8;
+      color: var(--ink);
+      font-weight: 650;
+    }
+
+    .agent-lock.active { display: block; }
+
     @media (max-width: 860px) {
       main { width: min(100% - 20px, 1120px); margin: 18px auto; }
       header, .layout { grid-template-columns: 1fr; display: grid; }
@@ -206,14 +220,16 @@
           <button id="disconnect-btn" class="danger" disabled>Disconnetti</button>
         </div>
 
-        <label>
+        <div id="agent-lock" class="agent-lock"></div>
+
+        <label id="agent-select-label">
           Agent D-ID
           <select id="agent-select">
             <option value="">Carica agenti o inserisci ID manualmente</option>
           </select>
         </label>
 
-        <label>
+        <label id="agent-id-label">
           Agent ID manuale
           <input id="agent-id" placeholder="agt_..." autocomplete="off">
         </label>
@@ -243,7 +259,10 @@
     const speakBtn = document.getElementById('speak-btn');
     const clearBtn = document.getElementById('clear-btn');
     const agentSelect = document.getElementById('agent-select');
+    const agentSelectLabel = document.getElementById('agent-select-label');
     const agentIdInput = document.getElementById('agent-id');
+    const agentIdLabel = document.getElementById('agent-id-label');
+    const agentLock = document.getElementById('agent-lock');
     const messageText = document.getElementById('message-text');
     const autoplayHint = document.getElementById('autoplay-hint');
     const video = document.getElementById('agent-video');
@@ -336,6 +355,10 @@
       }
       agentSelect.value = defaultAgentId;
       agentIdInput.value = defaultAgentId;
+      agentSelectLabel.classList.add('hidden');
+      agentIdLabel.classList.add('hidden');
+      agentLock.textContent = `Prof. Carbonio (${defaultAgentId})`;
+      agentLock.classList.add('active');
     }
 
     function summarizeMessages(messages, type) {
@@ -415,7 +438,9 @@
         } else if (!getAgentId()) {
           agentSelect.value = agents[0].id || agents[0].agent_id || '';
         }
-        log(`Trovati ${agents.length} agenti D-ID.`);
+        log(defaultAgentId
+          ? `Agenti D-ID disponibili: ${agents.length}. Uso Prof. Carbonio configurato da Vercel.`
+          : `Trovati ${agents.length} agenti D-ID.`);
         setStatus('Agenti caricati', 'ready');
         updateControls();
       } else {

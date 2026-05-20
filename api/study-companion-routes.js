@@ -593,6 +593,11 @@ function registerStudyCompanionRoutes(app, deps) {
   // GET /api/companion/lms-modules — modulo focus picker
   // Ritorna i moduli LMS dell'edizione attiva dello studente, per popolare il
   // multi-select del form. Pesca dall'enrollment + course_editions + lms_modules.
+  //
+  // Resilienza: se le tabelle LMS (lms_modules, enrollments, ...) non sono
+  // ancora state create — siamo in Fase 1 LMS — ritorniamo array vuoto invece
+  // di un 500. Il form lo gestisce mostrando "Nessun modulo disponibile" e
+  // lo studente può comunque creare il piano senza moduli focus.
   // ===========================================================================
   app.get('/api/companion/lms-modules', requireStudent, async (req, res) => {
     if (!ensureDb(res)) return;
@@ -611,6 +616,13 @@ function registerStudyCompanionRoutes(app, deps) {
       );
       res.json({ modules: rows });
     } catch (err) {
+      // 42P01 = undefined_table, 42703 = undefined_column.
+      // Capita quando la migrazione 002_lms_core (Fase 1 LMS) non è ancora
+      // stata applicata in produzione. Non è un errore per noi.
+      if (err && (err.code === '42P01' || err.code === '42703')) {
+        console.warn('[study-companion] LMS tables not present yet, returning empty list:', err.message);
+        return res.json({ modules: [] });
+      }
       console.error('[study-companion] GET modules error:', err);
       res.status(500).json({ error: 'Failed to load modules' });
     }

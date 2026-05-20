@@ -59,25 +59,27 @@
     }
 
     .stage {
-      aspect-ratio: 16 / 9;
-      background: #0f1f18;
+      min-height: min(72vh, 720px);
+      background: #f8faf8;
       border-radius: 8px;
       overflow: hidden;
       display: grid;
       place-items: center;
       position: relative;
+      border: 1px solid var(--line);
     }
 
     video {
       width: 100%;
       height: 100%;
       object-fit: contain;
-      background: #0f1f18;
+      background: #f8faf8;
     }
 
     .placeholder {
+      position: absolute;
       padding: 24px;
-      color: #d7e7dd;
+      color: var(--muted);
       text-align: center;
       max-width: 460px;
     }
@@ -158,6 +160,19 @@
     .entry { border-bottom: 1px solid #edf2ee; padding-bottom: 8px; }
     .entry.error { color: var(--danger); }
 
+    .hint {
+      display: none;
+      padding: 10px 12px;
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      background: #fffbeb;
+      color: #854d0e;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .hint.active { display: block; }
+
     @media (max-width: 860px) {
       main { width: min(100% - 20px, 1120px); margin: 18px auto; }
       header, .layout { grid-template-columns: 1fr; display: grid; }
@@ -204,6 +219,8 @@
 
         <textarea id="message-text">Ciao, sono Prof. Carbonio. Questa e' una prova tecnica dello streaming avatar D-ID per il Master in Carbon Farming.</textarea>
 
+        <div id="autoplay-hint" class="hint">Il browser ha bloccato l'autoplay. Premi di nuovo Connetti o Invia chat per attivare audio/video.</div>
+
         <div class="row">
           <button id="chat-btn" disabled>Invia chat</button>
           <button id="speak-btn" class="secondary" disabled>Solo speak</button>
@@ -227,6 +244,7 @@
     const agentSelect = document.getElementById('agent-select');
     const agentIdInput = document.getElementById('agent-id');
     const messageText = document.getElementById('message-text');
+    const autoplayHint = document.getElementById('autoplay-hint');
     const video = document.getElementById('agent-video');
     const placeholder = document.getElementById('placeholder');
     const statusDot = document.getElementById('status-dot');
@@ -235,6 +253,7 @@
 
     let sdk = null;
     let agentManager = null;
+    let defaultAgentId = '';
 
     function formatError(value) {
       if (!value) return 'Errore sconosciuto';
@@ -263,8 +282,24 @@
       placeholder.style.display = connected ? 'none' : 'block';
     }
 
+    function activateVideo() {
+      if (!video.srcObject) return Promise.resolve();
+      video.muted = false;
+      return video.play().then(() => {
+        autoplayHint.classList.remove('active');
+      }).catch((err) => {
+        autoplayHint.classList.add('active');
+        log(`Autoplay bloccato: ${err.message}`, 'error');
+      });
+    }
+
     function getAgentId() {
       return (agentIdInput.value || agentSelect.value || '').trim();
+    }
+
+    function getAgentLabel(agent) {
+      const id = agent.id || agent.agent_id || '';
+      return agent.preview_name || agent.name || agent.title || id;
     }
 
     async function apiRequest(url, options = {}) {
@@ -303,11 +338,12 @@
 
     async function loadStatus() {
       const status = await apiRequest('/api/admin/tutor/did/status');
-      if (status.defaultAgentId && !getAgentId()) {
-        agentIdInput.value = status.defaultAgentId;
+      defaultAgentId = status.defaultAgentId || '';
+      if (defaultAgentId && !getAgentId()) {
+        agentIdInput.value = defaultAgentId;
         agentSelect.value = '';
         connectBtn.disabled = false;
-        log(`Agent predefinito da Vercel: ${status.defaultAgentId}`);
+        log(`Agent predefinito da Vercel: ${defaultAgentId}`);
       }
       if (status.configured?.clientKey) {
         log('D-ID client key configurata su Vercel.');
@@ -326,11 +362,16 @@
         if (!id) return;
         const option = document.createElement('option');
         option.value = id;
-        option.textContent = `${agent.preview_name || agent.name || id} (${id})`;
+        option.textContent = `${getAgentLabel(agent)} (${id})`;
         agentSelect.appendChild(option);
       });
       if (agents.length) {
-        agentSelect.value = agents[0].id || agents[0].agent_id || '';
+        if (defaultAgentId && agents.some(agent => (agent.id || agent.agent_id) === defaultAgentId)) {
+          agentSelect.value = defaultAgentId;
+          agentIdInput.value = defaultAgentId;
+        } else if (!getAgentId()) {
+          agentSelect.value = agents[0].id || agents[0].agent_id || '';
+        }
         log(`Trovati ${agents.length} agenti D-ID.`);
         connectBtn.disabled = false;
         setStatus('Agenti caricati', 'ready');
@@ -341,7 +382,7 @@
     }
 
     agentSelect.addEventListener('change', () => {
-      if (agentSelect.value) agentIdInput.value = '';
+      if (agentSelect.value) agentIdInput.value = agentSelect.value;
       connectBtn.disabled = !getAgentId();
     });
 
@@ -380,7 +421,7 @@
         const callbacks = {
           onSrcObjectReady(value) {
             video.srcObject = value;
-            video.play().catch((err) => log(`Autoplay bloccato: ${err.message}`, 'error'));
+            activateVideo();
             setConnected(true);
             setStatus('Stream attivo', 'ready');
             log('Stream WebRTC D-ID attivo.');
@@ -405,6 +446,7 @@
         });
         setStatus('Connessione...', 'busy');
         await agentManager.connect();
+        await activateVideo();
         log(`Agent ${agentId} connesso.`);
       } catch (err) {
         console.error(err);
@@ -421,8 +463,10 @@
       if (!agentManager || !text) return;
       try {
         setStatus('Invio chat...', 'busy');
+        await activateVideo();
         await agentManager.chat(text);
         log(`Chat inviata: ${text}`);
+        setStatus('Chat inviata', 'ready');
       } catch (err) {
         console.error(err);
         log(err.message || String(err), 'error');
@@ -434,9 +478,11 @@
       if (!agentManager || !text) return;
       try {
         setStatus('Invio speak...', 'busy');
+        await activateVideo();
         if (!agentManager.speak) throw new Error('Questo SDK non espone speak(); usa Invia chat.');
         await agentManager.speak(text);
         log(`Speak inviato: ${text}`);
+        setStatus('Speak inviato', 'ready');
       } catch (err) {
         console.error(err);
         log(err.message || String(err), 'error');

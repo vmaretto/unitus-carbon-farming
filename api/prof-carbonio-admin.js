@@ -100,7 +100,8 @@ function registerProfCarbonioAdminRoutes(app, deps) {
     res.json({
       provider: 'd-id',
       configured: {
-        apiKey: Boolean(process.env.DID_API_KEY)
+        apiKey: Boolean(process.env.DID_API_KEY),
+        clientKey: Boolean(process.env.DID_CLIENT_KEY)
       }
     });
   });
@@ -131,6 +132,16 @@ function registerProfCarbonioAdminRoutes(app, deps) {
   app.post('/api/admin/tutor/did/client-key', requireAdmin, async (req, res) => {
     try {
       const { agentId, allowedDomains = [] } = req.body || {};
+      const existingClientKey = (process.env.DID_CLIENT_KEY || '').trim();
+      if (existingClientKey) {
+        return res.json({
+          provider: 'd-id',
+          agentId: agentId || null,
+          source: 'env',
+          clientKey: existingClientKey
+        });
+      }
+
       const domains = Array.isArray(allowedDomains) ? allowedDomains.filter(Boolean) : [];
       const origin = req.get('origin');
       const host = req.get('host');
@@ -161,6 +172,14 @@ function registerProfCarbonioAdminRoutes(app, deps) {
     } catch (err) {
       const status = err.status || 500;
       console.error('[admin/tutor] D-ID client key error:', err.message);
+      if (status === 400 && /client key already exists/i.test(err.message || '')) {
+        return res.status(409).json({
+          error: 'D-ID client key already exists. Retrieve it from D-ID Studio > Agents > selected Agent > Embed and add it to Vercel as DID_CLIENT_KEY.',
+          provider: 'd-id',
+          status: 409,
+          details: err.details || null
+        });
+      }
       res.status(status).json({
         error: err.message || 'Unable to create D-ID client key',
         provider: err.provider || 'd-id',

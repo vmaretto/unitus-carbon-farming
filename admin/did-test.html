@@ -357,7 +357,9 @@
           })
         });
         if (!keyResult.clientKey) throw new Error('D-ID non ha restituito client_key.');
-        log(`Client key creata per ${agentId}.`);
+        log(keyResult.source === 'env'
+          ? `Client key letta da Vercel per ${agentId}.`
+          : `Client key creata per ${agentId}.`);
 
         const mod = await loadSdk();
         const callbacks = {

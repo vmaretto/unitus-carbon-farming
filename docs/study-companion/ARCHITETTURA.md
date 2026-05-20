@@ -7,7 +7,7 @@
 > "oggi devi fare X+Y+Z". Un cron notturno rigenera il futuro in base al
 > consumo effettivo dello studente.
 >
-> Status: SPRINT 1 in lavorazione (maggio 2026).
+> Status: SPRINT 1 + SPRINT 2 deployati (maggio 2026). Agente AI vero attivo.
 
 ---
 
@@ -112,22 +112,25 @@ Aggiunte fase 2:
 
 ## 6. Sprint plan
 
-**Sprint 1 (in corso)** — Fondamenta
-- [ ] Migrazione 047_study_companion.sql
-- [ ] Modulo `api/study-companion-routes.js` con tutti gli endpoint sopra
-- [ ] Aggancio in `api/index.js` con `registerStudyCompanionRoutes(...)`
-- [ ] Widget homepage Custom Element `<study-companion-widget>` in `learn/js/study-companion.js`
-- [ ] Aggancio in `learn/index.html`
-- [ ] Form modal di setup piano (deadline, ore/giorno, moduli, livello)
-- [ ] Generatore artefatti "fittizi" (placeholder testuali, NO Claude) per validare il flow end-to-end senza spendere API
-- [ ] Pagina dettaglio artefatto `learn/study-artifact.html` (renderizza summary/quiz/flashcards/micro-lesson)
+**Sprint 1 (DONE)** — Fondamenta
+- [x] Migrazione 047_study_companion.sql
+- [x] Modulo `api/study-companion-routes.js` con tutti gli endpoint
+- [x] Aggancio in `api/index.js` con `registerStudyCompanionRoutes(...)`
+- [x] Widget homepage Custom Element `<study-companion-widget>` in `learn/js/study-companion.js`
+- [x] Aggancio in `learn/index.html`
+- [x] Form modal di setup piano (deadline, ore/giorno, moduli, livello)
+- [x] Generatore artefatti placeholder per validare il flow E2E
+- [x] Viewer artefatti in-place nel widget (markdown, quiz, flashcards)
+- [x] Check euristico coerenza obiettivo con banner warning
 
-**Sprint 2** — Agente AI reale
-- [ ] Tool definitions in `api/study-companion-agent.js`
-- [ ] Loop agentic con Claude tool use
-- [ ] Persistenza artefatti via `save_artifact`
-- [ ] Worker async background (status `generating` → `ready`)
-- [ ] Polling frontend ogni 5 secondi durante la generazione
+**Sprint 2 (DONE)** — Agente AI reale
+- [x] Tool definitions in `api/study-companion-agent.js`
+- [x] Loop agentic con Claude tool use (4 tool: search_kb, get_course_outline, get_student_progress, save_artifact)
+- [x] Modello configurabile via env STUDY_COMPANION_MODEL (default sonnet-4-6)
+- [x] Persistenza artefatti via save_artifact tool durante il loop
+- [x] Fallback ai placeholder se Anthropic/OpenAI non configurati o errore agente
+- [x] Override forzato via env STUDY_COMPANION_USE_PLACEHOLDERS=true per testing
+- [x] Telemetria persistita in study_plans.metadata.agent (model, turns, final_text)
 
 **Sprint 3** — Adattività + UX finale
 - [ ] Cron notturno `scripts/study-companion-adapt.js` (Vercel Cron)

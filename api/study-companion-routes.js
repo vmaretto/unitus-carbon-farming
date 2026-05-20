@@ -3,15 +3,18 @@
 // Si registra in api/index.js con:
 //
 //   const { registerStudyCompanionRoutes } = require('./study-companion-routes');
-//   registerStudyCompanionRoutes(app, { pool, anthropic, requireStudent, requireNonGuest });
+//   registerStudyCompanionRoutes(app, { pool, anthropic, openai, requireStudent, requireNonGuest });
 //
-// SPRINT 1: persistenza piano + generazione "placeholder" senza agente Claude.
-// SPRINT 2: la funzione generatePlanArtifacts() verrà sostituita dall'agente reale.
+// SPRINT 2: usa l'agente Claude vero (api/study-companion-agent.js) per
+// generare gli artefatti pescando dalla KB. Fallback ai placeholder
+// (api/study-companion-placeholders.js) se Anthropic/OpenAI non configurati
+// o se l'agente fallisce per qualsiasi motivo.
 
 const PLACEHOLDER_ARTIFACTS = require('./study-companion-placeholders');
+const { runAgent } = require('./study-companion-agent');
 
 function registerStudyCompanionRoutes(app, deps) {
-  const { pool, anthropic, requireStudent, requireNonGuest } = deps;
+  const { pool, anthropic, openai, requireStudent, requireNonGuest } = deps;
 
   if (!app) throw new Error('Express app required');
   if (!requireStudent || !requireNonGuest) {
@@ -325,19 +328,62 @@ function registerStudyCompanionRoutes(app, deps) {
   }
 
   /**
-   * Wrapper async che lancia la generazione "fire-and-forget" dopo aver
-   * marcato il piano come 'generating'. Lo studente vedrà lo stato evolvere
-   * via polling lato client.
+   * Genera gli artefatti del piano usando l'agente AI vero, con fallback ai
+   * placeholder se l'agente non è disponibile o fallisce.
    *
-   * NB: in produzione su Vercel serverless questa esecuzione non sopravvive
-   * alla request. In Sprint 2 useremo una coda. Sprint 1: la generazione
-   * placeholder è veloce (~50ms), facciamo tutto inline.
+   * Su Vercel serverless abbiamo maxDuration=60s; l'agente tipicamente
+   * impiega 25-45 secondi per generare 8-15 artefatti.
+   *
+   * Politica:
+   * - Se ANTHROPIC_API_KEY o OPENAI_API_KEY non configurate → placeholder
+   * - Se forzato via env STUDY_COMPANION_USE_PLACEHOLDERS=true → placeholder
+   * - Altrimenti → runAgent. Se errore o 0 artefatti salvati → fallback placeholder
    */
   async function triggerGenerationInline(plan) {
+    const forcePlaceholder = process.env.STUDY_COMPANION_USE_PLACEHOLDERS === 'true';
+    const canUseAgent = anthropic && openai && !forcePlaceholder;
+
+    // Strada 1: agente AI vero
+    if (canUseAgent) {
+      try {
+        console.log(`[study-companion] runAgent start for plan ${plan.id}`);
+        const result = await runAgent(plan, { pool, anthropic, openai });
+        console.log(`[study-companion] runAgent done: ${result.count} artefatti in ${result.turns} turni`);
+
+        if (result.ok && result.count > 0) {
+          await pool.query(
+            `UPDATE study_plans
+                SET status = 'active',
+                    generation_completed_at = NOW(),
+                    generation_error = NULL,
+                    last_regenerated_at = NOW(),
+                    metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb
+              WHERE id = $1`,
+            [plan.id, JSON.stringify({
+              agent: {
+                model: process.env.STUDY_COMPANION_MODEL || 'claude-sonnet-4-6',
+                turns: result.turns,
+                final_text: result.final_text
+              }
+            })]
+          );
+          return { ok: true, count: result.count, mode: 'agent', turns: result.turns };
+        }
+
+        // Agente non ha prodotto nulla — fallback placeholder
+        console.warn('[study-companion] agent produced 0 artifacts, falling back to placeholders');
+      } catch (err) {
+        console.error('[study-companion] agent error, falling back to placeholders:', err.message);
+        // ATTENZIONE: gli artefatti già salvati dall'agente PRIMA dell'errore
+        // restano in DB. Lasciamoli — sono comunque utilizzabili.
+      }
+    }
+
+    // Strada 2 (fallback): placeholders
     try {
       const artifacts = await generatePlanArtifacts(plan);
       await persistGeneratedArtifacts(plan.id, artifacts);
-      return { ok: true, count: artifacts.length };
+      return { ok: true, count: artifacts.length, mode: 'placeholder' };
     } catch (err) {
       console.error('[study-companion] generation error:', err);
       await pool.query(

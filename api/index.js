@@ -1682,11 +1682,12 @@ try {
 }
 
 // ---------------------------------------------------------------------------
-// AI Study Companion (Sprint 1: persistenza piano + artefatti placeholder)
+// AI Study Companion (Sprint 2: agente Claude con tool use sulla KB)
 // Docs: docs/study-companion/ARCHITETTURA.md
 // ---------------------------------------------------------------------------
 try {
   const { registerStudyCompanionRoutes } = require('./study-companion-routes');
+
   const studyCompanionAnthropic = process.env.ANTHROPIC_API_KEY
     ? (() => {
         const Anthropic = require('@anthropic-ai/sdk').default;
@@ -1694,9 +1695,19 @@ try {
       })()
     : null;
 
+  // Ricreiamo l'istanza OpenAI qui (lo scope del try di Prof. Carbonio è
+  // separato). Servono gli embeddings per il tool search_kb dell'agente.
+  const studyCompanionOpenAI = process.env.OPENAI_API_KEY
+    ? (() => {
+        const { OpenAI } = require('openai');
+        return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      })()
+    : null;
+
   registerStudyCompanionRoutes(app, {
     pool,
-    anthropic: studyCompanionAnthropic, // usato in Sprint 2 per l'agente; in Sprint 1 le route non lo richiedono
+    anthropic: studyCompanionAnthropic,
+    openai: studyCompanionOpenAI,
     requireStudent,
     requireNonGuest
   });

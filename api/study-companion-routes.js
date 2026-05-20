@@ -343,6 +343,14 @@ function registerStudyCompanionRoutes(app, deps) {
     const forcePlaceholder = process.env.STUDY_COMPANION_USE_PLACEHOLDERS === 'true';
     const canUseAgent = anthropic && openai && !forcePlaceholder;
 
+    // Diagnostica: dice ESATTAMENTE perché stiamo usando una strada o l'altra.
+    console.log('[study-companion] generation decision:', {
+      anthropic_configured: !!anthropic,
+      openai_configured: !!openai,
+      force_placeholder: forcePlaceholder,
+      can_use_agent: canUseAgent
+    });
+
     // Strada 1: agente AI vero
     if (canUseAgent) {
       try {
@@ -832,7 +840,12 @@ function registerStudyCompanionRoutes(app, deps) {
     }
   });
 
-  console.log('[study-companion] routes registered');
+  console.log('[study-companion] routes registered', {
+    anthropic: !!anthropic,
+    openai: !!openai,
+    placeholder_override: process.env.STUDY_COMPANION_USE_PLACEHOLDERS === 'true',
+    model: process.env.STUDY_COMPANION_MODEL || 'claude-sonnet-4-6 (default)'
+  });
 }
 
 module.exports = { registerStudyCompanionRoutes };

@@ -3264,8 +3264,9 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
         const resourceType = resourceTypeFromFile(item.fileType || item.fileName);
         const resourceTitle = getTeacherMaterialResourceTitle(item);
         const normalizedFacultyId = await resolveValidFacultyId(item.facultyId, item.lessonId);
+        const resourceFacultyId = normalizedFacultyId || null;
 
-        if (normalizedFacultyId !== item.facultyId) {
+        if (normalizedFacultyId && normalizedFacultyId !== item.facultyId) {
           const facultyUpdateSet = ['faculty_id = $1'];
           if (schema.hasUpdatedAt) facultyUpdateSet.push('updated_at = NOW()');
           await pool.query(
@@ -3284,7 +3285,7 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
           existingWhere.push(`COALESCE(lesson_id::text, '') = COALESCE($${existingValues.length}::text, '')`);
         }
         if (resourcesSchema.hasTeacherId) {
-          existingValues.push(normalizedFacultyId || null);
+          existingValues.push(resourceFacultyId);
           existingWhere.push(`COALESCE(teacher_id::text, '') = COALESCE($${existingValues.length}::text, '')`);
         }
         const { rows: existing } = await pool.query(
@@ -3307,7 +3308,7 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
             updateSet.push(`resource_type = $${updateValues.length}`);
           }
           if (resourcesSchema.hasTeacherId) {
-            updateValues.push(normalizedFacultyId || null);
+            updateValues.push(resourceFacultyId);
             updateSet.push(`teacher_id = $${updateValues.length}`);
           }
           if (resourcesSchema.hasLessonId) {
@@ -3343,7 +3344,7 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
           }
           if (resourcesSchema.hasTeacherId) {
             insertColumns.push('teacher_id');
-            insertValues.push(normalizedFacultyId || null);
+            insertValues.push(resourceFacultyId);
           }
           if (resourcesSchema.hasLessonId) {
             insertColumns.push('lesson_id');

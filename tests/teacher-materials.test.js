@@ -495,3 +495,109 @@ test('PUT /api/admin/teacher-materials/:id/review approva anche con schema legac
     true
   ]);
 });
+
+class AdminTeacherMaterialInvalidFacultyPool extends FakeTeacherMaterialsPool {
+  constructor() {
+    super();
+    this.facultyUpdateAttempted = false;
+    this.insertedResource = null;
+  }
+
+  async query(sql, values = []) {
+    const normalized = String(sql).replace(/\s+/g, ' ').trim();
+
+    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized)) {
+      return { rows: [] };
+    }
+
+    if (normalized.includes('FROM information_schema.columns')) {
+      const tableName = values[0];
+      if (tableName === 'materials_pending') {
+        return {
+          rows: [
+            { column_name: 'title' },
+            { column_name: 'description' },
+            { column_name: 'notes' },
+            { column_name: 'updated_at' }
+          ]
+        };
+      }
+
+      if (tableName === 'resources') {
+        return {
+          rows: [
+            { column_name: 'description' },
+            { column_name: 'resource_type' },
+            { column_name: 'is_published' },
+            { column_name: 'teacher_id' },
+            { column_name: 'lesson_id' }
+          ]
+        };
+      }
+
+      return { rows: [] };
+    }
+
+    if (normalized.startsWith('UPDATE materials_pending SET status = $1::varchar')) {
+      return {
+        rows: [{
+          id: 'pending-invalid-teacher',
+          facultyId: 'missing-faculty',
+          lessonId: null,
+          fileUrl: 'https://cdn.example.com/materiale.docx',
+          fileName: 'materiale.docx',
+          fileType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          title: 'Materiale Word',
+          description: null,
+          status: 'approved',
+          notes: null,
+          updatedAt: '2026-05-20T13:23:15.000Z'
+        }]
+      };
+    }
+
+    if (normalized === 'SELECT id FROM faculty WHERE id = $1 LIMIT 1') {
+      assert.deepEqual(values, ['missing-faculty']);
+      return { rows: [] };
+    }
+
+    if (normalized.startsWith('UPDATE materials_pending SET faculty_id = $1')) {
+      this.facultyUpdateAttempted = true;
+      throw new Error('faculty_id should not be rewritten when no valid faculty can be resolved');
+    }
+
+    if (normalized.startsWith('SELECT id FROM resources WHERE url = $1')) {
+      assert.deepEqual(values, ['https://cdn.example.com/materiale.docx', null, null]);
+      return { rows: [] };
+    }
+
+    if (normalized.startsWith('INSERT INTO resources')) {
+      assert.match(normalized, /teacher_id/);
+      assert.match(normalized, /lesson_id/);
+      this.insertedResource = values;
+      return { rows: [] };
+    }
+
+    if (normalized.includes('FROM resources WHERE id = $1')) {
+      return { rows: [] };
+    }
+
+    return super.query(sql, values);
+  }
+}
+
+test('PUT /api/admin/teacher-materials/:id/review non azzera faculty_id se il docente non si risolve', async () => {
+  const pool = new AdminTeacherMaterialInvalidFacultyPool();
+  apiModule.__setPool(pool);
+  const handler = findRouteHandler('/api/admin/teacher-materials/:id/review', 'put');
+  const req = { params: { id: 'pending-invalid-teacher' }, body: { action: 'approve' } };
+  const res = createMockRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(pool.facultyUpdateAttempted, false);
+  assert.equal(pool.insertedResource.at(-2), null);
+  assert.equal(pool.insertedResource.at(-1), null);
+});

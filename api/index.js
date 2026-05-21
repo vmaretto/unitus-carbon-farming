@@ -12272,6 +12272,79 @@ async function computeSurveyInvitees(client, scopeType, scopeId, targetRole) {
   return [];
 }
 
+async function getSingleSurveyInvitee(client, targetRole, recipientId) {
+  if (!recipientId) return null;
+  if (targetRole === 'student') {
+    const { rows } = await client.query(
+      `SELECT id FROM users
+        WHERE id = $1 AND role = 'student' AND is_active = true
+        LIMIT 1`,
+      [recipientId]
+    );
+    return rows.length ? { user_id: rows[0].id, faculty_id: null } : null;
+  }
+  const { rows } = await client.query(
+    `SELECT id FROM faculty
+      WHERE id = $1 AND is_active = true
+      LIMIT 1`,
+    [recipientId]
+  );
+  return rows.length ? { user_id: null, faculty_id: rows[0].id } : null;
+}
+
+function escapeXml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+async function buildSurveyOdtBuffer(survey, questions) {
+  const zip = new JSZip();
+  const mimetype = 'application/vnd.oasis.opendocument.text';
+  zip.file('mimetype', mimetype, { compression: 'STORE' });
+  zip.file('META-INF/manifest.xml', `<?xml version="1.0" encoding="UTF-8"?>
+<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
+  <manifest:file-entry manifest:full-path="/" manifest:media-type="${mimetype}"/>
+  <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
+  <manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>
+  <manifest:file-entry manifest:full-path="meta.xml" manifest:media-type="text/xml"/>
+</manifest:manifest>`);
+  zip.file('styles.xml', `<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" office:version="1.2">
+  <office:styles/>
+</office:document-styles>`);
+  zip.file('meta.xml', `<?xml version="1.0" encoding="UTF-8"?>
+<office:document-meta xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" office:version="1.2">
+  <office:meta><meta:generator>UNITUS Carbon Farming</meta:generator></office:meta>
+</office:document-meta>`);
+
+  const body = [
+    `<text:h text:outline-level="1">${escapeXml(survey.title)}</text:h>`,
+    survey.description ? `<text:p>${escapeXml(survey.description)}</text:p>` : '',
+    `<text:p>Pubblico: ${survey.targetRole === 'student' ? 'Studenti' : 'Docenti'}</text:p>`,
+    `<text:p/>`,
+    ...questions.map((q, index) => [
+      `<text:h text:outline-level="2">Domanda ${index + 1}</text:h>`,
+      `<text:p>${escapeXml(q.text)}</text:p>`,
+      `<text:p>Tipo: ${q.questionType === 'rating' ? 'Rating 1-5' : 'Testo libero'}${q.isRequired ? ' — obbligatoria' : ' — facoltativa'}</text:p>`
+    ].join('\n'))
+  ].filter(Boolean).join('\n');
+
+  zip.file('content.xml', `<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" office:version="1.2">
+  <office:body>
+    <office:text>
+${body}
+    </office:text>
+  </office:body>
+</office:document-content>`);
+
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
 // Risolve il nome leggibile dello scope (per UI)
 async function resolveSurveyScopeLabel(scopeType, scopeId) {
   if (!scopeId) return scopeType === 'course' ? 'Tutti i corsi' : '—';
@@ -12315,6 +12388,41 @@ app.get('/api/admin/surveys', requireAdmin, async (req, res) => {
   }
 });
 
+app.get('/api/admin/survey-recipients', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const targetRole = req.query.targetRole;
+  if (!['student', 'teacher'].includes(targetRole)) {
+    return res.status(400).json({ error: 'targetRole obbligatorio (student|teacher)' });
+  }
+  try {
+    if (targetRole === 'student') {
+      const { rows } = await pool.query(`
+        SELECT DISTINCT u.id,
+               u.email,
+               u.first_name AS "firstName",
+               u.last_name AS "lastName"
+          FROM users u
+          JOIN enrollments e ON e.user_id = u.id
+         WHERE u.role = 'student'
+           AND u.is_active = true
+           AND e.status = 'active'
+         ORDER BY u.last_name NULLS LAST, u.first_name NULLS LAST, u.email
+      `);
+      return res.json(rows);
+    }
+    const { rows } = await pool.query(`
+      SELECT id, name, email, first_name AS "firstName", last_name AS "lastName"
+        FROM faculty
+       WHERE is_active = true
+       ORDER BY name, email
+    `);
+    res.json(rows);
+  } catch (e) {
+    console.error('Error listing survey recipients', e);
+    res.status(500).json({ error: 'Errore nel recupero destinatari' });
+  }
+});
+
 app.post('/api/admin/surveys', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   const { title, description, targetRole } = req.body || {};
@@ -12352,6 +12460,36 @@ app.get('/api/admin/surveys/:id', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error('Error fetching survey', e);
     res.status(500).json({ error: 'Errore nel recupero' });
+  }
+});
+
+app.get('/api/admin/surveys/:id/export.odt', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows: surveys } = await pool.query(
+      `SELECT id, title, description, target_role AS "targetRole"
+         FROM surveys WHERE id=$1`,
+      [req.params.id]
+    );
+    if (!surveys.length) return res.status(404).json({ error: 'Questionario non trovato' });
+    const { rows: questions } = await pool.query(
+      `SELECT id, text, question_type AS "questionType", is_required AS "isRequired", sort_order AS "sortOrder"
+         FROM survey_questions WHERE survey_id = $1 ORDER BY sort_order ASC, created_at ASC`,
+      [req.params.id]
+    );
+    const buffer = await buildSurveyOdtBuffer(surveys[0], questions);
+    const filename = String(surveys[0].title || 'questionario')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/gi, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || 'questionario';
+    res.setHeader('Content-Type', 'application/vnd.oasis.opendocument.text');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}.odt"`);
+    res.send(buffer);
+  } catch (e) {
+    console.error('Error exporting survey ODT', e);
+    res.status(500).json({ error: 'Errore export ODT' });
   }
 });
 
@@ -12762,7 +12900,7 @@ app.get('/api/admin/survey-campaigns', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/survey-campaigns', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
-  const { surveyId, title, scopeType, scopeId, opensAt, closesAt } = req.body || {};
+  const { surveyId, title, scopeType, scopeId, opensAt, closesAt, recipientMode = 'scope', recipientId } = req.body || {};
   if (!surveyId || !['course', 'module', 'lesson', 'teacher'].includes(scopeType)) {
     return res.status(400).json({ error: 'surveyId e scopeType sono obbligatori' });
   }
@@ -12790,7 +12928,17 @@ app.post('/api/admin/survey-campaigns', requireAdmin, async (req, res) => {
        opensAt || new Date().toISOString(), closesAt || null]
     );
 
-    const invitees = await computeSurveyInvitees(client, scopeType, scopeId || null, targetRole);
+    let invitees;
+    if (recipientMode === 'single') {
+      const invitee = await getSingleSurveyInvitee(client, targetRole, recipientId);
+      if (!invitee) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Destinatario non valido o non attivo' });
+      }
+      invitees = [invitee];
+    } else {
+      invitees = await computeSurveyInvitees(client, scopeType, scopeId || null, targetRole);
+    }
     let invitedCount = 0;
     for (const inv of invitees) {
       await client.query(
@@ -12802,7 +12950,7 @@ app.post('/api/admin/survey-campaigns', requireAdmin, async (req, res) => {
     }
 
     await client.query('COMMIT');
-    res.status(201).json({ id: campaignId, invitedCount, targetRole });
+    res.status(201).json({ id: campaignId, invitedCount, targetRole, recipientMode });
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('Error launching survey campaign', e);
@@ -12861,6 +13009,66 @@ app.delete('/api/admin/survey-campaigns/:id', requireAdmin, async (req, res) => 
   }
 });
 
+app.post('/api/admin/survey-campaigns/:id/reset-results', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: campaign } = await client.query('SELECT id FROM survey_campaigns WHERE id=$1', [req.params.id]);
+    if (!campaign.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Campagna non trovata' });
+    }
+    const { rowCount: deletedAnswers } = await client.query(
+      `DELETE FROM survey_answers a
+        USING survey_invitations i
+        WHERE a.invitation_id = i.id AND i.campaign_id = $1`,
+      [req.params.id]
+    );
+    const { rowCount: resetInvitations } = await client.query(
+      'UPDATE survey_invitations SET completed_at = NULL WHERE campaign_id = $1 AND completed_at IS NOT NULL',
+      [req.params.id]
+    );
+    await client.query('COMMIT');
+    res.json({ deletedAnswers, resetInvitations });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('Error resetting survey results', e);
+    res.status(500).json({ error: 'Errore reset risultati' });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete('/api/admin/survey-campaigns/:campaignId/invitations/:invitationId/results', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: invitation } = await client.query(
+      'SELECT id FROM survey_invitations WHERE id=$1 AND campaign_id=$2',
+      [req.params.invitationId, req.params.campaignId]
+    );
+    if (!invitation.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Compilazione non trovata' });
+    }
+    const { rowCount: deletedAnswers } = await client.query(
+      'DELETE FROM survey_answers WHERE invitation_id=$1',
+      [req.params.invitationId]
+    );
+    await client.query('UPDATE survey_invitations SET completed_at = NULL WHERE id=$1', [req.params.invitationId]);
+    await client.query('COMMIT');
+    res.json({ deletedAnswers });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('Error deleting survey invitation results', e);
+    res.status(500).json({ error: 'Errore eliminazione risultato' });
+  } finally {
+    client.release();
+  }
+});
+
 // Risultati aggregati di una campagna (admin vede aggregati + commenti senza nominativo)
 app.get('/api/admin/survey-campaigns/:id/results', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
@@ -12912,10 +13120,35 @@ app.get('/api/admin/survey-campaigns/:id/results', requireAdmin, async (req, res
       }
     }
 
+    const { rows: completions } = await pool.query(`
+      SELECT i.id AS "invitationId",
+             i.completed_at AS "completedAt",
+             COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.email, f.name, f.email, 'Destinatario') AS "recipientName",
+             COALESCE(u.email, f.email) AS "recipientEmail",
+             COUNT(a.id)::int AS "answerCount",
+             STRING_AGG(
+               CASE
+                 WHEN q.question_type = 'rating' THEN q.text || ': ' || a.rating_value::text
+                 ELSE q.text || ': ' || COALESCE(NULLIF(a.text_value, ''), '—')
+               END,
+               ' | ' ORDER BY q.sort_order, q.created_at
+             ) AS summary
+        FROM survey_invitations i
+        LEFT JOIN users u ON u.id = i.user_id
+        LEFT JOIN faculty f ON f.id = i.faculty_id
+        LEFT JOIN survey_answers a ON a.invitation_id = i.id
+        LEFT JOIN survey_questions q ON q.id = a.question_id
+       WHERE i.campaign_id = $1
+         AND i.completed_at IS NOT NULL
+       GROUP BY i.id, i.completed_at, u.first_name, u.last_name, u.email, f.name, f.email
+       ORDER BY i.completed_at DESC
+    `, [req.params.id]);
+
     res.json({
       campaign: { ...campaign[0], scopeLabel: await resolveSurveyScopeLabel(campaign[0].scopeType, campaign[0].scopeId) },
       stats: invStats[0],
-      questions: aggregates
+      questions: aggregates,
+      completions
     });
   } catch (e) {
     console.error('Error fetching results', e);

@@ -3049,6 +3049,20 @@ Buono studio!</textarea>
                             </label>
                         </div>
                         <div class="form-grid" style="margin-top:14px;">
+                            <label>Destinatari
+                                <select id="surv-camp-recipient-mode">
+                                    <option value="scope">Tutti dallo scope</option>
+                                    <option value="single">Una persona specifica</option>
+                                </select>
+                            </label>
+                            <label id="surv-camp-recipient-wrap" style="display:none;">
+                                Persona
+                                <select id="surv-camp-recipient-id">
+                                    <option value="">-- Seleziona --</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="form-grid" style="margin-top:14px;">
                             <label>Apertura (opzionale)
                                 <input type="datetime-local" id="surv-camp-opens">
                             </label>
@@ -11486,7 +11500,8 @@ Buono studio!</textarea>
             templates: [],
             campaigns: [],
             currentTemplate: null,
-            scopeOptions: { courses: [], modules: [], lessons: [], teachers: [] }
+            scopeOptions: { courses: [], modules: [], lessons: [], teachers: [] },
+            recipients: { student: [], teacher: [] }
         };
 
         async function loadSurveysSection() {
@@ -11536,6 +11551,7 @@ Buono studio!</textarea>
                             ${t.description ? `<div style="margin-top:6px; color: var(--gray-600);">${escapeHtml(t.description)}</div>` : ''}
                         </div>
                         <div class="actions" style="margin:0;">
+                            <button type="button" class="secondary" data-surv-tpl-export="${t.id}">Scarica ODT</button>
                             <button type="button" class="secondary" data-surv-tpl-edit="${t.id}">Modifica domande</button>
                             <button type="button" class="danger" data-surv-tpl-del="${t.id}">Elimina</button>
                         </div>
@@ -11639,6 +11655,15 @@ Buono studio!</textarea>
         document.getElementById('surv-tpl-list').addEventListener('click', async (e) => {
             const editBtn = e.target.closest('[data-surv-tpl-edit]');
             const delBtn = e.target.closest('[data-surv-tpl-del]');
+            const exportBtn = e.target.closest('[data-surv-tpl-export]');
+            if (exportBtn) {
+                try {
+                    await downloadSurveyOdt(exportBtn.dataset.survTplExport);
+                } catch (err) {
+                    showToast(err.message || 'Errore export ODT', 'error');
+                }
+                return;
+            }
             if (editBtn) {
                 const id = editBtn.dataset.survTplEdit;
                 const panel = document.querySelector(`[data-surv-tpl-questions="${id}"]`);
@@ -11731,6 +11756,21 @@ Buono studio!</textarea>
             });
         }
 
+        async function downloadSurveyOdt(surveyId) {
+            const response = await fetch(`/api/admin/surveys/${surveyId}/export.odt`, {
+                headers: { Authorization: 'Bearer ' + adminToken }
+            });
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.error || 'Errore export ODT');
+            }
+            const blob = await response.blob();
+            const disposition = response.headers.get('Content-Disposition') || '';
+            const match = disposition.match(/filename="?([^"]+)"?/i);
+            const filename = match?.[1] || 'questionario.odt';
+            downloadBlobFile(blob, filename);
+        }
+
         // --- Campaigns ---
         function renderSurvCampaigns() {
             const container = document.getElementById('surv-camp-list');
@@ -11795,9 +11835,49 @@ Buono studio!</textarea>
                 survState.templates.map(t => `<option value="${t.id}" data-target="${t.targetRole}">${escapeHtml(t.title)} (${t.targetRole === 'student' ? 'studenti' : 'docenti'})</option>`).join('');
             // Scope dropdown initial: courses
             await refreshSurvScopeIdDropdown();
+            await refreshSurvRecipientDropdown();
         }
 
         document.getElementById('surv-camp-scope-type').addEventListener('change', refreshSurvScopeIdDropdown);
+        document.getElementById('surv-camp-survey').addEventListener('change', refreshSurvRecipientDropdown);
+        document.getElementById('surv-camp-recipient-mode').addEventListener('change', refreshSurvRecipientDropdown);
+
+        function getSelectedSurveyTargetRole() {
+            const tplSel = document.getElementById('surv-camp-survey');
+            return tplSel.selectedOptions[0]?.dataset.target || 'student';
+        }
+
+        async function getSurveyRecipients(targetRole) {
+            if (!survState.recipients[targetRole].length) {
+                survState.recipients[targetRole] = await apiRequest(`/api/admin/survey-recipients?targetRole=${encodeURIComponent(targetRole)}`);
+            }
+            return survState.recipients[targetRole];
+        }
+
+        async function refreshSurvRecipientDropdown() {
+            const mode = document.getElementById('surv-camp-recipient-mode').value;
+            const wrap = document.getElementById('surv-camp-recipient-wrap');
+            const sel = document.getElementById('surv-camp-recipient-id');
+            if (mode !== 'single') {
+                wrap.style.display = 'none';
+                sel.innerHTML = '<option value="">-- Seleziona --</option>';
+                return;
+            }
+            wrap.style.display = '';
+            const targetRole = getSelectedSurveyTargetRole();
+            try {
+                const recipients = await getSurveyRecipients(targetRole);
+                sel.innerHTML = '<option value="">-- Seleziona --</option>' + recipients.map((r) => {
+                    const name = targetRole === 'student'
+                        ? [r.firstName, r.lastName].filter(Boolean).join(' ') || r.email || 'Studente'
+                        : r.name || [r.firstName, r.lastName].filter(Boolean).join(' ') || r.email || 'Docente';
+                    const email = r.email ? ` — ${r.email}` : '';
+                    return `<option value="${r.id}">${escapeHtml(name + email)}</option>`;
+                }).join('');
+            } catch (err) {
+                sel.innerHTML = '<option value="">Errore caricamento</option>';
+            }
+        }
 
         async function refreshSurvScopeIdDropdown() {
             const scopeType = document.getElementById('surv-camp-scope-type').value;
@@ -11843,12 +11923,16 @@ Buono studio!</textarea>
                 opensAt: document.getElementById('surv-camp-opens').value || null,
                 closesAt: document.getElementById('surv-camp-closes').value || null
             };
+            payload.recipientMode = document.getElementById('surv-camp-recipient-mode').value;
+            payload.recipientId = document.getElementById('surv-camp-recipient-id').value || null;
             if (!payload.surveyId) return showToast('Seleziona un template', 'error');
             if (payload.scopeType !== 'course' && !payload.scopeId) return showToast('Seleziona uno scope', 'error');
+            if (payload.recipientMode === 'single' && !payload.recipientId) return showToast('Seleziona la persona destinataria', 'error');
             try {
                 const result = await apiRequest('/api/admin/survey-campaigns', { method: 'POST', body: JSON.stringify(payload) });
                 showToast(`Campagna lanciata: ${result.invitedCount} inviti creati`);
                 e.target.reset();
+                document.getElementById('surv-camp-recipient-wrap').style.display = 'none';
                 document.getElementById('surv-camp-form-details').open = false;
                 loadSurveysSection();
             } catch (err) { showToast(err.message || 'Errore', 'error'); }
@@ -11874,6 +11958,36 @@ Buono studio!</textarea>
             }
         });
 
+        document.getElementById('surv-results-content').addEventListener('click', async (e) => {
+            const resetBtn = e.target.closest('[data-surv-results-reset]');
+            const delBtn = e.target.closest('[data-surv-result-delete]');
+            const campaignId = document.getElementById('surv-results-campaign').value;
+            if (!campaignId) return;
+            try {
+                if (resetBtn) {
+                    if (!confirm('Resettare tutti i risultati di questa campagna? Gli inviti resteranno aperti/non completati.')) return;
+                    const result = await apiRequest(`/api/admin/survey-campaigns/${campaignId}/reset-results`, { method: 'POST' });
+                    showToast(`Risultati resettati: ${result.deletedAnswers || 0} risposte eliminate`);
+                    await loadSurveysSection();
+                    document.getElementById('surv-results-campaign').value = campaignId;
+                    const data = await apiRequest(`/api/admin/survey-campaigns/${campaignId}/results`);
+                    document.getElementById('surv-results-content').innerHTML = renderSurvResults(data);
+                }
+                if (delBtn) {
+                    if (!confirm('Rimuovere questa compilazione dai risultati?')) return;
+                    const invitationId = delBtn.dataset.survResultDelete;
+                    const result = await apiRequest(`/api/admin/survey-campaigns/${campaignId}/invitations/${invitationId}/results`, { method: 'DELETE' });
+                    showToast(`Compilazione rimossa: ${result.deletedAnswers || 0} risposte eliminate`);
+                    await loadSurveysSection();
+                    document.getElementById('surv-results-campaign').value = campaignId;
+                    const data = await apiRequest(`/api/admin/survey-campaigns/${campaignId}/results`);
+                    document.getElementById('surv-results-content').innerHTML = renderSurvResults(data);
+                }
+            } catch (err) {
+                showToast(err.message || 'Errore aggiornamento risultati', 'error');
+            }
+        });
+
         function renderSurvResults(data) {
             const c = data.campaign;
             const stats = data.stats;
@@ -11885,6 +11999,9 @@ Buono studio!</textarea>
                         &bull; Scope: ${c.scopeType} → ${escapeHtml(c.scopeLabel || '—')}
                     </div>
                     <div style="margin-top:8px;">📊 <strong>${stats.completed}/${stats.invited}</strong> compilati</div>
+                    <div class="actions" style="margin-top:10px;">
+                        <button type="button" class="danger" data-surv-results-reset="${c.id}">Reset risultati</button>
+                    </div>
                 </div>
             `;
             data.questions.forEach(q => {
@@ -11916,6 +12033,27 @@ Buono studio!</textarea>
                 }
                 html += `</div>`;
             });
+            const completions = data.completions || [];
+            html += `
+                <div style="padding:14px; border:1px solid var(--gray-200); border-radius:12px; margin-bottom:12px;">
+                    <h4 style="margin:0 0 10px;">Compilazioni</h4>
+                    ${completions.length ? completions.map((item, index) => `
+                        <div style="padding:10px 12px; background:var(--gray-100); border-radius:8px; margin-bottom:8px;">
+                            <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+                                <div>
+                                    <strong>#${index + 1} — ${escapeHtml(item.recipientName || 'Destinatario')}</strong>
+                                    ${item.recipientEmail ? `<span style="color:var(--gray-500);">(${escapeHtml(item.recipientEmail)})</span>` : ''}
+                                    <div style="font-size:0.85rem; color:var(--gray-500); margin-top:3px;">
+                                        ${item.completedAt ? new Date(item.completedAt).toLocaleString('it-IT') : 'n/d'} &bull; ${item.answerCount || 0} risposte
+                                    </div>
+                                    ${item.summary ? `<div style="font-size:0.85rem; color:var(--gray-600); margin-top:6px;">${escapeHtml(item.summary).slice(0, 360)}${item.summary.length > 360 ? '…' : ''}</div>` : ''}
+                                </div>
+                                <button type="button" class="danger" data-surv-result-delete="${item.invitationId}">Rimuovi</button>
+                            </div>
+                        </div>
+                    `).join('') : '<div class="empty-state">Nessuna compilazione da gestire.</div>'}
+                </div>
+            `;
             return html;
         }
 

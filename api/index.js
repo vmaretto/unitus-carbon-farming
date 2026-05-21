@@ -3217,16 +3217,28 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
 
   try {
     const schema = await getMaterialsPendingSchemaConfig();
+    if (!schema.hasTable) {
+      return res.status(500).json({ error: 'Materials pending schema missing' });
+    }
+    const resourcesSchema = await getResourcesSchemaConfig();
+    if (!resourcesSchema.hasTable) {
+      return res.status(500).json({ error: 'Resources schema missing' });
+    }
     const newStatus = action === 'approve' ? 'approved' : 'rejected';
     const reviewNotes = action === 'reject' ? String(notes).trim() : null;
     await pool.query('BEGIN');
     try {
       const returningFragments = buildMaterialsPendingSelectFragments(schema);
+      const pendingSetClauses = ['status = $1::varchar'];
+      if (schema.hasNotes) {
+        pendingSetClauses.push(`notes = CASE WHEN $1::varchar = 'rejected' THEN $2::text ELSE NULL END`);
+      }
+      if (schema.hasUpdatedAt) {
+        pendingSetClauses.push('updated_at = NOW()');
+      }
       const { rows } = await pool.query(
         `UPDATE materials_pending
-         SET status = $1::varchar,
-             notes = CASE WHEN $1::varchar = 'rejected' THEN $2::text ELSE NULL END,
-             updated_at = NOW()
+         SET ${pendingSetClauses.join(', ')}
          WHERE id = $3
          RETURNING id, faculty_id AS "facultyId", lesson_id AS "lessonId",
                    file_url AS "fileUrl", file_name AS "fileName", file_type AS "fileType",
@@ -3254,47 +3266,98 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
         const normalizedFacultyId = await resolveValidFacultyId(item.facultyId, item.lessonId);
 
         if (normalizedFacultyId !== item.facultyId) {
+          const facultyUpdateSet = ['faculty_id = $1'];
+          if (schema.hasUpdatedAt) facultyUpdateSet.push('updated_at = NOW()');
           await pool.query(
             `UPDATE materials_pending
-             SET faculty_id = $1, updated_at = NOW()
+             SET ${facultyUpdateSet.join(', ')}
              WHERE id = $2`,
             [normalizedFacultyId, item.id]
           );
           item.facultyId = normalizedFacultyId;
         }
 
+        const existingWhere = ['url = $1'];
+        const existingValues = [item.fileUrl];
+        if (resourcesSchema.hasLessonId) {
+          existingValues.push(item.lessonId || null);
+          existingWhere.push(`COALESCE(lesson_id::text, '') = COALESCE($${existingValues.length}::text, '')`);
+        }
+        if (resourcesSchema.hasTeacherId) {
+          existingValues.push(normalizedFacultyId || null);
+          existingWhere.push(`COALESCE(teacher_id::text, '') = COALESCE($${existingValues.length}::text, '')`);
+        }
         const { rows: existing } = await pool.query(
           `SELECT id FROM resources
-           WHERE url = $1
-             AND COALESCE(lesson_id::text, '') = COALESCE($2::text, '')
-             AND COALESCE(teacher_id::text, '') = COALESCE($3::text, '')
+           WHERE ${existingWhere.join(' AND ')}
            LIMIT 1`,
-          [item.fileUrl, item.lessonId || null, normalizedFacultyId || null]
+          existingValues
         );
 
         let approvedResourceId = null;
         if (existing.length) {
+          const updateValues = [existing[0].id, resourceTitle];
+          const updateSet = ['title = $2'];
+          if (resourcesSchema.hasDescription) {
+            updateValues.push(item.description || null);
+            updateSet.push(`description = $${updateValues.length}`);
+          }
+          if (resourcesSchema.hasResourceType) {
+            updateValues.push(resourceType);
+            updateSet.push(`resource_type = $${updateValues.length}`);
+          }
+          if (resourcesSchema.hasTeacherId) {
+            updateValues.push(normalizedFacultyId || null);
+            updateSet.push(`teacher_id = $${updateValues.length}`);
+          }
+          if (resourcesSchema.hasLessonId) {
+            updateValues.push(item.lessonId || null);
+            updateSet.push(`lesson_id = $${updateValues.length}`);
+          }
+          if (resourcesSchema.hasIsPublished) {
+            updateSet.push('is_published = true');
+          }
+          updateSet.push('updated_at = NOW()');
           await pool.query(
             `UPDATE resources
-             SET title = $2,
-                 description = $3,
-                 resource_type = $4,
-                 teacher_id = $5,
-                 lesson_id = $6,
-                 is_published = true,
-                 updated_at = NOW()
+             SET ${updateSet.join(', ')}
              WHERE id = $1`,
-            [existing[0].id, resourceTitle, item.description || null, resourceType, normalizedFacultyId || null, item.lessonId || null]
+            updateValues
           );
           approvedResourceId = existing[0].id;
         } else {
           approvedResourceId = uuidv4();
+          const insertColumns = ['id', 'title', 'url'];
+          const insertValues = [approvedResourceId, resourceTitle, item.fileUrl];
+          if (resourcesSchema.hasDescription) {
+            insertColumns.push('description');
+            insertValues.push(item.description || null);
+          }
+          if (resourcesSchema.hasResourceType) {
+            insertColumns.push('resource_type');
+            insertValues.push(resourceType);
+          }
+          if (resourcesSchema.hasIsPublished) {
+            insertColumns.push('is_published');
+            insertValues.push(true);
+          }
+          if (resourcesSchema.hasTeacherId) {
+            insertColumns.push('teacher_id');
+            insertValues.push(normalizedFacultyId || null);
+          }
+          if (resourcesSchema.hasLessonId) {
+            insertColumns.push('lesson_id');
+            insertValues.push(item.lessonId || null);
+          }
+          insertColumns.push('created_at', 'updated_at');
+          const placeholders = insertValues.map((_, index) => `$${index + 1}`);
+          placeholders.push('NOW()', 'NOW()');
           await pool.query(
             `INSERT INTO resources
-               (id, title, description, resource_type, url, is_published, teacher_id, lesson_id, created_at, updated_at)
+               (${insertColumns.join(', ')})
              VALUES
-               ($1, $2, $3, $4, $5, true, $6, $7, NOW(), NOW())`,
-            [approvedResourceId, resourceTitle, item.description || null, resourceType, item.fileUrl, normalizedFacultyId || null, item.lessonId || null]
+               (${placeholders.join(', ')})`,
+            insertValues
           );
         }
         await pool.query('COMMIT');

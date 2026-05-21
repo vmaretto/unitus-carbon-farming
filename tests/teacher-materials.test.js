@@ -389,3 +389,109 @@ test('PUT /api/teachers/materials/:id/review approva un materiale assegnato', as
   assert.equal(res.body.reviewStatus, 'teacher_approved');
   assert.equal(res.body.isPublished, true);
 });
+
+class AdminTeacherMaterialReviewLegacyPool extends FakeTeacherMaterialsPool {
+  constructor() {
+    super();
+    this.insertedResource = null;
+  }
+
+  async query(sql, values = []) {
+    const normalized = String(sql).replace(/\s+/g, ' ').trim();
+
+    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized)) {
+      return { rows: [] };
+    }
+
+    if (normalized.includes('FROM information_schema.columns')) {
+      const tableName = values[0];
+      if (tableName === 'materials_pending') {
+        return {
+          rows: [
+            { column_name: 'title' },
+            { column_name: 'description' }
+          ]
+        };
+      }
+
+      if (tableName === 'resources') {
+        return {
+          rows: [
+            { column_name: 'description' },
+            { column_name: 'resource_type' },
+            { column_name: 'is_published' }
+          ]
+        };
+      }
+
+      return { rows: [] };
+    }
+
+    if (normalized.startsWith('UPDATE materials_pending SET status = $1::varchar')) {
+      assert.doesNotMatch(normalized, /notes =/);
+      assert.doesNotMatch(normalized, /updated_at = NOW/);
+      assert.deepEqual(values, ['approved', null, 'pending-1']);
+      return {
+        rows: [{
+          id: 'pending-1',
+          facultyId: 'fac-1',
+          lessonId: 'lesson-1',
+          fileUrl: 'https://cdn.example.com/slide-seminario.pdf',
+          fileName: 'slide-seminario.pdf',
+          fileType: 'application/pdf',
+          title: 'Slide seminario',
+          description: 'Versione aggiornata',
+          status: 'approved',
+          notes: null,
+          updatedAt: '2026-04-24T08:00:00.000Z'
+        }]
+      };
+    }
+
+    if (normalized === 'SELECT id FROM faculty WHERE id = $1 LIMIT 1') {
+      return { rows: [{ id: 'fac-1' }] };
+    }
+
+    if (normalized.startsWith('SELECT id FROM resources WHERE url = $1')) {
+      assert.equal(normalized, 'SELECT id FROM resources WHERE url = $1 LIMIT 1');
+      assert.deepEqual(values, ['https://cdn.example.com/slide-seminario.pdf']);
+      return { rows: [] };
+    }
+
+    if (normalized.startsWith('INSERT INTO resources')) {
+      assert.match(normalized, /\(id, title, url, description, resource_type, is_published, created_at, updated_at\)/);
+      assert.doesNotMatch(normalized, /teacher_id/);
+      assert.doesNotMatch(normalized, /lesson_id/);
+      this.insertedResource = values;
+      return { rows: [] };
+    }
+
+    if (normalized.includes('FROM resources WHERE id = $1')) {
+      return { rows: [] };
+    }
+
+    return super.query(sql, values);
+  }
+}
+
+test('PUT /api/admin/teacher-materials/:id/review approva anche con schema legacy', async () => {
+  const pool = new AdminTeacherMaterialReviewLegacyPool();
+  apiModule.__setPool(pool);
+  const handler = findRouteHandler('/api/admin/teacher-materials/:id/review', 'put');
+  const req = { params: { id: 'pending-1' }, body: { action: 'approve' } };
+  const res = createMockRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.material.status, 'approved');
+  assert.match(pool.insertedResource[0], /^[0-9a-f-]{36}$/i);
+  assert.deepEqual(pool.insertedResource.slice(1), [
+    'Slide seminario',
+    'https://cdn.example.com/slide-seminario.pdf',
+    'Versione aggiornata',
+    'pdf',
+    true
+  ]);
+});

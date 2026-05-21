@@ -3228,7 +3228,9 @@ app.put('/api/admin/teacher-materials/:id/review', requireAdmin, async (req, res
     const reviewNotes = action === 'reject' ? String(notes).trim() : null;
     await pool.query('BEGIN');
     try {
-      const returningFragments = buildMaterialsPendingSelectFragments(schema);
+      // In UPDATE ... RETURNING non c'è alias FROM, quindi i frammenti devono
+      // essere senza prefisso `mp.` (default usato dalle SELECT con JOIN).
+      const returningFragments = buildMaterialsPendingSelectFragments(schema, '');
       const pendingSetClauses = ['status = $1::varchar'];
       if (schema.hasNotes) {
         pendingSetClauses.push(`notes = CASE WHEN $1::varchar = 'rejected' THEN $2::text ELSE NULL END`);

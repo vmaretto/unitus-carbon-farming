@@ -465,17 +465,31 @@ function registerProfCarbonioAdminRoutes(app, deps) {
   app.get('/api/tutor/config', deps.requireStudent || ((req, res, next) => next()), async (req, res) => {
     if (!ensureDb(res)) return;
     try {
+      // Leggiamo anche i flag "anteprima admin" (migration 053): se il chiamante
+      // e' admin in modalita' preview vengono OR-ati con i flag globali, cosi'
+      // l'admin puo' testare chat/avatar prima di accenderli per gli studenti.
       const { rows } = await pool.query(
         `SELECT key, value FROM tutor_settings
-          WHERE key IN ('chat_enabled', 'avatar_enabled', 'daily_limit_per_student', 'avatar_provider')`
+          WHERE key IN ('chat_enabled', 'avatar_enabled',
+                        'chat_enabled_admin', 'avatar_enabled_admin',
+                        'daily_limit_per_student', 'avatar_provider')`
       );
       const config = {};
       rows.forEach(r => { config[r.key] = r.value; });
+
+      const chatGlobal   = config.chat_enabled   === 'true';
+      const avatarGlobal = config.avatar_enabled === 'true';
+      const chatAdmin    = config.chat_enabled_admin   === 'true';
+      const avatarAdmin  = config.avatar_enabled_admin === 'true';
+      const isAdminPreview = Boolean(req.user && req.user.isAdminPreview);
+
       res.json({
-        chatEnabled:   config.chat_enabled === 'true',
-        avatarEnabled: config.avatar_enabled === 'true',
+        chatEnabled:   isAdminPreview ? (chatGlobal   || chatAdmin)   : chatGlobal,
+        avatarEnabled: isAdminPreview ? (avatarGlobal || avatarAdmin) : avatarGlobal,
         avatarProvider: config.avatar_provider || 'none',
-        dailyLimit:    parseInt(config.daily_limit_per_student || '50', 10)
+        dailyLimit:    parseInt(config.daily_limit_per_student || '50', 10),
+        // Utile al widget di anteprima per mostrare un eventuale badge "preview".
+        isAdminPreview
       });
     } catch (err) {
       console.error('[tutor] config error:', err);

@@ -12163,6 +12163,26 @@ Buono studio!</textarea>
                 hint: 'Avatar ID (LiveAvatar) o Agent ID (D-ID). Lascia vuoto per usare l\'env Vercel.',
                 type: 'text'
             },
+            // -------- Anteprima admin (migration 053) --------
+            // Permettono di attivare chat/avatar SOLO nella pagina
+            // /admin/prof-carbonio-preview.html. Backend logico: vanno in OR
+            // con i flag globali. Quindi:
+            //  - globale ON  -> tutti vedono (admin incluso)
+            //  - admin ON + globale OFF -> solo l'admin in anteprima
+            chat_enabled_admin: {
+                label: 'Chat testuale (solo anteprima admin)',
+                icon: '💬',
+                group: 'admin_preview',
+                hint: 'Attiva la chat solo nella pagina /admin/prof-carbonio-preview.html, senza accenderla per gli studenti. Per il rollout definitivo usa il toggle "Chat testuale" in alto.',
+                type: 'toggle'
+            },
+            avatar_enabled_admin: {
+                label: 'Modalità avatar (solo anteprima admin)',
+                icon: '🎙️',
+                group: 'admin_preview',
+                hint: 'Attiva l\'avatar solo nella pagina /admin/prof-carbonio-preview.html. Quando hai finito di testarlo, accendi "Modalità avatar" in alto per renderlo visibile a tutti.',
+                type: 'toggle'
+            },
             chat_model: {
                 label: 'Modello Claude',
                 icon: '🧠',
@@ -12201,6 +12221,7 @@ Buono studio!</textarea>
 
         const PC_GROUPS = {
             modes: { title: 'Modalita\' attivabili', icon: '🔧' },
+            admin_preview: { title: 'Anteprima admin (solo per te)', icon: '👤' },
             engine: { title: 'Motore AI', icon: '⚙️' },
             limits: { title: 'Limiti e controllo costi', icon: '🛡️' },
             companion: { title: 'AI Study Companion', icon: '📚' }

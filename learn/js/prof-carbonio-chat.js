@@ -1373,7 +1373,39 @@
         //  - transcriptText: con i marker [N] per renderizzare le chip citazione
         const speakText = result.spoken || result.reply || '';
         const transcriptText = result.replyWithMarkers || result.reply || speakText;
-        this.appendTranscript('assistant', transcriptText, result.citations);
+        const assistantMessageId = result.messageId || null;
+        this.appendTranscript('assistant', transcriptText, result.citations, assistantMessageId);
+
+        // Sincronizziamo i turni anche dentro state.messages cosi' la cronologia
+        // avatar non si perde al "Termina" e e' visibile in modalita' Chat scritta
+        // (entrambe le modalita' condividono la stessa sessione lato DB).
+        this.state.messages.push({
+          role: 'user',
+          content: msg,
+          id: 'avatar-u-' + Date.now(),
+          created_at: new Date().toISOString()
+        });
+        if (assistantMessageId) {
+          this.state.messages.push({
+            id: assistantMessageId,
+            role: 'assistant',
+            content: transcriptText,
+            citations: result.citations,
+            created_at: new Date().toISOString()
+          });
+        }
+        // Aggiorna usage giornaliero come fa sendUserMessage
+        if (result.usage) {
+          this.state.usage = {
+            today: new Date().toISOString().slice(0, 10),
+            used: result.usage.used,
+            limit: result.usage.limit,
+            remaining: result.usage.remaining,
+            cost_cents: result.usage.cost_cents
+          };
+          this.updateQuotaBar && this.updateQuotaBar();
+        }
+
         await this.avatarSpeak(speakText);
       } catch (err) {
         await this.avatarSpeak('Scusami, non sono riuscito a rispondere. Puoi ripetere?').catch(() => {});
@@ -1383,7 +1415,7 @@
       }
     }
 
-    appendTranscript(role, text, citations) {
+    appendTranscript(role, text, citations, messageId) {
       if (!this.refs.transcript) return;
       const cls = role === 'user' ? 'user' : 'assistant';
       const body = role === 'assistant' && citations?.length
@@ -1391,8 +1423,19 @@
         : escapeHtml(text);
       const div = document.createElement('div');
       div.className = `msg ${cls}`;
-      div.innerHTML = body;
+      // Per i messaggi assistant con un ID persistito in DB aggiungiamo il
+      // bottone "Chiedi al docente" — stessa azione di escalate della chat
+      // testuale, riusa l'endpoint /messages/:id/escalate.
+      const actions = (role === 'assistant' && messageId)
+        ? `<div class="actions"><button data-action="escalate" data-msg="${escapeHtml(messageId)}">↗️ Chiedi al docente</button></div>`
+        : '';
+      div.innerHTML = body + actions;
       this.refs.transcript.appendChild(div);
+      // Bind del click sul bottone appena aggiunto
+      const escBtn = div.querySelector('[data-action="escalate"]');
+      if (escBtn) {
+        escBtn.addEventListener('click', () => this.escalate(escBtn.dataset.msg));
+      }
       this.refs.transcript.scrollTop = this.refs.transcript.scrollHeight;
     }
 

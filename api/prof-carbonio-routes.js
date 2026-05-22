@@ -161,25 +161,31 @@ function registerProfCarbonioRoutes(app, deps) {
   });
 
   // ===========================================================================
-  // POST /api/tutor/avatar/session — token LiveAvatar per modalita' voce/avatar
-  // (LEGACY HeyGen — mantenuto per retrocompatibilita' col vecchio widget)
+  // POST /api/tutor/avatar/session — session token LiveAvatar (mode FULL).
+  // Chiama api.liveavatar.com/v1/sessions/token. Usato dal widget studente.
   // ===========================================================================
   app.post('/api/tutor/avatar/session', requireStudent, requireNonGuest, async (req, res) => {
     try {
       const { language = 'it' } = req.body || {};
       const result = await getLiveAvatarSessionToken({ language });
-      res.json(result);
+      res.json(result); // { sessionToken, sessionId, avatarId, language, provider }
     } catch (err) {
       const status = err.status || 500;
       console.error('[tutor] avatar session error:', err.message);
-      res.status(status).json({ error: err.message });
+      res.status(status).json({
+        error: err.message,
+        provider: err.provider || 'liveavatar',
+        details: err.details || null
+      });
     }
   });
 
   // ===========================================================================
-  // GET /api/tutor/did/config — config D-ID Agents per il widget studente
-  // Restituisce agentId + clientKey (entrambi "pubblici" per design D-ID:
-  // la clientKey e' vincolata ad allowed_domains lato D-ID e va esposta al browser).
+  // GET /api/tutor/did/config — config D-ID Agents per il widget studente.
+  // Restituisce agentId + clientKey letti dalle env DID_AGENT_ID + DID_CLIENT_KEY.
+  // La clientKey D-ID e' "pubblica per design": vincolata ad allowed_domains
+  // lato D-ID Studio, quindi puo' essere consegnata al browser senza rischi.
+  // Usato solo se avatar_provider='d-id' nel pannello admin.
   // ===========================================================================
   app.get('/api/tutor/did/config', requireStudent, requireNonGuest, async (_req, res) => {
     const agentId = (process.env.DID_AGENT_ID || '').trim();

@@ -10,7 +10,8 @@
 //
 // Auth: prende JWT da localStorage.learnToken (stesso pattern delle altre pagine).
 // Backend: /api/tutor/* registrato in api/index.js (modulo prof-carbonio-routes.js).
-// Avatar: D-ID Agents Client SDK caricato on-demand quando l'utente attiva la modalita' avatar.
+// Avatar: HeyGen LiveAvatar SDK (@heygen/liveavatar-web-sdk) caricato on-demand
+//         dal bundle locale /learn/js/vendor/liveavatar-bundle.mjs.
 
 (function () {
   'use strict';
@@ -19,9 +20,16 @@
   // CONFIG
   // =========================================================================
   const API_BASE = '/api/tutor';
-  // D-ID Agents Streaming Avatar — sostituisce la vecchia integrazione HeyGen.
-  // L'agentId reale e la clientKey vengono dal backend (env DID_AGENT_ID +
-  // DID_CLIENT_KEY) via GET /api/tutor/did/config. Qui solo URL SDK.
+  // LiveAvatar SDK — bundle locale (@heygen/liveavatar-web-sdk@^0.0.10) gia'
+  // presente nel repo, stesso pattern usato in azzurra-wrapper. avatarId +
+  // session token vengono dal backend (env LIVEAVATAR_API_KEY +
+  // LIVEAVATAR_AVATAR_ID) via POST /api/tutor/avatar/session.
+  const LIVEAVATAR_SDK_URLS = [
+    '/learn/js/vendor/liveavatar-bundle.mjs'
+  ];
+  // D-ID Agents Client SDK — provider alternativo. Il widget instrada a uno
+  // dei due flussi (LiveAvatar o D-ID) in base a state.config.avatarProvider,
+  // letto da GET /api/tutor/config (controllato dall'admin via tutor_settings).
   const DID_SDK_URLS = [
     'https://esm.sh/@d-id/client-sdk',
     'https://cdn.jsdelivr.net/npm/@d-id/client-sdk/+esm'
@@ -677,8 +685,9 @@
         this.stopAvatar().catch(() => {});
         this.renderMessages();
       } else {
-        // D-ID v1: nessun STT integrato, quindi lasciamo visibile l'input testo
-        // anche in modalita' avatar. sendUserMessage() instrada verso
+        // LiveAvatar ha STT integrato (voice chat in mode FULL), pero' lasciamo
+        // visibile l'input testo come fallback: in ambienti rumorosi o quando
+        // l'utente preferisce digitare. sendUserMessage() instrada verso
         // processAvatarTurn quando state.mode === 'avatar'.
         this.refs.inputArea.style.display = '';
         this.renderAvatarStage();
@@ -807,8 +816,9 @@
       if (!text) return;
 
       // Modalita' avatar: il messaggio va a /avatar/turn (Claude+RAG) e poi
-      // viene pronunciato dall'avatar D-ID. La trascrizione resta visibile
-      // sopra al video tramite appendTranscript() in processAvatarTurn().
+      // viene pronunciato dall'avatar LiveAvatar via session.repeat(). La
+      // trascrizione resta visibile sopra al video tramite appendTranscript()
+      // in processAvatarTurn().
       if (this.state.mode === 'avatar') {
         this.refs.textarea.value = '';
         this.autoresize();
@@ -993,16 +1003,23 @@
           </div>
         `;
         this.avatarVideoEl = this.refs.content.querySelector('video');
-        // Streaming Avatar SDK: assegna il MediaStream ricevuto dall'evento STREAM_READY
-        if (this.state.avatar.stream && this.avatarVideoEl) {
+        // Provider-specific attach del video element.
+        const provider = this.state.avatar.provider || 'liveavatar';
+        if ((provider === 'd-id' || provider === 'did') && this.state.avatar.stream && this.avatarVideoEl) {
+          // D-ID: lo stream WebRTC arriva via onSrcObjectReady, va assegnato a srcObject.
           try {
-            // Il payload puo' essere o lo stream direttamente, o un wrapper con .stream
             const stream = this.state.avatar.stream.getTracks
               ? this.state.avatar.stream
               : (this.state.avatar.stream.stream || this.state.avatar.stream);
             this.avatarVideoEl.srcObject = stream;
             this.avatarVideoEl.play().catch(() => {});
-          } catch (e) { console.warn('video attach error', e); }
+          } catch (e) { console.warn('D-ID video attach error', e); }
+        } else if (this.state.avatar.session) {
+          // LiveAvatar: pattern session.attach(videoElement). Lo facciamo qui
+          // (oltre che in SESSION_STREAM_READY) perche' renderAvatarStage puo'
+          // venire chiamato anche dopo che lo stream e' gia' pronto (es. resize,
+          // toggle mute) e il video element appena ricreato va ri-attaccato.
+          this.attachLiveAvatarVideo();
         }
         this.refs.content.querySelector('[data-action="avatar-mute"]')
           .addEventListener('click', () => this.toggleAvatarMute());
@@ -1013,8 +1030,45 @@
       }
     }
 
+    // ----------------------------------------------------------------------
+    // Dispatcher: sceglie il provider avatar in base a config.avatarProvider
+    // ('liveavatar' = HeyGen LiveAvatar | 'd-id' = D-ID Agents | default liveavatar).
+    // ----------------------------------------------------------------------
+    async startAvatar() {
+      const provider = (this.state.config?.avatarProvider || 'liveavatar').toLowerCase();
+      this.state.avatar.provider = provider;
+      if (provider === 'd-id' || provider === 'did') {
+        return this.startAvatarDid();
+      }
+      return this.startAvatarLiveAvatar();
+    }
+
+    async loadLiveAvatarSDK() {
+      if (this.state.avatar.liveAvatarSdk) return this.state.avatar.liveAvatarSdk;
+      this.refs.content.innerHTML = `<div class="empty"><p>Carico l'avatar...</p></div>`;
+
+      const errors = [];
+      for (const url of LIVEAVATAR_SDK_URLS) {
+        try {
+          console.log('[prof-carbonio] Loading LiveAvatar SDK from', url);
+          const mod = await import(/* @vite-ignore */ url);
+          if (!mod || typeof mod.LiveAvatarSession !== 'function') {
+            throw new Error('SDK module missing LiveAvatarSession export');
+          }
+          this.state.avatar.liveAvatarSdk = mod;
+          console.log('[prof-carbonio] LiveAvatar SDK loaded');
+          return mod;
+        } catch (err) {
+          console.warn(`[prof-carbonio] SDK ${url} failed:`, err.message);
+          errors.push(`${url}: ${err.message}`);
+        }
+      }
+      console.error('[prof-carbonio] All LiveAvatar SDK sources failed:', errors);
+      throw new Error('Impossibile caricare l\'SDK LiveAvatar.');
+    }
+
     async loadDidSDK() {
-      if (this.state.avatar.sdkLoaded) return this.state.avatar.sdk;
+      if (this.state.avatar.didSdk) return this.state.avatar.didSdk;
       this.refs.content.innerHTML = `<div class="empty"><p>Carico l'avatar...</p></div>`;
 
       const errors = [];
@@ -1025,39 +1079,145 @@
           if (!mod || typeof mod.createAgentManager !== 'function') {
             throw new Error('SDK module missing createAgentManager export');
           }
-          this.state.avatar.sdk = mod;
-          this.state.avatar.sdkLoaded = true;
-          console.log('[prof-carbonio] D-ID SDK loaded successfully');
+          this.state.avatar.didSdk = mod;
+          console.log('[prof-carbonio] D-ID SDK loaded');
           return mod;
         } catch (err) {
-          console.warn(`[prof-carbonio] CDN ${url} failed:`, err.message);
+          console.warn(`[prof-carbonio] D-ID SDK ${url} failed:`, err.message);
           errors.push(`${url}: ${err.message}`);
         }
       }
       console.error('[prof-carbonio] All D-ID SDK CDNs failed:', errors);
-      throw new Error('Impossibile caricare l\'SDK D-ID da nessun CDN.');
+      throw new Error('Impossibile caricare l\'SDK D-ID.');
     }
 
-    async startAvatar() {
+    async startAvatarLiveAvatar() {
       try {
-        const sdk = await this.loadDidSDK();
-        const { createAgentManager } = sdk;
-
-        // 1) Config D-ID dal nostro backend (agentId + clientKey legati ad allowed_domains)
-        const cfg = await this.api('/did/config', { method: 'GET' });
-        if (!cfg?.agentId || !cfg?.clientKey) {
-          throw new Error('Backend non ha restituito config D-ID');
+        const sdk = await this.loadLiveAvatarSDK();
+        const {
+          LiveAvatarSession,
+          SessionEvent,
+          SessionState,
+          AgentEventsEnum
+        } = sdk;
+        if (!LiveAvatarSession || !SessionEvent || !AgentEventsEnum) {
+          throw new Error('SDK LiveAvatar non espone gli enum attesi');
         }
+        this.state.avatar._enums = { SessionEvent, SessionState, AgentEventsEnum };
+
+        // 1) Token sessione dal nostro backend (chiama api.liveavatar.com)
+        const { sessionToken } = await this.api('/avatar/session', {
+          method: 'POST',
+          body: JSON.stringify({ language: 'it' })
+        });
+        if (!sessionToken) throw new Error('Backend non ha restituito sessionToken');
 
         // 2) Assicura sessione chat per persistere messaggi
         await this.ensureSession();
 
-        // 3) Crea AgentManager con callbacks
+        // 3) Crea sessione LiveAvatar - mode FULL = voice chat con STT integrato
+        const session = new LiveAvatarSession(sessionToken, {
+          voiceChat: { defaultMuted: false }
+        });
+        this.state.avatar.session = session;
+        this.state.avatar.muted = false;
+        this.userBuffer = '';
+
+        // 4) Eventi sessione
+        session.on(SessionEvent.SESSION_STATE_CHANGED, (event) => {
+          const state = event?.state || event;
+          if (state === SessionState.CONNECTED || state === 'CONNECTED') {
+            this.state.avatar.connected = true;
+            if (this.refs.statusText) this.refs.statusText.textContent = 'In ascolto...';
+            this.renderAvatarStage();
+          } else if (state === SessionState.DISCONNECTED || state === 'DISCONNECTED') {
+            this.state.avatar.connected = false;
+            this.renderAvatarStage();
+          }
+        });
+
+        // 5) Stream pronto -> attach al <video> + saluto iniziale
+        session.on(SessionEvent.SESSION_STREAM_READY, () => {
+          this.state.avatar.connected = true;
+          this.renderAvatarStage();
+          this.attachLiveAvatarVideo();
+          setTimeout(async () => {
+            try {
+              await this.avatarSpeak('Ciao, sono Prof. Carbonio. Puoi chiedermi a voce o scrivermi una domanda sul Master in Carbon Farming.');
+            } catch (e) { console.warn('welcome speak error', e); }
+          }, 500);
+        });
+
+        // 6) Eventi avatar (parla / smette di parlare)
+        session.on(AgentEventsEnum.AVATAR_SPEAK_STARTED, () => {
+          this.state.avatar.talking = true;
+          if (this.refs.statusText) this.refs.statusText.textContent = 'Prof. Carbonio parla...';
+        });
+        session.on(AgentEventsEnum.AVATAR_SPEAK_ENDED, () => {
+          this.state.avatar.talking = false;
+          if (this.refs.statusText) this.refs.statusText.textContent = 'In ascolto...';
+          // Se c'erano trascrizioni accumulate mentre parlava, processale ora
+          if ((this.userBuffer || '').trim().length >= 3) {
+            setTimeout(() => this.processAvatarTurn(session), 200);
+          }
+        });
+
+        // 7) Eventi utente (STT integrato del LiveAvatar)
+        session.on(AgentEventsEnum.USER_SPEAK_STARTED, () => {
+          if (this.state.avatar.muted) return;
+          if (this.refs.statusText) this.refs.statusText.textContent = 'Ti ascolto...';
+        });
+
+        session.on(AgentEventsEnum.USER_TRANSCRIPTION, (event) => {
+          if (this.state.avatar.muted) return;
+          const text = event?.text || event?.transcript || event?.detail?.text;
+          if (!text) return;
+          // Interrompi eventuali risposte automatiche dell'SDK
+          try { session.interrupt && session.interrupt(); } catch (_) {}
+          this.userBuffer = ((this.userBuffer || '') + ' ' + text).trim();
+        });
+
+        let endTimer = null;
+        session.on(AgentEventsEnum.USER_SPEAK_ENDED, () => {
+          if (this.state.avatar.muted) return;
+          if (endTimer) clearTimeout(endTimer);
+          // 1.5s di silenzio prima di considerare il turno chiuso
+          endTimer = setTimeout(() => this.processAvatarTurn(session), 1500);
+        });
+
+        // 8) Avvia sessione (parametri presi dal token: avatarId, language, mode)
+        await session.start();
+
+      } catch (err) {
+        console.error('startAvatar error', err);
+        this.state.avatar.connected = false;
+        const msg = stringifyError(err);
+        this.refs.content.innerHTML = `<div class="error-banner">Errore avatar: ${escapeHtml(msg)}</div>` +
+          `<div class="empty"><button id="btn-back-text">Torna alla chat scritta</button></div>`;
+        const back = this.refs.content.querySelector('#btn-back-text');
+        if (back) back.addEventListener('click', () => this.switchMode('text'));
+      }
+    }
+
+    // ----------------------------------------------------------------------
+    // Provider D-ID — alternativo a LiveAvatar, scelto da admin via flag
+    // tutor_settings.avatar_provider='d-id'. Niente STT integrato in v1:
+    // l'utente scrive nella chat, l'avatar pronuncia la risposta Claude.
+    // ----------------------------------------------------------------------
+    async startAvatarDid() {
+      try {
+        const sdk = await this.loadDidSDK();
+        const { createAgentManager } = sdk;
+
+        const cfg = await this.api('/did/config', { method: 'GET' });
+        if (!cfg?.agentId || !cfg?.clientKey) {
+          throw new Error('Backend non ha restituito config D-ID');
+        }
+        await this.ensureSession();
+
         const self = this;
         const callbacks = {
           onSrcObjectReady(value) {
-            // Stream WebRTC pronto: lo salviamo in state e renderAvatarStage
-            // lo assegna a <video>.srcObject. NON chiamiamo play() qui (no user gesture).
             self.state.avatar.stream = value;
             self.state.avatar.connected = true;
             self.renderAvatarStage();
@@ -1080,11 +1240,8 @@
             }
           },
           onError(error) {
-            // Le sessioni D-ID nei primi 200ms riportano "session_id" non pronto:
-            // e' rumore, si auto-risolve.
-            if (error?.kind === 'SessionError' && /session_id/i.test(error.description || '')) {
-              return;
-            }
+            // Rumore noto nei primi 200ms di sessione: "session_id" non pronto
+            if (error?.kind === 'SessionError' && /session_id/i.test(error.description || '')) return;
             console.warn('[prof-carbonio] D-ID error:', error);
           }
         };
@@ -1096,18 +1253,16 @@
         });
         this.state.avatar.session = agentManager;
 
-        // 4) Avvia connessione WebRTC
         await agentManager.connect();
 
-        // 5) Saluto iniziale
         setTimeout(async () => {
           try {
-            await this.didSpeak('Ciao, sono Prof. Carbonio. Scrivimi pure una domanda sul Master in Carbon Farming e ti rispondo a voce.');
+            await this.avatarSpeak('Ciao, sono Prof. Carbonio. Scrivimi pure una domanda sul Master in Carbon Farming e ti rispondo a voce.');
           } catch (e) { console.warn('welcome speak error', e); }
         }, 800);
 
       } catch (err) {
-        console.error('startAvatar error', err);
+        console.error('startAvatarDid error', err);
         this.state.avatar.connected = false;
         const msg = stringifyError(err);
         this.refs.content.innerHTML = `<div class="error-banner">Errore avatar: ${escapeHtml(msg)}</div>` +
@@ -1117,33 +1272,57 @@
       }
     }
 
-    // Wrapper su agentManager.speak() con fallback ai vari formati che il
-    // D-ID Client SDK accetta a seconda della versione (string vs oggetto).
-    async didSpeak(text) {
-      const av = this.state.avatar.session;
-      if (!av || !text) return;
-      if (typeof av.speak !== 'function') {
-        console.warn('[prof-carbonio] D-ID SDK non espone speak()');
-        return;
+    // LiveAvatar usa session.attach(videoElement) per legare lo stream WebRTC
+    // al <video> della UI (renderAvatarStage crea il video element nel DOM).
+    attachLiveAvatarVideo() {
+      const session = this.state.avatar.session;
+      if (!session || typeof session.attach !== 'function') return;
+      if (!this.avatarVideoEl) {
+        this.avatarVideoEl = this.refs.content && this.refs.content.querySelector('video');
       }
-      try {
-        await av.speak({ type: 'text', input: text });
-      } catch (_) {
-        try { await av.speak(text); } catch (e2) { console.warn('avatar speak error', e2); }
+      if (this.avatarVideoEl) {
+        try { session.attach(this.avatarVideoEl); }
+        catch (e) { console.warn('LiveAvatar attach error', e); }
       }
     }
 
-    // Turno avatar via testo: l'utente scrive in chat, Claude+RAG risponde,
-    // D-ID fa pronunciare la risposta. Non c'e' STT in v1: si rimanda alla
-    // chat testuale per la digitazione.
-    async processAvatarTurn(_av, userMessage) {
+    // Dispatcher TTS: LiveAvatar usa session.repeat(text), D-ID usa
+    // agentManager.speak({type:'text', input:text}). Discrimina su provider.
+    async avatarSpeak(text) {
+      const session = this.state.avatar.session;
+      if (!session || !text) return;
+      const provider = this.state.avatar.provider || 'liveavatar';
+      if (provider === 'd-id' || provider === 'did') {
+        if (typeof session.speak !== 'function') {
+          console.warn('[prof-carbonio] D-ID SDK non espone speak()');
+          return;
+        }
+        try { await session.speak({ type: 'text', input: text }); }
+        catch (_) {
+          try { await session.speak(text); }
+          catch (e2) { console.warn('D-ID speak error', e2); }
+        }
+        return;
+      }
+      // LiveAvatar (default)
+      if (typeof session.repeat !== 'function') {
+        console.warn('[prof-carbonio] LiveAvatar SDK non espone repeat()');
+        return;
+      }
+      try { await session.repeat(text); }
+      catch (e) { console.warn('LiveAvatar repeat error', e); }
+    }
+
+    // Turno conversazionale: input puo' arrivare via voce (USER_TRANSCRIPTION
+    // accumulato nel buffer) o via testo (sendUserMessage in modalita' avatar).
+    async processAvatarTurn(_session, userMessage) {
       const msg = (userMessage || this.userBuffer || '').trim();
       this.userBuffer = '';
-      if (!msg) return;
+      if (!msg || msg.length < 3) return;
       if (this.state.avatar.processing) return;
       if (this.state.avatar.talking) {
+        // Aspetta che l'avatar finisca di parlare prima di lanciare il turno nuovo
         this.userBuffer = msg;
-        setTimeout(() => this.processAvatarTurn(null, ''), 1000);
         return;
       }
       this.state.avatar.processing = true;
@@ -1159,9 +1338,9 @@
         });
         const spoken = result.spoken || result.reply || '';
         this.appendTranscript('assistant', spoken, result.citations);
-        await this.didSpeak(spoken);
+        await this.avatarSpeak(spoken);
       } catch (err) {
-        await this.didSpeak('Scusami, non sono riuscito a rispondere. Puoi ripetere?').catch(() => {});
+        await this.avatarSpeak('Scusami, non sono riuscito a rispondere. Puoi ripetere?').catch(() => {});
         console.error(err);
       } finally {
         this.state.avatar.processing = false;
@@ -1181,27 +1360,53 @@
       this.refs.transcript.scrollTop = this.refs.transcript.scrollHeight;
     }
 
-    // D-ID v1: nessun voice chat built-in. Il mute si applica al <video> element
-    // (utile se l'utente vuole vedere l'avatar in muto, es. in ambiente pubblico).
+    // Dispatcher mute: LiveAvatar ha voice chat integrata (mute microfono SDK),
+    // D-ID v1 non ha STT quindi il mute si applica al <video> element (silenzia
+    // l'audio del rendering avatar, utile in ambiente pubblico).
     async toggleAvatarMute() {
-      if (!this.avatarVideoEl) return;
-      this.state.avatar.muted = !this.state.avatar.muted;
-      this.avatarVideoEl.muted = this.state.avatar.muted;
-      this.renderAvatarStage();
+      const session = this.state.avatar.session;
+      const provider = this.state.avatar.provider || 'liveavatar';
+      if (provider === 'd-id' || provider === 'did') {
+        if (!this.avatarVideoEl) return;
+        this.state.avatar.muted = !this.state.avatar.muted;
+        this.avatarVideoEl.muted = this.state.avatar.muted;
+        this.renderAvatarStage();
+        return;
+      }
+      // LiveAvatar (default)
+      if (!session) return;
+      try {
+        if (this.state.avatar.muted) {
+          if (typeof session.unmuteVoiceChat === 'function') await session.unmuteVoiceChat();
+          else if (typeof session.startVoiceChat === 'function') await session.startVoiceChat();
+          this.state.avatar.muted = false;
+        } else {
+          if (typeof session.muteVoiceChat === 'function') await session.muteVoiceChat();
+          else if (typeof session.stopVoiceChat === 'function') await session.stopVoiceChat();
+          this.state.avatar.muted = true;
+        }
+        this.renderAvatarStage();
+      } catch (err) {
+        console.error('mute toggle error', err);
+      }
     }
 
     async stopAvatar() {
-      const av = this.state.avatar.session;
-      if (av) {
+      const session = this.state.avatar.session;
+      if (session) {
         try {
-          if (typeof av.disconnect === 'function') await av.disconnect();
+          // LiveAvatar: session.stop()  |  D-ID: agentManager.disconnect()
+          if (typeof session.stop === 'function') await session.stop();
+          else if (typeof session.disconnect === 'function') await session.disconnect();
         } catch (_) {}
       }
       this.state.avatar.session = null;
+      this.state.avatar.provider = null;
       this.state.avatar.connected = false;
       this.state.avatar.stream = null;
       this.state.avatar.talking = false;
       this.state.avatar.processing = false;
+      this.userBuffer = '';
       if (this.state.mode === 'avatar' && this.state.open) {
         this.renderAvatarStage();
       }

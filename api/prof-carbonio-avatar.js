@@ -90,8 +90,82 @@ async function getHeygenSessionToken(opts = {}) {
   };
 }
 
-// Alias retrocompatibile (se qualcosa importa il vecchio nome)
-const getLiveAvatarSessionToken = getHeygenSessionToken;
+// =============================================================================
+// LiveAvatar (ex-HeyGen, app.liveavatar.com) - prodotto streaming "nuovo"
+// Diverso da HeyGen Streaming Avatar:
+//  - Endpoint: api.liveavatar.com/v1/sessions/token (non api.heygen.com)
+//  - SDK: @heygen/liveavatar-web-sdk (NON @heygen/streaming-avatar)
+//  - Modalita' FULL = voice chat integrata con STT lato SDK
+//  - Pattern: new LiveAvatarSession(token, opts), .start(), .repeat(text), .stop()
+// =============================================================================
+const LIVEAVATAR_TOKEN_URL = 'https://api.liveavatar.com/v1/sessions/token';
+
+async function getLiveAvatarSessionToken(opts = {}) {
+  const apiKey = (process.env.LIVEAVATAR_API_KEY || process.env.HEYGEN_API_KEY || '').trim();
+  if (!apiKey) {
+    const err = new Error('LIVEAVATAR_API_KEY not configured');
+    err.status = 503;
+    throw err;
+  }
+
+  const avatarId = opts.avatarId
+    || process.env.LIVEAVATAR_AVATAR_ID
+    || process.env.HEYGEN_AVATAR_ID
+    || DEFAULT_AVATAR_ID;
+
+  const contextId = (opts.contextId || process.env.LIVEAVATAR_CONTEXT_ID || '').trim() || null;
+  const language = opts.language || 'it';
+
+  const body = {
+    mode: 'FULL',
+    avatar_id: avatarId,
+    avatar_persona: {
+      ...(contextId ? { context_id: contextId } : {}),
+      language
+    }
+  };
+
+  const response = await fetch(LIVEAVATAR_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'X-API-KEY': apiKey,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  const rawText = await response.text();
+  let data = {};
+  try { data = rawText ? JSON.parse(rawText) : {}; } catch (_) { data = { raw: rawText }; }
+
+  if (!response.ok) {
+    console.error('[prof-carbonio-avatar] LiveAvatar API error:', response.status, data);
+    const message = typeof data?.message === 'string'
+      ? data.message
+      : typeof data?.error === 'string'
+        ? data.error
+        : data?.error?.message
+          ? data.error.message
+          : `LiveAvatar API error (${response.status})`;
+    const err = new Error(message);
+    err.status = response.status;
+    err.provider = 'liveavatar';
+    err.details = data;
+    throw err;
+  }
+
+  // Formato risposta LiveAvatar: { data: { session_token, session_id, ... } }
+  const sessionToken = data?.data?.session_token || data?.session_token;
+  const sessionId   = data?.data?.session_id   || data?.session_id || null;
+  if (!sessionToken) {
+    console.error('[prof-carbonio-avatar] Unexpected LiveAvatar response:', data);
+    const err = new Error('Unexpected response from LiveAvatar API');
+    err.status = 502;
+    throw err;
+  }
+
+  return { sessionToken, sessionId, avatarId, language, provider: 'liveavatar' };
+}
 
 /**
  * Variante della risposta Claude pensata per la voce:
@@ -114,6 +188,6 @@ function stripCitationMarkers(text) {
 module.exports = {
   DEFAULT_AVATAR_ID,
   getHeygenSessionToken,
-  getLiveAvatarSessionToken,  // alias retrocompatibile
+  getLiveAvatarSessionToken,
   stripCitationMarkers
 };

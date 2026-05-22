@@ -1000,6 +1000,16 @@
         this.refs.content.querySelector('[data-action="avatar-start"]')
           .addEventListener('click', () => this.startAvatar());
       } else {
+        // Bottone microfono: provider-specific.
+        // - LiveAvatar: STT integrato sempre attivo, il bottone fa mute/unmute
+        //   del microfono lato SDK.
+        // - D-ID: niente STT integrato, il bottone attiva il Web Speech API
+        //   del browser (push-to-talk). Action diverso (avatar-listen).
+        const providerForBtn = this.state.avatar.provider || 'liveavatar';
+        const isDidProvider = providerForBtn === 'd-id' || providerForBtn === 'did';
+        const micButton = isDidProvider
+          ? `<button data-action="avatar-listen">${a.isListening ? '⏹ Stop' : '🎤 Parla'}</button>`
+          : `<button data-action="avatar-mute">🎤 ${a.muted ? 'Riattiva' : 'Muta'}</button>`;
         this.refs.content.innerHTML = `
           <div class="avatar-stage">
             <div class="avatar-video-wrap">
@@ -1007,7 +1017,7 @@
               <div class="status"><span class="dot"></span><span class="status-text">Connesso</span></div>
             </div>
             <div class="avatar-controls">
-              <button data-action="avatar-mute">🎤 ${a.muted ? 'Riattiva' : 'Muta'}</button>
+              ${micButton}
               <button class="danger" data-action="avatar-stop">Termina</button>
             </div>
             <div class="avatar-transcript"></div>
@@ -1032,8 +1042,15 @@
           // toggle mute) e il video element appena ricreato va ri-attaccato.
           this.attachLiveAvatarVideo();
         }
-        this.refs.content.querySelector('[data-action="avatar-mute"]')
-          .addEventListener('click', () => this.toggleAvatarMute());
+        // Listener provider-specific per il bottone microfono.
+        const micBtn = this.refs.content.querySelector('[data-action="avatar-listen"]')
+                    || this.refs.content.querySelector('[data-action="avatar-mute"]');
+        if (micBtn) {
+          micBtn.addEventListener('click', () => {
+            if (micBtn.dataset.action === 'avatar-listen') this.toggleAvatarListen();
+            else this.toggleAvatarMute();
+          });
+        }
         this.refs.content.querySelector('[data-action="avatar-stop"]')
           .addEventListener('click', () => this.stopAvatar());
         this.refs.transcript = this.refs.content.querySelector('.avatar-transcript');
@@ -1379,6 +1396,88 @@
       this.refs.transcript.scrollTop = this.refs.transcript.scrollHeight;
     }
 
+    // ----------------------------------------------------------------------
+    // Browser Web Speech API — fornisce STT lato browser per i provider che
+    // non hanno il riconoscimento vocale integrato (es. D-ID). LiveAvatar
+    // non lo usa perche' fa STT internamente. Funziona bene su Chrome / Edge
+    // / Android Chrome; su Safari iOS e' limitato.
+    // ----------------------------------------------------------------------
+    initBrowserSTT() {
+      const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!Rec) return null;
+      const rec = new Rec();
+      rec.lang = 'it-IT';
+      rec.interimResults = true;
+      rec.continuous = false; // si chiude da sola dopo silenzio
+      rec.onresult = (event) => {
+        let finalText = '';
+        let interimText = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const r = event.results[i];
+          if (r.isFinal) finalText += r[0].transcript;
+          else interimText += r[0].transcript;
+        }
+        const combined = (finalText || interimText).trim();
+        this.state.avatar.recognitionBuffer = combined;
+        if (this.refs.statusText && combined) {
+          this.refs.statusText.textContent = '🎤 ' + combined;
+        }
+      };
+      rec.onend = () => {
+        this.state.avatar.isListening = false;
+        const text = (this.state.avatar.recognitionBuffer || '').trim();
+        this.state.avatar.recognitionBuffer = '';
+        // Aggiorna etichetta bottone in-place senza ri-renderare lo stage
+        const btn = this.refs.content && this.refs.content.querySelector('[data-action="avatar-listen"]');
+        if (btn) btn.textContent = '🎤 Parla';
+        if (text) {
+          this.processAvatarTurn(null, text);
+        } else if (this.refs.statusText) {
+          this.refs.statusText.textContent = 'Scrivi qui sotto per chiedere';
+        }
+      };
+      rec.onerror = (event) => {
+        console.warn('STT error:', event.error);
+        this.state.avatar.isListening = false;
+        const btn = this.refs.content && this.refs.content.querySelector('[data-action="avatar-listen"]');
+        if (btn) btn.textContent = '🎤 Parla';
+        if (this.refs.statusText) {
+          this.refs.statusText.textContent = event.error === 'no-speech'
+            ? 'Non ho sentito nulla, riprova'
+            : event.error === 'not-allowed'
+              ? 'Permesso microfono negato'
+              : 'Microfono non disponibile';
+        }
+      };
+      return rec;
+    }
+
+    async toggleAvatarListen() {
+      if (!this.state.avatar.recognition) {
+        this.state.avatar.recognition = this.initBrowserSTT();
+      }
+      const rec = this.state.avatar.recognition;
+      if (!rec) {
+        alert('Il tuo browser non supporta il riconoscimento vocale. Usa Chrome / Edge o scrivi la tua domanda nella casella di testo.');
+        return;
+      }
+      const btn = this.refs.content && this.refs.content.querySelector('[data-action="avatar-listen"]');
+      if (this.state.avatar.isListening) {
+        try { rec.stop(); } catch (_) {}
+      } else {
+        this.state.avatar.recognitionBuffer = '';
+        this.state.avatar.isListening = true;
+        if (this.refs.statusText) this.refs.statusText.textContent = '🎤 Ti ascolto...';
+        if (btn) btn.textContent = '⏹ Stop';
+        try { rec.start(); }
+        catch (e) {
+          console.warn('STT start error:', e);
+          this.state.avatar.isListening = false;
+          if (btn) btn.textContent = '🎤 Parla';
+        }
+      }
+    }
+
     // Dispatcher mute: LiveAvatar ha voice chat integrata (mute microfono SDK),
     // D-ID v1 non ha STT quindi il mute si applica al <video> element (silenzia
     // l'audio del rendering avatar, utile in ambiente pubblico).
@@ -1424,12 +1523,18 @@
           else if (typeof session.disconnect === 'function') await session.disconnect();
         } catch (_) {}
       }
+      // Ferma eventuale Web Speech in corso (provider D-ID)
+      if (this.state.avatar.recognition && this.state.avatar.isListening) {
+        try { this.state.avatar.recognition.stop(); } catch (_) {}
+      }
       this.state.avatar.session = null;
       this.state.avatar.provider = null;
       this.state.avatar.connected = false;
       this.state.avatar.stream = null;
       this.state.avatar.talking = false;
       this.state.avatar.processing = false;
+      this.state.avatar.isListening = false;
+      this.state.avatar.recognitionBuffer = '';
       this.userBuffer = '';
       if (this.state.mode === 'avatar' && this.state.open) {
         this.renderAvatarStage();

@@ -162,6 +162,7 @@ function registerProfCarbonioRoutes(app, deps) {
 
   // ===========================================================================
   // POST /api/tutor/avatar/session — token LiveAvatar per modalita' voce/avatar
+  // (LEGACY HeyGen — mantenuto per retrocompatibilita' col vecchio widget)
   // ===========================================================================
   app.post('/api/tutor/avatar/session', requireStudent, requireNonGuest, async (req, res) => {
     try {
@@ -173,6 +174,28 @@ function registerProfCarbonioRoutes(app, deps) {
       console.error('[tutor] avatar session error:', err.message);
       res.status(status).json({ error: err.message });
     }
+  });
+
+  // ===========================================================================
+  // GET /api/tutor/did/config — config D-ID Agents per il widget studente
+  // Restituisce agentId + clientKey (entrambi "pubblici" per design D-ID:
+  // la clientKey e' vincolata ad allowed_domains lato D-ID e va esposta al browser).
+  // ===========================================================================
+  app.get('/api/tutor/did/config', requireStudent, requireNonGuest, async (_req, res) => {
+    const agentId = (process.env.DID_AGENT_ID || '').trim();
+    const clientKey = (process.env.DID_CLIENT_KEY || process.env.DATA_CLIENT_KEY || '').trim();
+    if (!agentId || !clientKey) {
+      return res.status(503).json({
+        error: 'D-ID non configurato',
+        configured: { agentId: Boolean(agentId), clientKey: Boolean(clientKey) }
+      });
+    }
+    res.json({
+      provider: 'd-id',
+      agentId,
+      clientKey,
+      language: 'it'
+    });
   });
 
   // ===========================================================================

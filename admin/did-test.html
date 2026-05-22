@@ -324,15 +324,27 @@
       updateControls();
     }
 
+    // Strategia anti-blocco autoplay (Safari / Chrome mobile):
+    // 1) Primo play parte SEMPRE muted (consentito dai browser anche senza gesture)
+    // 2) Lo unmute avviene al primo gesto utente vero (click su qualsiasi bottone)
+    let videoUnmuted = false;
     function activateVideo() {
       if (!video.srcObject) return Promise.resolve();
-      video.muted = false;
+      if (!videoUnmuted) {
+        video.muted = true; // forziamo muted al primo play per evitare il blocco
+      }
       return video.play().then(() => {
         autoplayHint.classList.remove('active');
       }).catch((err) => {
         autoplayHint.classList.add('active');
         log(`Autoplay bloccato: ${err.message}`, 'error');
       });
+    }
+    function unmuteVideoOnGesture() {
+      if (videoUnmuted || !video.srcObject) return;
+      video.muted = false;
+      videoUnmuted = true;
+      video.play().catch(() => {});
     }
 
     function getAgentId() {
@@ -492,7 +504,10 @@
         const callbacks = {
           onSrcObjectReady(value) {
             video.srcObject = value;
-            activateVideo();
+            // NON chiamare activateVideo() qui: il callback dell'SDK arriva fuori
+            // dal "user gesture" del click su Connetti, quindi il browser blocca
+            // play() con audio. activateVideo() viene chiamata subito dopo dentro
+            // l'handler del bottone (riga ~525), che invece e' un gesto utente.
             setStatus('Stream attivo', 'ready');
             log('Stream WebRTC D-ID attivo.');
           },
@@ -518,7 +533,10 @@
         agentManager = await mod.createAgentManager(agentId, {
           auth,
           callbacks,
-          streamOptions: { compatibilityMode: 'auto', streamWarmup: true }
+          // streamWarmup: false — disabilita lo "stream idle" pre-creato che su
+          // alcuni agenti/piani D-ID restituisce 400 sulla call /streams.
+          // L'avvio del primo speak resta veloce e non vediamo piu' l'errore in console.
+          streamOptions: { compatibilityMode: 'auto', streamWarmup: false }
         });
         setStatus('Connessione...', 'busy');
         await agentManager.connect();
@@ -543,6 +561,7 @@
         actionBusy = true;
         updateControls();
         setStatus('Invio chat...', 'busy');
+        unmuteVideoOnGesture(); // primo gesto utente -> unmute consentito
         await activateVideo();
         await agentManager.chat(text);
         log(`Chat inviata: ${text}`);
@@ -563,6 +582,7 @@
         actionBusy = true;
         updateControls();
         setStatus('Invio speak...', 'busy');
+        unmuteVideoOnGesture();
         await activateVideo();
         if (!agentManager.speak) throw new Error('Questo SDK non espone speak(); usa Invia chat.');
         await agentManager.speak(text);

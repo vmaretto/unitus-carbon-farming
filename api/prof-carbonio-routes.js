@@ -160,14 +160,34 @@ function registerProfCarbonioRoutes(app, deps) {
     }
   });
 
+  // Legge l'override di avatar_id dalla setting admin (tutor_settings).
+  // Se valorizzato sovrascrive l'env Vercel; se vuoto/inesistente fallback env.
+  async function getAvatarIdOverride() {
+    if (!pool) return null;
+    try {
+      const { rows } = await pool.query(
+        `SELECT value FROM tutor_settings WHERE key = 'avatar_id' LIMIT 1`
+      );
+      const v = (rows[0]?.value || '').trim();
+      return v || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ===========================================================================
   // POST /api/tutor/avatar/session — session token LiveAvatar (mode FULL).
   // Chiama api.liveavatar.com/v1/sessions/token. Usato dal widget studente.
+  // L'avatarId effettivo viene preso (in ordine): tutor_settings.avatar_id
+  // (admin panel) > env LIVEAVATAR_AVATAR_ID > env HEYGEN_AVATAR_ID > DEFAULT.
   // ===========================================================================
   app.post('/api/tutor/avatar/session', requireStudent, requireNonGuest, async (req, res) => {
     try {
       const { language = 'it' } = req.body || {};
-      const result = await getLiveAvatarSessionToken({ language });
+      const avatarIdOverride = await getAvatarIdOverride();
+      const opts = { language };
+      if (avatarIdOverride) opts.avatarId = avatarIdOverride;
+      const result = await getLiveAvatarSessionToken(opts);
       res.json(result); // { sessionToken, sessionId, avatarId, language, provider }
     } catch (err) {
       const status = err.status || 500;
@@ -182,13 +202,14 @@ function registerProfCarbonioRoutes(app, deps) {
 
   // ===========================================================================
   // GET /api/tutor/did/config — config D-ID Agents per il widget studente.
-  // Restituisce agentId + clientKey letti dalle env DID_AGENT_ID + DID_CLIENT_KEY.
+  // Restituisce agentId + clientKey letti dalle env (e dal pannello admin).
   // La clientKey D-ID e' "pubblica per design": vincolata ad allowed_domains
   // lato D-ID Studio, quindi puo' essere consegnata al browser senza rischi.
   // Usato solo se avatar_provider='d-id' nel pannello admin.
   // ===========================================================================
   app.get('/api/tutor/did/config', requireStudent, requireNonGuest, async (_req, res) => {
-    const agentId = (process.env.DID_AGENT_ID || '').trim();
+    const avatarIdOverride = await getAvatarIdOverride();
+    const agentId = avatarIdOverride || (process.env.DID_AGENT_ID || '').trim();
     const clientKey = (process.env.DID_CLIENT_KEY || process.env.DATA_CLIENT_KEY || '').trim();
     if (!agentId || !clientKey) {
       return res.status(503).json({

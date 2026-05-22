@@ -3593,7 +3593,19 @@ Buono studio!</textarea>
             </style>
             <div class="section-header">
                 <h2>🌱 Prof. Carbonio — AI Tutor</h2>
-                <button class="btn btn-secondary" onclick="profCarbonioLoadAll()">🔄 Aggiorna</button>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <!--
+                      Anteprima admin: apre il widget di Prof. Carbonio (chat + avatar)
+                      esattamente come lo vedono gli studenti, usando il token admin.
+                      Le sessioni create da qui sono isolate sotto lo pseudo-utente
+                      "Admin Preview" (vedi migration 052 + requireStudentOrAdminPreview).
+                    -->
+                    <a href="/admin/prof-carbonio-preview.html" target="_blank" rel="noopener"
+                       class="btn btn-primary" style="text-decoration:none;">
+                        👤 Apri anteprima studente
+                    </a>
+                    <button class="btn btn-secondary" onclick="profCarbonioLoadAll()">🔄 Aggiorna</button>
+                </div>
             </div>
 
             <!-- Stats cards -->

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>Anteprima Prof. Carbonio — Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                   Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f4f7f1;
+      color: #1f2937;
+      min-height: 100vh;
+    }
+
+    /* Barra admin in alto: serve a ricordare che non sei uno studente reale. */
+    .admin-bar {
+      background: #1f2937;
+      color: white;
+      padding: 12px 22px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      position: sticky;
+      top: 0;
+      z-index: 9000;
+    }
+    .admin-bar .pill {
+      background: #fbbf24;
+      color: #78350f;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    .admin-bar .spacer { flex: 1; }
+    .admin-bar a {
+      color: #d1d5db;
+      text-decoration: none;
+      padding: 7px 14px;
+      border: 1px solid #4b5563;
+      border-radius: 6px;
+      transition: background 0.15s, color 0.15s;
+      font-weight: 500;
+    }
+    .admin-bar a:hover { background: #374151; color: white; }
+
+    .preview-shell {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 36px 24px 120px 24px;
+    }
+    .preview-shell h1 {
+      margin: 0 0 10px 0;
+      font-size: 24px;
+      color: #1d3a14;
+      letter-spacing: -0.3px;
+    }
+    .preview-shell .lead {
+      margin: 0 0 22px 0;
+      color: #4b5563;
+      line-height: 1.6;
+      max-width: 760px;
+    }
+
+    .preview-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      padding: 26px 28px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .preview-card h2 {
+      margin: 0 0 14px 0;
+      font-size: 16px;
+      color: #1d3a14;
+      letter-spacing: 0.2px;
+    }
+    .preview-card ul {
+      margin: 0;
+      padding-left: 18px;
+      color: #4b5563;
+      line-height: 1.7;
+    }
+    .preview-card code {
+      background: #eef2ec;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #1d3a14;
+    }
+
+    .auth-error {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+      padding: 14px 18px;
+      border-radius: 8px;
+      margin-top: 20px;
+      line-height: 1.6;
+    }
+    .auth-error a { color: #991b1b; font-weight: 600; }
+
+    .status-row {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #ecfdf5;
+      border: 1px solid #6ee7b7;
+      color: #065f46;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .status-chip.warn {
+      background: #fef3c7;
+      border-color: #fcd34d;
+      color: #92400e;
+    }
+    .status-chip .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: currentColor;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="admin-bar">
+    <span class="pill">Anteprima</span>
+    <strong>Prof. Carbonio</strong>
+    <span style="color:#9ca3af; font-size:13px;">
+      Vedi il widget come uno studente — sessioni isolate sotto "Admin Preview"
+    </span>
+    <span class="spacer"></span>
+    <a href="/admin/">← Torna al pannello</a>
+  </div>
+
+  <div class="preview-shell">
+    <h1>Anteprima Prof. Carbonio (admin)</h1>
+    <p class="lead">
+      Questa pagina carica lo stesso widget che vedono gli studenti in
+      <code>/learn/</code>, ma autenticato con il tuo token admin. Tutte le
+      sessioni di chat e le conversazioni con l'avatar create da qui sono
+      memorizzate sotto un utente speciale (<em>Admin Preview</em>), quindi non
+      "sporcano" i dati degli studenti reali.
+    </p>
+
+    <div class="preview-card">
+      <h2>Come funziona</h2>
+      <ul>
+        <li>Cerca il bottone fluttuante (<strong>FAB</strong>) in basso a destra: è lo stesso che vedono gli studenti.</li>
+        <li>Apre il widget con il provider avatar e i feature flag configurati nel <a href="/admin/">pannello admin</a> (sezione Prof. Carbonio).</li>
+        <li>Quando finisci, chiudi la tab: la prossima volta che apri la pagina vedrai di nuovo il widget pulito.</li>
+        <li>Per <em>resettare</em> la cronologia delle anteprime, basta cancellare le sessioni di Admin Preview dal pannello admin (oppure dal DB).</li>
+      </ul>
+
+      <div class="status-row" id="status-row">
+        <!-- popolato via JS -->
+      </div>
+
+      <div id="auth-status"></div>
+    </div>
+
+    <!-- Widget Prof. Carbonio: stesso custom element usato in /learn/.
+         Il JS viene caricato dallo script in fondo SOLO dopo aver impostato
+         window.__PROF_CARBONIO_AUTH_TOKEN, altrimenti tenta il learnToken. -->
+    <prof-carbonio-chat></prof-carbonio-chat>
+  </div>
+
+  <script>
+    (function () {
+      const adminToken = localStorage.getItem('adminToken');
+      const statusEl = document.getElementById('auth-status');
+      const statusRow = document.getElementById('status-row');
+
+      function chip(text, warn) {
+        const span = document.createElement('span');
+        span.className = 'status-chip' + (warn ? ' warn' : '');
+        const dot = document.createElement('span');
+        dot.className = 'dot';
+        span.appendChild(dot);
+        span.appendChild(document.createTextNode(text));
+        return span;
+      }
+
+      if (!adminToken) {
+        statusEl.innerHTML = `
+          <div class="auth-error">
+            <strong>Sessione admin non attiva.</strong><br>
+            Effettua il login dal <a href="/admin/">pannello admin</a> e poi ricarica questa pagina.
+          </div>`;
+        return;
+      }
+
+      // Verifica al volo che il token sia valido (anche per scadenze).
+      fetch('/api/auth/verify', {
+        headers: { 'Authorization': 'Bearer ' + adminToken }
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (!data.valid) {
+            statusEl.innerHTML = `
+              <div class="auth-error">
+                <strong>Token admin scaduto.</strong><br>
+                Effettua di nuovo il login dal <a href="/admin/">pannello admin</a>.
+              </div>`;
+            return;
+          }
+          statusRow.appendChild(chip('Token admin valido'));
+          statusRow.appendChild(chip('Utente: Admin Preview'));
+
+          // Imposta il token che il widget leggera' al posto del learnToken
+          // (modifica in getAuthToken di /learn/js/prof-carbonio-chat.js).
+          window.__PROF_CARBONIO_AUTH_TOKEN = adminToken;
+
+          // Carica il widget DOPO aver impostato il token.
+          const s = document.createElement('script');
+          s.src = '/learn/js/prof-carbonio-chat.js';
+          s.defer = true;
+          document.body.appendChild(s);
+        })
+        .catch(err => {
+          statusEl.innerHTML = `
+            <div class="auth-error">
+              <strong>Impossibile verificare il token admin.</strong><br>
+              ${(err && err.message) || err}
+            </div>`;
+        });
+    })();
+  </script>
+</body>
+</html>

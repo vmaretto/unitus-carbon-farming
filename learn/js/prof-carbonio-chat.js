@@ -39,6 +39,12 @@
   const PERSIST_PANEL_KEY = 'profCarbonio.panelOpen';
 
   function getAuthToken() {
+    // Override esplicito: usato dalla pagina /admin/prof-carbonio-preview.html
+    // per far girare il widget con il token admin senza toccare il learnToken
+    // dello studente che potrebbe essere loggato in un'altra tab.
+    if (typeof window !== 'undefined' && window.__PROF_CARBONIO_AUTH_TOKEN) {
+      return window.__PROF_CARBONIO_AUTH_TOKEN;
+    }
     for (const k of TOKEN_KEYS) {
       const v = localStorage.getItem(k);
       if (v) return v;

@@ -145,6 +145,21 @@ function registerProfCarbonioRoutes(app, deps) {
   app.post('/api/tutor/messages/:id/escalate', requireStudent, requireNonGuest, async (req, res) => {
     if (!ensureDb(res)) return;
     try {
+      // Anteprima admin: NON creiamo una vera domanda al docente, restituiamo
+      // un finto record con la stessa shape della risposta reale. L'UI mostra
+      // comunque "Domanda inoltrata" senza inquinare la coda dei docenti.
+      if (req.user.isAdminPreview) {
+        return res.status(201).json({
+          question: {
+            id: 'preview-' + Date.now(),
+            status: 'open',
+            created_at: new Date().toISOString(),
+            preview: true
+          },
+          preview: true,
+          message: 'Escalate simulata (anteprima admin) — nessuna domanda salvata in DB.'
+        });
+      }
       const { lmsLessonId = null, moduleId = null } = req.body || {};
       const question = await escalateToTeacher(pool, {
         messageId: req.params.id,

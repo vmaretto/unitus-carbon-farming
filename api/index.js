@@ -1419,6 +1419,58 @@ function requireNonGuest(req, res, next) {
   next();
 }
 
+// =============================================================================
+// Admin "preview studente"
+// -----------------------------------------------------------------------------
+// L'admin del pannello puo' aprire /admin/prof-carbonio-preview.html per
+// vedere il widget Prof. Carbonio esattamente come lo vede uno studente.
+// Quel widget chiama /api/tutor/* e ha bisogno di un req.user.userId valido.
+//
+// Il JWT admin pero' contiene solo {role:'admin'} senza userId, quindi
+// requireStudent (che accetta gia' role='admin') non basta: tutte le query
+// scope per user_id si romperebbero.
+//
+// requireStudentOrAdminPreview rileva il caso "token admin senza userId" e
+// inietta un userId reale (ADMIN_PREVIEW_USER_ID, seedato da migration 052)
+// in req.user. Effetto:
+//   - le sessioni create dall'admin in anteprima usano questo user_id
+//   - sono isolate dalle sessioni degli studenti reali
+//   - la FK tutor_sessions.user_id -> users.id continua a essere rispettata.
+// =============================================================================
+const ADMIN_PREVIEW_USER_ID = '00000000-0000-0000-0000-000000000001';
+
+function requireStudentOrAdminPreview(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  const token = authHeader.slice(7);
+  const payload = verifyToken(token);
+  if (!payload) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  // Token admin "puro" (no userId): sintetizziamo lo pseudo-utente preview.
+  if (payload.role === 'admin' && !payload.userId) {
+    req.user = {
+      role: 'admin',
+      userId: ADMIN_PREVIEW_USER_ID,
+      firstName: 'Admin',
+      lastName: 'Preview',
+      email: 'admin-preview@carbonfarmingmaster.local',
+      isAdminPreview: true
+    };
+    return next();
+  }
+
+  // Altrimenti comportamento identico a requireStudent.
+  if (!['student', 'teacher', 'admin', 'guest'].includes(payload.role)) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+  req.user = payload;
+  next();
+}
+
 let pool = null;
 
 async function resolveValidFacultyId(candidateFacultyId, lessonId = null) {
@@ -1665,7 +1717,10 @@ try {
     pool,
     anthropic: profCarbonioAnthropic,
     openai: profCarbonioOpenAI,
-    requireStudent,
+    // requireStudentOrAdminPreview accetta anche il token admin (no userId)
+    // e inietta lo pseudo-utente "Admin Preview" per consentire la pagina
+    // /admin/prof-carbonio-preview.html senza rompere le query scope-by-user.
+    requireStudent: requireStudentOrAdminPreview,
     requireNonGuest
   });
 
@@ -1674,7 +1729,8 @@ try {
     pool,
     openai: profCarbonioOpenAI,
     requireAdmin,
-    requireStudent
+    // Anche /api/tutor/config deve essere raggiungibile dall'admin preview.
+    requireStudent: requireStudentOrAdminPreview
   });
   console.log('[prof-carbonio] Routes registered (student + admin)');
 } catch (err) {

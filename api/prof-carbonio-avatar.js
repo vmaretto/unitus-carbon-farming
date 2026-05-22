@@ -168,20 +168,44 @@ async function getLiveAvatarSessionToken(opts = {}) {
 }
 
 /**
- * Variante della risposta Claude pensata per la voce:
- * rimuove i marker di citazione [^N] dal testo che verra' pronunciato dall'avatar
- * (suonerebbero malissimo letti ad alta voce), ma li ritorna a parte cosi' la UI
- * puo' mostrarli nel pannello laterale.
+ * Variante della risposta Claude pensata per la voce: produce un testo "spoken"
+ * pulito che l'avatar puo' pronunciare ad alta voce senza pasticci. Rimuove:
+ *  - marker di citazione [^N] e [N] (Claude haiku spesso omette il caret)
+ *  - asterischi del markdown **bold**, *italic*, __bold__, _italic_
+ *  - backtick di `code`
+ *  - simboli markdown a inizio riga (#, >, -, *, 1.) e link [testo](url) -> testo
+ * Ritorna anche l'array dei numeri citazione trovati per la UI.
  */
 function stripCitationMarkers(text) {
   if (!text) return { spoken: '', markers: [] };
   const markers = [];
-  const regex = /\[\^(\d+)\]/g;
+  // Estrai i numeri sia da [^N] sia da [N] (solo numeri puri, non link markdown)
+  const citeRegex = /\[\^?(\d+)\]/g;
   let m;
-  while ((m = regex.exec(text)) !== null) {
+  while ((m = citeRegex.exec(text)) !== null) {
     markers.push(parseInt(m[1], 10));
   }
-  const spoken = text.replace(/\s*\[\^\d+\]/g, '').replace(/\s{2,}/g, ' ').trim();
+  let spoken = text;
+  // Rimuovi marker citazione [^N] e [N] (con eventuale spazio davanti)
+  spoken = spoken.replace(/\s*\[\^?\d+\]/g, '');
+  // Link markdown [testo](url) -> tieni solo "testo"
+  spoken = spoken.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  // Bold/italic markdown: **x** *x* __x__ _x_ -> x
+  spoken = spoken.replace(/\*\*(.+?)\*\*/g, '$1');
+  spoken = spoken.replace(/(?<!\w)\*(.+?)\*(?!\w)/g, '$1');
+  spoken = spoken.replace(/__(.+?)__/g, '$1');
+  spoken = spoken.replace(/(?<!\w)_(.+?)_(?!\w)/g, '$1');
+  // Inline code: `x` -> x
+  spoken = spoken.replace(/`([^`]+)`/g, '$1');
+  // Heading e blockquote a inizio riga (#, ##, >)
+  spoken = spoken.replace(/^[ \t]*#{1,6}\s+/gm, '');
+  spoken = spoken.replace(/^[ \t]*>\s?/gm, '');
+  // Bullet a inizio riga (- *  -> spazio)
+  spoken = spoken.replace(/^[ \t]*[-*+]\s+/gm, '');
+  // Numerati a inizio riga (1.  2.) -> rimuovi numero, lascia testo
+  spoken = spoken.replace(/^[ \t]*\d+[.)]\s+/gm, '');
+  // Compatta spazi/newline multipli
+  spoken = spoken.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
   return { spoken, markers };
 }
 

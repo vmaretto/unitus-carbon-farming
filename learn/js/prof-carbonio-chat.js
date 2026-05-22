@@ -333,14 +333,18 @@
     /* === AVATAR MODE === */
     .avatar-stage {
       flex: 1; display: flex; flex-direction: column;
-      background: #000;
+      background: #000; min-height: 0;
     }
+    /* Video con aspect-ratio fissa: non si rimpicciolisce mai quando la
+       trascrizione cresce sotto. flex-shrink:0 e' l'altra meta' del fix. */
     .avatar-video-wrap {
-      flex: 1; position: relative; background: #000;
-      min-height: 280px;
+      position: relative; background: #000;
+      flex-shrink: 0;
+      width: 100%;
+      aspect-ratio: 4 / 3;
     }
     .avatar-video-wrap video {
-      width: 100%; height: 100%; object-fit: cover;
+      width: 100%; height: 100%; object-fit: cover; display: block;
     }
     .avatar-video-wrap .status {
       position: absolute; top: 12px; left: 12px;
@@ -1336,9 +1340,13 @@
           method: 'POST',
           body: JSON.stringify({ sessionId: session.id, message: msg, language: 'it' })
         });
-        const spoken = result.spoken || result.reply || '';
-        this.appendTranscript('assistant', spoken, result.citations);
-        await this.avatarSpeak(spoken);
+        // Due testi distinti:
+        //  - speakText: pulito (senza marker / markdown) per il TTS dell'avatar
+        //  - transcriptText: con i marker [N] per renderizzare le chip citazione
+        const speakText = result.spoken || result.reply || '';
+        const transcriptText = result.replyWithMarkers || result.reply || speakText;
+        this.appendTranscript('assistant', transcriptText, result.citations);
+        await this.avatarSpeak(speakText);
       } catch (err) {
         await this.avatarSpeak('Scusami, non sono riuscito a rispondere. Puoi ripetere?').catch(() => {});
         console.error(err);
@@ -1363,29 +1371,34 @@
     // Dispatcher mute: LiveAvatar ha voice chat integrata (mute microfono SDK),
     // D-ID v1 non ha STT quindi il mute si applica al <video> element (silenzia
     // l'audio del rendering avatar, utile in ambiente pubblico).
+    // IMPORTANTE: NON chiamiamo renderAvatarStage() qui — ricreerebbe l'HTML
+    // dello stage svuotando la trascrizione. Aggiorniamo solo l'etichetta
+    // del bottone mute in-place.
     async toggleAvatarMute() {
       const session = this.state.avatar.session;
       const provider = this.state.avatar.provider || 'liveavatar';
-      if (provider === 'd-id' || provider === 'did') {
-        if (!this.avatarVideoEl) return;
-        this.state.avatar.muted = !this.state.avatar.muted;
-        this.avatarVideoEl.muted = this.state.avatar.muted;
-        this.renderAvatarStage();
-        return;
-      }
-      // LiveAvatar (default)
-      if (!session) return;
       try {
-        if (this.state.avatar.muted) {
-          if (typeof session.unmuteVoiceChat === 'function') await session.unmuteVoiceChat();
-          else if (typeof session.startVoiceChat === 'function') await session.startVoiceChat();
-          this.state.avatar.muted = false;
+        if (provider === 'd-id' || provider === 'did') {
+          if (!this.avatarVideoEl) return;
+          this.state.avatar.muted = !this.state.avatar.muted;
+          this.avatarVideoEl.muted = this.state.avatar.muted;
         } else {
-          if (typeof session.muteVoiceChat === 'function') await session.muteVoiceChat();
-          else if (typeof session.stopVoiceChat === 'function') await session.stopVoiceChat();
-          this.state.avatar.muted = true;
+          // LiveAvatar
+          if (!session) return;
+          if (this.state.avatar.muted) {
+            if (typeof session.unmuteVoiceChat === 'function') await session.unmuteVoiceChat();
+            else if (typeof session.startVoiceChat === 'function') await session.startVoiceChat();
+            this.state.avatar.muted = false;
+          } else {
+            if (typeof session.muteVoiceChat === 'function') await session.muteVoiceChat();
+            else if (typeof session.stopVoiceChat === 'function') await session.stopVoiceChat();
+            this.state.avatar.muted = true;
+          }
         }
-        this.renderAvatarStage();
+        const muteBtn = this.refs.content && this.refs.content.querySelector('[data-action="avatar-mute"]');
+        if (muteBtn) {
+          muteBtn.textContent = `🎤 ${this.state.avatar.muted ? 'Riattiva' : 'Muta'}`;
+        }
       } catch (err) {
         console.error('mute toggle error', err);
       }

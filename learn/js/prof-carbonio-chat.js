@@ -333,18 +333,21 @@
     /* === AVATAR MODE === */
     .avatar-stage {
       flex: 1; display: flex; flex-direction: column;
-      background: #000; min-height: 0;
+      background: var(--pc-bg); min-height: 0;
     }
     /* Video con aspect-ratio fissa: non si rimpicciolisce mai quando la
-       trascrizione cresce sotto. flex-shrink:0 e' l'altra meta' del fix. */
+       trascrizione cresce sotto. flex-shrink:0 e' l'altra meta' del fix.
+       object-fit: contain mostra tutto l'avatar senza tagliare (vs cover che
+       ritaglia per riempire). Lo sfondo chiaro sostituisce le eventuali bande
+       laterali nere quando l'aspect del video sorgente non matcha il container. */
     .avatar-video-wrap {
-      position: relative; background: #000;
+      position: relative; background: #f0f4ef;
       flex-shrink: 0;
       width: 100%;
       aspect-ratio: 4 / 3;
     }
     .avatar-video-wrap video {
-      width: 100%; height: 100%; object-fit: cover; display: block;
+      width: 100%; height: 100%; object-fit: contain; display: block;
     }
     .avatar-video-wrap .status {
       position: absolute; top: 12px; left: 12px;
@@ -388,12 +391,16 @@
     .avatar-controls button.danger { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
 
     .avatar-transcript {
-      max-height: 200px; overflow-y: auto;
+      max-height: 200px; min-height: 60px; overflow-y: auto;
       background: var(--pc-bg); padding: 12px;
       border-top: 1px solid var(--pc-border);
       font-size: 13px;
     }
     .avatar-transcript .msg { max-width: 100%; }
+    .avatar-transcript:empty::before {
+      content: 'La trascrizione della conversazione apparira\' qui.';
+      color: var(--pc-muted); font-style: italic; font-size: 12px;
+    }
 
     @media (max-width: 600px) {
       .panel { max-width: 100%; }
@@ -986,7 +993,7 @@
               <h3>🎙️ Modalita' Voce + Avatar</h3>
               <p>Prof. Carbonio ti parla. Permetti l'accesso al microfono quando il browser lo chiede. Fai domande naturali, in italiano. Per fonti dettagliate torna alla Chat scritta.</p>
               <button data-action="avatar-start">Inizia conversazione</button>
-              <small style="opacity:0.7;font-size:11px;">Powered by HeyGen LiveAvatar</small>
+              <small style="opacity:0.7;font-size:11px;">Powered by FIB</small>
             </div>
           </div>
         `;
@@ -1220,6 +1227,10 @@
         await this.ensureSession();
 
         const self = this;
+        // D-ID v1 NON ha STT integrato (a differenza di LiveAvatar): l'utente
+        // deve scrivere nella textarea sotto. Quindi l'etichetta "In ascolto..."
+        // sarebbe fuorviante: la sostituiamo con un invito esplicito a scrivere.
+        const idleLabel = 'Scrivi qui sotto per chiedere';
         const callbacks = {
           onSrcObjectReady(value) {
             self.state.avatar.stream = value;
@@ -1228,7 +1239,7 @@
           },
           onConnectionStateChange(state) {
             if (state === 'connected') {
-              if (self.refs.statusText) self.refs.statusText.textContent = 'In ascolto...';
+              if (self.refs.statusText) self.refs.statusText.textContent = idleLabel;
             } else if (state === 'disconnected' || state === 'fail' || state === 'failed') {
               self.state.avatar.connected = false;
               self.renderAvatarStage();
@@ -1240,7 +1251,7 @@
             if (self.refs.statusText) {
               self.refs.statusText.textContent = talking
                 ? 'Prof. Carbonio parla...'
-                : 'In ascolto...';
+                : idleLabel;
             }
           },
           onError(error) {

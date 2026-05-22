@@ -12236,9 +12236,27 @@ Buono studio!</textarea>
                 const { settings } = await profCarbonioApi('/settings');
                 const container = document.getElementById('pc-settings-container');
 
+                // Fonde le settings ricevute dal backend con quelle definite in
+                // PC_SETTINGS_META: cosi' un campo nuovo (es. avatar_id) compare
+                // nel pannello anche se la riga DB non e' ancora stata creata
+                // dalla migrazione. Al primo salvataggio l'INSERT ... ON CONFLICT
+                // DO UPDATE in PUT /settings/:key persiste il valore.
+                const settingsByKey = {};
+                settings.forEach(s => { settingsByKey[s.key] = s; });
+                Object.keys(PC_SETTINGS_META).forEach(key => {
+                    if (!settingsByKey[key]) {
+                        settingsByKey[key] = {
+                            key,
+                            value: '',
+                            description: PC_SETTINGS_META[key].hint || ''
+                        };
+                    }
+                });
+                const allSettings = Object.values(settingsByKey);
+
                 // Raggruppa
                 const byGroup = {};
-                settings.forEach(s => {
+                allSettings.forEach(s => {
                     const g = (PC_SETTINGS_META[s.key] || {}).group || 'other';
                     (byGroup[g] = byGroup[g] || []).push(s);
                 });

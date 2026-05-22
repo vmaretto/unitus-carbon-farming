@@ -12294,7 +12294,10 @@ Buono studio!</textarea>
                     (byGroup[g] = byGroup[g] || []).push(s);
                 });
 
-                const groupOrder = ['modes', 'engine', 'limits', 'companion', 'other'];
+                // admin_preview compare subito dopo 'modes' (vicino alla
+                // versione "definitiva" dei toggle) cosi' l'admin trova facilmente
+                // i flag di test prima di promuoverli al rollout globale.
+                const groupOrder = ['modes', 'admin_preview', 'engine', 'limits', 'companion', 'other'];
                 container.innerHTML = groupOrder
                     .filter(g => byGroup[g]?.length)
                     .map(g => {

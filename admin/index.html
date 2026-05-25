@@ -3462,6 +3462,7 @@ Buono studio!</textarea>
                             <th>Data</th>
                             <th>Nome</th>
                             <th>Email</th>
+                            <th>Note / partecipazione</th>
                             <th>Fonte</th>
                             <th>Organizzatore</th>
                             <th>Conferma</th>
@@ -3471,7 +3472,7 @@ Buono studio!</textarea>
                     </thead>
                     <tbody id="conference-registrations-table-body">
                         <tr class="empty-state" data-empty-conference-registrations>
-                            <td colspan="8">Nessuna registrazione ancora tracciata.</td>
+                            <td colspan="9">Nessuna registrazione ancora tracciata.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -5422,6 +5423,9 @@ Buono studio!</textarea>
                         ${item.role ? `<div style="color: var(--gray-500); font-size: 0.85rem;">${escapeHtml(item.role)}</div>` : ''}
                     </td>
                     <td>${escapeHtml(item.email || '—')}</td>
+                    <td style="max-width: 260px; white-space: normal;">
+                        ${item.note ? escapeHtml(item.note) : '<span style="color: var(--gray-400);">—</span>'}
+                    </td>
                     <td>
                         ${renderConferenceRegistrationSource(item)}
                     </td>

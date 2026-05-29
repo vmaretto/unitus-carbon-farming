@@ -2078,7 +2078,9 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
   try {
     const facultyId = req.teacher.id;
     
-    // Teacher lessons in scope: future OR completed, excluding cancelled
+    // Teacher lessons in scope: all non-cancelled lessons.
+    // Teachers often need to upload materials after a lesson date, before the
+    // admin has marked that lesson as completed.
     const { rows: lessonStats } = await pool.query(
       `SELECT
          COUNT(*)::int AS total_lessons,
@@ -2088,11 +2090,7 @@ app.get('/api/teachers/stats', requireTeacher, async (req, res) => {
          COALESCE(SUM(COALESCE(l.duration_minutes, 0)) FILTER (WHERE l.status = 'completed'), 0)::int AS completed_minutes
        FROM lessons l
        WHERE l.teacher_id = $1
-         AND COALESCE(l.status, 'scheduled') != 'cancelled'
-         AND (
-           l.start_datetime >= NOW()
-           OR l.status = 'completed'
-         )`,
+         AND COALESCE(l.status, 'scheduled') != 'cancelled'`,
       [facultyId]
     );
 
@@ -2173,10 +2171,6 @@ app.get('/api/teachers/lessons', requireTeacher, async (req, res) => {
 
     if (includeCancelled !== 'true') {
       filters.push(`COALESCE(l.status, 'scheduled') != 'cancelled'`);
-    }
-
-    if (!month && !year) {
-      filters.push(`(l.start_datetime >= NOW() OR l.status = 'completed')`);
     }
 
     const { rows: lessons } = await pool.query(

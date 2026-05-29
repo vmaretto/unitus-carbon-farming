@@ -10830,6 +10830,9 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
 
       // Per singola lezione, includi dettagli presenza
       const singleLessonAttendance = lessonId && filteredAttendances.length > 0 ? filteredAttendances[0] : null;
+      const singleAttendanceImportedMinutes = singleLessonAttendance ? getImportedAttendanceMinutes(singleLessonAttendance) : 0;
+      const singleAttendanceCreditMinutes = singleLessonAttendance ? getAttendanceCreditMinutes(singleLessonAttendance) : 0;
+      const singleAttendanceMinutes = singleAttendanceImportedMinutes || singleAttendanceCreditMinutes || null;
       
       return {
         id: s.id,
@@ -10850,12 +10853,14 @@ app.get('/api/attendance/report/:courseEditionId', requireAdmin, async (req, res
         attendanceType: singleLessonAttendance?.attendance_type,
         method: singleLessonAttendance?.method,
         checkInAt: singleLessonAttendance?.check_in_at,
+        attendanceMinutes: singleAttendanceMinutes,
         attendances: filteredAttendances.map(a => ({
           lessonId: a.lesson_id,
           lmsLessonId: a.lms_lesson_id,
           type: a.attendance_type,
           method: a.method,
-          checkInAt: a.check_in_at
+          checkInAt: a.check_in_at,
+          attendanceMinutes: getImportedAttendanceMinutes(a) || getAttendanceCreditMinutes(a) || null
         }))
       };
     }).filter(Boolean);

@@ -11058,7 +11058,7 @@ Buono studio!</textarea>
                     <th>Presente</th>
                     <th>Tipo</th>
                     <th>Metodo</th>
-                    <th>Ora check-in</th>
+                    <th>Minuti partecipazione</th>
                     <th>Azioni</th>
                 `;
             } else {
@@ -11089,8 +11089,9 @@ Buono studio!</textarea>
                 // Vista singola lezione
                 tbody.innerHTML = data.students.map(s => {
                     const present = s.total > 0;
-                    const typeIcon = s.attendanceType === 'in_person' ? '🏫' : s.attendanceType === 'remote_live' ? '💻' : s.attendanceType === 'remote_partial' ? '⏱️' : '📹';
-                    const checkTime = s.checkInAt ? new Date(s.checkInAt).toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}) : '—';
+                    const attendanceMinutes = Number.isFinite(Number(s.attendanceMinutes)) && Number(s.attendanceMinutes) > 0
+                        ? `${Math.round(Number(s.attendanceMinutes))} min`
+                        : '—';
                     return `
                     <tr style="${present ? '' : 'opacity: 0.5;'}">
                         <td>${s.lastName || ''}</td>
@@ -11104,7 +11105,7 @@ Buono studio!</textarea>
                           <option value="async" ${s.attendanceType === 'async' ? 'selected' : ''}>📹 Asincrona</option>
                         </select>` : '—'}</td>
                         <td>${s.method || '—'}</td>
-                        <td>${checkTime}</td>
+                        <td>${attendanceMinutes}</td>
                         <td>${present ? `<button class="secondary" onclick="deleteAttendance('${s.attendanceId}')" title="Cancella presenza" style="padding: 4px 8px; border-radius: 6px; font-size: 0.85rem;">🗑️</button>` : '—'}</td>
                     </tr>
                 `}).join('');

@@ -5277,7 +5277,7 @@ const ALLOWED_UPDATE_FIELDS = {
   courses: ['title', 'slug', 'description', 'cover_image_url', 'is_published'],
   course_editions: ['edition_name', 'course_id', 'start_date', 'end_date', 'max_students', 'is_active'],
   lms_lessons: ['lms_module_id', 'title', 'description', 'video_url', 'video_provider', 'duration_seconds', 'sort_order', 'is_free', 'is_published', 'materials', 'calendar_lesson_id'],
-  quizzes: ['title', 'description', 'passing_score', 'max_attempts', 'time_limit_minutes', 'is_active'],
+  quizzes: ['title', 'description', 'passing_score', 'max_attempts', 'time_limit_minutes', 'is_published'],
 };
 
 function buildUpdateQuery(table, fields, id) {
@@ -7923,12 +7923,7 @@ app.put('/api/lms/courses/:id', requireAdmin, async (req, res) => {
     const { query, values } = buildUpdateQuery('courses', {
       title, slug, description,
       cover_image_url: coverImageUrl,
-      is_published: typeof isPublished === 'boolean' ? isPublished : undefined,
-      seo_title: seoTitle,
-      meta_description: metaDescription,
-      focus_keyword: focusKeyword,
-      pillar_slug: pillarSlug,
-      cover_alt: coverAlt
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
     }, req.params.id);
     const { rows } = await pool.query(query, values);
     if (!rows.length) return res.status(404).json({ error: 'Course not found' });
@@ -8188,12 +8183,7 @@ app.put('/api/lms/modules/:id', requireAdmin, async (req, res) => {
     const { query, values } = buildUpdateQuery('modules', {
       course_id: courseId, name: title, description,
       sort_order: sortOrder,
-      is_published: typeof isPublished === 'boolean' ? isPublished : undefined,
-      seo_title: seoTitle,
-      meta_description: metaDescription,
-      focus_keyword: focusKeyword,
-      pillar_slug: pillarSlug,
-      cover_alt: coverAlt
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
     }, req.params.id);
     const { rows } = await pool.query(query, values);
     if (!rows.length) return res.status(404).json({ error: 'Module not found' });
@@ -9812,12 +9802,7 @@ app.put('/api/lms/quizzes/:id', requireAdmin, async (req, res) => {
       passing_score: passingScore,
       max_attempts: maxAttempts,
       time_limit_minutes: timeLimitMinutes,
-      is_published: typeof isPublished === 'boolean' ? isPublished : undefined,
-      seo_title: seoTitle,
-      meta_description: metaDescription,
-      focus_keyword: focusKeyword,
-      pillar_slug: pillarSlug,
-      cover_alt: coverAlt
+      is_published: typeof isPublished === 'boolean' ? isPublished : undefined
     }, req.params.id);
     const { rows } = await pool.query(query, values);
     if (!rows.length) return res.status(404).json({ error: 'Quiz not found' });

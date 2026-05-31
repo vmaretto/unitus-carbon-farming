@@ -43,8 +43,10 @@ function createRes() {
   };
 }
 
-test('POST /api/conference-registration invia le email e reindirizza alla conferma', async (t) => {
+test('POST /api/conference-registration rifiuta nuove iscrizioni quando il form e chiuso', async (t) => {
   const calls = [];
+  const originalOpen = process.env.CONFERENCE_REGISTRATION_OPEN;
+  delete process.env.CONFERENCE_REGISTRATION_OPEN;
   const pool = new FakeBlogPool();
   apiModule.__setPool(pool);
   apiModule.__setConferenceRegistrationEmailSender(async (payload) => {
@@ -52,6 +54,53 @@ test('POST /api/conference-registration invia le email e reindirizza alla confer
     return { success: true, provider: 'resend' };
   });
   t.after(() => {
+    if (originalOpen === undefined) {
+      delete process.env.CONFERENCE_REGISTRATION_OPEN;
+    } else {
+      process.env.CONFERENCE_REGISTRATION_OPEN = originalOpen;
+    }
+    apiModule.__setPool(null);
+    apiModule.__setConferenceRegistrationEmailSender(null);
+  });
+
+  const layer = findRoute('/api/conference-registration', 'post');
+  assert.ok(layer, 'route /api/conference-registration non trovata');
+
+  const res = createRes();
+  await layer.route.stack[0].handle({
+    method: 'POST',
+    url: '/api/conference-registration',
+    body: {
+      nome: 'Virgilio',
+      cognome: 'Maretto',
+      email: 'vmaretto@example.com',
+      formStartedAt: Date.now() - 10000
+    },
+    headers: {}
+  }, res);
+
+  assert.equal(res.statusCode, 410);
+  assert.equal(res.body, 'Registrazioni chiuse.');
+  assert.equal(calls.length, 0);
+  assert.equal(pool.conferenceRegistrations.length, 0);
+});
+
+test('POST /api/conference-registration invia le email e reindirizza alla conferma quando aperta', async (t) => {
+  const calls = [];
+  const originalOpen = process.env.CONFERENCE_REGISTRATION_OPEN;
+  process.env.CONFERENCE_REGISTRATION_OPEN = 'true';
+  const pool = new FakeBlogPool();
+  apiModule.__setPool(pool);
+  apiModule.__setConferenceRegistrationEmailSender(async (payload) => {
+    calls.push(payload);
+    return { success: true, provider: 'resend' };
+  });
+  t.after(() => {
+    if (originalOpen === undefined) {
+      delete process.env.CONFERENCE_REGISTRATION_OPEN;
+    } else {
+      process.env.CONFERENCE_REGISTRATION_OPEN = originalOpen;
+    }
     apiModule.__setPool(null);
     apiModule.__setConferenceRegistrationEmailSender(null);
   });
@@ -69,7 +118,8 @@ test('POST /api/conference-registration invia le email e reindirizza alla confer
       telefono: '123456789',
       ente: 'UNITUS',
       ruolo: 'CEO',
-      note: 'Test'
+      note: 'Test',
+      formStartedAt: Date.now() - 10000
     },
     headers: {}
   };
@@ -92,6 +142,48 @@ test('POST /api/conference-registration invia le email e reindirizza alla confer
   assert.equal(tracking.organizer_email_status, 'sent');
   assert.equal(tracking.confirmation_email_status, 'sent');
   assert.equal(tracking.overall_status, 'sent');
+});
+
+test('POST /api/conference-registration blocca invii honeypot quando aperta', async (t) => {
+  const calls = [];
+  const originalOpen = process.env.CONFERENCE_REGISTRATION_OPEN;
+  process.env.CONFERENCE_REGISTRATION_OPEN = 'true';
+  const pool = new FakeBlogPool();
+  apiModule.__setPool(pool);
+  apiModule.__setConferenceRegistrationEmailSender(async (payload) => {
+    calls.push(payload);
+    return { success: true, provider: 'resend' };
+  });
+  t.after(() => {
+    if (originalOpen === undefined) {
+      delete process.env.CONFERENCE_REGISTRATION_OPEN;
+    } else {
+      process.env.CONFERENCE_REGISTRATION_OPEN = originalOpen;
+    }
+    apiModule.__setPool(null);
+    apiModule.__setConferenceRegistrationEmailSender(null);
+  });
+
+  const layer = findRoute('/api/conference-registration', 'post');
+  assert.ok(layer, 'route /api/conference-registration non trovata');
+
+  const res = createRes();
+  await layer.route.stack[0].handle({
+    method: 'POST',
+    url: '/api/conference-registration',
+    body: {
+      nome: 'Spam',
+      cognome: 'Bot',
+      email: 'spam@example.com',
+      website: 'https://spam.example',
+      formStartedAt: Date.now() - 10000
+    },
+    headers: {}
+  }, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(calls.length, 0);
+  assert.equal(pool.conferenceRegistrations.length, 0);
 });
 
 async function buildConferenceXlsxBuffer() {
@@ -192,4 +284,34 @@ test('POST /api/admin/conference-registrations/import-xlsx importa righe nuove e
   assert.equal(listRes.body.length, 2);
   assert.ok(listRes.body.some((row) => row.recordType === 'tracked'));
   assert.ok(listRes.body.some((row) => row.recordType === 'imported'));
+});
+
+test('DELETE /api/admin/conference-registrations/:recordType/:id elimina una registrazione', async (t) => {
+  const pool = new FakeBlogPool();
+  apiModule.__setPool(pool);
+  t.after(() => {
+    apiModule.__setPool(null);
+  });
+
+  pool.conferenceRegistrations.push({
+    id: 'tracked-1',
+    full_name: 'Bot Fake',
+    email: 'bot@example.com',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  });
+
+  const layer = findRoute('/api/admin/conference-registrations/:recordType/:id', 'delete');
+  assert.ok(layer, 'route DELETE conference registrations non trovata');
+
+  const res = createRes();
+  await layer.route.stack[layer.route.stack.length - 1].handle({
+    method: 'DELETE',
+    url: '/api/admin/conference-registrations/tracked/tracked-1',
+    params: { recordType: 'tracked', id: 'tracked-1' },
+    headers: {}
+  }, res);
+
+  assert.equal(res.statusCode, 204);
+  assert.equal(pool.conferenceRegistrations.length, 0);
 });

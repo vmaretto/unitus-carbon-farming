@@ -853,6 +853,33 @@ async function updateConferenceRegistrationTracking(id, updates = {}) {
 
 let conferenceRegistrationEmailSender = sendEmail;
 
+function isConferenceRegistrationOpen() {
+  return String(process.env.CONFERENCE_REGISTRATION_OPEN || '').toLowerCase() === 'true';
+}
+
+function validateConferenceRegistrationAntiSpam(body = {}) {
+  const honeypot = String(body.website || body.companyWebsite || '').trim();
+  if (honeypot) {
+    return { ok: false, status: 400, message: 'Richiesta non valida.' };
+  }
+
+  const startedAt = Number(body.formStartedAt || body._formStartedAt || 0);
+  if (!startedAt || !Number.isFinite(startedAt)) {
+    return { ok: false, status: 400, message: 'Sessione form non valida. Ricarica la pagina e riprova.' };
+  }
+
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs < 3000) {
+    return { ok: false, status: 429, message: 'Invio troppo rapido. Ricarica la pagina e riprova.' };
+  }
+
+  if (elapsedMs > 1000 * 60 * 60 * 6) {
+    return { ok: false, status: 400, message: 'Sessione form scaduta. Ricarica la pagina e riprova.' };
+  }
+
+  return { ok: true };
+}
+
 function buildConferenceRegistrationHtml(data, { isConfirmation = false } = {}) {
   const title = isConfirmation
     ? 'Conferma registrazione conferenza 26 maggio 2026'
@@ -894,6 +921,15 @@ function buildConferenceRegistrationHtml(data, { isConfirmation = false } = {}) 
 }
 
 app.post('/api/conference-registration', async (req, res) => {
+  if (!isConferenceRegistrationOpen()) {
+    return res.status(410).send('Registrazioni chiuse.');
+  }
+
+  const antiSpam = validateConferenceRegistrationAntiSpam(req.body || {});
+  if (!antiSpam.ok) {
+    return res.status(antiSpam.status).send(antiSpam.message);
+  }
+
   const data = {
     nome: String(req.body.nome || '').trim(),
     cognome: String(req.body.cognome || '').trim(),
@@ -1037,6 +1073,32 @@ app.get('/api/admin/conference-registrations', requireAdmin, async (req, res) =>
   } catch (error) {
     console.error('Error fetching conference registrations', error);
     res.status(500).json({ error: 'Unable to retrieve conference registrations' });
+  }
+});
+
+app.delete('/api/admin/conference-registrations/:recordType/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  const { recordType, id } = req.params;
+  const table = recordType === 'tracked'
+    ? 'conference_registrations'
+    : recordType === 'imported'
+      ? 'conference_registration_imports'
+      : null;
+
+  if (!table) {
+    return res.status(400).json({ error: 'Tipo registrazione non valido' });
+  }
+
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+    if (!rowCount) {
+      return res.status(404).json({ error: 'Registrazione non trovata' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting conference registration', error);
+    res.status(500).json({ error: 'Unable to delete conference registration' });
   }
 });
 

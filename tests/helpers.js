@@ -193,6 +193,20 @@ class FakeBlogPool {
       };
     }
 
+    if (/^DELETE FROM conference_registrations WHERE id = \$1$/i.test(normalized)) {
+      const index = this.conferenceRegistrations.findIndex((item) => item.id === params[0]);
+      if (index === -1) return { rowCount: 0 };
+      this.conferenceRegistrations.splice(index, 1);
+      return { rowCount: 1 };
+    }
+
+    if (/^DELETE FROM conference_registration_imports WHERE id = \$1$/i.test(normalized)) {
+      const index = this.conferenceRegistrationImports.findIndex((item) => item.id === params[0]);
+      if (index === -1) return { rowCount: 0 };
+      this.conferenceRegistrationImports.splice(index, 1);
+      return { rowCount: 1 };
+    }
+
     if (normalized.startsWith('SELECT * FROM blog_posts')) {
       let rows = [...this.posts];
       if (normalized.includes('WHERE is_published = $1')) {

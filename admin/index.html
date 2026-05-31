@@ -5446,6 +5446,7 @@ Buono studio!</textarea>
                     <td>
                         <div class="actions" style="margin:0;">
                             <button type="button" class="secondary" data-copy-email="${escapeHtml(item.email || '')}">Copia email</button>
+                            <button type="button" class="danger" data-delete-conference-registration="${escapeHtml(item.id || '')}" data-record-type="${escapeHtml(item.recordType || '')}">Elimina</button>
                         </div>
                     </td>
                 `;
@@ -7966,6 +7967,27 @@ Buono studio!</textarea>
         });
 
         document.getElementById('conference-registrations-table-body').addEventListener('click', async (event) => {
+            const deleteButton = event.target.closest('button[data-delete-conference-registration]');
+            if (deleteButton) {
+                const id = String(deleteButton.dataset.deleteConferenceRegistration || '').trim();
+                const recordType = String(deleteButton.dataset.recordType || '').trim();
+                if (!id || !recordType) return;
+                if (!confirm('Eliminare questa registrazione?')) return;
+
+                deleteButton.disabled = true;
+                try {
+                    await apiRequest(`/api/admin/conference-registrations/${encodeURIComponent(recordType)}/${encodeURIComponent(id)}`, {
+                        method: 'DELETE'
+                    });
+                    showToast('Registrazione eliminata');
+                    await loadConferenceRegistrations();
+                } catch (error) {
+                    showToast(error.message || 'Errore eliminazione registrazione', 'error');
+                    deleteButton.disabled = false;
+                }
+                return;
+            }
+
             const copyButton = event.target.closest('button[data-copy-email]');
             if (!copyButton) return;
             const email = String(copyButton.dataset.copyEmail || '').trim();

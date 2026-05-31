@@ -443,8 +443,13 @@
         </section>
 
         <section class="form-card" id="modulo">
-            <h2 class="section-title">Modulo di registrazione</h2>
+            <h2 class="section-title">Registrazioni chiuse</h2>
+            <p class="note" style="margin-top: -4px;">
+                La conferenza del 26 maggio 2026 si e conclusa. Il modulo pubblico non accetta piu nuove registrazioni.
+            </p>
             <form method="POST" action="/api/conference-registration">
+                <input type="hidden" name="formStartedAt" id="form-started-at" value="">
+                <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-10000px; top:auto; width:1px; height:1px; overflow:hidden;">
                 <div class="row">
                     <div class="field">
                         <label for="nome">Nome *</label>
@@ -480,11 +485,11 @@
                     <textarea id="note" name="note" placeholder="Indicaci eventuali esigenze o domande sulla partecipazione."></textarea>
                 </div>
                 <div class="actions">
-                    <button class="submit-btn" type="submit">📝 Conferma registrazione</button>
+                    <button class="submit-btn" type="submit" disabled>Registrazioni chiuse</button>
                     <a class="secondary-btn" href="index.html#info">Informazioni sul master</a>
                 </div>
                 <p class="note">
-                    La registrazione serve per organizzare l'accesso all'evento e per inviarti eventuali aggiornamenti logistici.
+                    Per aggiornamenti o richieste successive all'evento, scrivi direttamente alla segreteria organizzativa.
                 </p>
             </form>
 
@@ -507,6 +512,10 @@
         (function () {
             const params = new URLSearchParams(window.location.search);
             const success = document.getElementById('grazie');
+            const startedAt = document.getElementById('form-started-at');
+            if (startedAt) {
+                startedAt.value = String(Date.now());
+            }
             if (!success) return;
             if (params.get('sent') === '1') {
                 success.style.display = 'block';

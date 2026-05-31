@@ -217,7 +217,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
 const PIPELINE_API_KEY = process.env.PIPELINE_API_KEY || null;
 
 // Helper per invio email con fallback Resend -> Brevo
-async function sendEmail({ to, subject, html, bcc, from }) {
+async function sendEmail({ to, subject, html, cc, bcc, from }) {
   const fromEmail = from || process.env.RESEND_FROM || 'Master Carbon Farming <noreply@carbonfarmingmaster.it>';
   
   // Prova prima con Resend
@@ -226,6 +226,7 @@ async function sendEmail({ to, subject, html, bcc, from }) {
       const { Resend } = require('resend');
       const resend = new Resend(RESEND_API_KEY);
       const emailData = { from: fromEmail, to, subject, html };
+      if (cc) emailData.cc = cc;
       if (bcc) emailData.bcc = bcc;
       await resend.emails.send(emailData);
       return { success: true, provider: 'resend' };
@@ -247,6 +248,7 @@ async function sendEmail({ to, subject, html, bcc, from }) {
         body: JSON.stringify({
           sender: { name: 'Master Carbon Farming', email: 'noreply@carbonfarmingmaster.it' },
           to: [{ email: to }],
+          cc: cc ? [{ email: cc }] : undefined,
           bcc: bcc ? [{ email: bcc }] : undefined,
           subject,
           htmlContent: html
@@ -9608,6 +9610,7 @@ app.put('/api/questions/:id/assign', requireAdmin, async (req, res) => {
         const teacherUrl = `${getPublicBaseUrl(req)}/teachers/`;
         const emailResult = await questionAssignmentEmailSender({
           to: teacher.email,
+          cc: process.env.QUESTION_ASSIGNMENT_CC || 'maretto@carbonfarmingmaster.it',
           subject: 'Nuova domanda assegnata - Master Carbon Farming',
           html: buildQuestionAssignmentEmailHtml(question, teacher, teacherUrl)
         });

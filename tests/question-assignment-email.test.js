@@ -116,6 +116,7 @@ test('PUT /api/questions/:id/assign invia una notifica email al docente', async 
   assert.equal(res.body.notification.provider, 'test-mail');
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, 'teacher@example.com');
+  assert.equal(sent[0].cc, 'maretto@carbonfarmingmaster.it');
   assert.match(sent[0].subject, /Nuova domanda assegnata/);
   assert.match(sent[0].html, /Come funziona il carbon farming/);
   assert.match(sent[0].html, /https:\/\/unitus.test\/teachers\//);

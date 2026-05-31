@@ -852,6 +852,7 @@ async function updateConferenceRegistrationTracking(id, updates = {}) {
 }
 
 let conferenceRegistrationEmailSender = sendEmail;
+let questionAssignmentEmailSender = sendEmail;
 
 function isConferenceRegistrationOpen() {
   return String(process.env.CONFERENCE_REGISTRATION_OPEN || '').toLowerCase() === 'true';
@@ -915,6 +916,42 @@ function buildConferenceRegistrationHtml(data, { isConfirmation = false } = {}) 
             `).join('')}
           </tbody>
         </table>
+      </div>
+    </div>
+  `;
+}
+
+function buildQuestionAssignmentEmailHtml(question, teacher, teacherUrl) {
+  const teacherName = teacher.displayName || teacher.email || 'Docente';
+  const contextRows = [
+    ['Studente', question.studentName || question.studentEmail || 'Studente'],
+    ['Modulo', question.moduleTitle],
+    ['Lezione', question.lessonTitle],
+    ['Data domanda', question.createdAt ? new Date(question.createdAt).toLocaleString('it-IT') : null]
+  ].filter(([, value]) => Boolean(String(value || '').trim()));
+
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 680px; margin: 0 auto; padding: 24px; color: #1f2937;">
+      <div style="background: #245a3d; color: white; padding: 20px 24px; border-radius: 16px 16px 0 0;">
+        <h1 style="margin: 0; font-size: 22px;">Nuova domanda assegnata</h1>
+      </div>
+      <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-top: 0; border-radius: 0 0 16px 16px; padding: 24px;">
+        <p style="margin: 0 0 18px; font-size: 16px; line-height: 1.6;">Gentile ${escapeHtml(teacherName)}, ti e stata assegnata una domanda nel pannello docenti del Master in Carbon Farming.</p>
+        <div style="background: white; border: 1px solid #d1d5db; border-radius: 12px; padding: 18px; margin-bottom: 18px;">
+          <div style="font-weight: 700; margin-bottom: 8px; color: #245a3d;">Domanda</div>
+          <div style="font-size: 16px; line-height: 1.6;">${escapeHtml(question.questionText)}</div>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
+          <tbody>
+            ${contextRows.map(([label, value]) => `
+              <tr>
+                <th style="text-align: left; vertical-align: top; padding: 9px 12px 9px 0; width: 140px; color: #374151;">${escapeHtml(label)}</th>
+                <td style="padding: 9px 0; border-bottom: 1px solid #e5e7eb;">${escapeHtml(value)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <a href="${escapeHtml(teacherUrl)}" style="display: inline-block; background: #245a3d; color: white; text-decoration: none; font-weight: 700; padding: 12px 18px; border-radius: 999px;">Apri pannello docenti</a>
       </div>
     </div>
   `;
@@ -9503,7 +9540,13 @@ app.put('/api/questions/:id/assign', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'teacherId is required' });
   }
   try {
-    const { rows: teachers } = await pool.query('SELECT id FROM faculty WHERE id = $1', [teacherId]);
+    const { rows: teachers } = await pool.query(`
+      SELECT id,
+             email,
+             COALESCE(name, NULLIF(TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')), ''), email) AS "displayName"
+      FROM faculty
+      WHERE id = $1
+    `, [teacherId]);
     if (!teachers.length) {
       return res.status(404).json({ error: 'Teacher not found' });
     }
@@ -9529,7 +9572,56 @@ app.put('/api/questions/:id/assign', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Question not found' });
     }
 
-    res.json(rows[0]);
+    const { rows: detailRows } = await pool.query(`
+      SELECT sq.id,
+             sq.user_id AS "userId",
+             COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email, 'Studente') AS "studentName",
+             u.email AS "studentEmail",
+             sq.module_id AS "moduleId",
+             m.name AS "moduleTitle",
+             sq.lms_lesson_id AS "lmsLessonId",
+             ll.title AS "lessonTitle",
+             sq.question_text AS "questionText",
+             sq.status,
+             sq.assigned_to AS "assignedTo",
+             COALESCE(ft.name, NULLIF(TRIM(COALESCE(ft.first_name, '') || ' ' || COALESCE(ft.last_name, '')), ''), ft.email) AS "assignedTeacherName",
+             sq.is_faq AS "isFaq",
+             sq.faq_category AS "faqCategory",
+             sq.created_at AS "createdAt",
+             sq.updated_at AS "updatedAt"
+      FROM student_questions sq
+      JOIN users u ON u.id = sq.user_id
+      LEFT JOIN modules m ON m.id = sq.module_id
+      LEFT JOIN lms_lessons ll ON ll.id = sq.lms_lesson_id
+      LEFT JOIN faculty ft ON ft.id = sq.assigned_to
+      WHERE sq.id = $1
+      LIMIT 1
+    `, [req.params.id]);
+
+    const question = detailRows[0] || rows[0];
+    const teacher = teachers[0];
+    const responsePayload = { ...question, notification: { attempted: false, sent: false } };
+
+    if (teacher.email) {
+      responsePayload.notification.attempted = true;
+      try {
+        const teacherUrl = `${getPublicBaseUrl(req)}/teachers/`;
+        const emailResult = await questionAssignmentEmailSender({
+          to: teacher.email,
+          subject: 'Nuova domanda assegnata - Master Carbon Farming',
+          html: buildQuestionAssignmentEmailHtml(question, teacher, teacherUrl)
+        });
+        responsePayload.notification.sent = true;
+        responsePayload.notification.provider = emailResult.provider || null;
+      } catch (emailError) {
+        console.error('Error sending question assignment notification', emailError);
+        responsePayload.notification.error = emailError.message || 'Unable to send notification';
+      }
+    } else {
+      responsePayload.notification.skippedReason = 'teacher_email_missing';
+    }
+
+    res.json(responsePayload);
   } catch (error) {
     console.error('Error assigning question', error);
     res.status(500).json({ error: 'Unable to assign question' });
@@ -13653,4 +13745,7 @@ module.exports.__importBlogPostsFromDocxBufferIntoDatabase = importBlogPostsFrom
 module.exports.__generateCoverForBlogPost = generateCoverForBlogPost;
 module.exports.__setConferenceRegistrationEmailSender = (nextSender) => {
   conferenceRegistrationEmailSender = typeof nextSender === 'function' ? nextSender : sendEmail;
+};
+module.exports.__setQuestionAssignmentEmailSender = (nextSender) => {
+  questionAssignmentEmailSender = typeof nextSender === 'function' ? nextSender : sendEmail;
 };

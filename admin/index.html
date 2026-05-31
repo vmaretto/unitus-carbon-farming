@@ -6008,11 +6008,17 @@ Buono studio!</textarea>
                         showToast('Seleziona un docente', 'error');
                         return;
                     }
-                    await apiRequest(`/api/questions/${assignId}/assign`, {
+                    const assignment = await apiRequest(`/api/questions/${assignId}/assign`, {
                         method: 'PUT',
                         body: JSON.stringify({ teacherId })
                     });
-                    showToast('Domanda assegnata');
+                    if (assignment?.notification?.sent) {
+                        showToast('Domanda assegnata e notifica email inviata');
+                    } else if (assignment?.notification?.attempted) {
+                        showToast('Domanda assegnata, ma la notifica email non e partita', 'error');
+                    } else {
+                        showToast('Domanda assegnata');
+                    }
                 }
 
                 if (replyId) {

@@ -254,28 +254,85 @@ function collectUrlsFromText(value = '') {
 function extractSources($, nodes = []) {
   const sources = [];
 
-  nodes.forEach((node) => {
-    $(node).find('a[href]').each((_, link) => {
-      const title = normalizeWhitespace($(link).text()) || normalizeWhitespace($(link).attr('href'));
-      const url = normalizeWhitespace($(link).attr('href'));
-      if (title && url) {
-        sources.push({ title, url });
-      }
-    });
-
-    const text = normalizeWhitespace($(node).text());
-    if (!text) return;
-
+  // Helper: extract sources from a single "atomic" text block (one bullet, one paragraph)
+  // where each block is expected to contain at most one source.
+  function pushFromBlock(blockText) {
+    const text = normalizeWhitespace(blockText);
+    if (!text) return false;
     const urls = collectUrlsFromText(text);
-    urls.forEach((url) => {
-      const title = normalizeWhitespace(text.replace(url, ''))
+    if (urls.length === 0) return false;
+    // If multiple URLs slipped into the same block, split the block by URL boundaries
+    // so each source gets only its own title fragment.
+    let remaining = text;
+    urls.forEach((url, idx) => {
+      const splitAt = remaining.indexOf(url);
+      let titlePart;
+      if (splitAt >= 0) {
+        titlePart = remaining.slice(0, splitAt);
+        remaining = remaining.slice(splitAt + url.length);
+      } else {
+        titlePart = remaining;
+      }
+      const title = normalizeWhitespace(titlePart)
         .replace(/^[•\-–—:]+\s*/, '')
+        .replace(/\s*[-–—|:]\s*$/, '')
         .replace(/\s+/g, ' ')
         .trim();
       sources.push({
         title: title || buildSourceTitleFromUrl(url),
-        url
+        url,
       });
+    });
+    return true;
+  }
+
+  nodes.forEach((node) => {
+    const $node = $(node);
+
+    // Pass 1: per anchor tag (handles HTML sources with proper <a href>)
+    let anchorCount = 0;
+    $node.find('a[href]').each((_, link) => {
+      const $link = $(link);
+      const url = normalizeWhitespace($link.attr('href'));
+      if (!url || !/^https?:\/\//i.test(url)) return;
+      const title = normalizeWhitespace($link.text()) || buildSourceTitleFromUrl(url);
+      sources.push({ title, url });
+      anchorCount += 1;
+    });
+    if (anchorCount > 0) return;
+
+    // Pass 2: per <li> / <p> child (plain-text sources from a docx bullet list)
+    const blocks = $node.find('li, p').toArray();
+    if (blocks.length) {
+      let consumed = false;
+      blocks.forEach((b) => {
+        if (pushFromBlock($(b).text())) consumed = true;
+      });
+      if (consumed) return;
+    }
+
+    // Pass 3: fallback — node text, split per URL
+    const rawText = normalizeWhitespace($node.text());
+    if (!rawText) return;
+    const urls = collectUrlsFromText(rawText);
+    if (urls.length === 0) return;
+
+    if (urls.length === 1) {
+      pushFromBlock(rawText);
+      return;
+    }
+
+    // Multiple URLs in a single text blob — split so each chunk ends at the URL
+    // it owns (chunk = "Title - URL"), giving the title-before-URL extractor a
+    // clean string per source.
+    let cursor = 0;
+    urls.forEach((url) => {
+      const pos = rawText.indexOf(url, cursor);
+      if (pos < 0) return;
+      const chunkEnd = pos + url.length;
+      const chunk = rawText.slice(cursor, chunkEnd);
+      pushFromBlock(chunk);
+      cursor = chunkEnd;
     });
   });
 

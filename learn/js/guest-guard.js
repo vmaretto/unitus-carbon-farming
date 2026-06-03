@@ -50,7 +50,7 @@
         badge.innerHTML = '👁️';
         badge.title = window.__isTeacherGuestView ? 'Torna al pannello docenti' : 'Modalità consultazione';
         badge.setAttribute('aria-label', badge.title);
-        badge.style.cssText = 'position:fixed;bottom:16px;right:16px;width:46px;height:46px;background:#fef3c7;color:#92400e;border:1px solid #f5d38a;border-radius:999px;font-size:1.1rem;z-index:1000;box-shadow:0 4px 14px rgba(0,0,0,0.12);cursor:pointer;display:flex;align-items:center;justify-content:center;';
+        badge.style.cssText = 'position:fixed;bottom:16px;left:16px;width:46px;height:46px;background:#fef3c7;color:#92400e;border:1px solid #f5d38a;border-radius:999px;font-size:1.1rem;z-index:1000;box-shadow:0 4px 14px rgba(0,0,0,0.12);cursor:pointer;display:flex;align-items:center;justify-content:center;';
         document.body.appendChild(badge);
         badge.addEventListener('click', () => {
             window.location.href = window.__isTeacherGuestView ? '/teachers/' : '/learn/index.html';

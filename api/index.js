@@ -6459,19 +6459,27 @@ app.get('/api/resources', async (req, res) => {
       SELECT r.id, r.title, r.description, r.resource_type AS "resourceType",
              r.url, r.thumbnail_url AS "thumbnailUrl", r.file_size_bytes AS "fileSizeBytes",
              r.sort_order AS "sortOrder", r.is_published AS "isPublished",
-             r.teacher_id AS "teacherId", r.lesson_id AS "lessonId",
+             r.teacher_id AS "teacherId",
+             -- Per le risorse quiz LMS la lezione è collegata via quizzes.lms_lesson_id;
+             -- in tal caso deriviamo la lezione/modulo dalla lezione calendario collegata
+             COALESCE(r.lesson_id, ql.id) AS "lessonId",
              r.source, r.tags,
              r.extraction_status AS "extractionStatus", r.extracted_at AS "extractedAt",
-             f.name AS "teacherName", l.title AS "lessonTitle",
-             l.start_datetime AS "lessonStartDatetime",
-             m.name AS "moduleName",
+             f.name AS "teacherName",
+             COALESCE(l.title, ql.title) AS "lessonTitle",
+             COALESCE(l.start_datetime, ql.start_datetime) AS "lessonStartDatetime",
+             COALESCE(m.name, qm.name) AS "moduleName",
              r.created_at AS "createdAt", r.updated_at AS "updatedAt"
       FROM resources r
       LEFT JOIN faculty f ON f.id = r.teacher_id
       LEFT JOIN lessons l ON l.id = r.lesson_id
       LEFT JOIN modules m ON m.id = l.module_id
+      LEFT JOIN quizzes q ON q.resource_id = r.id
+      LEFT JOIN lms_lessons qll ON qll.id = q.lms_lesson_id
+      LEFT JOIN lessons ql ON ql.id = qll.calendar_lesson_id
+      LEFT JOIN modules qm ON qm.id = COALESCE(ql.module_id, qll.lms_module_id, q.lms_module_id)
       ${where}
-      ORDER BY r.sort_order NULLS LAST, l.start_datetime NULLS LAST, r.created_at DESC
+      ORDER BY r.sort_order NULLS LAST, COALESCE(l.start_datetime, ql.start_datetime) NULLS LAST, r.created_at DESC
     `;
 
     const { rows } = await pool.query(sql, values);

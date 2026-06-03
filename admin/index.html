@@ -6389,7 +6389,8 @@ Buono studio!</textarea>
             const typeIcons = { video: '🎬', pdf: '📄', document: '📝', audio: '🎧', link: '🔗', quiz: '🧠' };
             const modal = document.createElement('div');
             modal.className = 'blog-preview-modal';
-            const canOpen = /^(https?:|data:)/i.test(String(item.url || ''));
+            // I quiz sono data:URL JSON: "Apri risorsa" aprirebbe una pagina bianca, quindi lo mostriamo solo per URL web reali
+            const canOpen = item.resourceType !== 'quiz' && /^https?:/i.test(String(item.url || ''));
             modal.innerHTML = `
                 <div class="blog-preview-shell" style="width:min(860px,100%);" role="dialog" aria-modal="true">
                     <div class="blog-preview-header">

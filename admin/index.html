@@ -12089,23 +12089,51 @@ Buono studio!</textarea>
             }
         });
 
-        function renderSurvQuestionsPanel(panel, detail) {
+        function renderSurvQuestionsPanel(panel, detail, editingId = null) {
             const qs = detail.questions || [];
+            const renderRow = (q, i) => {
+                if (q.id === editingId) {
+                    return `
+                        <div style="padding:12px; background: white; border:1px solid var(--orange-300, #fdba74); border-radius:8px; margin-bottom:6px;">
+                            <div class="form-grid">
+                                <label>Testo della domanda
+                                    <input type="text" data-qe-text value="${escapeHtml(q.text)}">
+                                </label>
+                                <label>Tipo
+                                    <select data-qe-type>
+                                        <option value="rating" ${q.questionType === 'rating' ? 'selected' : ''}>⭐ Rating 1-5</option>
+                                        <option value="text" ${q.questionType === 'text' ? 'selected' : ''}>✏️ Testo libero</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="actions" style="margin-top:8px;">
+                                <label class="switch"><input type="checkbox" data-qe-required ${q.isRequired ? 'checked' : ''}><span class="slider"></span> Obbligatoria</label>
+                                <button type="button" class="primary" data-surv-q-save="${q.id}">Salva</button>
+                                <button type="button" class="secondary" data-surv-q-cancel>Annulla</button>
+                            </div>
+                        </div>
+                    `;
+                }
+                return `
+                    <div style="padding:8px 12px; background: var(--gray-100); border-radius:8px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                        <div>
+                            <strong>${i+1}.</strong> ${escapeHtml(q.text)}
+                            <span style="margin-left:8px; padding:2px 8px; border-radius:999px; background:white; font-size:0.75rem;">
+                                ${q.questionType === 'rating' ? '⭐ rating 1-5' : '✏️ testo libero'}
+                            </span>
+                            ${q.isRequired ? '<span style="margin-left:6px; color:#b91c1c; font-size:0.75rem;">obbligatoria</span>' : ''}
+                        </div>
+                        <div style="display:flex; gap:6px; flex-shrink:0;">
+                            <button type="button" class="secondary" data-surv-q-edit="${q.id}" style="padding:4px 10px;" title="Modifica">✏️</button>
+                            <button type="button" class="danger" data-surv-q-del="${q.id}" style="padding:4px 10px;" title="Elimina">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            };
             panel.innerHTML = `
                 <h4 style="margin: 0 0 12px;">Domande del template</h4>
                 <div class="surv-q-list">
-                    ${qs.length ? qs.map((q, i) => `
-                        <div style="padding:8px 12px; background: var(--gray-100); border-radius:8px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
-                            <div>
-                                <strong>${i+1}.</strong> ${escapeHtml(q.text)}
-                                <span style="margin-left:8px; padding:2px 8px; border-radius:999px; background:white; font-size:0.75rem;">
-                                    ${q.questionType === 'rating' ? '⭐ rating 1-5' : '✏️ testo libero'}
-                                </span>
-                                ${q.isRequired ? '<span style="margin-left:6px; color:#b91c1c; font-size:0.75rem;">obbligatoria</span>' : ''}
-                            </div>
-                            <button type="button" class="danger" data-surv-q-del="${q.id}" style="padding:4px 10px;">🗑️</button>
-                        </div>
-                    `).join('') : '<div class="empty-state">Nessuna domanda. Aggiungi qui sotto.</div>'}
+                    ${qs.length ? qs.map(renderRow).join('') : '<div class="empty-state">Nessuna domanda. Aggiungi qui sotto.</div>'}
                 </div>
                 <form data-surv-q-form="${detail.id}" style="margin-top:14px; padding:12px; background:white; border:1px dashed var(--gray-200); border-radius:8px;">
                     <div class="form-grid">
@@ -12143,6 +12171,31 @@ Buono studio!</textarea>
                     loadSurveysSection();
                 } catch (err) { showToast(err.message || 'Errore', 'error'); }
             });
+            panel.querySelectorAll('[data-surv-q-edit]').forEach(btn => {
+                btn.addEventListener('click', () => renderSurvQuestionsPanel(panel, detail, btn.dataset.survQEdit));
+            });
+            const cancelBtn = panel.querySelector('[data-surv-q-cancel]');
+            if (cancelBtn) cancelBtn.addEventListener('click', () => renderSurvQuestionsPanel(panel, detail, null));
+            const saveBtn = panel.querySelector('[data-surv-q-save]');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', async () => {
+                    const row = saveBtn.closest('div').parentElement;
+                    const text = panel.querySelector('[data-qe-text]').value.trim();
+                    if (!text) return showToast('Inserisci il testo', 'error');
+                    const payload = {
+                        text,
+                        questionType: panel.querySelector('[data-qe-type]').value,
+                        isRequired: panel.querySelector('[data-qe-required]').checked
+                    };
+                    try {
+                        await apiRequest(`/api/admin/survey-questions/${saveBtn.dataset.survQSave}`, { method: 'PUT', body: JSON.stringify(payload) });
+                        showToast('Domanda aggiornata');
+                        const fresh = await apiRequest(`/api/admin/surveys/${detail.id}`);
+                        renderSurvQuestionsPanel(panel, fresh);
+                        loadSurveysSection();
+                    } catch (err) { showToast(err.message || 'Errore', 'error'); }
+                });
+            }
             panel.querySelectorAll('[data-surv-q-del]').forEach(btn => {
                 btn.addEventListener('click', async () => {
                     if (!confirm('Eliminare questa domanda?')) return;
@@ -12361,7 +12414,6 @@ Buono studio!</textarea>
 
         document.getElementById('surv-results-content').addEventListener('click', async (e) => {
             const resetBtn = e.target.closest('[data-surv-results-reset]');
-            const delBtn = e.target.closest('[data-surv-result-delete]');
             const campaignId = document.getElementById('surv-results-campaign').value;
             if (!campaignId) return;
             try {
@@ -12369,16 +12421,6 @@ Buono studio!</textarea>
                     if (!confirm('Resettare tutti i risultati di questa campagna? Gli inviti resteranno aperti/non completati.')) return;
                     const result = await apiRequest(`/api/admin/survey-campaigns/${campaignId}/reset-results`, { method: 'POST' });
                     showToast(`Risultati resettati: ${result.deletedAnswers || 0} risposte eliminate`);
-                    await loadSurveysSection();
-                    document.getElementById('surv-results-campaign').value = campaignId;
-                    const data = await apiRequest(`/api/admin/survey-campaigns/${campaignId}/results`);
-                    document.getElementById('surv-results-content').innerHTML = renderSurvResults(data);
-                }
-                if (delBtn) {
-                    if (!confirm('Rimuovere questa compilazione dai risultati?')) return;
-                    const invitationId = delBtn.dataset.survResultDelete;
-                    const result = await apiRequest(`/api/admin/survey-campaigns/${campaignId}/invitations/${invitationId}/results`, { method: 'DELETE' });
-                    showToast(`Compilazione rimossa: ${result.deletedAnswers || 0} risposte eliminate`);
                     await loadSurveysSection();
                     document.getElementById('surv-results-campaign').value = campaignId;
                     const data = await apiRequest(`/api/admin/survey-campaigns/${campaignId}/results`);
@@ -12434,27 +12476,7 @@ Buono studio!</textarea>
                 }
                 html += `</div>`;
             });
-            const completions = data.completions || [];
-            html += `
-                <div style="padding:14px; border:1px solid var(--gray-200); border-radius:12px; margin-bottom:12px;">
-                    <h4 style="margin:0 0 10px;">Compilazioni</h4>
-                    ${completions.length ? completions.map((item, index) => `
-                        <div style="padding:10px 12px; background:var(--gray-100); border-radius:8px; margin-bottom:8px;">
-                            <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
-                                <div>
-                                    <strong>#${index + 1} — ${escapeHtml(item.recipientName || 'Destinatario')}</strong>
-                                    ${item.recipientEmail ? `<span style="color:var(--gray-500);">(${escapeHtml(item.recipientEmail)})</span>` : ''}
-                                    <div style="font-size:0.85rem; color:var(--gray-500); margin-top:3px;">
-                                        ${item.completedAt ? new Date(item.completedAt).toLocaleString('it-IT') : 'n/d'} &bull; ${item.answerCount || 0} risposte
-                                    </div>
-                                    ${item.summary ? `<div style="font-size:0.85rem; color:var(--gray-600); margin-top:6px;">${escapeHtml(item.summary).slice(0, 360)}${item.summary.length > 360 ? '…' : ''}</div>` : ''}
-                                </div>
-                                <button type="button" class="danger" data-surv-result-delete="${item.invitationId}">Rimuovi</button>
-                            </div>
-                        </div>
-                    `).join('') : '<div class="empty-state">Nessuna compilazione da gestire.</div>'}
-                </div>
-            `;
+            // Sezione "Compilazioni" rimossa: i risultati restano anonimi (solo aggregati + commenti anonimi)
             return html;
         }
 

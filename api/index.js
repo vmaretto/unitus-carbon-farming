@@ -13388,35 +13388,12 @@ app.get('/api/admin/survey-campaigns/:id/results', requireAdmin, async (req, res
       }
     }
 
-    const { rows: completions } = await pool.query(`
-      SELECT i.id AS "invitationId",
-             i.completed_at AS "completedAt",
-             COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.email, f.name, f.email, 'Destinatario') AS "recipientName",
-             COALESCE(u.email, f.email) AS "recipientEmail",
-             COUNT(a.id)::int AS "answerCount",
-             STRING_AGG(
-               CASE
-                 WHEN q.question_type = 'rating' THEN q.text || ': ' || a.rating_value::text
-                 ELSE q.text || ': ' || COALESCE(NULLIF(a.text_value, ''), '—')
-               END,
-               ' | ' ORDER BY q.sort_order, q.created_at
-             ) AS summary
-        FROM survey_invitations i
-        LEFT JOIN users u ON u.id = i.user_id
-        LEFT JOIN faculty f ON f.id = i.faculty_id
-        LEFT JOIN survey_answers a ON a.invitation_id = i.id
-        LEFT JOIN survey_questions q ON q.id = a.question_id
-       WHERE i.campaign_id = $1
-         AND i.completed_at IS NOT NULL
-       GROUP BY i.id, i.completed_at, u.first_name, u.last_name, u.email, f.name, f.email
-       ORDER BY i.completed_at DESC
-    `, [req.params.id]);
-
+    // I risultati sono anonimi: non restituiamo l'elenco delle singole compilazioni
+    // con nomi/email dei rispondenti, ma solo gli aggregati e i commenti anonimi.
     res.json({
       campaign: { ...campaign[0], scopeLabel: await resolveSurveyScopeLabel(campaign[0].scopeType, campaign[0].scopeId) },
       stats: invStats[0],
-      questions: aggregates,
-      completions
+      questions: aggregates
     });
   } catch (e) {
     console.error('Error fetching results', e);

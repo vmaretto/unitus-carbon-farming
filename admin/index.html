@@ -6294,6 +6294,345 @@ Buono studio!</textarea>
             }
         }
 
+        function parseQuizDataUrl(url) {
+            const raw = String(url || '');
+            if (!raw.startsWith('data:')) return null;
+            const comma = raw.indexOf(',');
+            if (comma === -1) return null;
+            const payload = raw.slice(comma + 1);
+            try {
+                return JSON.parse(decodeURIComponent(payload));
+            } catch (error) {
+                try { return JSON.parse(payload); } catch (innerError) { return null; }
+            }
+        }
+
+        function getResourceExtension(item) {
+            const fromFile = getResourceFileName(item.url);
+            const base = fromFile || String(item.url || '').split('?')[0];
+            const ext = (base.split('.').pop() || '').toLowerCase();
+            return /^[a-z0-9]{1,5}$/.test(ext) ? ext : '';
+        }
+
+        function buildResourcePreviewBody(item) {
+            const url = String(item.url || '');
+            const safeUrl = escapeHtml(url);
+            const type = item.resourceType;
+            const ext = getResourceExtension(item);
+            const frameStyle = 'width:100%;height:68vh;border:1px solid var(--gray-200);border-radius:12px;background:#fff;';
+
+            if (type === 'quiz') {
+                const quiz = parseQuizDataUrl(url);
+                if (!quiz || !Array.isArray(quiz.questions)) {
+                    return '<p style="color:#b91c1c;">Impossibile leggere i dati del quiz.</p>';
+                }
+                const isCorrect = (q, opt) => Array.isArray(q.correctAnswer) ? q.correctAnswer.includes(opt) : q.correctAnswer === opt;
+                const meta = `<div style="display:flex;gap:18px;flex-wrap:wrap;color:var(--gray-600);font-size:0.85rem;margin-bottom:16px;">
+                        <span>📊 Soglia superamento: <strong>${Number(quiz.passingScore) || 70}%</strong></span>
+                        <span>🔁 Tentativi max: <strong>${Number(quiz.maxAttempts) || 0 ? quiz.maxAttempts : 'illimitati'}</strong></span>
+                        <span>❓ Domande: <strong>${quiz.questions.length}</strong></span>
+                    </div>`;
+                const questions = quiz.questions.map((q, i) => `
+                    <div style="padding:14px 16px;border:1px solid var(--gray-200);border-radius:12px;margin-bottom:12px;background:#fff;">
+                        <div style="font-weight:600;color:var(--green-800);margin-bottom:10px;">${i + 1}. ${escapeHtml(q.questionText || '')} <span style="font-weight:400;color:var(--gray-500);font-size:0.8rem;">(${Number(q.points) || 1} pt)</span></div>
+                        <div style="display:flex;flex-direction:column;gap:6px;">
+                            ${(q.options || []).map((opt) => {
+                                const correct = isCorrect(q, opt);
+                                return `<div style="padding:8px 12px;border-radius:8px;font-size:0.9rem;${correct ? 'background:#dcfce7;border:1px solid #86efac;color:#166534;font-weight:600;' : 'background:var(--gray-50);border:1px solid var(--gray-200);color:var(--gray-700);'}">${correct ? '✅ ' : ''}${escapeHtml(String(opt))}</div>`;
+                            }).join('')}
+                        </div>
+                    </div>`).join('');
+                return meta + questions;
+            }
+
+            if (type === 'pdf' || ext === 'pdf') {
+                return `<iframe src="${safeUrl}" style="${frameStyle}" title="Anteprima PDF"></iframe>`;
+            }
+
+            if (type === 'audio' || ['mp3', 'm4a', 'wav', 'ogg'].includes(ext)) {
+                return `<audio controls style="width:100%;" src="${safeUrl}"></audio>`;
+            }
+
+            if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
+                return `<img src="${safeUrl}" alt="${escapeHtml(item.title || '')}" style="max-width:100%;border-radius:12px;border:1px solid var(--gray-200);">`;
+            }
+
+            if (type === 'video' || ['mp4', 'webm', 'mov'].includes(ext)) {
+                const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/);
+                if (yt) return `<iframe src="https://www.youtube.com/embed/${yt[1]}" style="${frameStyle}" allowfullscreen title="Video"></iframe>`;
+                const vimeo = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+                if (vimeo) return `<iframe src="https://player.vimeo.com/video/${vimeo[1]}" style="${frameStyle}" allowfullscreen title="Video"></iframe>`;
+                if (['mp4', 'webm', 'mov'].includes(ext)) return `<video controls style="width:100%;max-height:68vh;border-radius:12px;" src="${safeUrl}"></video>`;
+                return `<iframe src="${safeUrl}" style="${frameStyle}" allowfullscreen title="Video"></iframe>`;
+            }
+
+            if (['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'].includes(ext) && /^https?:\/\//i.test(url)) {
+                const office = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(url);
+                return `<iframe src="${escapeHtml(office)}" style="${frameStyle}" title="Anteprima documento"></iframe>
+                    <p style="margin-top:10px;color:var(--gray-500);font-size:0.82rem;">Se l'anteprima non si carica, usa "Apri risorsa" qui sotto.</p>`;
+            }
+
+            if (/^https?:\/\//i.test(url)) {
+                return `<iframe src="${safeUrl}" style="${frameStyle}" title="Anteprima risorsa"></iframe>
+                    <p style="margin-top:10px;color:var(--gray-500);font-size:0.82rem;">Alcuni siti bloccano l'anteprima incorporata. In tal caso usa "Apri risorsa".</p>`;
+            }
+
+            return '<p style="color:var(--gray-500);">Anteprima non disponibile per questo tipo di risorsa. Usa "Apri risorsa" per visualizzarla.</p>';
+        }
+
+        function openResourcePreview(id) {
+            const item = state.resources.find((r) => r.id === id);
+            if (!item) { showToast('Risorsa non trovata', 'error'); return; }
+
+            const typeIcons = { video: '🎬', pdf: '📄', document: '📝', audio: '🎧', link: '🔗', quiz: '🧠' };
+            const modal = document.createElement('div');
+            modal.className = 'blog-preview-modal';
+            const canOpen = /^(https?:|data:)/i.test(String(item.url || ''));
+            modal.innerHTML = `
+                <div class="blog-preview-shell" style="width:min(860px,100%);" role="dialog" aria-modal="true">
+                    <div class="blog-preview-header">
+                        <div>
+                            <div class="status-pill" data-status="${item.isPublished ? 'published' : 'draft'}" style="display:inline-flex;">${item.isPublished ? 'Visibile' : 'Bozza'}</div>
+                            <h3 style="margin:6px 0 0;">${typeIcons[item.resourceType] || ''} ${escapeHtml(item.title || 'Anteprima risorsa')}</h3>
+                            ${item.description ? `<p style="margin:6px 0 0;color:var(--gray-600);font-size:0.88rem;">${escapeHtml(item.description)}</p>` : ''}
+                        </div>
+                        <button type="button" class="secondary" data-preview-close>Chiudi</button>
+                    </div>
+                    <div style="padding:20px 24px;">${buildResourcePreviewBody(item)}</div>
+                    <div class="blog-preview-footer">
+                        ${item.resourceType === 'quiz' ? '<button type="button" class="secondary" data-preview-edit-quiz>📝 Modifica domande</button>' : ''}
+                        ${canOpen ? `<a class="secondary" href="${escapeHtml(item.url)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">Apri risorsa ↗</a>` : ''}
+                        <button type="button" class="secondary" data-preview-close>Chiudi</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            const close = () => modal.remove();
+            modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+            modal.querySelectorAll('[data-preview-close]').forEach((btn) => btn.addEventListener('click', close));
+            const editQuizBtn = modal.querySelector('[data-preview-edit-quiz]');
+            if (editQuizBtn) editQuizBtn.addEventListener('click', () => { close(); openQuizEditorModal(id); });
+        }
+
+        let quizEditorState = null;
+
+        function openQuizEditorModal(id) {
+            const item = state.resources.find((r) => r.id === id);
+            if (!item) { showToast('Risorsa non trovata', 'error'); return; }
+            const quiz = parseQuizDataUrl(item.url);
+            if (!quiz || !Array.isArray(quiz.questions)) {
+                showToast('Impossibile leggere i dati del quiz', 'error');
+                return;
+            }
+            quizEditorState = {
+                resourceId: id,
+                item,
+                title: quiz.title || item.title || '',
+                passingScore: Number(quiz.passingScore) || 70,
+                maxAttempts: Number(quiz.maxAttempts) || 0,
+                source: quiz.source || 'admin_manual_preliminary_quiz',
+                questions: quiz.questions.map((q) => ({
+                    questionText: String(q.questionText || ''),
+                    options: Array.isArray(q.options) ? q.options.map((o) => String(o ?? '')) : ['', ''],
+                    correctAnswers: Array.isArray(q.correctAnswer)
+                        ? q.correctAnswer.map((o) => String(o ?? ''))
+                        : (q.correctAnswer ? [String(q.correctAnswer)] : []),
+                    points: Number(q.points) > 0 ? Number(q.points) : 1
+                }))
+            };
+
+            const modal = document.createElement('div');
+            modal.className = 'blog-preview-modal';
+            modal.id = 'quiz-editor-modal';
+            modal.innerHTML = `
+                <div class="blog-preview-shell" style="width:min(820px,100%);" role="dialog" aria-modal="true">
+                    <div class="blog-preview-header">
+                        <div>
+                            <h3 style="margin:0;">📝 Modifica domande quiz</h3>
+                            <p style="margin:6px 0 0;color:var(--gray-600);font-size:0.85rem;">Le modifiche reimpostano lo stato di revisione: ricontrolla la pubblicazione dopo il salvataggio.</p>
+                        </div>
+                        <button type="button" class="secondary" data-quiz-editor-close>Chiudi</button>
+                    </div>
+                    <div style="padding:20px 24px;">
+                        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px;">
+                            <div class="quiz-editor-field" style="flex:1;min-width:240px;">
+                                <label>Titolo quiz</label>
+                                <input type="text" id="quiz-editor-title" value="${escapeHtml(quizEditorState.title)}">
+                            </div>
+                            <div class="quiz-editor-field" style="width:150px;">
+                                <label>Soglia (%)</label>
+                                <input type="number" min="0" max="100" id="quiz-editor-passing" value="${quizEditorState.passingScore}">
+                            </div>
+                            <div class="quiz-editor-field" style="width:150px;">
+                                <label>Tentativi max (0=∞)</label>
+                                <input type="number" min="0" id="quiz-editor-attempts" value="${quizEditorState.maxAttempts}">
+                            </div>
+                        </div>
+                        <div id="quiz-editor-questions" style="display:flex;flex-direction:column;gap:14px;"></div>
+                        <div style="margin-top:14px;">
+                            <button type="button" class="secondary" data-quiz-add-question style="background:var(--green-100);color:var(--green-700);">+ Aggiungi domanda</button>
+                        </div>
+                    </div>
+                    <div class="blog-preview-footer">
+                        <button type="button" class="secondary" data-quiz-editor-close>Annulla</button>
+                        <button type="button" id="quiz-editor-save">💾 Salva domande</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            renderQuizEditorQuestions();
+
+            const close = () => { modal.remove(); quizEditorState = null; };
+            modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+            modal.querySelectorAll('[data-quiz-editor-close]').forEach((btn) => btn.addEventListener('click', close));
+
+            modal.querySelector('[data-quiz-add-question]').addEventListener('click', () => {
+                syncQuizEditorFromDom();
+                quizEditorState.questions.push({ questionText: '', options: ['', ''], correctAnswers: [], points: 1 });
+                renderQuizEditorQuestions();
+            });
+
+            modal.querySelector('#quiz-editor-questions').addEventListener('click', (event) => {
+                const removeQ = event.target.closest('[data-qe-remove-question]');
+                const addOpt = event.target.closest('[data-qe-add-option]');
+                const removeOpt = event.target.closest('[data-qe-remove-option]');
+                if (removeQ) {
+                    syncQuizEditorFromDom();
+                    if (quizEditorState.questions.length <= 1) { showToast('Il quiz deve avere almeno una domanda', 'error'); return; }
+                    quizEditorState.questions.splice(Number(removeQ.dataset.qeRemoveQuestion), 1);
+                    renderQuizEditorQuestions();
+                } else if (addOpt) {
+                    syncQuizEditorFromDom();
+                    quizEditorState.questions[Number(addOpt.dataset.qeAddOption)].options.push('');
+                    renderQuizEditorQuestions();
+                } else if (removeOpt) {
+                    syncQuizEditorFromDom();
+                    const [qi, oi] = removeOpt.dataset.qeRemoveOption.split(':').map(Number);
+                    const q = quizEditorState.questions[qi];
+                    if (q.options.length <= 2) { showToast('Ogni domanda deve avere almeno due opzioni', 'error'); return; }
+                    const removed = q.options.splice(oi, 1)[0];
+                    q.correctAnswers = q.correctAnswers.filter((c) => c !== removed);
+                    renderQuizEditorQuestions();
+                }
+            });
+
+            modal.querySelector('#quiz-editor-save').addEventListener('click', saveQuizEditor);
+        }
+
+        function renderQuizEditorQuestions() {
+            const container = document.getElementById('quiz-editor-questions');
+            if (!container || !quizEditorState) return;
+            container.innerHTML = quizEditorState.questions.map((q, qi) => `
+                <div data-qe-question="${qi}" style="padding:14px;border:1px solid var(--gray-200);border-radius:12px;background:#fff;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;">
+                        <strong style="color:var(--green-800);">Domanda ${qi + 1}</strong>
+                        <button type="button" class="secondary" data-qe-remove-question="${qi}" style="padding:6px 12px;background:#fee2e2;color:#991b1b;">Rimuovi</button>
+                    </div>
+                    <div class="quiz-editor-field">
+                        <label>Testo domanda</label>
+                        <textarea data-qe-text="${qi}" placeholder="Scrivi la domanda">${escapeHtml(q.questionText)}</textarea>
+                    </div>
+                    <div class="quiz-editor-field" style="margin-top:10px;max-width:160px;">
+                        <label>Punti</label>
+                        <input type="number" min="1" step="1" data-qe-points="${qi}" value="${q.points}">
+                    </div>
+                    <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+                        <span style="font-size:0.8rem;color:var(--gray-500);">Spunta le risposte corrette</span>
+                        ${q.options.map((opt, oi) => `
+                            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                                <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#166534;white-space:nowrap;">
+                                    <input type="checkbox" data-qe-correct="${qi}:${oi}" ${q.correctAnswers.includes(opt) && opt ? 'checked' : ''}> Corretta
+                                </label>
+                                <input type="text" data-qe-option="${qi}:${oi}" value="${escapeHtml(opt)}" placeholder="Opzione ${oi + 1}" style="flex:1;min-width:220px;">
+                                <button type="button" class="secondary" data-qe-remove-option="${qi}:${oi}" style="padding:6px 10px;background:var(--gray-100);">✕</button>
+                            </div>
+                        `).join('')}
+                        <div><button type="button" class="secondary" data-qe-add-option="${qi}" style="background:var(--green-100);color:var(--green-700);">+ Aggiungi opzione</button></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function syncQuizEditorFromDom() {
+            if (!quizEditorState) return;
+            const titleEl = document.getElementById('quiz-editor-title');
+            if (titleEl) quizEditorState.title = titleEl.value;
+            const passingEl = document.getElementById('quiz-editor-passing');
+            if (passingEl) quizEditorState.passingScore = Number(passingEl.value) || 70;
+            const attemptsEl = document.getElementById('quiz-editor-attempts');
+            if (attemptsEl) quizEditorState.maxAttempts = Number(attemptsEl.value) || 0;
+            const container = document.getElementById('quiz-editor-questions');
+            if (!container) return;
+            quizEditorState.questions = Array.from(container.querySelectorAll('[data-qe-question]')).map((card, qi) => {
+                const questionText = card.querySelector(`[data-qe-text="${qi}"]`)?.value || '';
+                const points = Number(card.querySelector(`[data-qe-points="${qi}"]`)?.value) || 1;
+                const optionInputs = Array.from(card.querySelectorAll(`[data-qe-option^="${qi}:"]`));
+                const options = optionInputs.map((input) => input.value);
+                const correctAnswers = [];
+                options.forEach((opt, oi) => {
+                    const checkbox = card.querySelector(`[data-qe-correct="${qi}:${oi}"]`);
+                    if (checkbox?.checked && opt.trim()) correctAnswers.push(opt);
+                });
+                return { questionText, options, correctAnswers, points };
+            });
+        }
+
+        async function saveQuizEditor() {
+            if (!quizEditorState) return;
+            syncQuizEditorFromDom();
+            try {
+                const title = quizEditorState.title.trim();
+                if (!title) throw new Error('Inserisci il titolo del quiz');
+                if (!quizEditorState.questions.length) throw new Error('Inserisci almeno una domanda');
+
+                const questions = quizEditorState.questions.map((q, index) => {
+                    const questionText = String(q.questionText || '').trim();
+                    if (!questionText) throw new Error(`La domanda ${index + 1} non ha testo`);
+                    const options = (q.options || []).map((o) => String(o || '').trim()).filter(Boolean);
+                    if (options.length < 2) throw new Error(`La domanda ${index + 1} deve avere almeno 2 opzioni`);
+                    const corrects = (q.correctAnswers || []).map((c) => String(c || '').trim()).filter((c) => options.includes(c));
+                    if (!corrects.length) throw new Error(`Seleziona la risposta corretta per la domanda ${index + 1}`);
+                    return {
+                        questionText,
+                        options,
+                        correctAnswer: corrects.length === 1 ? corrects[0] : corrects,
+                        points: Number(q.points) > 0 ? Number(q.points) : 1,
+                        sortOrder: index
+                    };
+                });
+
+                const quizData = buildPreliminaryQuizResourceData({
+                    title,
+                    questions,
+                    source: quizEditorState.source,
+                    passingScore: quizEditorState.passingScore,
+                    maxAttempts: quizEditorState.maxAttempts
+                });
+
+                const item = quizEditorState.item;
+                await apiRequest(`/api/resources/${quizEditorState.resourceId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        title,
+                        resourceType: 'quiz',
+                        url: 'data:application/json,' + encodeURIComponent(JSON.stringify(quizData)),
+                        description: item.description || null,
+                        tags: Array.isArray(item.tags) ? item.tags : [],
+                        sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : null,
+                        isPublished: item.isPublished,
+                        teacherId: item.teacherId || null,
+                        lessonId: item.lessonId || null
+                    })
+                });
+                showToast(`Quiz aggiornato (${questions.length} domande)`, 'success');
+                document.getElementById('quiz-editor-modal')?.remove();
+                quizEditorState = null;
+                loadResources();
+            } catch (error) {
+                showToast(error.message || 'Errore nel salvataggio del quiz', 'error');
+            }
+        }
+
         function buildResourceRow(item) {
             const typeIcons = { video: '🎬', pdf: '📄', document: '📝', audio: '🎧', link: '🔗', quiz: '🧠' };
             const sourceInfo = {
@@ -6335,6 +6674,8 @@ Buono studio!</textarea>
                 <td style="font-size: 0.85rem; color: var(--gray-600);">${item.createdAt ? new Date(item.createdAt).toLocaleDateString('it-IT') : '—'}</td>
                 <td data-status><span class="status-pill" data-status="${item.isPublished ? 'published' : 'draft'}">${item.isPublished ? 'Visibile' : 'Bozza'}</span></td>
                 <td>
+                    <button data-preview class="icon-btn" title="Anteprima">👁️</button>
+                    ${item.resourceType === 'quiz' ? '<button data-quiz-edit class="icon-btn" title="Modifica domande">📝</button>' : ''}
                     <button data-edit class="icon-btn" title="Modifica">✏️</button>
                     <button data-request-review class="icon-btn" title="Invia revisione docente">🧑‍🏫</button>
                     <button data-delete class="icon-btn danger" title="Elimina">🗑️</button>
@@ -7554,9 +7895,21 @@ Buono studio!</textarea>
             const editButton = event.target.closest('button[data-edit]');
             const deleteButton = event.target.closest('button[data-delete]');
             const requestReviewButton = event.target.closest('button[data-request-review]');
+            const previewButton = event.target.closest('button[data-preview]');
+            const quizEditButton = event.target.closest('button[data-quiz-edit]');
             const resourceEl = event.target.closest('[data-id]');
-            if (!resourceEl || (!editButton && !deleteButton && !requestReviewButton)) return;
+            if (!resourceEl || (!editButton && !deleteButton && !requestReviewButton && !previewButton && !quizEditButton)) return;
             const id = resourceEl.dataset.id;
+
+            if (previewButton) {
+                openResourcePreview(id);
+                return;
+            }
+
+            if (quizEditButton) {
+                openQuizEditorModal(id);
+                return;
+            }
 
             if (editButton) {
                 const current = state.resources.find((item) => item.id === id);

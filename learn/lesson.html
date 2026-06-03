@@ -336,6 +336,7 @@
 
         // --- Main ---
         let plyrInstance = null;
+        let vimeoPlayer = null;
         let segmentTracker = null;
         let lastTrackedTime = 0;
         let sessionStartTime = Date.now();
@@ -442,7 +443,7 @@
                         url: r.url,
                         assetType: r.resourceType === 'pdf' ? 'pdf' : (r.resourceType === 'document' ? 'slide' : r.resourceType || 'file')
                     }));
-                renderMaterials([...lessonMaterials, ...assetMaterials, ...linkedResources]);
+                renderMaterials(dedupeMaterials([...lessonMaterials, ...assetMaterials, ...linkedResources]));
 
                 // Setup watermark
                 setupWatermark();
@@ -508,6 +509,7 @@
                     iframe.allowFullscreen = true;
                     videoContainer.insertBefore(iframe, videoContainer.firstChild);
 
+                    setupVimeoTracking(iframe, progress);
                     console.log('Vimeo video loaded:', vimeoId);
                     return;
                 } else {
@@ -569,6 +571,72 @@
             }
         }
 
+        function loadVimeoSdk() {
+            return new Promise((resolve, reject) => {
+                if (window.Vimeo && window.Vimeo.Player) { resolve(); return; }
+                const existing = document.querySelector('script[data-vimeo-sdk]');
+                if (existing) {
+                    existing.addEventListener('load', () => resolve());
+                    existing.addEventListener('error', reject);
+                    return;
+                }
+                const script = document.createElement('script');
+                script.src = 'https://player.vimeo.com/api/player.js';
+                script.async = true;
+                script.dataset.vimeoSdk = 'true';
+                script.onload = () => resolve();
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        async function setupVimeoTracking(iframe, progress) {
+            try {
+                await loadVimeoSdk();
+                vimeoPlayer = new Vimeo.Player(iframe);
+
+                // Imposta la durata reale del video sul tracker
+                try {
+                    const duration = await vimeoPlayer.getDuration();
+                    if (duration > 0 && segmentTracker) segmentTracker.duration = Math.floor(duration);
+                } catch (e) { /* durata non disponibile */ }
+
+                // Riprendi dall'ultima posizione salvata
+                if (progress && progress.lastPositionSeconds > 0) {
+                    vimeoPlayer.setCurrentTime(progress.lastPositionSeconds).catch(() => {});
+                }
+
+                // Traccia la riproduzione in avanti (come per i video locali)
+                vimeoPlayer.on('timeupdate', (data) => {
+                    if (!segmentTracker) return;
+                    const currentTime = data.seconds;
+                    if (data.duration > 0 && segmentTracker.duration !== Math.floor(data.duration)) {
+                        segmentTracker.duration = Math.floor(data.duration);
+                    }
+                    if (currentTime > lastTrackedTime && (currentTime - lastTrackedTime) < 3) {
+                        segmentTracker.markWatched(lastTrackedTime, currentTime);
+                    }
+                    lastTrackedTime = currentTime;
+                    updateProgressUI(segmentTracker.getPercentage());
+                });
+
+                // Sul seek non conteggiare i segmenti saltati
+                vimeoPlayer.on('seeked', (data) => {
+                    lastTrackedTime = data.seconds;
+                });
+
+                vimeoPlayer.on('pause', saveProgress);
+                vimeoPlayer.on('ended', saveProgress);
+
+                if (!window.__isGuest) {
+                    saveInterval = setInterval(saveProgress, 10000);
+                    window.addEventListener('beforeunload', saveProgress);
+                }
+            } catch (error) {
+                console.error('Error setting up Vimeo tracking', error);
+            }
+        }
+
         function updateProgressUI(percent) {
             document.getElementById('progress-fill').style.width = percent + '%';
             document.getElementById('progress-text').textContent = percent + '%';
@@ -576,18 +644,21 @@
 
         async function saveProgress() {
             if (window.__skipProgressTracking || window.__isGuest) return;
-            if (!plyrInstance || !segmentTracker) return;
+            if (!segmentTracker) return;
+            if (!plyrInstance && !vimeoPlayer) return;
 
             const watchPercentage = segmentTracker.getPercentage();
             const timeSpentSeconds = Math.round((Date.now() - sessionStartTime) / 1000);
 
             updateProgressUI(watchPercentage);
 
+            const currentPosition = plyrInstance ? plyrInstance.currentTime : lastTrackedTime;
+
             try {
                 await api(`/api/lms/lessons/${lessonId}/progress`, {
                     method: 'POST',
                     body: JSON.stringify({
-                        lastPositionSec: Math.floor(plyrInstance.currentTime),
+                        lastPositionSec: Math.floor(currentPosition || 0),
                         watchPercentage: watchPercentage,
                         timeSpentSeconds: timeSpentSeconds,
                         watchedSegments: segmentTracker.toRanges()
@@ -596,6 +667,23 @@
             } catch (e) {
                 console.error('Error saving progress', e);
             }
+        }
+
+        function dedupeMaterials(materials) {
+            const seen = new Map();
+            (materials || []).forEach((m) => {
+                if (!m) return;
+                const rawUrl = String(m.url || '').split('?')[0].split('#')[0].trim().toLowerCase();
+                const key = rawUrl || ('title:' + String(m.title || '').trim().toLowerCase());
+                const existing = seen.get(key);
+                // Conserva la prima occorrenza, ma preferisci quella con resourceId (necessario per il tracking visualizzazioni)
+                if (!existing) {
+                    seen.set(key, m);
+                } else if (!existing.resourceId && m.resourceId) {
+                    seen.set(key, m);
+                }
+            });
+            return Array.from(seen.values());
         }
 
         function renderMaterials(assets) {

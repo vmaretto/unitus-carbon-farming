@@ -4831,13 +4831,15 @@ async function getLessonCompletionStatus(lessonId, userId, preloaded = {}) {
   const viewedResourceIds = Array.isArray(materialRows[0]?.viewedResourceIds) ? materialRows[0].viewedResourceIds.filter(Boolean) : [];
   const materialsOk = materialTotal === 0 || (materialViewed / materialTotal) >= 0.50;
 
+  // Solo i quiz collegati a QUESTA lezione contano per il completamento della lezione.
+  // Il quiz di modulo è tracciato separatamente (vista corso) e non deve soddisfare il criterio delle singole lezioni.
   const { rows: quizRows } = await pool.query(`
     SELECT id
     FROM quizzes
     WHERE is_published = true
-      AND (lms_lesson_id = $1 OR lms_module_id = $2)
-    ORDER BY CASE WHEN lms_lesson_id = $1 THEN 0 ELSE 1 END, created_at ASC
-  `, [lessonId, lesson.moduleId]);
+      AND lms_lesson_id = $1
+    ORDER BY created_at ASC
+  `, [lessonId]);
   const quizIds = quizRows.map(row => row.id);
 
   let quizBestScore = null;

@@ -1576,6 +1576,7 @@
             </div>
             <div class="sidebar-group">
                 <div class="sidebar-group-title">Eventi</div>
+                <a href="#events" data-section="events">🎟️ Eventi &amp; iscrizioni</a>
                 <a href="#conference-registrations" data-section="conference-registrations">📨 Conferenza 26/5</a>
             </div>
             <div class="sidebar-group">
@@ -3425,6 +3426,44 @@ Buono studio!</textarea>
             </div>
         </section>
 
+        <section id="events">
+            <header>
+                <h2>🎟️ Eventi &amp; iscrizioni</h2>
+                <p class="section-description">Crea eventi (es. visite aziendali) a cui gli studenti del master possono iscriversi dalla loro area. Qui gestisci gli eventi e vedi gli iscritti.</p>
+            </header>
+
+            <form id="event-form" style="background:white; border:1px solid var(--gray-200); border-radius:12px; padding:16px; margin-bottom:20px;">
+                <input type="hidden" id="event-id">
+                <div class="form-grid">
+                    <label>Titolo *
+                        <input type="text" id="event-title" required placeholder="Es. Visita aziendale — Azienda Tre Botti">
+                    </label>
+                    <label>Data e ora
+                        <input type="datetime-local" id="event-starts-at">
+                    </label>
+                    <label>Luogo
+                        <input type="text" id="event-location" placeholder="Es. Azienda Tre Botti, ...">
+                    </label>
+                    <label>Posti disponibili (vuoto = illimitati)
+                        <input type="number" id="event-capacity" min="1" placeholder="Es. 30">
+                    </label>
+                    <label>Collega a lezione in calendario (opzionale)
+                        <select id="event-lesson"><option value="">— Nessuna —</option></select>
+                    </label>
+                </div>
+                <label style="display:block; margin-top:10px;">Descrizione
+                    <textarea id="event-description" rows="2" placeholder="Dettagli, programma, ritrovo..."></textarea>
+                </label>
+                <div class="actions" style="margin-top:10px; align-items:center;">
+                    <label class="switch"><input type="checkbox" id="event-registration-open" checked><span class="slider"></span> Iscrizioni aperte</label>
+                    <button type="submit" class="primary" id="event-submit-btn">+ Crea evento</button>
+                    <button type="button" class="secondary" id="event-cancel-btn" style="display:none;">Annulla modifica</button>
+                </div>
+            </form>
+
+            <div id="events-list"><div class="empty-state">Caricamento...</div></div>
+        </section>
+
         <section id="conference-registrations">
             <header>
                 <h2>📨 Conferenza 26/5</h2>
@@ -3908,7 +3947,8 @@ Buono studio!</textarea>
                     () => typeof loadTeacherPendingMaterials === 'function' ? loadTeacherPendingMaterials() : Promise.resolve(),
                     () => typeof loadStudentQuestions === 'function' ? loadStudentQuestions() : Promise.resolve(),
                     () => typeof loadSurveysSection === 'function' ? loadSurveysSection() : Promise.resolve(),
-                    () => typeof loadConferenceRegistrations === 'function' ? loadConferenceRegistrations() : Promise.resolve()
+                    () => typeof loadConferenceRegistrations === 'function' ? loadConferenceRegistrations() : Promise.resolve(),
+                    () => typeof loadAdminEvents === 'function' ? loadAdminEvents() : Promise.resolve()
                 ];
 
                 for (const task of startupTasks) {
@@ -5517,6 +5557,196 @@ Buono studio!</textarea>
             }
             return allLessonsCache;
         }
+
+        // ===== EVENTI (iscrizioni studenti) =====
+        let adminEvents = [];
+
+        function formatAdminEventDate(value) {
+            if (!value) return 'Data non impostata';
+            try { return new Date(value).toLocaleString('it-IT', { day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
+            catch (e) { return ''; }
+        }
+
+        function toDatetimeLocalValue(iso) {
+            if (!iso) return '';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return '';
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
+        async function populateEventLessonSelect() {
+            const sel = document.getElementById('event-lesson');
+            if (!sel) return;
+            try {
+                const lessons = await ensureAllLessonsCache();
+                const current = sel.value;
+                sel.innerHTML = '<option value="">— Nessuna —</option>' + (lessons || []).map((l) => {
+                    const d = l.startDatetime ? new Date(l.startDatetime).toLocaleDateString('it-IT') : '';
+                    return `<option value="${l.id}">${escapeHtml(l.title)}${d ? ' (' + d + ')' : ''}</option>`;
+                }).join('');
+                if (current) sel.value = current;
+            } catch (e) { /* lezioni non disponibili */ }
+        }
+
+        function renderAdminEvents() {
+            const list = document.getElementById('events-list');
+            if (!list) return;
+            if (!adminEvents.length) {
+                list.innerHTML = '<div class="empty-state">Nessun evento. Crea il primo evento qui sopra.</div>';
+                return;
+            }
+            list.innerHTML = adminEvents.map((ev) => {
+                const seats = ev.capacity ? `${ev.registeredCount}/${ev.capacity}` : `${ev.registeredCount}`;
+                const statusPill = ev.registrationOpen
+                    ? '<span class="status-pill" data-status="published">Iscrizioni aperte</span>'
+                    : '<span class="status-pill" data-status="draft">Iscrizioni chiuse</span>';
+                return `
+                    <div style="padding:16px; border:1px solid var(--gray-200); border-radius:12px; margin-bottom:12px; background:white;" data-event-id="${ev.id}">
+                        <div style="display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap; align-items:flex-start;">
+                            <div style="flex:1; min-width:240px;">
+                                <strong style="font-size:1.05rem;">${escapeHtml(ev.title)}</strong> ${statusPill}
+                                <div style="color:var(--gray-500); font-size:0.88rem; margin-top:4px;">📅 ${escapeHtml(formatAdminEventDate(ev.startsAt))}${ev.location ? ' • 📍 ' + escapeHtml(ev.location) : ''}</div>
+                                ${ev.description ? `<div style="color:var(--gray-600); font-size:0.88rem; margin-top:6px;">${escapeHtml(ev.description)}</div>` : ''}
+                                <div style="margin-top:8px; font-weight:600; color:var(--green-700);">👥 ${seats} iscritti</div>
+                            </div>
+                            <div class="actions" style="margin:0;">
+                                <button type="button" class="secondary" data-event-view="${ev.id}">Vedi iscritti</button>
+                                <button type="button" class="secondary" data-event-edit="${ev.id}">Modifica</button>
+                                <button type="button" class="danger" data-event-del="${ev.id}">Elimina</button>
+                            </div>
+                        </div>
+                        <div data-event-regs="${ev.id}" style="display:none; margin-top:12px; border-top:1px solid var(--gray-200); padding-top:12px;"></div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function loadAdminEvents() {
+            const list = document.getElementById('events-list');
+            if (!list) return;
+            populateEventLessonSelect();
+            try {
+                adminEvents = await apiRequest('/api/admin/events');
+                renderAdminEvents();
+            } catch (e) {
+                adminEvents = [];
+                list.innerHTML = '<div class="empty-state">Errore nel caricamento eventi.</div>';
+            }
+        }
+
+        function resetEventForm() {
+            document.getElementById('event-id').value = '';
+            document.getElementById('event-title').value = '';
+            document.getElementById('event-starts-at').value = '';
+            document.getElementById('event-location').value = '';
+            document.getElementById('event-capacity').value = '';
+            document.getElementById('event-description').value = '';
+            document.getElementById('event-lesson').value = '';
+            document.getElementById('event-registration-open').checked = true;
+            document.getElementById('event-submit-btn').textContent = '+ Crea evento';
+            document.getElementById('event-cancel-btn').style.display = 'none';
+        }
+
+        document.getElementById('event-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('event-id').value;
+            const startsLocal = document.getElementById('event-starts-at').value;
+            const capacityVal = document.getElementById('event-capacity').value;
+            const payload = {
+                title: document.getElementById('event-title').value.trim(),
+                description: document.getElementById('event-description').value.trim() || null,
+                location: document.getElementById('event-location').value.trim() || null,
+                startsAt: startsLocal ? new Date(startsLocal).toISOString() : null,
+                capacity: capacityVal ? Number(capacityVal) : null,
+                registrationOpen: document.getElementById('event-registration-open').checked,
+                calendarLessonId: document.getElementById('event-lesson').value || null
+            };
+            if (!payload.title) return showToast('Inserisci il titolo', 'error');
+            try {
+                if (id) {
+                    await apiRequest(`/api/admin/events/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+                    showToast('Evento aggiornato');
+                } else {
+                    await apiRequest('/api/admin/events', { method: 'POST', body: JSON.stringify(payload) });
+                    showToast('Evento creato');
+                }
+                resetEventForm();
+                loadAdminEvents();
+            } catch (err) { showToast(err.message || 'Errore salvataggio evento', 'error'); }
+        });
+
+        document.getElementById('event-cancel-btn').addEventListener('click', resetEventForm);
+
+        document.getElementById('events-list').addEventListener('click', async (e) => {
+            const editBtn = e.target.closest('[data-event-edit]');
+            const delBtn = e.target.closest('[data-event-del]');
+            const viewBtn = e.target.closest('[data-event-view]');
+            const regDelBtn = e.target.closest('[data-event-reg-del]');
+
+            if (editBtn) {
+                const ev = adminEvents.find((x) => x.id === editBtn.dataset.eventEdit);
+                if (!ev) return;
+                await populateEventLessonSelect();
+                document.getElementById('event-id').value = ev.id;
+                document.getElementById('event-title').value = ev.title || '';
+                document.getElementById('event-starts-at').value = toDatetimeLocalValue(ev.startsAt);
+                document.getElementById('event-location').value = ev.location || '';
+                document.getElementById('event-capacity').value = ev.capacity || '';
+                document.getElementById('event-description').value = ev.description || '';
+                document.getElementById('event-lesson').value = ev.calendarLessonId || '';
+                document.getElementById('event-registration-open').checked = ev.registrationOpen !== false;
+                document.getElementById('event-submit-btn').textContent = 'Salva modifiche';
+                document.getElementById('event-cancel-btn').style.display = 'inline-block';
+                document.getElementById('event-form').scrollIntoView({ behavior: 'smooth' });
+                return;
+            }
+            if (delBtn) {
+                if (!confirm('Eliminare questo evento e tutte le iscrizioni?')) return;
+                try { await apiRequest(`/api/admin/events/${delBtn.dataset.eventDel}`, { method: 'DELETE' }); showToast('Evento eliminato'); loadAdminEvents(); }
+                catch (err) { showToast(err.message || 'Errore', 'error'); }
+                return;
+            }
+            if (regDelBtn) {
+                const [eventId, regId] = regDelBtn.dataset.eventRegDel.split(':');
+                if (!confirm('Rimuovere questo iscritto?')) return;
+                try {
+                    await apiRequest(`/api/admin/events/${eventId}/registrations/${regId}`, { method: 'DELETE' });
+                    showToast('Iscritto rimosso');
+                    loadAdminEvents();
+                } catch (err) { showToast(err.message || 'Errore', 'error'); }
+                return;
+            }
+            if (viewBtn) {
+                const id = viewBtn.dataset.eventView;
+                const box = document.querySelector(`[data-event-regs="${id}"]`);
+                if (!box) return;
+                if (box.style.display !== 'none') { box.style.display = 'none'; viewBtn.textContent = 'Vedi iscritti'; return; }
+                box.style.display = '';
+                viewBtn.textContent = 'Nascondi iscritti';
+                box.innerHTML = '<div class="empty-state">Caricamento...</div>';
+                try {
+                    const regs = await apiRequest(`/api/admin/events/${id}/registrations`);
+                    if (!regs.length) { box.innerHTML = '<div class="empty-state">Nessun iscritto.</div>'; return; }
+                    box.innerHTML = `
+                        <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                            <thead><tr style="text-align:left; color:var(--gray-500);"><th style="padding:6px;">Studente</th><th style="padding:6px;">Email</th><th style="padding:6px;">Iscritto il</th><th></th></tr></thead>
+                            <tbody>
+                                ${regs.map((r) => `
+                                    <tr style="border-top:1px solid var(--gray-200);">
+                                        <td style="padding:6px;">${escapeHtml(r.studentName || '—')}</td>
+                                        <td style="padding:6px;">${escapeHtml(r.studentEmail || '—')}</td>
+                                        <td style="padding:6px;">${r.registeredAt ? new Date(r.registeredAt).toLocaleString('it-IT') : '—'}</td>
+                                        <td style="padding:6px; text-align:right;"><button type="button" class="danger" data-event-reg-del="${id}:${r.id}" style="padding:4px 10px;">Rimuovi</button></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                } catch (err) { box.innerHTML = '<div class="empty-state">Errore nel caricamento iscritti.</div>'; }
+                return;
+            }
+        });
 
         async function updateResourceLessonSelect(forceRefresh = false) {
             const sel = document.getElementById('resource-lesson');

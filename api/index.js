@@ -1214,6 +1214,228 @@ app.post('/api/admin/conference-registrations/import-xlsx', requireAdmin, upload
   }
 });
 
+// =============================================================================
+// EVENTI — iscrizioni studenti (es. visite aziendali)
+// =============================================================================
+
+// Studente: elenco eventi aperti con stato iscrizione personale
+app.get('/api/lms/events', requireStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const userId = req.user.userId || null;
+    const { rows } = await pool.query(`
+      SELECT e.id, e.title, e.description, e.location, e.starts_at AS "startsAt",
+             e.capacity, e.registration_open AS "registrationOpen",
+             COUNT(r.id)::int AS "registeredCount",
+             BOOL_OR(r.user_id = $1) AS "isRegistered"
+      FROM events e
+      LEFT JOIN event_registrations r ON r.event_id = e.id
+      GROUP BY e.id
+      HAVING e.registration_open = true OR BOOL_OR(r.user_id = $1) = true
+      ORDER BY e.starts_at NULLS LAST, e.created_at DESC
+    `, [userId]);
+    res.json(rows.map(row => ({ ...row, isRegistered: row.isRegistered === true })));
+  } catch (error) {
+    console.error('Error fetching events', error);
+    res.status(500).json({ error: 'Unable to retrieve events' });
+  }
+});
+
+// Studente: iscriviti a un evento
+app.post('/api/lms/events/:id/register', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const userId = req.user.userId;
+  if (!userId) return res.status(400).json({ error: 'Utente non valido' });
+  try {
+    const { rows: eventRows } = await pool.query(
+      'SELECT id, capacity, registration_open AS "registrationOpen" FROM events WHERE id = $1',
+      [req.params.id]
+    );
+    const event = eventRows[0];
+    if (!event) return res.status(404).json({ error: 'Evento non trovato' });
+
+    const { rows: existing } = await pool.query(
+      'SELECT id FROM event_registrations WHERE event_id = $1 AND user_id = $2',
+      [event.id, userId]
+    );
+    if (existing.length) return res.json({ ok: true, alreadyRegistered: true });
+
+    if (!event.registrationOpen) {
+      return res.status(409).json({ error: 'Le iscrizioni per questo evento sono chiuse' });
+    }
+    if (event.capacity) {
+      const { rows: countRows } = await pool.query(
+        'SELECT COUNT(*)::int AS n FROM event_registrations WHERE event_id = $1',
+        [event.id]
+      );
+      if (countRows[0].n >= event.capacity) {
+        return res.status(409).json({ error: 'Posti esauriti per questo evento' });
+      }
+    }
+
+    await pool.query(
+      'INSERT INTO event_registrations (event_id, user_id) VALUES ($1, $2) ON CONFLICT (event_id, user_id) DO NOTHING',
+      [event.id, userId]
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error registering to event', error);
+    res.status(500).json({ error: 'Iscrizione non riuscita' });
+  }
+});
+
+// Studente: annulla iscrizione
+app.delete('/api/lms/events/:id/register', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const userId = req.user.userId;
+  if (!userId) return res.status(400).json({ error: 'Utente non valido' });
+  try {
+    await pool.query(
+      'DELETE FROM event_registrations WHERE event_id = $1 AND user_id = $2',
+      [req.params.id, userId]
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error cancelling event registration', error);
+    res.status(500).json({ error: 'Annullamento non riuscito' });
+  }
+});
+
+// Admin: elenco eventi con conteggio iscritti
+app.get('/api/admin/events', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT e.id, e.title, e.description, e.location, e.starts_at AS "startsAt",
+             e.capacity, e.registration_open AS "registrationOpen",
+             e.calendar_lesson_id AS "calendarLessonId",
+             COUNT(r.id)::int AS "registeredCount",
+             e.created_at AS "createdAt"
+      FROM events e
+      LEFT JOIN event_registrations r ON r.event_id = e.id
+      GROUP BY e.id
+      ORDER BY e.starts_at NULLS LAST, e.created_at DESC
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching admin events', error);
+    res.status(500).json({ error: 'Unable to retrieve events' });
+  }
+});
+
+// Admin: crea evento
+app.post('/api/admin/events', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { title, description, location, startsAt, capacity, registrationOpen, calendarLessonId } = req.body || {};
+  if (!title || !String(title).trim()) {
+    return res.status(400).json({ error: 'Il titolo è obbligatorio' });
+  }
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO events (title, description, location, starts_at, capacity, registration_open, calendar_lesson_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id
+    `, [
+      String(title).trim(),
+      description ? String(description).trim() : null,
+      location ? String(location).trim() : null,
+      startsAt || null,
+      Number.isFinite(Number(capacity)) && Number(capacity) > 0 ? Number(capacity) : null,
+      registrationOpen === false ? false : true,
+      calendarLessonId || null
+    ]);
+    res.status(201).json({ id: rows[0].id });
+  } catch (error) {
+    console.error('Error creating event', error);
+    res.status(500).json({ error: 'Creazione evento non riuscita' });
+  }
+});
+
+// Admin: aggiorna evento
+app.put('/api/admin/events/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const { title, description, location, startsAt, capacity, registrationOpen, calendarLessonId } = req.body || {};
+  try {
+    const { rows } = await pool.query(`
+      UPDATE events SET
+        title = COALESCE($2, title),
+        description = $3,
+        location = $4,
+        starts_at = $5,
+        capacity = $6,
+        registration_open = COALESCE($7, registration_open),
+        calendar_lesson_id = $8,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING id
+    `, [
+      req.params.id,
+      title ? String(title).trim() : null,
+      description ? String(description).trim() : null,
+      location ? String(location).trim() : null,
+      startsAt || null,
+      Number.isFinite(Number(capacity)) && Number(capacity) > 0 ? Number(capacity) : null,
+      typeof registrationOpen === 'boolean' ? registrationOpen : null,
+      calendarLessonId || null
+    ]);
+    if (!rows.length) return res.status(404).json({ error: 'Evento non trovato' });
+    res.json({ id: rows[0].id });
+  } catch (error) {
+    console.error('Error updating event', error);
+    res.status(500).json({ error: 'Aggiornamento evento non riuscito' });
+  }
+});
+
+// Admin: elimina evento
+app.delete('/api/admin/events/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM events WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Evento non trovato' });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting event', error);
+    res.status(500).json({ error: 'Eliminazione evento non riuscita' });
+  }
+});
+
+// Admin: elenco iscritti a un evento
+app.get('/api/admin/events/:id/registrations', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT r.id,
+             COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.email, 'Studente') AS "studentName",
+             u.email AS "studentEmail",
+             r.created_at AS "registeredAt"
+      FROM event_registrations r
+      LEFT JOIN users u ON u.id = r.user_id
+      WHERE r.event_id = $1
+      ORDER BY r.created_at ASC
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching event registrations', error);
+    res.status(500).json({ error: 'Unable to retrieve registrations' });
+  }
+});
+
+// Admin: rimuovi un iscritto
+app.delete('/api/admin/events/:id/registrations/:regId', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM event_registrations WHERE id = $1 AND event_id = $2',
+      [req.params.regId, req.params.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Iscrizione non trovata' });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting event registration', error);
+    res.status(500).json({ error: 'Rimozione iscrizione non riuscita' });
+  }
+});
+
 function normalizeEmailList(input) {
   const raw = Array.isArray(input) ? input : [input];
   const seen = new Set();
@@ -13111,14 +13333,22 @@ app.post('/api/admin/surveys/:id/questions', requireAdmin, async (req, res) => {
 app.put('/api/admin/survey-questions/:qid', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
   const { text, questionType, isRequired, sortOrder } = req.body || {};
+  // UPDATE diretta: la tabella survey_questions non ha la colonna updated_at,
+  // quindi non possiamo usare buildUpdateQuery (che la imposta sempre).
+  const sets = [];
+  const values = [];
+  if (typeof text === 'string' && text.trim()) { values.push(text.trim()); sets.push(`text = $${values.length}`); }
+  if (['rating', 'text'].includes(questionType)) { values.push(questionType); sets.push(`question_type = $${values.length}`); }
+  if (typeof isRequired === 'boolean') { values.push(isRequired); sets.push(`is_required = $${values.length}`); }
+  if (typeof sortOrder === 'number') { values.push(sortOrder); sets.push(`sort_order = $${values.length}`); }
+  if (!sets.length) return res.status(400).json({ error: 'Nessun campo da aggiornare' });
+  values.push(req.params.qid);
   try {
-    const { query, values } = buildUpdateQuery('survey_questions', {
-      text,
-      question_type: ['rating', 'text'].includes(questionType) ? questionType : undefined,
-      is_required: typeof isRequired === 'boolean' ? isRequired : undefined,
-      sort_order: typeof sortOrder === 'number' ? sortOrder : undefined
-    }, req.params.qid);
-    const { rows } = await pool.query(query, values);
+    const { rows } = await pool.query(
+      `UPDATE survey_questions SET ${sets.join(', ')} WHERE id = $${values.length}
+       RETURNING id, text, question_type AS "questionType", is_required AS "isRequired", sort_order AS "sortOrder"`,
+      values
+    );
     if (!rows.length) return res.status(404).json({ error: 'Non trovato' });
     res.json(rows[0]);
   } catch (e) {

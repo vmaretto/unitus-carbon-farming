@@ -6240,6 +6240,8 @@ Buono studio!</textarea>
                                         </div>
                                         <span class="status-pill" data-status="${item.isPublished ? 'published' : 'draft'}">${status}</span>
                                         <div class="admin-resource-actions">
+                                            <button data-preview class="icon-btn" title="Anteprima">👁️</button>
+                                            ${item.resourceType === 'quiz' ? '<button data-quiz-edit class="icon-btn" title="Modifica domande">📝</button>' : ''}
                                             <button data-edit class="icon-btn" title="Modifica">✏️</button>
                                             <button data-request-review class="icon-btn" title="Invia revisione docente">🧑‍🏫</button>
                                             <button data-delete class="icon-btn danger" title="Elimina">🗑️</button>

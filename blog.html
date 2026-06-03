@@ -926,7 +926,9 @@
 
             const renderSourcesBlock = (post) => {
                 const sources = Array.isArray(post.sources) ? post.sources : [];
-                if (!post.sourceModule && sources.length === 0) {
+                // sourceModule is internal (didactic metadata); the public Fonti block
+                // only renders if there is at least one external source URL.
+                if (sources.length === 0) {
                     return null;
                 }
 
@@ -937,7 +939,11 @@
                 title.textContent = 'Fonti';
                 block.appendChild(title);
 
-                if (post.sourceModule) {
+                // Internal master module reference: visible only to authenticated learners.
+                // Public visitors should not see "Modulo collegato: M2..." (it's internal didactic metadata).
+                // TODO: when /learn auth is wired into blog.html, replace `false` with the auth check.
+                const showInternalMeta = false;
+                if (showInternalMeta && post.sourceModule) {
                     const moduleLine = document.createElement('p');
                     const strong = document.createElement('strong');
                     strong.textContent = 'Modulo collegato:';

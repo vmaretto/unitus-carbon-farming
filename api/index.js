@@ -6211,7 +6211,7 @@ app.get('/share/blog/:slug', async (req, res) => {
               <div>
                 <div class="eyebrow">Master in Carbon Farming</div>
                 <h1>${escapeHtml(title)}</h1>
-                <div class="meta">${escapeHtml(post.sourceModule || 'Articolo del blog')} · ${escapeHtml(post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('it-IT', { year: 'numeric', month: 'long', day: 'numeric' }) : '')}</div>
+                <div class="meta">Articolo del blog · ${escapeHtml(post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('it-IT', { year: 'numeric', month: 'long', day: 'numeric' }) : '')}</div>
               </div>
               <p class="excerpt">${escapeHtml(excerpt)}</p>
               <div class="actions">

@@ -3447,6 +3447,9 @@ Buono studio!</textarea>
                     <label>Posti disponibili (vuoto = illimitati)
                         <input type="number" id="event-capacity" min="1" placeholder="Es. 30">
                     </label>
+                    <label>Scadenza iscrizioni (vuoto = nessuna)
+                        <input type="datetime-local" id="event-registration-deadline">
+                    </label>
                     <label>Collega a lezione in calendario (opzionale)
                         <select id="event-lesson"><option value="">— Nessuna —</option></select>
                     </label>
@@ -5607,6 +5610,7 @@ Buono studio!</textarea>
                             <div style="flex:1; min-width:240px;">
                                 <strong style="font-size:1.05rem;">${escapeHtml(ev.title)}</strong> ${statusPill}
                                 <div style="color:var(--gray-500); font-size:0.88rem; margin-top:4px;">📅 ${escapeHtml(formatAdminEventDate(ev.startsAt))}${ev.location ? ' • 📍 ' + escapeHtml(ev.location) : ''}</div>
+                                ${ev.registrationDeadline ? `<div style="color:var(--gray-500); font-size:0.84rem; margin-top:2px;">⏳ Iscrizioni entro: ${escapeHtml(formatAdminEventDate(ev.registrationDeadline))}</div>` : ''}
                                 ${ev.description ? `<div style="color:var(--gray-600); font-size:0.88rem; margin-top:6px;">${escapeHtml(ev.description)}</div>` : ''}
                                 <div style="margin-top:8px; font-weight:600; color:var(--green-700);">👥 ${seats} iscritti</div>
                             </div>
@@ -5641,6 +5645,7 @@ Buono studio!</textarea>
             document.getElementById('event-starts-at').value = '';
             document.getElementById('event-location').value = '';
             document.getElementById('event-capacity').value = '';
+            document.getElementById('event-registration-deadline').value = '';
             document.getElementById('event-description').value = '';
             document.getElementById('event-lesson').value = '';
             document.getElementById('event-registration-open').checked = true;
@@ -5660,7 +5665,8 @@ Buono studio!</textarea>
                 startsAt: startsLocal ? new Date(startsLocal).toISOString() : null,
                 capacity: capacityVal ? Number(capacityVal) : null,
                 registrationOpen: document.getElementById('event-registration-open').checked,
-                calendarLessonId: document.getElementById('event-lesson').value || null
+                calendarLessonId: document.getElementById('event-lesson').value || null,
+                registrationDeadline: (() => { const v = document.getElementById('event-registration-deadline').value; return v ? new Date(v).toISOString() : null; })()
             };
             if (!payload.title) return showToast('Inserisci il titolo', 'error');
             try {
@@ -5693,6 +5699,7 @@ Buono studio!</textarea>
                 document.getElementById('event-starts-at').value = toDatetimeLocalValue(ev.startsAt);
                 document.getElementById('event-location').value = ev.location || '';
                 document.getElementById('event-capacity').value = ev.capacity || '';
+                document.getElementById('event-registration-deadline').value = toDatetimeLocalValue(ev.registrationDeadline);
                 document.getElementById('event-description').value = ev.description || '';
                 document.getElementById('event-lesson').value = ev.calendarLessonId || '';
                 document.getElementById('event-registration-open').checked = ev.registrationOpen !== false;

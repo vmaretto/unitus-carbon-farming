@@ -492,15 +492,19 @@
                 section.style.display = 'block';
                 const cards = events.map(ev => {
                     const dateStr = formatEventDate(ev.startsAt);
+                    const deadlineStr = formatEventDate(ev.registrationDeadline);
+                    const deadlinePassed = ev.registrationDeadline && new Date(ev.registrationDeadline).getTime() < Date.now();
                     const full = ev.capacity && ev.registeredCount >= ev.capacity && !ev.isRegistered;
                     const seats = ev.capacity
                         ? `${ev.registeredCount}/${ev.capacity} iscritti`
                         : `${ev.registeredCount} iscritti`;
                     let actionBtn;
                     if (ev.isRegistered) {
-                        actionBtn = `<button class="event-btn" data-event-cancel="${ev.id}" style="background:#fff;color:#166534;border:1px solid #6ee7b7;">✓ Iscritto — Annulla</button>`;
+                        actionBtn = `<button class="event-btn" disabled style="background:#dcfce7;color:#166534;border:1px solid #6ee7b7;cursor:default;">✓ Iscritto</button>`;
                     } else if (!ev.registrationOpen) {
                         actionBtn = `<button class="event-btn" disabled style="background:#e5e7eb;color:#6b7280;cursor:not-allowed;">Iscrizioni chiuse</button>`;
+                    } else if (deadlinePassed) {
+                        actionBtn = `<button class="event-btn" disabled style="background:#e5e7eb;color:#6b7280;cursor:not-allowed;">Termine scaduto</button>`;
                     } else if (full) {
                         actionBtn = `<button class="event-btn" disabled style="background:#e5e7eb;color:#6b7280;cursor:not-allowed;">Posti esauriti</button>`;
                     } else {
@@ -515,6 +519,7 @@
                                     ${ev.location ? `<div style="color:#6b7280; font-size:0.9rem;">📍 ${ev.location}</div>` : ''}
                                     ${ev.description ? `<div style="margin-top:8px; color:#374151; font-size:0.92rem;">${ev.description}</div>` : ''}
                                     <div style="margin-top:8px; color:#6b7280; font-size:0.82rem;">${seats}</div>
+                                    ${deadlineStr && !ev.isRegistered ? `<div style="margin-top:4px; color:${deadlinePassed ? '#b91c1c' : '#b45309'}; font-size:0.82rem;">⏳ Iscrizioni entro il ${deadlineStr}</div>` : ''}
                                 </div>
                                 <div style="flex-shrink:0;">${actionBtn}</div>
                             </div>
@@ -535,31 +540,23 @@
 
         document.getElementById('events-section').addEventListener('click', async (e) => {
             const regBtn = e.target.closest('[data-event-register]');
-            const cancelBtn = e.target.closest('[data-event-cancel]');
-            if (regBtn) {
-                regBtn.disabled = true;
-                try {
-                    const res = await fetch(`/api/lms/events/${regBtn.dataset.eventRegister}/register`, {
-                        method: 'POST', headers: { 'Authorization': 'Bearer ' + token }
-                    });
-                    if (!res.ok) {
-                        const data = await res.json().catch(() => ({}));
-                        alert(data.error || 'Iscrizione non riuscita');
-                        regBtn.disabled = false;
-                        return;
-                    }
-                    await loadEvents();
-                } catch (err) { alert('Iscrizione non riuscita'); regBtn.disabled = false; }
-            } else if (cancelBtn) {
-                if (!confirm('Vuoi annullare la tua iscrizione a questo evento?')) return;
-                cancelBtn.disabled = true;
-                try {
-                    await fetch(`/api/lms/events/${cancelBtn.dataset.eventCancel}/register`, {
-                        method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token }
-                    });
-                    await loadEvents();
-                } catch (err) { alert('Operazione non riuscita'); cancelBtn.disabled = false; }
-            }
+            if (!regBtn) return;
+            // Conferma obbligatoria: l'iscrizione è definitiva e non annullabile.
+            if (!confirm('Confermi l\'iscrizione a questo evento?\n\n⚠️ L\'iscrizione è DEFINITIVA e non potrà essere annullata dalla tua area. Riceverai una email di conferma.')) return;
+            regBtn.disabled = true;
+            try {
+                const res = await fetch(`/api/lms/events/${regBtn.dataset.eventRegister}/register`, {
+                    method: 'POST', headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    alert(data.error || 'Iscrizione non riuscita');
+                    regBtn.disabled = false;
+                    return;
+                }
+                alert('Iscrizione confermata! Ti abbiamo inviato una email di conferma.');
+                await loadEvents();
+            } catch (err) { alert('Iscrizione non riuscita'); regBtn.disabled = false; }
         });
 
         refreshCurrentUser().then(loadDashboard).then(loadPendingSurveys).then(loadEvents);

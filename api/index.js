@@ -284,6 +284,53 @@ function stripHtml(value) {
     .trim();
 }
 
+// Formatta una data evento in italiano (es. "venerdì 17 luglio 2026 alle 08:00")
+function formatEventDateIt(value) {
+  if (!value) return '';
+  try {
+    return new Date(value).toLocaleString('it-IT', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'
+    });
+  } catch (e) {
+    return '';
+  }
+}
+
+// HTML dell'email di conferma iscrizione a un evento
+function buildEventRegistrationEmail({ student, event }) {
+  const name = escapeHtml(student.firstName || 'Studente');
+  const dateStr = formatEventDateIt(event.startsAt);
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="background: linear-gradient(135deg, #166534 0%, #22c55e 100%); padding: 20px; border-radius: 12px 12px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 1.5rem;">🌱 Master Carbon Farming</h1>
+        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 14px;">Università della Tuscia</p>
+      </div>
+      <div style="background: #f9fafb; padding: 24px; border-radius: 0 0 12px 12px;">
+        <h2 style="color: #166534; margin: 0 0 16px;">Iscrizione confermata ✅</h2>
+        <p style="margin: 16px 0; line-height: 1.6;">
+          Ciao <strong>${name}</strong>,<br><br>
+          la tua iscrizione al seguente evento è stata registrata con successo:
+        </p>
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin: 16px 0;">
+          <div style="font-size: 1.05rem; font-weight: 700; color: #14532d;">${escapeHtml(event.title)}</div>
+          ${dateStr ? `<div style="color:#374151; margin-top:8px;">📅 ${escapeHtml(dateStr)}</div>` : ''}
+          ${event.location ? `<div style="color:#374151; margin-top:4px;">📍 ${escapeHtml(event.location)}</div>` : ''}
+        </div>
+        <p style="margin: 16px 0; line-height: 1.6; color: #b45309; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:12px;">
+          ⚠️ <strong>L'iscrizione è definitiva</strong> e non può essere annullata dall'area studente.
+          Per eventuali necessità contatta la segreteria del Master.
+        </p>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+        <p style="font-size: 13px; color: #6b7280; margin: 0;">
+          Questa è una conferma automatica. A presto!<br>Master in Carbon Farming — UNITUS Academy
+        </p>
+      </div>
+    </div>
+  `;
+}
+
 function resolveAbsoluteUrl(value, baseUrl) {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -1226,6 +1273,7 @@ app.get('/api/lms/events', requireStudent, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT e.id, e.title, e.description, e.location, e.starts_at AS "startsAt",
              e.capacity, e.registration_open AS "registrationOpen",
+             e.registration_deadline AS "registrationDeadline",
              COUNT(r.id)::int AS "registeredCount",
              BOOL_OR(r.user_id = $1) AS "isRegistered"
       FROM events e
@@ -1248,7 +1296,10 @@ app.post('/api/lms/events/:id/register', requireStudent, requireNonGuest, async 
   if (!userId) return res.status(400).json({ error: 'Utente non valido' });
   try {
     const { rows: eventRows } = await pool.query(
-      'SELECT id, capacity, registration_open AS "registrationOpen" FROM events WHERE id = $1',
+      `SELECT id, title, location, starts_at AS "startsAt", capacity,
+              registration_open AS "registrationOpen",
+              registration_deadline AS "registrationDeadline"
+       FROM events WHERE id = $1`,
       [req.params.id]
     );
     const event = eventRows[0];
@@ -1263,6 +1314,9 @@ app.post('/api/lms/events/:id/register', requireStudent, requireNonGuest, async 
     if (!event.registrationOpen) {
       return res.status(409).json({ error: 'Le iscrizioni per questo evento sono chiuse' });
     }
+    if (event.registrationDeadline && new Date(event.registrationDeadline).getTime() < Date.now()) {
+      return res.status(409).json({ error: 'Il termine per iscriversi a questo evento è scaduto' });
+    }
     if (event.capacity) {
       const { rows: countRows } = await pool.query(
         'SELECT COUNT(*)::int AS n FROM event_registrations WHERE event_id = $1',
@@ -1273,10 +1327,32 @@ app.post('/api/lms/events/:id/register', requireStudent, requireNonGuest, async 
       }
     }
 
-    await pool.query(
-      'INSERT INTO event_registrations (event_id, user_id) VALUES ($1, $2) ON CONFLICT (event_id, user_id) DO NOTHING',
+    const { rows: inserted } = await pool.query(
+      'INSERT INTO event_registrations (event_id, user_id) VALUES ($1, $2) ON CONFLICT (event_id, user_id) DO NOTHING RETURNING id',
       [event.id, userId]
     );
+
+    // Email di conferma (best-effort: non blocca l'iscrizione se l'invio fallisce).
+    // Inviata solo per una nuova iscrizione effettiva (inserted.length > 0).
+    if (inserted.length) {
+      try {
+        const { rows: userRows } = await pool.query(
+          'SELECT email, first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1',
+          [userId]
+        );
+        const student = userRows[0];
+        if (student && student.email) {
+          await sendEmail({
+            to: student.email,
+            subject: `Conferma iscrizione: ${event.title}`,
+            html: buildEventRegistrationEmail({ student, event })
+          });
+        }
+      } catch (mailErr) {
+        console.error('Event confirmation email failed', mailErr.message);
+      }
+    }
+
     res.json({ ok: true });
   } catch (error) {
     console.error('Error registering to event', error);
@@ -1284,21 +1360,12 @@ app.post('/api/lms/events/:id/register', requireStudent, requireNonGuest, async 
   }
 });
 
-// Studente: annulla iscrizione
+// Studente: l'iscrizione a un evento è definitiva e NON può essere annullata
+// dallo studente. Solo l'admin può rimuovere un iscritto (route admin sotto).
 app.delete('/api/lms/events/:id/register', requireStudent, requireNonGuest, async (req, res) => {
-  if (!ensurePool(res)) return;
-  const userId = req.user.userId;
-  if (!userId) return res.status(400).json({ error: 'Utente non valido' });
-  try {
-    await pool.query(
-      'DELETE FROM event_registrations WHERE event_id = $1 AND user_id = $2',
-      [req.params.id, userId]
-    );
-    res.json({ ok: true });
-  } catch (error) {
-    console.error('Error cancelling event registration', error);
-    res.status(500).json({ error: 'Annullamento non riuscito' });
-  }
+  return res.status(403).json({
+    error: 'L\'iscrizione è definitiva e non può essere annullata. Per necessità contatta la segreteria.'
+  });
 });
 
 // Admin: elenco eventi con conteggio iscritti
@@ -1308,6 +1375,7 @@ app.get('/api/admin/events', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT e.id, e.title, e.description, e.location, e.starts_at AS "startsAt",
              e.capacity, e.registration_open AS "registrationOpen",
+             e.registration_deadline AS "registrationDeadline",
              e.calendar_lesson_id AS "calendarLessonId",
              COUNT(r.id)::int AS "registeredCount",
              e.created_at AS "createdAt"
@@ -1326,14 +1394,14 @@ app.get('/api/admin/events', requireAdmin, async (req, res) => {
 // Admin: crea evento
 app.post('/api/admin/events', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
-  const { title, description, location, startsAt, capacity, registrationOpen, calendarLessonId } = req.body || {};
+  const { title, description, location, startsAt, capacity, registrationOpen, calendarLessonId, registrationDeadline } = req.body || {};
   if (!title || !String(title).trim()) {
     return res.status(400).json({ error: 'Il titolo è obbligatorio' });
   }
   try {
     const { rows } = await pool.query(`
-      INSERT INTO events (title, description, location, starts_at, capacity, registration_open, calendar_lesson_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO events (title, description, location, starts_at, capacity, registration_open, calendar_lesson_id, registration_deadline)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id
     `, [
       String(title).trim(),
@@ -1342,7 +1410,8 @@ app.post('/api/admin/events', requireAdmin, async (req, res) => {
       startsAt || null,
       Number.isFinite(Number(capacity)) && Number(capacity) > 0 ? Number(capacity) : null,
       registrationOpen === false ? false : true,
-      calendarLessonId || null
+      calendarLessonId || null,
+      registrationDeadline || null
     ]);
     res.status(201).json({ id: rows[0].id });
   } catch (error) {
@@ -1354,7 +1423,7 @@ app.post('/api/admin/events', requireAdmin, async (req, res) => {
 // Admin: aggiorna evento
 app.put('/api/admin/events/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) return;
-  const { title, description, location, startsAt, capacity, registrationOpen, calendarLessonId } = req.body || {};
+  const { title, description, location, startsAt, capacity, registrationOpen, calendarLessonId, registrationDeadline } = req.body || {};
   try {
     const { rows } = await pool.query(`
       UPDATE events SET
@@ -1365,6 +1434,7 @@ app.put('/api/admin/events/:id', requireAdmin, async (req, res) => {
         capacity = $6,
         registration_open = COALESCE($7, registration_open),
         calendar_lesson_id = $8,
+        registration_deadline = $9,
         updated_at = NOW()
       WHERE id = $1
       RETURNING id
@@ -1376,7 +1446,8 @@ app.put('/api/admin/events/:id', requireAdmin, async (req, res) => {
       startsAt || null,
       Number.isFinite(Number(capacity)) && Number(capacity) > 0 ? Number(capacity) : null,
       typeof registrationOpen === 'boolean' ? registrationOpen : null,
-      calendarLessonId || null
+      calendarLessonId || null,
+      registrationDeadline || null
     ]);
     if (!rows.length) return res.status(404).json({ error: 'Evento non trovato' });
     res.json({ id: rows[0].id });

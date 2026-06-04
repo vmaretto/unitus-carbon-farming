@@ -704,8 +704,8 @@
             container.innerHTML = assets.map(a => {
                 // Check if it's a PDF - open in protected viewer
                 const isPdf = a.assetType === 'pdf' || (a.url && a.url.toLowerCase().endsWith('.pdf'));
-                const href = isPdf 
-                    ? `/learn/viewer.html?url=${encodeURIComponent(a.url)}&title=${encodeURIComponent(a.title)}&return=${encodeURIComponent(window.location.href)}`
+                const href = isPdf
+                    ? `/learn/viewer.html?url=${encodeURIComponent(a.url)}&title=${encodeURIComponent(a.title)}&return=${encodeURIComponent(window.location.href)}${a.resourceId ? '&id=' + encodeURIComponent(a.resourceId) : ''}`
                     : escapeHtml(a.url);
                 const target = isPdf ? '' : 'target="_blank" rel="noopener"';
                 

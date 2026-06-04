@@ -12,7 +12,7 @@ const { put, del } = require('@vercel/blob');
 const { generateClientTokenFromReadWriteToken } = require('@vercel/blob/client');
 const JSZip = require('jszip');
 const { OpenAI } = require('openai');
-const { PDFDocument } = require('pdf-lib');
+const { PDFDocument, rgb, degrees, StandardFonts } = require('pdf-lib');
 const { v2: cloudinary } = require('cloudinary');
 const { parseBlogPostsFromDocxBuffer, slugify } = require('./blog-import');
 const { buildCalendarFeed } = require('./calendar-ics');
@@ -53,6 +53,51 @@ async function compressPdfWithPdfLib(buffer) {
     compressed: outputBuffer.length < buffer.length,
     preset: 'pdf-lib'
   };
+}
+
+// Clausola legale stampata su ogni download (anche dentro il PDF).
+const DOWNLOAD_LICENSE_CLAUSE =
+  'Documento riservato del Master in Carbon Farming (UNITUS). Ogni riproduzione, ' +
+  'diffusione o condivisione, totale o parziale, è vietata.';
+
+// Stampa una filigrana diagonale ripetuta (identità utente) su ogni pagina del PDF
+// + una riga di clausola legale a piè pagina. Restituisce un Buffer del nuovo PDF.
+async function stampPdfWatermark(inputBuffer, { name, email, dateStr }) {
+  const pdfDoc = await PDFDocument.load(inputBuffer, { ignoreEncryption: true });
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const tag = [name, email, dateStr].filter(Boolean).join('  ·  ');
+  const footer = `${DOWNLOAD_LICENSE_CLAUSE}  —  Scaricato da ${tag}`;
+
+  for (const page of pdfDoc.getPages()) {
+    const { width, height } = page.getSize();
+
+    // Filigrana diagonale ripetuta, molto tenue
+    const wmSize = Math.max(12, Math.min(20, Math.round(width / 38)));
+    const step = 230;
+    for (let y = 40; y < height + step; y += step) {
+      for (let x = -40; x < width + step; x += step * 1.3) {
+        page.drawText(tag || 'Master Carbon Farming', {
+          x, y, size: wmSize, font,
+          color: rgb(0.6, 0.6, 0.6), opacity: 0.12,
+          rotate: degrees(35)
+        });
+      }
+    }
+
+    // Banda chiara + clausola a piè pagina
+    page.drawRectangle({ x: 0, y: 0, width, height: 24, color: rgb(0.96, 0.97, 0.96), opacity: 0.9 });
+    let line = footer;
+    const fSize = 7;
+    const maxW = width - 24;
+    while (font.widthOfTextAtSize(line, fSize) > maxW && line.length > 4) {
+      line = line.slice(0, -2);
+    }
+    if (line !== footer) line = line.replace(/\s+\S*$/, '') + '…';
+    page.drawText(line, { x: 12, y: 9, size: fSize, font, color: rgb(0.2, 0.3, 0.2), opacity: 0.95 });
+  }
+
+  const out = await pdfDoc.save({ useObjectStreams: true });
+  return Buffer.from(out);
 }
 
 async function prepareCompressibleMaterialUpload(file, finalLimitBytes, uploadLabel) {
@@ -7763,6 +7808,88 @@ app.get('/api/resources/:id', async (req, res) => {
   } catch (error) {
     console.error('Error fetching resource', error);
     res.status(500).json({ error: 'Unable to retrieve resource' });
+  }
+});
+
+// Download di un documento della lezione con filigrana personalizzata + clausola.
+// Solo studenti autenticati (no guest). Il PDF viene marchiato al volo con i dati
+// dello studente; chiamare questo endpoint implica l'accettazione della clausola
+// (mostrata e confermata nel frontend prima del download).
+app.get('/api/resources/:id/download', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const isAdmin = Boolean(getOptionalAdmin(req));
+    const where = isAdmin ? 'id = $1' : 'id = $1 AND is_published = true';
+    const { rows } = await pool.query(
+      `SELECT id, title, resource_type AS "resourceType", url FROM resources WHERE ${where}`,
+      [req.params.id]
+    );
+    const resource = rows[0];
+    if (!resource || !resource.url) return res.status(404).json({ error: 'Documento non trovato' });
+
+    // Identità studente per la filigrana
+    let name = '';
+    let email = '';
+    if (req.user && req.user.userId) {
+      const { rows: u } = await pool.query(
+        'SELECT email, first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1',
+        [req.user.userId]
+      );
+      if (u[0]) {
+        name = [u[0].firstName, u[0].lastName].filter(Boolean).join(' ').trim();
+        email = u[0].email || '';
+      }
+    }
+
+    // Scarica i byte del file dal blob (domini consentiti) o da /upload locale
+    let fileBuffer;
+    if (resource.url.startsWith('/upload/')) {
+      const fs = require('fs');
+      const fp = path.join(__dirname, '..', resource.url);
+      if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File non trovato' });
+      fileBuffer = fs.readFileSync(fp);
+    } else {
+      let parsed;
+      try { parsed = new URL(resource.url); } catch (e) { return res.status(400).json({ error: 'URL non valido' }); }
+      if (!parsed.hostname.endsWith('.public.blob.vercel-storage.com') && parsed.hostname !== 'public.blob.vercel-storage.com') {
+        return res.status(403).json({ error: 'Dominio non consentito' });
+      }
+      const resp = await fetch(resource.url);
+      if (!resp.ok) return res.status(502).json({ error: 'Impossibile recuperare il documento' });
+      fileBuffer = Buffer.from(await resp.arrayBuffer());
+    }
+
+    const isPdf = resource.resourceType === 'pdf' || /\.pdf($|\?)/i.test(resource.url);
+    const safeTitle = String(resource.title || 'documento').replace(/[^\p{L}\p{N} ._-]/gu, '').trim() || 'documento';
+    const dateStr = new Date().toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+
+    if (isPdf) {
+      let stamped;
+      try {
+        stamped = await stampPdfWatermark(fileBuffer, { name, email, dateStr });
+      } catch (wmErr) {
+        console.error('Watermark stamping failed, serving original PDF', wmErr.message);
+        stamped = fileBuffer;
+      }
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${safeTitle}.pdf"`,
+        'Content-Length': stamped.length
+      });
+      return res.send(stamped);
+    }
+
+    // Non-PDF: non è possibile imprimere la filigrana; serviamo l'originale come allegato.
+    const ext = (resource.url.split('?')[0].match(/\.[a-z0-9]+$/i) || [''])[0];
+    res.set({
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${safeTitle}${ext}"`,
+      'Content-Length': fileBuffer.length
+    });
+    return res.send(fileBuffer);
+  } catch (error) {
+    console.error('Resource download error', error);
+    res.status(500).json({ error: 'Download non riuscito' });
   }
 });
 

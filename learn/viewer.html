@@ -500,6 +500,10 @@
                 <span>Indietro</span>
             </a>
             <div class="doc-title" id="doc-title">Caricamento...</div>
+            <button class="back-btn" id="download-btn" style="display:none; cursor:pointer; border:none;" title="Scarica documento con filigrana">
+                <span>📥</span>
+                <span>Scarica</span>
+            </button>
         </div>
         <div class="header-right">
             <div class="nav-links">
@@ -514,7 +518,30 @@
             <span id="user-info"></span>
         </div>
     </div>
-    
+
+    <!-- Modal consenso download -->
+    <div id="dl-consent-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:1000; align-items:center; justify-content:center; padding:16px;">
+        <div style="background:#fff; max-width:520px; width:100%; border-radius:16px; padding:24px; box-shadow:0 20px 50px rgba(0,0,0,0.3);">
+            <h2 style="margin:0 0 12px; color:#14532d; font-size:1.2rem;">📥 Scarica documento</h2>
+            <p style="margin:0 0 12px; color:#374151; line-height:1.6; font-size:0.95rem;">
+                Il documento verrà scaricato con una <strong>filigrana personalizzata</strong> con il tuo nome,
+                la tua email e la data: è quindi riconducibile a te.
+            </p>
+            <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:12px; color:#92400e; font-size:0.9rem; line-height:1.55; margin-bottom:16px;">
+                ⚠️ Documento riservato del Master in Carbon Farming (UNITUS). Scaricandolo dichiari di accettare che
+                <strong>ogni riproduzione, diffusione o condivisione, totale o parziale, è vietata</strong>.
+            </div>
+            <label style="display:flex; gap:10px; align-items:flex-start; font-size:0.92rem; color:#374151; cursor:pointer; margin-bottom:18px;">
+                <input type="checkbox" id="dl-consent-check" style="margin-top:3px; width:18px; height:18px;">
+                <span>Ho letto e accetto la clausola: ogni riproduzione o condivisione del documento è vietata.</span>
+            </label>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button id="dl-consent-cancel" class="back-btn" style="cursor:pointer; border:none;">Annulla</button>
+                <button id="dl-consent-accept" disabled style="background:#16a34a; color:#fff; border:none; padding:10px 18px; border-radius:8px; font-weight:600; cursor:pointer; opacity:0.5;">Accetto e scarico</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toolbar (Moodle-style) -->
     <div class="toolbar">
         <div class="toolbar-group">
@@ -645,6 +672,7 @@
         const fileUrl = params.get('url');
         const fileTitle = params.get('title') || 'Documento';
         const returnUrl = params.get('return') || '/learn/';
+        const resourceId = params.get('id') || '';
         
         // Validate URL
         if (!fileUrl) {
@@ -726,11 +754,72 @@
             
             // Load PDF
             loadPdf();
-            
+
             // Setup event listeners
             setupEventListeners();
+
+            // Setup download (con filigrana + consenso) se abbiamo l'id risorsa
+            setupDownload();
         }
-        
+
+        // === DOWNLOAD CON FILIGRANA + CONSENSO ===
+        function setupDownload() {
+            const btn = document.getElementById('download-btn');
+            if (!btn || !resourceId) return; // download disponibile solo se la risorsa ha un id
+            btn.style.display = '';
+
+            const overlay = document.getElementById('dl-consent-overlay');
+            const check = document.getElementById('dl-consent-check');
+            const accept = document.getElementById('dl-consent-accept');
+            const cancel = document.getElementById('dl-consent-cancel');
+
+            const closeModal = () => {
+                overlay.style.display = 'none';
+                check.checked = false;
+                accept.disabled = true;
+                accept.style.opacity = '0.5';
+            };
+            const openModal = () => { overlay.style.display = 'flex'; };
+
+            btn.addEventListener('click', openModal);
+            cancel.addEventListener('click', closeModal);
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+            check.addEventListener('change', () => {
+                accept.disabled = !check.checked;
+                accept.style.opacity = check.checked ? '1' : '0.5';
+            });
+
+            accept.addEventListener('click', async () => {
+                accept.disabled = true;
+                accept.textContent = 'Preparazione...';
+                try {
+                    const res = await fetch(`/api/resources/${resourceId}/download`, {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (!res.ok) {
+                        const data = await res.json().catch(() => ({}));
+                        throw new Error(data.error || 'Download non riuscito');
+                    }
+                    const blob = await res.blob();
+                    const dispo = res.headers.get('Content-Disposition') || '';
+                    const m = dispo.match(/filename="([^"]+)"/);
+                    const filename = m ? m[1] : (fileTitle + '.pdf');
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+                    closeModal();
+                } catch (err) {
+                    alert(err.message || 'Download non riuscito');
+                } finally {
+                    accept.textContent = 'Accetto e scarico';
+                    accept.disabled = !check.checked;
+                }
+            });
+        }
+
         // === LOAD PDF ===
         async function loadPdf() {
             console.log('🐛 Loading PDF:', fileUrl);

@@ -4253,6 +4253,11 @@ async function initDatabase() {
       await pool.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
       console.log(`Migration completed: ${file}`);
     }
+  } else {
+    // Se questo log appare in produzione, le migrazioni SQL non sono state incluse
+    // nel bundle serverless: controlla "includeFiles" in vercel.json (deve essere
+    // "db/migrations/**", relativo alla root del progetto, NON "../db/migrations/**").
+    console.warn(`Migrations directory not found at ${migrationsDir} — SQL migrations were skipped. Check vercel.json "includeFiles".`);
   }
 
   // ============================================

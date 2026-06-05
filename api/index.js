@@ -2720,7 +2720,7 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
     
   } catch (error) {
     console.error('Teacher upload error:', error);
-    res.status(500).json({ error: 'Errore durante il caricamento' });
+    res.status(500).json({ error: 'Errore durante il caricamento', detail: error && (error.message || String(error)), code: error && error.name });
   }
 });
 

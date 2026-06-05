@@ -62,11 +62,21 @@ const DOWNLOAD_LICENSE_CLAUSE =
 
 // Stampa una filigrana diagonale ripetuta (identità utente) su ogni pagina del PDF
 // + una riga di clausola legale a piè pagina. Restituisce un Buffer del nuovo PDF.
+function toWinAnsi(value) {
+  return String(value || '')
+    .replace(/[‐-―]/g, '-')   // trattini tipografici
+    .replace(/[‘’‚‛]/g, "'")
+    .replace(/[“”„‟]/g, '"')
+    .replace(/…/g, '...')           // ellissi
+    .replace(/ /g, ' ')             // no-break space
+    .replace(/[^\x00-\xFF]/g, '?');      // qualsiasi residuo fuori Latin-1 (WinAnsi)
+}
+
 async function stampPdfWatermark(inputBuffer, { name, email, dateStr }) {
   const pdfDoc = await PDFDocument.load(inputBuffer, { ignoreEncryption: true });
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const tag = [name, email, dateStr].filter(Boolean).join('  ·  ');
-  const footer = `${DOWNLOAD_LICENSE_CLAUSE}  —  Scaricato da ${tag}`;
+  const tag = toWinAnsi([name, email, dateStr].filter(Boolean).join('  -  '));
+  const footer = toWinAnsi(`${DOWNLOAD_LICENSE_CLAUSE}  -  Scaricato da ${tag}`);
 
   for (const page of pdfDoc.getPages()) {
     const { width, height } = page.getSize();
@@ -92,7 +102,7 @@ async function stampPdfWatermark(inputBuffer, { name, email, dateStr }) {
     while (font.widthOfTextAtSize(line, fSize) > maxW && line.length > 4) {
       line = line.slice(0, -2);
     }
-    if (line !== footer) line = line.replace(/\s+\S*$/, '') + '…';
+    if (line !== footer) line = line.replace(/\s+\S*$/, '') + '...';
     page.drawText(line, { x: 12, y: 9, size: fSize, font, color: rgb(0.2, 0.3, 0.2), opacity: 0.95 });
   }
 
@@ -2682,12 +2692,29 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
       return res.status(413).json({ error: materialUpload.error });
     }
     
-    // Upload to Vercel Blob
-    const { url, pathname } = await put(file.originalname, materialUpload.buffer, {
-      access: 'public',
-      token: process.env.BLOB_READ_WRITE_TOKEN
-    });
-    
+    // Upload to Vercel Blob — con retry: il put fallisce a volte in modo
+    // transitorio su cold start / rete, ed era la causa di 500 intermittenti.
+    let url, pathname;
+    {
+      let lastErr;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          ({ url, pathname } = await put(file.originalname, materialUpload.buffer, {
+            access: 'public',
+            addRandomSuffix: true,
+            token: process.env.BLOB_READ_WRITE_TOKEN
+          }));
+          lastErr = null;
+          break;
+        } catch (putErr) {
+          lastErr = putErr;
+          console.warn(`Blob put attempt ${attempt}/3 failed:`, putErr && putErr.message);
+          await new Promise(r => setTimeout(r, 400 * attempt));
+        }
+      }
+      if (lastErr) throw lastErr;
+    }
+
     // Save to materials_pending
     let materials;
     if (schema.hasTitle && schema.hasDescription) {
@@ -2720,7 +2747,7 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
     
   } catch (error) {
     console.error('Teacher upload error:', error);
-    res.status(500).json({ error: 'Errore durante il caricamento', detail: error && (error.message || String(error)), code: error && error.name });
+    res.status(500).json({ error: 'Errore durante il caricamento' });
   }
 });
 

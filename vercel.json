@@ -2,7 +2,7 @@
   "version": 2,
   "framework": "express",
   "functions": {
-    "api/index.js": {
+    "server.js": {
       "maxDuration": 300,
       "memory": 1024,
       "includeFiles": "db/migrations/**"

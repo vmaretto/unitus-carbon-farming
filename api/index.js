@@ -9677,6 +9677,29 @@ function buildNetworkIntroRequest(row) {
   };
 }
 
+function buildNetworkPost(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    body: row.body,
+    linkUrl: row.linkUrl,
+    linkTitle: row.linkTitle,
+    tags: row.tags || [],
+    visibility: row.visibility,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    author: {
+      userId: row.authorUserId,
+      fullName: [row.authorFirstName, row.authorLastName].filter(Boolean).join(' ').trim(),
+      headline: row.authorHeadline,
+      organization: row.authorOrganization,
+      roleTitle: row.authorRoleTitle,
+      profilePhotoUrl: row.authorProfilePhotoUrl || row.authorAvatarUrl || null
+    },
+    canDelete: Boolean(row.canDelete)
+  };
+}
+
 app.get('/api/lms/network/profile', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
@@ -9942,6 +9965,101 @@ app.patch('/api/lms/network/intro-requests/:id', requireStudent, requireNonGuest
   } catch (error) {
     console.error('Update network intro request error:', error);
     res.status(500).json({ error: 'Errore nell aggiornamento richiesta network' });
+  }
+});
+
+app.get('/api/lms/network/posts', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT post.id, post.body, post.link_url AS "linkUrl",
+             post.link_title AS "linkTitle", post.tags, post.visibility,
+             post.created_at AS "createdAt", post.updated_at AS "updatedAt",
+             post.author_user_id AS "authorUserId",
+             u.first_name AS "authorFirstName", u.last_name AS "authorLastName",
+             u.avatar_url AS "authorAvatarUrl",
+             p.headline AS "authorHeadline",
+             p.organization AS "authorOrganization",
+             p.role_title AS "authorRoleTitle",
+             p.profile_photo_url AS "authorProfilePhotoUrl",
+             (post.author_user_id = $1) AS "canDelete"
+      FROM network_posts post
+      JOIN users u ON u.id = post.author_user_id
+      LEFT JOIN network_profiles p ON p.user_id = u.id
+      WHERE post.is_deleted = false
+        AND u.is_active = true
+      ORDER BY post.created_at DESC
+      LIMIT 100
+    `, [req.user.userId]);
+
+    res.json(rows.map(buildNetworkPost));
+  } catch (error) {
+    console.error('List network posts error:', error);
+    res.status(500).json({ error: 'Errore nel recupero post network' });
+  }
+});
+
+app.post('/api/lms/network/posts', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const body = normalizeNetworkText(req.body.body, 1600);
+    const linkUrl = normalizeNetworkUrl(req.body.linkUrl);
+    const linkTitle = normalizeNetworkText(req.body.linkTitle, 160);
+    const tags = normalizeNetworkList(req.body.tags).slice(0, 8);
+
+    if (!body || body.length < 3) {
+      return res.status(400).json({ error: 'Scrivi un contenuto per pubblicare il post' });
+    }
+
+    const { rows } = await pool.query(`
+      INSERT INTO network_posts (
+        author_user_id, body, link_url, link_title, tags, visibility, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5::text[], 'network', NOW(), NOW())
+      RETURNING id, body, link_url AS "linkUrl", link_title AS "linkTitle",
+                tags, visibility, created_at AS "createdAt", updated_at AS "updatedAt",
+                author_user_id AS "authorUserId", true AS "canDelete"
+    `, [req.user.userId, body, linkUrl, linkTitle, tags]);
+
+    const authorRes = await pool.query(`
+      SELECT u.first_name AS "authorFirstName", u.last_name AS "authorLastName",
+             u.avatar_url AS "authorAvatarUrl",
+             p.headline AS "authorHeadline",
+             p.organization AS "authorOrganization",
+             p.role_title AS "authorRoleTitle",
+             p.profile_photo_url AS "authorProfilePhotoUrl"
+      FROM users u
+      LEFT JOIN network_profiles p ON p.user_id = u.id
+      WHERE u.id = $1
+    `, [req.user.userId]);
+
+    res.status(201).json(buildNetworkPost({ ...rows[0], ...authorRes.rows[0] }));
+  } catch (error) {
+    console.error('Create network post error:', error);
+    res.status(500).json({ error: 'Errore nella pubblicazione del post' });
+  }
+});
+
+app.delete('/api/lms/network/posts/:id', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      UPDATE network_posts
+      SET is_deleted = true, updated_at = NOW()
+      WHERE id = $1
+        AND author_user_id = $2
+        AND is_deleted = false
+      RETURNING id
+    `, [req.params.id, req.user.userId]);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Post non trovato' });
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Delete network post error:', error);
+    res.status(500).json({ error: 'Errore nella cancellazione del post' });
   }
 });
 

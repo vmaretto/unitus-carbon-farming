@@ -268,3 +268,76 @@ test('POST /api/lms/network/intro-requests crea una richiesta verso profili disp
   assert.equal(res.body.status, 'pending');
   assert.equal(queries.length, 2);
 });
+
+test('POST /api/lms/network/posts pubblica un post nel feed riservato', async (t) => {
+  const queries = [];
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      queries.push({ statement, params });
+
+      if (statement.startsWith('INSERT INTO network_posts')) {
+        assert.equal(params[0], '11111111-1111-4111-8111-111111111111');
+        assert.equal(params[1], 'Cerco partner per un progetto pilota su MRV.');
+        assert.equal(params[2], 'https://example.com/project');
+        assert.equal(params[3], 'Scheda progetto');
+        assert.deepEqual(params[4], ['MRV', 'Suolo']);
+        return {
+          rows: [{
+            id: 'post-1',
+            body: params[1],
+            linkUrl: params[2],
+            linkTitle: params[3],
+            tags: params[4],
+            visibility: 'network',
+            createdAt: '2026-06-09T12:00:00.000Z',
+            updatedAt: '2026-06-09T12:00:00.000Z',
+            authorUserId: params[0],
+            canDelete: true
+          }]
+        };
+      }
+
+      if (statement.startsWith('SELECT u.first_name AS "authorFirstName"')) {
+        return {
+          rows: [{
+            authorFirstName: 'Ada',
+            authorLastName: 'Lovelace',
+            authorAvatarUrl: null,
+            authorHeadline: 'Carbon project developer',
+            authorOrganization: 'Unitus',
+            authorRoleTitle: 'Studentessa',
+            authorProfilePhotoUrl: 'https://example.com/ada.jpg'
+          }]
+        };
+      }
+
+      throw new Error(`query inattesa: ${statement}`);
+    }
+  });
+  t.after(() => apiModule.__setPool(null));
+
+  const layer = findRoute('/api/lms/network/posts', 'post');
+  assert.ok(layer, 'route POST /api/lms/network/posts non trovata');
+
+  const req = {
+    method: 'POST',
+    url: '/api/lms/network/posts',
+    headers: authHeaders(),
+    body: {
+      body: 'Cerco partner per un progetto pilota su MRV.',
+      linkUrl: 'https://example.com/project',
+      linkTitle: 'Scheda progetto',
+      tags: ['MRV', 'Suolo', 'mrv']
+    }
+  };
+  const res = createJsonRes();
+
+  await runRoute(layer, req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.body.body, 'Cerco partner per un progetto pilota su MRV.');
+  assert.equal(res.body.author.fullName, 'Ada Lovelace');
+  assert.equal(res.body.canDelete, true);
+  assert.equal(queries.length, 2);
+});

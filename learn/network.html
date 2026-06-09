@@ -76,11 +76,24 @@
         .request-list { display: grid; gap: 10px; }
         .request-item { border: 1px solid var(--gray-200); border-radius: 12px; padding: 12px; display: grid; gap: 6px; }
         .request-meta { color: var(--gray-500); font-size: 0.78rem; }
+        .post-composer { display: grid; gap: 12px; margin-bottom: 16px; }
+        .post-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .feed { display: grid; gap: 12px; }
+        .post-card { border: 1px solid var(--gray-200); border-radius: 14px; padding: 14px; display: grid; gap: 12px; background: white; }
+        .post-header { display: flex; gap: 10px; align-items: center; }
+        .post-author { min-width: 0; flex: 1; }
+        .post-author strong { display: block; color: var(--green-900); overflow-wrap: anywhere; }
+        .post-author span { display: block; color: var(--gray-500); font-size: 0.78rem; margin-top: 2px; }
+        .post-body { color: var(--gray-900); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .post-link { border: 1px solid var(--gray-200); border-radius: 12px; padding: 10px 12px; color: var(--green-700); text-decoration: none; font-weight: 700; overflow-wrap: anywhere; }
+        .post-actions { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .btn-link { border: 0; background: none; color: var(--red-700); cursor: pointer; font: inherit; font-size: 0.82rem; font-weight: 700; padding: 0; }
         .empty { color: var(--gray-500); text-align: center; padding: 34px 16px; border: 1px dashed var(--gray-200); border-radius: 14px; }
         .loading { color: var(--gray-500); padding: 20px 0; }
         @media (max-width: 960px) {
             .page-grid { grid-template-columns: 1fr; }
             .filters { grid-template-columns: 1fr; }
+            .post-options { grid-template-columns: 1fr; }
             .header-content { flex-direction: column; align-items: flex-start; }
             .nav-links { width: 100%; gap: 16px; flex-wrap: wrap; }
         }
@@ -204,6 +217,33 @@
                 </section>
 
                 <section class="card">
+                    <h2>Feed</h2>
+                    <form id="post-form" class="post-composer">
+                        <label>Condividi un aggiornamento
+                            <textarea id="post-body" maxlength="1600" placeholder="Condividi un progetto, una domanda, un'opportunità o una riflessione utile al network."></textarea>
+                        </label>
+                        <div class="post-options">
+                            <label>Link opzionale
+                                <input id="post-link-url" type="url" placeholder="https://...">
+                            </label>
+                            <label>Titolo link
+                                <input id="post-link-title" maxlength="160" placeholder="Titolo o descrizione breve">
+                            </label>
+                        </div>
+                        <label>Tag
+                            <input id="post-tags" placeholder="MRV, suolo, policy">
+                        </label>
+                        <div class="button-row">
+                            <button class="btn btn-primary" id="publish-post-btn" type="submit">Pubblica</button>
+                            <span class="hint">Visibile solo ai partecipanti autenticati del Master.</span>
+                        </div>
+                    </form>
+                    <div class="feed" id="network-feed">
+                        <div class="loading">Caricamento feed...</div>
+                    </div>
+                </section>
+
+                <section class="card">
                     <h2>Networking</h2>
                     <div class="request-list" id="intro-requests">
                         <div class="loading">Caricamento richieste...</div>
@@ -242,10 +282,12 @@
         const directoryEl = document.getElementById('directory');
         const previewEl = document.getElementById('profile-preview');
         const requestsEl = document.getElementById('intro-requests');
+        const feedEl = document.getElementById('network-feed');
         const statusEl = document.getElementById('profile-status');
         const saveBtn = document.getElementById('save-btn');
         let profiles = [];
         let introRequests = [];
+        let posts = [];
         let currentProfile = null;
         let currentUserId = null;
 
@@ -468,6 +510,57 @@
             }).join('');
         }
 
+        function formatDate(value) {
+            if (!value) return '';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '';
+            return date.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+
+        function renderPosts() {
+            if (!posts.length) {
+                feedEl.innerHTML = '<div class="empty">Ancora nessun post. Condividi il primo aggiornamento con il network.</div>';
+                return;
+            }
+
+            feedEl.innerHTML = posts.map((post) => {
+                const author = post.author || {};
+                const avatarProfile = {
+                    firstName: author.fullName?.split(' ')[0],
+                    lastName: author.fullName?.split(' ').slice(1).join(' '),
+                    profilePhotoUrl: author.profilePhotoUrl
+                };
+                const subtitle = [author.roleTitle, author.organization].filter(Boolean).join(' · ') || author.headline || '';
+                const avatar = author.profilePhotoUrl
+                    ? `<img src="${escapeHtml(author.profilePhotoUrl)}" alt="">`
+                    : escapeHtml(initials(avatarProfile));
+                const tags = (post.tags || []).map((tag) => `<span class="chip">${escapeHtml(tag)}</span>`).join('');
+                const link = post.linkUrl
+                    ? `<a class="post-link" href="${escapeHtml(post.linkUrl)}" target="_blank" rel="noopener">${escapeHtml(post.linkTitle || post.linkUrl)}</a>`
+                    : '';
+                const deleteButton = post.canDelete
+                    ? `<button class="btn-link delete-post-btn" type="button" data-post-id="${escapeHtml(post.id)}">Elimina</button>`
+                    : '';
+                return `
+                    <article class="post-card">
+                        <div class="post-header">
+                            <div class="avatar" style="width:48px;height:48px;border-width:2px;">${avatar}</div>
+                            <div class="post-author">
+                                <strong>${escapeHtml(author.fullName || 'Partecipante')}</strong>
+                                <span>${escapeHtml([subtitle, formatDate(post.createdAt)].filter(Boolean).join(' · '))}</span>
+                            </div>
+                        </div>
+                        <div class="post-body">${escapeHtml(post.body)}</div>
+                        ${link}
+                        <div class="post-actions">
+                            <div class="chips">${tags}</div>
+                            ${deleteButton}
+                        </div>
+                    </article>
+                `;
+            }).join('');
+        }
+
         function renderDirectory() {
             const search = document.getElementById('search-filter').value.trim().toLowerCase();
             const skill = document.getElementById('skill-filter').value.trim();
@@ -537,19 +630,23 @@
 
         async function loadNetwork() {
             try {
-                const [profile, list, requests] = await Promise.all([
+                const [profile, list, requests, feed] = await Promise.all([
                     api('/api/lms/network/profile'),
                     api('/api/lms/network/profiles'),
-                    api('/api/lms/network/intro-requests')
+                    api('/api/lms/network/intro-requests'),
+                    api('/api/lms/network/posts')
                 ]);
                 if (profile) fillForm(profile);
                 profiles = Array.isArray(list) ? list : [];
                 introRequests = Array.isArray(requests) ? requests : [];
+                posts = Array.isArray(feed) ? feed : [];
                 renderDirectory();
                 renderRequests();
+                renderPosts();
             } catch (error) {
                 directoryEl.innerHTML = '<div class="empty">Errore nel caricamento del network.</div>';
                 requestsEl.innerHTML = '<div class="empty">Errore nel caricamento delle richieste.</div>';
+                feedEl.innerHTML = '<div class="empty">Errore nel caricamento del feed.</div>';
                 statusEl.textContent = error.message;
                 statusEl.className = 'status error';
             }
@@ -653,6 +750,49 @@
 
         document.getElementById('refresh-preview-btn').addEventListener('click', renderPreview);
         document.getElementById('linkedin-import-btn').addEventListener('click', applyLinkedinImport);
+
+        document.getElementById('post-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const publishBtn = document.getElementById('publish-post-btn');
+            publishBtn.disabled = true;
+            try {
+                const created = await api('/api/lms/network/posts', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        body: document.getElementById('post-body').value,
+                        linkUrl: document.getElementById('post-link-url').value,
+                        linkTitle: document.getElementById('post-link-title').value,
+                        tags: splitList(document.getElementById('post-tags').value)
+                    })
+                });
+                posts = [created, ...posts];
+                document.getElementById('post-form').reset();
+                renderPosts();
+                statusEl.textContent = 'Post pubblicato nel network.';
+                statusEl.className = 'status ok';
+            } catch (error) {
+                statusEl.textContent = error.message;
+                statusEl.className = 'status error';
+            } finally {
+                publishBtn.disabled = false;
+            }
+        });
+
+        feedEl.addEventListener('click', async (event) => {
+            const button = event.target.closest('.delete-post-btn');
+            if (!button) return;
+            if (!window.confirm('Eliminare questo post dal feed?')) return;
+            try {
+                await api(`/api/lms/network/posts/${encodeURIComponent(button.dataset.postId)}`, { method: 'DELETE' });
+                posts = posts.filter((post) => post.id !== button.dataset.postId);
+                renderPosts();
+                statusEl.textContent = 'Post eliminato.';
+                statusEl.className = 'status ok';
+            } catch (error) {
+                statusEl.textContent = error.message;
+                statusEl.className = 'status error';
+            }
+        });
 
         directoryEl.addEventListener('click', async (event) => {
             const button = event.target.closest('.request-contact-btn');

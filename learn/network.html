@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network - Carbon Farming Master</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --green-900:#1b3a2d; --green-700:#245a3d; --green-500:#2c7a4b; --green-100:#ecf6f0; --orange-500:#ff7a1a; --gray-900:#1c1c1c; --gray-700:#3d3d3d; --gray-500:#6b6b6b; --gray-200:#d9d9d9; --gray-100:#f3f4f6; --red-100:#fef2f2; --red-700:#991b1b; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--gray-100); color: var(--gray-900); min-height: 100vh; }
+        header { background: linear-gradient(135deg, rgba(27,58,45,0.94), rgba(44,122,75,0.88)); color: white; padding: 22px 24px; box-shadow: 0 10px 40px rgba(27,58,45,0.25); }
+        .header-content { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+        header h1 { font-size: 1.55rem; margin: 0; letter-spacing: -0.02em; }
+        .nav-links { display: flex; gap: 22px; align-items: center; flex-wrap: nowrap; }
+        .nav-links a { color: white; text-decoration: none; padding: 0 0 6px; font-weight: 600; font-size: 0.95rem; transition: color 0.2s ease; position: relative; white-space: nowrap; }
+        .nav-links a::after { content: ''; position: absolute; left: 0; bottom: 0; width: 0; height: 2px; background: var(--orange-500); transition: width 0.2s ease; }
+        .nav-links a:hover, .nav-links a.active { color: #ffd7c1; }
+        .nav-links a:hover::after, .nav-links a.active::after { width: 100%; }
+        main { max-width: 1200px; margin: 24px auto; padding: 0 24px 40px; }
+        .page-grid { display: grid; grid-template-columns: minmax(320px, 420px) minmax(0, 1fr); gap: 24px; align-items: start; }
+        .card { background: white; border-radius: 20px; padding: 24px; box-shadow: 0 8px 30px rgba(31,41,55,0.08); border: 1px solid rgba(36,90,61,0.08); }
+        .card h2 { font-size: 1.2rem; margin: 0 0 16px; color: var(--green-900); }
+        .form-grid { display: grid; gap: 14px; }
+        label { display: grid; gap: 6px; font-size: 0.82rem; font-weight: 600; color: var(--gray-700); }
+        input, textarea { width: 100%; border: 1px solid var(--gray-200); border-radius: 10px; padding: 11px 12px; font: inherit; color: var(--gray-900); background: white; }
+        textarea { min-height: 92px; resize: vertical; line-height: 1.45; }
+        input:focus, textarea:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px rgba(44,122,75,0.12); }
+        .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .checks { display: grid; gap: 10px; padding-top: 2px; }
+        .check { display: flex; gap: 10px; align-items: flex-start; font-size: 0.86rem; color: var(--gray-700); font-weight: 500; }
+        .check input { width: 16px; height: 16px; margin-top: 1px; accent-color: var(--green-500); flex-shrink: 0; }
+        .btn { border: 0; border-radius: 12px; padding: 12px 18px; font: inherit; font-weight: 700; cursor: pointer; }
+        .btn-primary { background: linear-gradient(135deg, var(--green-700), var(--green-500)); color: white; }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+        .status { min-height: 20px; font-size: 0.86rem; color: var(--gray-500); }
+        .status.ok { color: var(--green-700); }
+        .status.error { color: var(--red-700); }
+        .filters { display: grid; grid-template-columns: minmax(180px, 1.2fr) repeat(2, minmax(140px, 0.8fr)); gap: 12px; margin-bottom: 18px; }
+        .directory { display: grid; gap: 12px; }
+        .profile-card { border: 1px solid var(--gray-200); border-radius: 14px; padding: 16px; display: grid; gap: 10px; }
+        .profile-head { display: flex; gap: 12px; align-items: flex-start; }
+        .avatar { width: 42px; height: 42px; border-radius: 50%; background: var(--green-100); color: var(--green-700); display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
+        .profile-main { min-width: 0; }
+        .profile-name { font-size: 1rem; font-weight: 700; color: var(--green-900); overflow-wrap: anywhere; }
+        .profile-subtitle { color: var(--gray-700); font-size: 0.9rem; margin-top: 2px; overflow-wrap: anywhere; }
+        .profile-location { color: var(--gray-500); font-size: 0.82rem; margin-top: 3px; }
+        .bio { color: var(--gray-700); font-size: 0.9rem; line-height: 1.5; }
+        .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+        .chip { background: var(--green-100); color: var(--green-700); border-radius: 999px; padding: 4px 9px; font-size: 0.75rem; font-weight: 700; }
+        .chip.interest { background: #fff7ed; color: #9a3412; }
+        .contact-row { display: flex; flex-wrap: wrap; gap: 8px; }
+        .contact-link { color: var(--green-700); background: var(--green-100); text-decoration: none; border-radius: 10px; padding: 7px 10px; font-size: 0.8rem; font-weight: 700; }
+        .empty { color: var(--gray-500); text-align: center; padding: 34px 16px; border: 1px dashed var(--gray-200); border-radius: 14px; }
+        .loading { color: var(--gray-500); padding: 20px 0; }
+        @media (max-width: 960px) {
+            .page-grid { grid-template-columns: 1fr; }
+            .filters { grid-template-columns: 1fr; }
+            .header-content { flex-direction: column; align-items: flex-start; }
+            .nav-links { width: 100%; gap: 16px; flex-wrap: wrap; }
+        }
+        @media (max-width: 560px) {
+            main { padding: 0 16px 32px; }
+            .card { padding: 18px; border-radius: 16px; }
+            .field-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div>
+                <h1>Carbon Farming Master</h1>
+                <p style="font-size: 1.1rem; margin: 0 0 4px; opacity: 0.9;">Network</p>
+            </div>
+            <div class="nav-links">
+                <a href="/learn/index.html">Dashboard</a>
+                <a href="/learn/calendar.html">Calendario</a>
+                <a href="/learn/resources.html">Risorse</a>
+                <a href="/learn/network.html" class="active">Network</a>
+                <a href="/learn/checkin.html">Check-in</a>
+                <a href="/learn/documents.html">Documenti</a>
+                <a href="/learn/questions.html">Domande</a>
+                <a href="#" id="logout-btn">Esci</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="page-grid">
+            <section class="card">
+                <h2>Il mio profilo</h2>
+                <form id="profile-form" class="form-grid">
+                    <label>Headline
+                        <input id="headline" name="headline" maxlength="160" placeholder="Consulente ESG, agronomo, ricercatrice..." autocomplete="organization-title">
+                    </label>
+                    <div class="field-row">
+                        <label>Organizzazione
+                            <input id="organization" name="organization" maxlength="160" autocomplete="organization">
+                        </label>
+                        <label>Ruolo
+                            <input id="role-title" name="roleTitle" maxlength="160">
+                        </label>
+                    </div>
+                    <div class="field-row">
+                        <label>Città
+                            <input id="city" name="city" maxlength="120" autocomplete="address-level2">
+                        </label>
+                        <label>Paese
+                            <input id="country" name="country" maxlength="120" autocomplete="country-name">
+                        </label>
+                    </div>
+                    <label>Bio
+                        <textarea id="bio" name="bio" maxlength="900"></textarea>
+                    </label>
+                    <label>Competenze
+                        <input id="skills" name="skills" placeholder="MRV, crediti carbonio, suolo" autocomplete="off">
+                    </label>
+                    <label>Interessi
+                        <input id="interests" name="interests" placeholder="agricoltura rigenerativa, ETS, policy" autocomplete="off">
+                    </label>
+                    <label>LinkedIn
+                        <input id="linkedin-url" name="linkedinUrl" type="url" placeholder="https://www.linkedin.com/in/..." autocomplete="url">
+                    </label>
+                    <label>Email di contatto
+                        <input id="contact-email" name="contactEmail" type="email" autocomplete="email">
+                    </label>
+                    <div class="checks">
+                        <label class="check"><input id="is-visible" name="isVisible" type="checkbox">Mostra il mio profilo nella directory</label>
+                        <label class="check"><input id="available-for-contact" name="availableForContact" type="checkbox">Disponibile a essere contattato</label>
+                        <label class="check"><input id="show-email" name="showEmail" type="checkbox">Mostra email agli altri partecipanti</label>
+                        <label class="check"><input id="show-linkedin" name="showLinkedin" type="checkbox">Mostra LinkedIn agli altri partecipanti</label>
+                    </div>
+                    <button class="btn btn-primary" id="save-btn" type="submit">Salva profilo</button>
+                    <div class="status" id="profile-status"></div>
+                </form>
+            </section>
+
+            <section class="card">
+                <h2>Directory</h2>
+                <div class="filters">
+                    <input id="search-filter" placeholder="Cerca nome, azienda, ruolo">
+                    <input id="skill-filter" placeholder="Competenza">
+                    <input id="interest-filter" placeholder="Interesse">
+                </div>
+                <div class="directory" id="directory">
+                    <div class="loading">Caricamento...</div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script src="/learn/js/guest-guard.js"></script>
+    <script>
+        const token = localStorage.getItem('learnToken');
+        if (!token) { window.location.href = '/learn/login.html'; }
+
+        document.getElementById('logout-btn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            localStorage.removeItem('learnToken');
+            localStorage.removeItem('learnUser');
+            window.location.href = '/learn/login.html';
+        });
+
+        const directoryEl = document.getElementById('directory');
+        const statusEl = document.getElementById('profile-status');
+        const saveBtn = document.getElementById('save-btn');
+        let profiles = [];
+        let currentUserId = null;
+
+        async function api(url, options = {}) {
+            const res = await fetch(url, {
+                ...options,
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {})
+                }
+            });
+            if (res.status === 401) {
+                localStorage.removeItem('learnToken');
+                window.location.href = '/learn/login.html';
+                return null;
+            }
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Errore API');
+            }
+            return res.json();
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function splitList(value) {
+            return String(value || '')
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean);
+        }
+
+        function listToInput(value) {
+            return Array.isArray(value) ? value.join(', ') : '';
+        }
+
+        function matchesList(items, needle) {
+            if (!needle) return true;
+            const query = needle.toLowerCase();
+            return (items || []).some((item) => String(item).toLowerCase().includes(query));
+        }
+
+        function profileText(profile) {
+            return [
+                profile.fullName,
+                profile.headline,
+                profile.organization,
+                profile.roleTitle,
+                profile.city,
+                profile.country,
+                profile.bio
+            ].filter(Boolean).join(' ').toLowerCase();
+        }
+
+        function initials(profile) {
+            return [profile.firstName, profile.lastName]
+                .filter(Boolean)
+                .map((part) => part.trim().charAt(0).toUpperCase())
+                .join('')
+                .slice(0, 2) || 'CF';
+        }
+
+        function renderProfile(profile) {
+            const subtitle = [profile.roleTitle, profile.organization].filter(Boolean).join(' · ') || profile.headline || '';
+            const location = [profile.city, profile.country].filter(Boolean).join(', ');
+            const skills = (profile.skills || []).map((skill) => `<span class="chip">${escapeHtml(skill)}</span>`).join('');
+            const interests = (profile.interests || []).map((interest) => `<span class="chip interest">${escapeHtml(interest)}</span>`).join('');
+            const contacts = [
+                profile.contactEmail ? `<a class="contact-link" href="mailto:${escapeHtml(profile.contactEmail)}">Email</a>` : '',
+                profile.linkedinUrl ? `<a class="contact-link" href="${escapeHtml(profile.linkedinUrl)}" target="_blank" rel="noopener">LinkedIn</a>` : ''
+            ].filter(Boolean).join('');
+            const availability = profile.availableForContact ? '<span class="chip">Disponibile</span>' : '';
+
+            return `
+                <article class="profile-card">
+                    <div class="profile-head">
+                        <div class="avatar">${escapeHtml(initials(profile))}</div>
+                        <div class="profile-main">
+                            <div class="profile-name">${escapeHtml(profile.fullName || 'Partecipante')}</div>
+                            ${subtitle ? `<div class="profile-subtitle">${escapeHtml(subtitle)}</div>` : ''}
+                            ${location ? `<div class="profile-location">${escapeHtml(location)}</div>` : ''}
+                        </div>
+                    </div>
+                    ${profile.bio ? `<div class="bio">${escapeHtml(profile.bio)}</div>` : ''}
+                    ${(skills || interests || availability) ? `<div class="chips">${availability}${skills}${interests}</div>` : ''}
+                    ${contacts ? `<div class="contact-row">${contacts}</div>` : ''}
+                </article>
+            `;
+        }
+
+        function renderDirectory() {
+            const search = document.getElementById('search-filter').value.trim().toLowerCase();
+            const skill = document.getElementById('skill-filter').value.trim();
+            const interest = document.getElementById('interest-filter').value.trim();
+            const filtered = profiles.filter((profile) => {
+                return (!search || profileText(profile).includes(search))
+                    && matchesList(profile.skills, skill)
+                    && matchesList(profile.interests, interest);
+            });
+
+            if (!filtered.length) {
+                directoryEl.innerHTML = '<div class="empty">Nessun profilo visibile con questi filtri.</div>';
+                return;
+            }
+
+            directoryEl.innerHTML = filtered.map(renderProfile).join('');
+        }
+
+        function fillForm(profile) {
+            currentUserId = profile.userId;
+            document.getElementById('headline').value = profile.headline || '';
+            document.getElementById('organization').value = profile.organization || '';
+            document.getElementById('role-title').value = profile.roleTitle || '';
+            document.getElementById('city').value = profile.city || '';
+            document.getElementById('country').value = profile.country || '';
+            document.getElementById('bio').value = profile.bio || '';
+            document.getElementById('skills').value = listToInput(profile.skills);
+            document.getElementById('interests').value = listToInput(profile.interests);
+            document.getElementById('linkedin-url').value = profile.linkedinUrl || '';
+            document.getElementById('contact-email').value = profile.contactEmail || '';
+            document.getElementById('is-visible').checked = Boolean(profile.isVisible);
+            document.getElementById('available-for-contact').checked = profile.availableForContact !== false;
+            document.getElementById('show-email').checked = Boolean(profile.showEmail);
+            document.getElementById('show-linkedin').checked = profile.showLinkedin !== false;
+        }
+
+        function readForm() {
+            return {
+                headline: document.getElementById('headline').value,
+                organization: document.getElementById('organization').value,
+                roleTitle: document.getElementById('role-title').value,
+                city: document.getElementById('city').value,
+                country: document.getElementById('country').value,
+                bio: document.getElementById('bio').value,
+                skills: splitList(document.getElementById('skills').value),
+                interests: splitList(document.getElementById('interests').value),
+                linkedinUrl: document.getElementById('linkedin-url').value,
+                contactEmail: document.getElementById('contact-email').value,
+                isVisible: document.getElementById('is-visible').checked,
+                availableForContact: document.getElementById('available-for-contact').checked,
+                showEmail: document.getElementById('show-email').checked,
+                showLinkedin: document.getElementById('show-linkedin').checked
+            };
+        }
+
+        async function loadNetwork() {
+            try {
+                const [profile, list] = await Promise.all([
+                    api('/api/lms/network/profile'),
+                    api('/api/lms/network/profiles')
+                ]);
+                if (profile) fillForm(profile);
+                profiles = Array.isArray(list) ? list : [];
+                renderDirectory();
+            } catch (error) {
+                directoryEl.innerHTML = '<div class="empty">Errore nel caricamento del network.</div>';
+                statusEl.textContent = error.message;
+                statusEl.className = 'status error';
+            }
+        }
+
+        document.getElementById('profile-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            saveBtn.disabled = true;
+            statusEl.textContent = 'Salvataggio...';
+            statusEl.className = 'status';
+            try {
+                const updated = await api('/api/lms/network/profile', {
+                    method: 'PUT',
+                    body: JSON.stringify(readForm())
+                });
+                fillForm(updated);
+                const existingIndex = profiles.findIndex((profile) => profile.userId === currentUserId);
+                if (updated.isVisible) {
+                    if (existingIndex >= 0) profiles[existingIndex] = updated;
+                    else profiles = [...profiles, updated];
+                } else if (existingIndex >= 0) {
+                    profiles.splice(existingIndex, 1);
+                }
+                renderDirectory();
+                statusEl.textContent = 'Profilo salvato.';
+                statusEl.className = 'status ok';
+            } catch (error) {
+                statusEl.textContent = error.message;
+                statusEl.className = 'status error';
+            } finally {
+                saveBtn.disabled = false;
+            }
+        });
+
+        ['search-filter', 'skill-filter', 'interest-filter'].forEach((id) => {
+            document.getElementById(id).addEventListener('input', renderDirectory);
+        });
+
+        loadNetwork();
+    </script>
+</body>
+</html>

@@ -9568,6 +9568,202 @@ app.get('/api/students/me', requireStudent, async (req, res) => {
   }
 });
 
+function normalizeNetworkText(value, maxLength = 500) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  return text.slice(0, maxLength);
+}
+
+function normalizeNetworkList(value) {
+  const input = Array.isArray(value)
+    ? value
+    : String(value || '')
+      .split(',')
+      .map((item) => item.trim());
+
+  const seen = new Set();
+  return input
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .map((item) => item.slice(0, 60))
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 20);
+}
+
+function normalizeNetworkUrl(value) {
+  const text = normalizeNetworkText(value, 300);
+  if (!text) return null;
+  if (!/^https?:\/\//i.test(text)) return null;
+  return text;
+}
+
+function buildNetworkProfile(row, options = {}) {
+  if (!row) return null;
+  const exposePrivate = Boolean(options.exposePrivate);
+  const email = exposePrivate || row.showEmail ? (row.contactEmail || row.userEmail || null) : null;
+  return {
+    userId: row.userId,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    fullName: [row.firstName, row.lastName].filter(Boolean).join(' ').trim(),
+    role: row.role,
+    headline: row.headline,
+    organization: row.organization,
+    roleTitle: row.roleTitle,
+    city: row.city,
+    country: row.country,
+    bio: row.bio,
+    skills: row.skills || [],
+    interests: row.interests || [],
+    linkedinUrl: exposePrivate || row.showLinkedin ? row.linkedinUrl : null,
+    contactEmail: email,
+    isVisible: Boolean(row.isVisible),
+    showEmail: Boolean(row.showEmail),
+    showLinkedin: Boolean(row.showLinkedin),
+    availableForContact: Boolean(row.availableForContact),
+    updatedAt: row.updatedAt
+  };
+}
+
+app.get('/api/lms/network/profile', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT u.id AS "userId", u.email AS "userEmail",
+             u.first_name AS "firstName", u.last_name AS "lastName", u.role,
+             p.headline, p.organization, p.role_title AS "roleTitle",
+             p.city, p.country, p.bio, COALESCE(p.skills, '{}') AS skills,
+             COALESCE(p.interests, '{}') AS interests,
+             p.linkedin_url AS "linkedinUrl", p.contact_email AS "contactEmail",
+             COALESCE(p.is_visible, false) AS "isVisible",
+             COALESCE(p.show_email, false) AS "showEmail",
+             COALESCE(p.show_linkedin, true) AS "showLinkedin",
+             COALESCE(p.available_for_contact, true) AS "availableForContact",
+             p.updated_at AS "updatedAt"
+      FROM users u
+      LEFT JOIN network_profiles p ON p.user_id = u.id
+      WHERE u.id = $1
+    `, [req.user.userId]);
+
+    if (!rows.length) return res.status(404).json({ error: 'Studente non trovato' });
+    res.json(buildNetworkProfile(rows[0], { exposePrivate: true }));
+  } catch (error) {
+    console.error('Get network profile error:', error);
+    res.status(500).json({ error: 'Errore nel recupero profilo network' });
+  }
+});
+
+app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const payload = {
+      headline: normalizeNetworkText(req.body.headline, 160),
+      organization: normalizeNetworkText(req.body.organization, 160),
+      roleTitle: normalizeNetworkText(req.body.roleTitle, 160),
+      city: normalizeNetworkText(req.body.city, 120),
+      country: normalizeNetworkText(req.body.country, 120),
+      bio: normalizeNetworkText(req.body.bio, 900),
+      skills: normalizeNetworkList(req.body.skills),
+      interests: normalizeNetworkList(req.body.interests),
+      linkedinUrl: normalizeNetworkUrl(req.body.linkedinUrl),
+      contactEmail: normalizeNetworkText(req.body.contactEmail, 180),
+      isVisible: normalizeBoolean(req.body.isVisible, false),
+      showEmail: normalizeBoolean(req.body.showEmail, false),
+      showLinkedin: normalizeBoolean(req.body.showLinkedin, true),
+      availableForContact: normalizeBoolean(req.body.availableForContact, true)
+    };
+
+    const { rows } = await pool.query(`
+      INSERT INTO network_profiles (
+        user_id, headline, organization, role_title, city, country, bio,
+        skills, interests, linkedin_url, contact_email, is_visible,
+        show_email, show_linkedin, available_for_contact, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text[], $9::text[], $10, $11, $12, $13, $14, $15, NOW())
+      ON CONFLICT (user_id) DO UPDATE SET
+        headline = EXCLUDED.headline,
+        organization = EXCLUDED.organization,
+        role_title = EXCLUDED.role_title,
+        city = EXCLUDED.city,
+        country = EXCLUDED.country,
+        bio = EXCLUDED.bio,
+        skills = EXCLUDED.skills,
+        interests = EXCLUDED.interests,
+        linkedin_url = EXCLUDED.linkedin_url,
+        contact_email = EXCLUDED.contact_email,
+        is_visible = EXCLUDED.is_visible,
+        show_email = EXCLUDED.show_email,
+        show_linkedin = EXCLUDED.show_linkedin,
+        available_for_contact = EXCLUDED.available_for_contact,
+        updated_at = NOW()
+      RETURNING user_id AS "userId", headline, organization, role_title AS "roleTitle",
+                city, country, bio, skills, interests, linkedin_url AS "linkedinUrl",
+                contact_email AS "contactEmail", is_visible AS "isVisible",
+                show_email AS "showEmail", show_linkedin AS "showLinkedin",
+                available_for_contact AS "availableForContact", updated_at AS "updatedAt"
+    `, [
+      req.user.userId,
+      payload.headline,
+      payload.organization,
+      payload.roleTitle,
+      payload.city,
+      payload.country,
+      payload.bio,
+      payload.skills,
+      payload.interests,
+      payload.linkedinUrl,
+      payload.contactEmail,
+      payload.isVisible,
+      payload.showEmail,
+      payload.showLinkedin,
+      payload.availableForContact
+    ]);
+
+    const userRes = await pool.query(
+      'SELECT email AS "userEmail", first_name AS "firstName", last_name AS "lastName", role FROM users WHERE id = $1',
+      [req.user.userId]
+    );
+    res.json(buildNetworkProfile({ ...rows[0], ...userRes.rows[0] }, { exposePrivate: true }));
+  } catch (error) {
+    console.error('Update network profile error:', error);
+    res.status(500).json({ error: 'Errore nel salvataggio profilo network' });
+  }
+});
+
+app.get('/api/lms/network/profiles', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT u.id AS "userId", u.email AS "userEmail",
+             u.first_name AS "firstName", u.last_name AS "lastName", u.role,
+             p.headline, p.organization, p.role_title AS "roleTitle",
+             p.city, p.country, p.bio, p.skills, p.interests,
+             p.linkedin_url AS "linkedinUrl", p.contact_email AS "contactEmail",
+             p.is_visible AS "isVisible", p.show_email AS "showEmail",
+             p.show_linkedin AS "showLinkedin",
+             p.available_for_contact AS "availableForContact",
+             p.updated_at AS "updatedAt"
+      FROM network_profiles p
+      JOIN users u ON u.id = p.user_id
+      WHERE p.is_visible = true
+        AND u.is_active = true
+      ORDER BY u.last_name ASC, u.first_name ASC
+      LIMIT 300
+    `);
+
+    res.json(rows.map(buildNetworkProfile));
+  } catch (error) {
+    console.error('List network profiles error:', error);
+    res.status(500).json({ error: 'Errore nel recupero network' });
+  }
+});
+
 // Corsi dello studente loggato
 app.get('/api/lms/my-courses', requireStudent, async (req, res) => {
   if (!ensurePool(res)) return;

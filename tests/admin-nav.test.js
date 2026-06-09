@@ -28,7 +28,7 @@ test('il menu admin separa Area riservata / Piattaforma e Sito pubblico', () => 
   assert.match(html, /Domande inviate/);
   assert.match(html, /Feedback ricevuti/);
   assert.doesNotMatch(html, /slice\(0, 8\)/);
-  assert.equal((html.match(/<section id="/g) || []).length, 16);
+  assert.equal((html.match(/<section id="/g) || []).length, 18);
 });
 
 test('la sezione LMS admin non contiene debug temporanei e usa cache lezioni per modulo', () => {

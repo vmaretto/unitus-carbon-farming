@@ -267,8 +267,8 @@ test('POST /api/lms/lessons/:id/complete richiede materiali e quiz anche con pre
         };
       }
 
-      if (statement.includes('FROM quizzes') && statement.includes('lms_lesson_id = $1 OR lms_module_id = $2')) {
-        assert.deepEqual(params, ['lesson-1', 'module-1']);
+      if (statement.includes('FROM quizzes') && statement.includes('lms_lesson_id = $1')) {
+        assert.deepEqual(params, ['lesson-1']);
         return { rows: [{ id: 'quiz-1' }] };
       }
 

@@ -9655,6 +9655,28 @@ function buildNetworkProfile(row, options = {}) {
   };
 }
 
+function buildNetworkIntroRequest(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    direction: row.direction,
+    status: row.status,
+    message: row.message,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    participant: {
+      userId: row.participantUserId,
+      fullName: [row.participantFirstName, row.participantLastName].filter(Boolean).join(' ').trim(),
+      headline: row.participantHeadline,
+      organization: row.participantOrganization,
+      roleTitle: row.participantRoleTitle,
+      profilePhotoUrl: row.participantProfilePhotoUrl || row.participantAvatarUrl || null,
+      linkedinUrl: row.participantShowLinkedin ? row.participantLinkedinUrl : null,
+      contactEmail: row.participantShowEmail ? (row.participantContactEmail || row.participantEmail || null) : null
+    }
+  };
+}
+
 app.get('/api/lms/network/profile', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
@@ -9815,6 +9837,111 @@ app.get('/api/lms/network/profiles', requireStudent, requireNonGuest, async (req
   } catch (error) {
     console.error('List network profiles error:', error);
     res.status(500).json({ error: 'Errore nel recupero network' });
+  }
+});
+
+app.get('/api/lms/network/intro-requests', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT r.id, r.status, r.message,
+             r.created_at AS "createdAt", r.updated_at AS "updatedAt",
+             CASE WHEN r.sender_user_id = $1 THEN 'sent' ELSE 'received' END AS direction,
+             u.id AS "participantUserId", u.email AS "participantEmail",
+             u.first_name AS "participantFirstName", u.last_name AS "participantLastName",
+             u.avatar_url AS "participantAvatarUrl",
+             p.headline AS "participantHeadline",
+             p.organization AS "participantOrganization",
+             p.role_title AS "participantRoleTitle",
+             p.profile_photo_url AS "participantProfilePhotoUrl",
+             p.linkedin_url AS "participantLinkedinUrl",
+             p.contact_email AS "participantContactEmail",
+             p.show_email AS "participantShowEmail",
+             p.show_linkedin AS "participantShowLinkedin"
+      FROM network_intro_requests r
+      JOIN users u ON u.id = CASE WHEN r.sender_user_id = $1 THEN r.recipient_user_id ELSE r.sender_user_id END
+      LEFT JOIN network_profiles p ON p.user_id = u.id
+      WHERE r.sender_user_id = $1 OR r.recipient_user_id = $1
+      ORDER BY r.created_at DESC
+      LIMIT 100
+    `, [req.user.userId]);
+
+    res.json(rows.map(buildNetworkIntroRequest));
+  } catch (error) {
+    console.error('List network intro requests error:', error);
+    res.status(500).json({ error: 'Errore nel recupero richieste network' });
+  }
+});
+
+app.post('/api/lms/network/intro-requests', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const recipientUserId = normalizeNetworkText(req.body.recipientUserId, 80);
+    const message = normalizeNetworkText(req.body.message, 700);
+
+    if (!recipientUserId) {
+      return res.status(400).json({ error: 'Destinatario richiesto' });
+    }
+    if (recipientUserId === req.user.userId) {
+      return res.status(400).json({ error: 'Non puoi inviare una richiesta a te stesso' });
+    }
+
+    const recipientRes = await pool.query(`
+      SELECT p.user_id
+      FROM network_profiles p
+      JOIN users u ON u.id = p.user_id
+      WHERE p.user_id = $1
+        AND p.is_visible = true
+        AND p.available_for_contact = true
+        AND u.is_active = true
+    `, [recipientUserId]);
+
+    if (!recipientRes.rows.length) {
+      return res.status(404).json({ error: 'Profilo non disponibile per il contatto' });
+    }
+
+    const { rows } = await pool.query(`
+      INSERT INTO network_intro_requests (
+        sender_user_id, recipient_user_id, message, status, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, 'pending', NOW(), NOW())
+      ON CONFLICT (sender_user_id, recipient_user_id) WHERE status = 'pending'
+      DO UPDATE SET message = EXCLUDED.message, updated_at = NOW()
+      RETURNING id, status, message, created_at AS "createdAt", updated_at AS "updatedAt"
+    `, [req.user.userId, recipientUserId, message]);
+
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Create network intro request error:', error);
+    res.status(500).json({ error: 'Errore nell invio richiesta network' });
+  }
+});
+
+app.patch('/api/lms/network/intro-requests/:id', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const status = normalizeNetworkText(req.body.status, 20);
+    if (!['accepted', 'declined', 'archived'].includes(status)) {
+      return res.status(400).json({ error: 'Stato richiesta non valido' });
+    }
+
+    const { rows } = await pool.query(`
+      UPDATE network_intro_requests
+      SET status = $1, updated_at = NOW()
+      WHERE id = $2
+        AND recipient_user_id = $3
+        AND status = 'pending'
+      RETURNING id, status, message, created_at AS "createdAt", updated_at AS "updatedAt"
+    `, [status, req.params.id, req.user.userId]);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Richiesta non trovata' });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Update network intro request error:', error);
+    res.status(500).json({ error: 'Errore nell aggiornamento richiesta network' });
   }
 });
 

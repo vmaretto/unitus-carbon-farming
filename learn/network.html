@@ -34,13 +34,21 @@
         .check input { width: 16px; height: 16px; margin-top: 1px; accent-color: var(--green-500); flex-shrink: 0; }
         .btn { border: 0; border-radius: 12px; padding: 12px 18px; font: inherit; font-weight: 700; cursor: pointer; }
         .btn-primary { background: linear-gradient(135deg, var(--green-700), var(--green-500)); color: white; }
+        .btn-secondary { background: var(--green-100); color: var(--green-700); }
+        .btn-ghost { background: white; color: var(--green-700); border: 1px solid var(--gray-200); }
         .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+        .button-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
         .status { min-height: 20px; font-size: 0.86rem; color: var(--gray-500); }
         .status.ok { color: var(--green-700); }
         .status.error { color: var(--red-700); }
         .filters { display: grid; grid-template-columns: minmax(180px, 1.2fr) repeat(2, minmax(140px, 0.8fr)); gap: 12px; margin-bottom: 18px; }
         .directory { display: grid; gap: 12px; }
+        .stack { display: grid; gap: 18px; }
         .hint { color: var(--gray-500); font-size: 0.75rem; line-height: 1.35; margin-top: -2px; }
+        .import-panel { background: #f8faf9; border: 1px solid rgba(36,90,61,0.14); border-radius: 14px; padding: 14px; display: grid; gap: 12px; }
+        .import-panel summary { cursor: pointer; font-weight: 800; color: var(--green-900); }
+        .profile-preview { border: 1px solid var(--gray-200); border-radius: 14px; overflow: hidden; background: white; }
+        .profile-preview .profile-card { border: 0; border-radius: 0; }
         .profile-card { border: 1px solid var(--gray-200); border-radius: 14px; overflow: hidden; display: grid; background: white; }
         .profile-cover { min-height: 92px; background: linear-gradient(135deg, rgba(27,58,45,0.9), rgba(44,122,75,0.72)); background-size: cover; background-position: center; }
         .profile-body { padding: 0 18px 18px; display: grid; gap: 12px; }
@@ -65,6 +73,9 @@
         .chip.interest { background: #fff7ed; color: #9a3412; }
         .contact-row { display: flex; flex-wrap: wrap; gap: 8px; }
         .contact-link { color: var(--green-700); background: var(--green-100); text-decoration: none; border-radius: 10px; padding: 7px 10px; font-size: 0.8rem; font-weight: 700; }
+        .request-list { display: grid; gap: 10px; }
+        .request-item { border: 1px solid var(--gray-200); border-radius: 12px; padding: 12px; display: grid; gap: 6px; }
+        .request-meta { color: var(--gray-500); font-size: 0.78rem; }
         .empty { color: var(--gray-500); text-align: center; padding: 34px 16px; border: 1px dashed var(--gray-200); border-radius: 14px; }
         .loading { color: var(--gray-500); padding: 20px 0; }
         @media (max-width: 960px) {
@@ -104,6 +115,19 @@
         <div class="page-grid">
             <section class="card">
                 <h2>Il mio profilo</h2>
+                <details class="import-panel">
+                    <summary>Importa da LinkedIn</summary>
+                    <label>URL profilo LinkedIn
+                        <input id="linkedin-import-url" type="url" placeholder="https://www.linkedin.com/in/...">
+                    </label>
+                    <label>Testo copiato dal profilo LinkedIn
+                        <textarea id="linkedin-import-text" placeholder="Incolla qui headline, informazioni, esperienza e competenze copiate dal tuo profilo LinkedIn."></textarea>
+                    </label>
+                    <div class="button-row">
+                        <button class="btn btn-secondary" id="linkedin-import-btn" type="button">Compila campi</button>
+                        <span class="hint">L'import non pubblica nulla finché non premi Salva profilo.</span>
+                    </div>
+                </details>
                 <form id="profile-form" class="form-grid">
                     <label>Headline
                         <input id="headline" name="headline" maxlength="160" placeholder="Consulente ESG, agronomo, ricercatrice..." autocomplete="organization-title">
@@ -163,22 +187,41 @@
                         <label class="check"><input id="show-email" name="showEmail" type="checkbox">Mostra email agli altri partecipanti</label>
                         <label class="check"><input id="show-linkedin" name="showLinkedin" type="checkbox">Mostra LinkedIn agli altri partecipanti</label>
                     </div>
-                    <button class="btn btn-primary" id="save-btn" type="submit">Salva profilo</button>
+                    <div class="button-row">
+                        <button class="btn btn-primary" id="save-btn" type="submit">Salva profilo</button>
+                        <button class="btn btn-ghost" id="refresh-preview-btn" type="button">Aggiorna anteprima</button>
+                    </div>
                     <div class="status" id="profile-status"></div>
                 </form>
             </section>
 
-            <section class="card">
-                <h2>Directory</h2>
-                <div class="filters">
-                    <input id="search-filter" placeholder="Cerca nome, azienda, ruolo">
-                    <input id="skill-filter" placeholder="Competenza">
-                    <input id="interest-filter" placeholder="Interesse">
-                </div>
-                <div class="directory" id="directory">
-                    <div class="loading">Caricamento...</div>
-                </div>
-            </section>
+            <div class="stack">
+                <section class="card">
+                    <h2>Anteprima profilo</h2>
+                    <div class="profile-preview" id="profile-preview">
+                        <div class="empty">Compila il profilo per vedere come apparirà agli altri partecipanti.</div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <h2>Networking</h2>
+                    <div class="request-list" id="intro-requests">
+                        <div class="loading">Caricamento richieste...</div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <h2>Directory</h2>
+                    <div class="filters">
+                        <input id="search-filter" placeholder="Cerca nome, azienda, ruolo">
+                        <input id="skill-filter" placeholder="Competenza">
+                        <input id="interest-filter" placeholder="Interesse">
+                    </div>
+                    <div class="directory" id="directory">
+                        <div class="loading">Caricamento...</div>
+                    </div>
+                </section>
+            </div>
         </div>
     </main>
 
@@ -197,9 +240,13 @@
         });
 
         const directoryEl = document.getElementById('directory');
+        const previewEl = document.getElementById('profile-preview');
+        const requestsEl = document.getElementById('intro-requests');
         const statusEl = document.getElementById('profile-status');
         const saveBtn = document.getElementById('save-btn');
         let profiles = [];
+        let introRequests = [];
+        let currentProfile = null;
         let currentUserId = null;
 
         async function api(url, options = {}) {
@@ -262,6 +309,10 @@
             ].filter(Boolean).join(' ').toLowerCase();
         }
 
+        function currentFullName() {
+            return currentProfile?.fullName || JSON.parse(localStorage.getItem('learnUser') || '{}').name || 'Il tuo profilo';
+        }
+
         function initials(profile) {
             return [profile.firstName, profile.lastName]
                 .filter(Boolean)
@@ -311,7 +362,8 @@
                 .join('\n');
         }
 
-        function renderProfile(profile) {
+        function renderProfile(profile, options = {}) {
+            const isOwn = options.isOwn || profile.userId === currentUserId;
             const subtitle = [profile.roleTitle, profile.organization].filter(Boolean).join(' · ') || profile.headline || '';
             const location = [profile.city, profile.country].filter(Boolean).join(', ');
             const skills = (profile.skills || []).map((skill) => `<span class="chip">${escapeHtml(skill)}</span>`).join('');
@@ -337,6 +389,9 @@
                 profile.linkedinUrl ? `<a class="contact-link" href="${escapeHtml(profile.linkedinUrl)}" target="_blank" rel="noopener">LinkedIn</a>` : ''
             ].filter(Boolean).join('');
             const availability = profile.availableForContact ? '<span class="chip">Disponibile</span>' : '';
+            const requestButton = !isOwn && profile.availableForContact
+                ? `<button class="btn btn-secondary request-contact-btn" type="button" data-user-id="${escapeHtml(profile.userId)}" data-name="${escapeHtml(profile.fullName || 'partecipante')}">Richiedi contatto</button>`
+                : '';
 
             return `
                 <article class="profile-card">
@@ -356,10 +411,61 @@
                         ${(skills || interests || availability) ? `<div class="chips">${availability}${skills}${interests}</div>` : ''}
                         ${experience ? `<div class="profile-section"><div class="profile-section-title">Esperienza</div><div class="experience-list">${experience}</div></div>` : ''}
                         ${featuredLinks ? `<div class="profile-section"><div class="profile-section-title">In evidenza</div><div class="featured-links">${featuredLinks}</div></div>` : ''}
-                        ${contacts ? `<div class="contact-row">${contacts}</div>` : ''}
+                        ${(contacts || requestButton) ? `<div class="contact-row">${contacts}${requestButton}</div>` : ''}
                     </div>
                 </article>
             `;
+        }
+
+        function renderPreview() {
+            const draft = {
+                ...currentProfile,
+                ...readForm(),
+                userId: currentUserId,
+                fullName: currentFullName(),
+                firstName: currentProfile?.firstName,
+                lastName: currentProfile?.lastName
+            };
+            previewEl.innerHTML = renderProfile(draft, { isOwn: true });
+        }
+
+        function renderRequests() {
+            if (!introRequests.length) {
+                requestsEl.innerHTML = '<div class="empty">Nessuna richiesta di networking ancora presente.</div>';
+                return;
+            }
+
+            requestsEl.innerHTML = introRequests.map((request) => {
+                const participant = request.participant || {};
+                const direction = request.direction === 'sent' ? 'Inviata a' : 'Ricevuta da';
+                const statusLabel = {
+                    pending: 'In attesa',
+                    accepted: 'Accettata',
+                    declined: 'Rifiutata',
+                    archived: 'Archiviata'
+                }[request.status] || request.status;
+                const contacts = request.status === 'accepted'
+                    ? [
+                        participant.contactEmail ? `<a class="contact-link" href="mailto:${escapeHtml(participant.contactEmail)}">Email</a>` : '',
+                        participant.linkedinUrl ? `<a class="contact-link" href="${escapeHtml(participant.linkedinUrl)}" target="_blank" rel="noopener">LinkedIn</a>` : ''
+                    ].filter(Boolean).join('')
+                    : '';
+                const actions = request.direction === 'received' && request.status === 'pending'
+                    ? `<div class="button-row">
+                        <button class="btn btn-secondary intro-status-btn" data-request-id="${escapeHtml(request.id)}" data-status="accepted" type="button">Accetta</button>
+                        <button class="btn btn-ghost intro-status-btn" data-request-id="${escapeHtml(request.id)}" data-status="declined" type="button">Rifiuta</button>
+                      </div>`
+                    : '';
+                return `
+                    <article class="request-item">
+                        <strong>${direction} ${escapeHtml(participant.fullName || 'partecipante')}</strong>
+                        <div class="request-meta">${escapeHtml(statusLabel)}${participant.headline ? ` · ${escapeHtml(participant.headline)}` : ''}</div>
+                        ${request.message ? `<div class="bio">${escapeHtml(request.message)}</div>` : ''}
+                        ${contacts ? `<div class="contact-row">${contacts}</div>` : ''}
+                        ${actions}
+                    </article>
+                `;
+            }).join('');
         }
 
         function renderDirectory() {
@@ -382,6 +488,7 @@
 
         function fillForm(profile) {
             currentUserId = profile.userId;
+            currentProfile = profile;
             document.getElementById('headline').value = profile.headline || '';
             document.getElementById('organization').value = profile.organization || '';
             document.getElementById('role-title').value = profile.roleTitle || '';
@@ -401,6 +508,7 @@
             document.getElementById('available-for-contact').checked = profile.availableForContact !== false;
             document.getElementById('show-email').checked = Boolean(profile.showEmail);
             document.getElementById('show-linkedin').checked = profile.showLinkedin !== false;
+            renderPreview();
         }
 
         function readForm() {
@@ -429,18 +537,84 @@
 
         async function loadNetwork() {
             try {
-                const [profile, list] = await Promise.all([
+                const [profile, list, requests] = await Promise.all([
                     api('/api/lms/network/profile'),
-                    api('/api/lms/network/profiles')
+                    api('/api/lms/network/profiles'),
+                    api('/api/lms/network/intro-requests')
                 ]);
                 if (profile) fillForm(profile);
                 profiles = Array.isArray(list) ? list : [];
+                introRequests = Array.isArray(requests) ? requests : [];
                 renderDirectory();
+                renderRequests();
             } catch (error) {
                 directoryEl.innerHTML = '<div class="empty">Errore nel caricamento del network.</div>';
+                requestsEl.innerHTML = '<div class="empty">Errore nel caricamento delle richieste.</div>';
                 statusEl.textContent = error.message;
                 statusEl.className = 'status error';
             }
+        }
+
+        function parseLinkedinImport(text, url) {
+            const lines = String(text || '')
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .filter((line) => !/^(connect|message|follow|more|activity|posts|comments)$/i.test(line));
+            const lowerIndex = (label) => lines.findIndex((line) => line.toLowerCase() === label);
+            const aboutIndex = lowerIndex('about') >= 0 ? lowerIndex('about') : lowerIndex('informazioni');
+            const experienceIndex = lowerIndex('experience') >= 0 ? lowerIndex('experience') : lowerIndex('esperienza');
+            const skillsIndex = lowerIndex('skills') >= 0 ? lowerIndex('skills') : lowerIndex('competenze');
+            const locationLine = lines.find((line) => /italia|italy|roma|milano|viterbo|napoli|torino|bologna|firenze/i.test(line));
+
+            const result = {};
+            if (url) result.linkedinUrl = url;
+            if (lines[1] && !/linkedin/i.test(lines[1])) result.headline = lines[1];
+            if (locationLine) {
+                const parts = locationLine.split(',').map((part) => part.trim()).filter(Boolean);
+                result.city = parts[0] || '';
+                result.country = parts.slice(1).join(', ') || '';
+            }
+            if (aboutIndex >= 0) {
+                const end = [experienceIndex, skillsIndex].filter((index) => index > aboutIndex).sort((a, b) => a - b)[0] || Math.min(lines.length, aboutIndex + 7);
+                result.bio = lines.slice(aboutIndex + 1, end).join('\n').slice(0, 900);
+            }
+            if (experienceIndex >= 0) {
+                const end = skillsIndex > experienceIndex ? skillsIndex : Math.min(lines.length, experienceIndex + 12);
+                const experienceLines = lines.slice(experienceIndex + 1, end)
+                    .filter((line) => !/^(show all|mostra tutto)/i.test(line))
+                    .slice(0, 8);
+                const firstTitle = experienceLines.find((line) => !/\d{4}|present|presente|oggi|anni|mesi|year|month/i.test(line));
+                const firstOrg = experienceLines.find((line) => line !== firstTitle && !/\d{4}|present|presente|oggi|anni|mesi|year|month/i.test(line));
+                if (firstTitle) result.roleTitle = firstTitle;
+                if (firstOrg) result.organization = firstOrg;
+                result.experience = experienceLines.join('\n');
+            }
+            if (skillsIndex >= 0) {
+                result.skills = lines.slice(skillsIndex + 1, skillsIndex + 12)
+                    .filter((line) => !/^(show all|mostra tutto)/i.test(line))
+                    .join(', ');
+            }
+            return result;
+        }
+
+        function applyLinkedinImport() {
+            const imported = parseLinkedinImport(
+                document.getElementById('linkedin-import-text').value,
+                document.getElementById('linkedin-import-url').value
+            );
+            if (imported.linkedinUrl) document.getElementById('linkedin-url').value = imported.linkedinUrl;
+            if (imported.headline && !document.getElementById('headline').value) document.getElementById('headline').value = imported.headline;
+            if (imported.organization && !document.getElementById('organization').value) document.getElementById('organization').value = imported.organization;
+            if (imported.roleTitle && !document.getElementById('role-title').value) document.getElementById('role-title').value = imported.roleTitle;
+            if (imported.city && !document.getElementById('city').value) document.getElementById('city').value = imported.city;
+            if (imported.country && !document.getElementById('country').value) document.getElementById('country').value = imported.country;
+            if (imported.bio && !document.getElementById('bio').value) document.getElementById('bio').value = imported.bio;
+            if (imported.experience && !document.getElementById('experience').value) document.getElementById('experience').value = imported.experience;
+            if (imported.skills && !document.getElementById('skills').value) document.getElementById('skills').value = imported.skills;
+            renderPreview();
+            statusEl.textContent = 'Informazioni LinkedIn importate. Controlla i campi e salva il profilo.';
+            statusEl.className = 'status ok';
         }
 
         document.getElementById('profile-form').addEventListener('submit', async (event) => {
@@ -462,6 +636,7 @@
                     profiles.splice(existingIndex, 1);
                 }
                 renderDirectory();
+                renderPreview();
                 statusEl.textContent = 'Profilo salvato.';
                 statusEl.className = 'status ok';
             } catch (error) {
@@ -474,6 +649,47 @@
 
         ['search-filter', 'skill-filter', 'interest-filter'].forEach((id) => {
             document.getElementById(id).addEventListener('input', renderDirectory);
+        });
+
+        document.getElementById('refresh-preview-btn').addEventListener('click', renderPreview);
+        document.getElementById('linkedin-import-btn').addEventListener('click', applyLinkedinImport);
+
+        directoryEl.addEventListener('click', async (event) => {
+            const button = event.target.closest('.request-contact-btn');
+            if (!button) return;
+            const message = window.prompt(`Messaggio per ${button.dataset.name}`, 'Mi piacerebbe entrare in contatto per confrontarci su progetti e opportunità nel Carbon Farming.');
+            if (message === null) return;
+            try {
+                await api('/api/lms/network/intro-requests', {
+                    method: 'POST',
+                    body: JSON.stringify({ recipientUserId: button.dataset.userId, message })
+                });
+                introRequests = await api('/api/lms/network/intro-requests');
+                renderRequests();
+                statusEl.textContent = 'Richiesta di contatto inviata.';
+                statusEl.className = 'status ok';
+            } catch (error) {
+                statusEl.textContent = error.message;
+                statusEl.className = 'status error';
+            }
+        });
+
+        requestsEl.addEventListener('click', async (event) => {
+            const button = event.target.closest('.intro-status-btn');
+            if (!button) return;
+            try {
+                await api(`/api/lms/network/intro-requests/${encodeURIComponent(button.dataset.requestId)}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ status: button.dataset.status })
+                });
+                introRequests = await api('/api/lms/network/intro-requests');
+                renderRequests();
+                statusEl.textContent = 'Richiesta aggiornata.';
+                statusEl.className = 'status ok';
+            } catch (error) {
+                statusEl.textContent = error.message;
+                statusEl.className = 'status error';
+            }
         });
 
         loadNetwork();

@@ -213,3 +213,58 @@ test('GET /api/lms/network/profiles espone solo contatti consentiti', async (t) 
   assert.equal(res.body[0].profilePhotoUrl, 'https://example.com/profile.jpg');
   assert.equal(res.body[0].experience[0].title, 'Founder');
 });
+
+test('POST /api/lms/network/intro-requests crea una richiesta verso profili disponibili', async (t) => {
+  const queries = [];
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      queries.push({ statement, params });
+
+      if (statement.startsWith('SELECT p.user_id FROM network_profiles')) {
+        assert.equal(params[0], '22222222-2222-4222-8222-222222222222');
+        assert.match(statement, /p\.is_visible = true/);
+        assert.match(statement, /p\.available_for_contact = true/);
+        return { rows: [{ user_id: params[0] }] };
+      }
+
+      if (statement.startsWith('INSERT INTO network_intro_requests')) {
+        assert.equal(params[0], '11111111-1111-4111-8111-111111111111');
+        assert.equal(params[1], '22222222-2222-4222-8222-222222222222');
+        assert.equal(params[2], 'Confrontiamoci su un project work.');
+        return {
+          rows: [{
+            id: 'intro-1',
+            status: 'pending',
+            message: params[2],
+            createdAt: '2026-06-09T12:00:00.000Z',
+            updatedAt: '2026-06-09T12:00:00.000Z'
+          }]
+        };
+      }
+
+      throw new Error(`query inattesa: ${statement}`);
+    }
+  });
+  t.after(() => apiModule.__setPool(null));
+
+  const layer = findRoute('/api/lms/network/intro-requests', 'post');
+  assert.ok(layer, 'route POST /api/lms/network/intro-requests non trovata');
+
+  const req = {
+    method: 'POST',
+    url: '/api/lms/network/intro-requests',
+    headers: authHeaders(),
+    body: {
+      recipientUserId: '22222222-2222-4222-8222-222222222222',
+      message: 'Confrontiamoci su un project work.'
+    }
+  };
+  const res = createJsonRes();
+
+  await runRoute(layer, req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.body.status, 'pending');
+  assert.equal(queries.length, 2);
+});

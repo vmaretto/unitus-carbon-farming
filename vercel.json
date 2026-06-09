@@ -5,15 +5,23 @@
     "server.js": {
       "maxDuration": 300,
       "memory": 1024,
-      "includeFiles": "db/migrations/**"
+      "includeFiles": [
+        "db/migrations/**",
+        "*.html",
+        "*.txt",
+        "*.ico",
+        "*.png",
+        "*.jpg",
+        "*.jpeg",
+        "*.webp",
+        "*.svg",
+        "admin/**",
+        "assets/**",
+        "images/**",
+        "learn/**",
+        "press/**",
+        "teachers/**"
+      ]
     }
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/share/(.*)", "destination": "/api" },
-    { "source": "/sitemap.xml", "destination": "/api" },
-    { "source": "/sitemap", "destination": "/api" },
-    { "source": "/robots.txt", "destination": "/api" },
-    { "source": "/:key([a-f0-9]{8,128}).txt", "destination": "/api" }
-  ]
+  }
 }

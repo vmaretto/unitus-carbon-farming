@@ -56,6 +56,7 @@
         .lesson-info { flex: 1; }
         .lesson-title { font-weight: 500; font-size: 0.95rem; }
         .lesson-desc { color: var(--gray-500); font-size: 0.8rem; margin-top: 2px; }
+        .lesson-meta { color: var(--gray-500); font-size: 0.8rem; margin-top: 4px; line-height: 1.4; }
         .lesson-duration { color: var(--gray-500); font-size: 0.8rem; white-space: nowrap; }
         .empty { color: var(--gray-500); text-align: center; padding: 32px; }
         html.guest-view .progress-bar,
@@ -146,6 +147,34 @@
             }
             if (!res.ok) throw new Error('API error');
             return res.json();
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatLessonDate(value) {
+            if (!value) return '';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '';
+            return date.toLocaleDateString('it-IT', {
+                weekday: 'long',
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric'
+            });
+        }
+
+        function buildLessonMeta(lesson) {
+            const parts = [];
+            const dateLabel = formatLessonDate(lesson.startDatetime);
+            const teacherLabel = lesson.teacherName || lesson.externalTeacherName;
+            if (dateLabel) parts.push(dateLabel);
+            if (teacherLabel) parts.push(`Docente: ${teacherLabel}`);
+            return parts.join(' — ');
         }
 
         async function loadCourse() {
@@ -319,14 +348,16 @@
                         const icon = lessonStatus.icon;
                         const durationMin = lesson.durationMinutes ? `${lesson.durationMinutes} min` : '';
                         const ordinal = ordinals[index] || (index + 1) + 'ª';
+                        const lessonMeta = buildLessonMeta(lesson);
 
                         const lessonDiv = document.createElement('div');
                         lessonDiv.className = 'lesson-item';
                         lessonDiv.innerHTML = `
                             <div class="lesson-icon ${iconClass}">${icon}</div>
                             <div class="lesson-info">
-                                <div class="lesson-title">${ordinal} lezione: ${lesson.title}</div>
-                                ${lesson.description ? `<div class="lesson-desc">${lesson.description}</div>` : ''}
+                                <div class="lesson-title">${escapeHtml(`${ordinal} lezione: ${lesson.title}`)}</div>
+                                ${lesson.description ? `<div class="lesson-desc">${escapeHtml(lesson.description)}</div>` : ''}
+                                ${lessonMeta ? `<div class="lesson-meta">${escapeHtml(lessonMeta)}</div>` : ''}
                             </div>
                             ${durationMin ? `<div class="lesson-duration">${durationMin}</div>` : ''}
                         `;
@@ -402,13 +433,15 @@
                         const isCompleted = (lProgress && lProgress.completedAt) || (lProgress && lProgress.hasAttendance);
                         const iconClass = isCompleted ? 'completed' : 'available';
                         const icon = isCompleted ? '&#10003;' : '&#9654;';
+                        const lessonMeta = buildLessonMeta(lesson);
 
                         const lessonDiv = document.createElement('div');
                         lessonDiv.className = 'lesson-item';
                         lessonDiv.innerHTML = `
                             <div class="lesson-icon ${iconClass}">${icon}</div>
                             <div class="lesson-info">
-                                <div class="lesson-title">${lesson.title}</div>
+                                <div class="lesson-title">${escapeHtml(lesson.title)}</div>
+                                ${lessonMeta ? `<div class="lesson-meta">${escapeHtml(lessonMeta)}</div>` : ''}
                             </div>
                         `;
                         lessonDiv.addEventListener('click', () => {

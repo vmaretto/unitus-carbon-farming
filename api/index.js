@@ -8793,9 +8793,12 @@ app.get('/api/lms/lessons', async (req, res) => {
              ll.is_free AS "isFree", ll.is_published AS "isPublished",
              ll.calendar_lesson_id AS "calendarLessonId",
              cal.start_datetime AS "startDatetime",
+             cal.teacher_id AS "teacherId", f.name AS "teacherName",
+             cal.external_teacher_name AS "externalTeacherName",
              ll.created_at AS "createdAt", ll.updated_at AS "updatedAt"
       FROM lms_lessons ll
       LEFT JOIN lessons cal ON cal.id = ll.calendar_lesson_id
+      LEFT JOIN faculty f ON f.id = cal.teacher_id
       ${needsJoin ? 'JOIN modules m ON m.id = ll.lms_module_id' : ''}
       ${where}
       ORDER BY ll.sort_order ASC, ll.created_at ASC

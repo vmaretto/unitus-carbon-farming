@@ -57,12 +57,17 @@ test('PUT /api/lms/network/profile salva il profilo normalizzato', async (t) => 
       queries.push({ statement, params });
 
       if (statement.startsWith('INSERT INTO network_profiles')) {
-        assert.deepEqual(params[7], ['MRV', 'Suolo']);
-        assert.deepEqual(params[8], ['Policy', 'ETS']);
-        assert.equal(params[9], null, 'URL non http(s) deve essere scartato');
-        assert.equal(params[11], true);
-        assert.equal(params[12], true);
-        assert.equal(params[13], false);
+        assert.equal(params[7], 'Project work e partnership');
+        assert.equal(params[8], 'https://example.com/photo.jpg');
+        assert.equal(params[9], 'https://example.com/cover.jpg');
+        assert.deepEqual(JSON.parse(params[10]), [{ title: 'CEO', organization: 'POSTI', period: '2024-oggi', description: 'Innovazione' }]);
+        assert.deepEqual(JSON.parse(params[11]), [{ label: 'Portfolio', url: 'https://example.com' }]);
+        assert.deepEqual(params[12], ['MRV', 'Suolo']);
+        assert.deepEqual(params[13], ['Policy', 'ETS']);
+        assert.equal(params[14], null, 'URL non http(s) deve essere scartato');
+        assert.equal(params[16], true);
+        assert.equal(params[17], true);
+        assert.equal(params[18], false);
         return {
           rows: [{
             userId: params[0],
@@ -72,14 +77,19 @@ test('PUT /api/lms/network/profile salva il profilo normalizzato', async (t) => 
             city: params[4],
             country: params[5],
             bio: params[6],
-            skills: params[7],
-            interests: params[8],
-            linkedinUrl: params[9],
-            contactEmail: params[10],
-            isVisible: params[11],
-            showEmail: params[12],
-            showLinkedin: params[13],
-            availableForContact: params[14],
+            collaborationGoals: params[7],
+            profilePhotoUrl: params[8],
+            coverImageUrl: params[9],
+            experience: JSON.parse(params[10]),
+            featuredLinks: JSON.parse(params[11]),
+            skills: params[12],
+            interests: params[13],
+            linkedinUrl: params[14],
+            contactEmail: params[15],
+            isVisible: params[16],
+            showEmail: params[17],
+            showLinkedin: params[18],
+            availableForContact: params[19],
             updatedAt: '2026-06-09T12:00:00.000Z'
           }]
         };
@@ -91,7 +101,8 @@ test('PUT /api/lms/network/profile salva il profilo normalizzato', async (t) => 
             userEmail: 'student@example.com',
             firstName: 'Ada',
             lastName: 'Lovelace',
-            role: 'student'
+            role: 'student',
+            userAvatarUrl: null
           }]
         };
       }
@@ -115,6 +126,11 @@ test('PUT /api/lms/network/profile salva il profilo normalizzato', async (t) => 
       city: 'Viterbo',
       country: 'Italia',
       bio: 'Bio',
+      collaborationGoals: 'Project work e partnership',
+      profilePhotoUrl: 'https://example.com/photo.jpg',
+      coverImageUrl: 'https://example.com/cover.jpg',
+      experience: [{ title: 'CEO', organization: 'POSTI', period: '2024-oggi', description: 'Innovazione' }],
+      featuredLinks: [{ label: 'Portfolio', url: 'https://example.com' }],
       skills: ['MRV', 'Suolo', 'mrv'],
       interests: 'Policy, ETS',
       linkedinUrl: 'linkedin.com/in/ada',
@@ -156,6 +172,11 @@ test('GET /api/lms/network/profiles espone solo contatti consentiti', async (t) 
             city: 'Roma',
             country: 'Italia',
             bio: 'Lavora su suolo e MRV.',
+            collaborationGoals: 'Cerca partner per progetti pilota.',
+            profilePhotoUrl: 'https://example.com/profile.jpg',
+            coverImageUrl: 'https://example.com/cover.jpg',
+            experience: [{ title: 'Founder', organization: 'Azienda Agricola', period: '2025-oggi' }],
+            featuredLinks: [{ label: 'Sito', url: 'https://example.com' }],
             skills: ['MRV'],
             interests: ['Suolo'],
             linkedinUrl: 'https://linkedin.com/in/uno',
@@ -189,4 +210,6 @@ test('GET /api/lms/network/profiles espone solo contatti consentiti', async (t) 
   assert.equal(res.body.length, 1);
   assert.equal(res.body[0].contactEmail, null);
   assert.equal(res.body[0].linkedinUrl, 'https://linkedin.com/in/uno');
+  assert.equal(res.body[0].profilePhotoUrl, 'https://example.com/profile.jpg');
+  assert.equal(res.body[0].experience[0].title, 'Founder');
 });

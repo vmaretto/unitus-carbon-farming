@@ -9603,6 +9603,25 @@ function normalizeNetworkUrl(value) {
   return text;
 }
 
+function normalizeNetworkEntries(value, allowedKeys, maxItems = 5) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const normalized = {};
+      allowedKeys.forEach((key) => {
+        const text = normalizeNetworkText(entry[key], key === 'url' ? 300 : 180);
+        if (text) normalized[key] = key === 'url' ? normalizeNetworkUrl(text) : text;
+      });
+      Object.keys(normalized).forEach((key) => {
+        if (normalized[key] === null) delete normalized[key];
+      });
+      return Object.keys(normalized).length ? normalized : null;
+    })
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
 function buildNetworkProfile(row, options = {}) {
   if (!row) return null;
   const exposePrivate = Boolean(options.exposePrivate);
@@ -9619,6 +9638,11 @@ function buildNetworkProfile(row, options = {}) {
     city: row.city,
     country: row.country,
     bio: row.bio,
+    collaborationGoals: row.collaborationGoals,
+    profilePhotoUrl: row.profilePhotoUrl || row.userAvatarUrl || null,
+    coverImageUrl: row.coverImageUrl,
+    experience: Array.isArray(row.experience) ? row.experience : [],
+    featuredLinks: Array.isArray(row.featuredLinks) ? row.featuredLinks : [],
     skills: row.skills || [],
     interests: row.interests || [],
     linkedinUrl: exposePrivate || row.showLinkedin ? row.linkedinUrl : null,
@@ -9637,9 +9661,15 @@ app.get('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
     const { rows } = await pool.query(`
       SELECT u.id AS "userId", u.email AS "userEmail",
              u.first_name AS "firstName", u.last_name AS "lastName", u.role,
+             u.avatar_url AS "userAvatarUrl",
              p.headline, p.organization, p.role_title AS "roleTitle",
              p.city, p.country, p.bio, COALESCE(p.skills, '{}') AS skills,
              COALESCE(p.interests, '{}') AS interests,
+             p.profile_photo_url AS "profilePhotoUrl",
+             p.cover_image_url AS "coverImageUrl",
+             p.collaboration_goals AS "collaborationGoals",
+             COALESCE(p.experience, '[]'::jsonb) AS "experience",
+             COALESCE(p.featured_links, '[]'::jsonb) AS "featuredLinks",
              p.linkedin_url AS "linkedinUrl", p.contact_email AS "contactEmail",
              COALESCE(p.is_visible, false) AS "isVisible",
              COALESCE(p.show_email, false) AS "showEmail",
@@ -9669,6 +9699,11 @@ app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
       city: normalizeNetworkText(req.body.city, 120),
       country: normalizeNetworkText(req.body.country, 120),
       bio: normalizeNetworkText(req.body.bio, 900),
+      collaborationGoals: normalizeNetworkText(req.body.collaborationGoals, 500),
+      profilePhotoUrl: normalizeNetworkUrl(req.body.profilePhotoUrl),
+      coverImageUrl: normalizeNetworkUrl(req.body.coverImageUrl),
+      experience: normalizeNetworkEntries(req.body.experience, ['title', 'organization', 'period', 'description'], 8),
+      featuredLinks: normalizeNetworkEntries(req.body.featuredLinks, ['label', 'url'], 6),
       skills: normalizeNetworkList(req.body.skills),
       interests: normalizeNetworkList(req.body.interests),
       linkedinUrl: normalizeNetworkUrl(req.body.linkedinUrl),
@@ -9682,10 +9717,11 @@ app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
     const { rows } = await pool.query(`
       INSERT INTO network_profiles (
         user_id, headline, organization, role_title, city, country, bio,
+        collaboration_goals, profile_photo_url, cover_image_url, experience, featured_links,
         skills, interests, linkedin_url, contact_email, is_visible,
         show_email, show_linkedin, available_for_contact, updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text[], $9::text[], $10, $11, $12, $13, $14, $15, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::text[], $14::text[], $15, $16, $17, $18, $19, $20, NOW())
       ON CONFLICT (user_id) DO UPDATE SET
         headline = EXCLUDED.headline,
         organization = EXCLUDED.organization,
@@ -9693,6 +9729,11 @@ app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
         city = EXCLUDED.city,
         country = EXCLUDED.country,
         bio = EXCLUDED.bio,
+        collaboration_goals = EXCLUDED.collaboration_goals,
+        profile_photo_url = EXCLUDED.profile_photo_url,
+        cover_image_url = EXCLUDED.cover_image_url,
+        experience = EXCLUDED.experience,
+        featured_links = EXCLUDED.featured_links,
         skills = EXCLUDED.skills,
         interests = EXCLUDED.interests,
         linkedin_url = EXCLUDED.linkedin_url,
@@ -9703,7 +9744,10 @@ app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
         available_for_contact = EXCLUDED.available_for_contact,
         updated_at = NOW()
       RETURNING user_id AS "userId", headline, organization, role_title AS "roleTitle",
-                city, country, bio, skills, interests, linkedin_url AS "linkedinUrl",
+                city, country, bio, collaboration_goals AS "collaborationGoals",
+                profile_photo_url AS "profilePhotoUrl", cover_image_url AS "coverImageUrl",
+                experience, featured_links AS "featuredLinks",
+                skills, interests, linkedin_url AS "linkedinUrl",
                 contact_email AS "contactEmail", is_visible AS "isVisible",
                 show_email AS "showEmail", show_linkedin AS "showLinkedin",
                 available_for_contact AS "availableForContact", updated_at AS "updatedAt"
@@ -9715,6 +9759,11 @@ app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
       payload.city,
       payload.country,
       payload.bio,
+      payload.collaborationGoals,
+      payload.profilePhotoUrl,
+      payload.coverImageUrl,
+      JSON.stringify(payload.experience),
+      JSON.stringify(payload.featuredLinks),
       payload.skills,
       payload.interests,
       payload.linkedinUrl,
@@ -9726,7 +9775,7 @@ app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
     ]);
 
     const userRes = await pool.query(
-      'SELECT email AS "userEmail", first_name AS "firstName", last_name AS "lastName", role FROM users WHERE id = $1',
+      'SELECT email AS "userEmail", first_name AS "firstName", last_name AS "lastName", role, avatar_url AS "userAvatarUrl" FROM users WHERE id = $1',
       [req.user.userId]
     );
     res.json(buildNetworkProfile({ ...rows[0], ...userRes.rows[0] }, { exposePrivate: true }));
@@ -9742,8 +9791,13 @@ app.get('/api/lms/network/profiles', requireStudent, requireNonGuest, async (req
     const { rows } = await pool.query(`
       SELECT u.id AS "userId", u.email AS "userEmail",
              u.first_name AS "firstName", u.last_name AS "lastName", u.role,
+             u.avatar_url AS "userAvatarUrl",
              p.headline, p.organization, p.role_title AS "roleTitle",
              p.city, p.country, p.bio, p.skills, p.interests,
+             p.profile_photo_url AS "profilePhotoUrl",
+             p.cover_image_url AS "coverImageUrl",
+             p.collaboration_goals AS "collaborationGoals",
+             p.experience, p.featured_links AS "featuredLinks",
              p.linkedin_url AS "linkedinUrl", p.contact_email AS "contactEmail",
              p.is_visible AS "isVisible", p.show_email AS "showEmail",
              p.show_linkedin AS "showLinkedin",

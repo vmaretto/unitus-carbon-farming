@@ -40,13 +40,25 @@
         .status.error { color: var(--red-700); }
         .filters { display: grid; grid-template-columns: minmax(180px, 1.2fr) repeat(2, minmax(140px, 0.8fr)); gap: 12px; margin-bottom: 18px; }
         .directory { display: grid; gap: 12px; }
-        .profile-card { border: 1px solid var(--gray-200); border-radius: 14px; padding: 16px; display: grid; gap: 10px; }
-        .profile-head { display: flex; gap: 12px; align-items: flex-start; }
-        .avatar { width: 42px; height: 42px; border-radius: 50%; background: var(--green-100); color: var(--green-700); display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
+        .hint { color: var(--gray-500); font-size: 0.75rem; line-height: 1.35; margin-top: -2px; }
+        .profile-card { border: 1px solid var(--gray-200); border-radius: 14px; overflow: hidden; display: grid; background: white; }
+        .profile-cover { min-height: 92px; background: linear-gradient(135deg, rgba(27,58,45,0.9), rgba(44,122,75,0.72)); background-size: cover; background-position: center; }
+        .profile-body { padding: 0 18px 18px; display: grid; gap: 12px; }
+        .profile-head { display: flex; gap: 14px; align-items: flex-end; margin-top: -34px; }
+        .avatar { width: 76px; height: 76px; border-radius: 50%; background: var(--green-100); color: var(--green-700); border: 4px solid white; display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; overflow: hidden; }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .profile-main { min-width: 0; }
-        .profile-name { font-size: 1rem; font-weight: 700; color: var(--green-900); overflow-wrap: anywhere; }
+        .profile-name { font-size: 1.15rem; font-weight: 700; color: var(--green-900); overflow-wrap: anywhere; }
         .profile-subtitle { color: var(--gray-700); font-size: 0.9rem; margin-top: 2px; overflow-wrap: anywhere; }
         .profile-location { color: var(--gray-500); font-size: 0.82rem; margin-top: 3px; }
+        .profile-section { border-top: 1px solid var(--gray-200); padding-top: 12px; display: grid; gap: 8px; }
+        .profile-section-title { color: var(--green-900); font-size: 0.9rem; font-weight: 800; }
+        .experience-list { display: grid; gap: 9px; }
+        .experience-item { display: grid; gap: 2px; }
+        .experience-title { font-weight: 700; color: var(--gray-900); font-size: 0.88rem; }
+        .experience-meta { color: var(--gray-500); font-size: 0.78rem; }
+        .featured-links { display: flex; flex-wrap: wrap; gap: 8px; }
+        .featured-link { color: var(--green-700); background: var(--green-100); text-decoration: none; border-radius: 10px; padding: 7px 10px; font-size: 0.8rem; font-weight: 700; }
         .bio { color: var(--gray-700); font-size: 0.9rem; line-height: 1.5; }
         .chips { display: flex; flex-wrap: wrap; gap: 6px; }
         .chip { background: var(--green-100); color: var(--green-700); border-radius: 999px; padding: 4px 9px; font-size: 0.75rem; font-weight: 700; }
@@ -115,6 +127,16 @@
                     <label>Bio
                         <textarea id="bio" name="bio" maxlength="900"></textarea>
                     </label>
+                    <label>Sto cercando / posso offrire
+                        <textarea id="collaboration-goals" name="collaborationGoals" maxlength="500" placeholder="Project work, partnership, ricerca, advisory, opportunità aziendali..."></textarea>
+                    </label>
+                    <label>Foto profilo
+                        <input id="profile-photo-url" name="profilePhotoUrl" type="url" placeholder="https://.../foto.jpg" autocomplete="url">
+                        <span class="hint">Puoi usare un URL immagine pubblico, anche copiato da LinkedIn se disponibile.</span>
+                    </label>
+                    <label>Immagine copertina
+                        <input id="cover-image-url" name="coverImageUrl" type="url" placeholder="https://.../cover.jpg" autocomplete="url">
+                    </label>
                     <label>Competenze
                         <input id="skills" name="skills" placeholder="MRV, crediti carbonio, suolo" autocomplete="off">
                     </label>
@@ -126,6 +148,14 @@
                     </label>
                     <label>Email di contatto
                         <input id="contact-email" name="contactEmail" type="email" autocomplete="email">
+                    </label>
+                    <label>Esperienza
+                        <textarea id="experience" name="experience" placeholder="CEO | POSTI | 2024-oggi | Innovazione digitale per carbon farming"></textarea>
+                        <span class="hint">Una riga per esperienza: ruolo | organizzazione | periodo | descrizione.</span>
+                    </label>
+                    <label>Link in evidenza
+                        <textarea id="featured-links" name="featuredLinks" placeholder="Sito aziendale | https://example.com"></textarea>
+                        <span class="hint">Una riga per link: etichetta | URL.</span>
                     </label>
                     <div class="checks">
                         <label class="check"><input id="is-visible" name="isVisible" type="checkbox">Mostra il mio profilo nella directory</label>
@@ -225,7 +255,10 @@
                 profile.roleTitle,
                 profile.city,
                 profile.country,
-                profile.bio
+                profile.bio,
+                profile.collaborationGoals,
+                ...(profile.skills || []),
+                ...(profile.interests || [])
             ].filter(Boolean).join(' ').toLowerCase();
         }
 
@@ -237,11 +270,68 @@
                 .slice(0, 2) || 'CF';
         }
 
+        function parseExperience(value) {
+            return String(value || '')
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .map((line) => {
+                    const [title, organization, period, ...rest] = line.split('|').map((part) => part.trim());
+                    return {
+                        title,
+                        organization,
+                        period,
+                        description: rest.join(' | ')
+                    };
+                })
+                .filter((item) => item.title || item.organization || item.description);
+        }
+
+        function experienceToText(items) {
+            return (Array.isArray(items) ? items : [])
+                .map((item) => [item.title, item.organization, item.period, item.description].filter(Boolean).join(' | '))
+                .join('\n');
+        }
+
+        function parseFeaturedLinks(value) {
+            return String(value || '')
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .map((line) => {
+                    const [label, ...rest] = line.split('|').map((part) => part.trim());
+                    return { label, url: rest.join('|') };
+                })
+                .filter((item) => item.label && item.url);
+        }
+
+        function featuredLinksToText(items) {
+            return (Array.isArray(items) ? items : [])
+                .map((item) => [item.label, item.url].filter(Boolean).join(' | '))
+                .join('\n');
+        }
+
         function renderProfile(profile) {
             const subtitle = [profile.roleTitle, profile.organization].filter(Boolean).join(' · ') || profile.headline || '';
             const location = [profile.city, profile.country].filter(Boolean).join(', ');
             const skills = (profile.skills || []).map((skill) => `<span class="chip">${escapeHtml(skill)}</span>`).join('');
             const interests = (profile.interests || []).map((interest) => `<span class="chip interest">${escapeHtml(interest)}</span>`).join('');
+            const coverStyle = profile.coverImageUrl ? ` style="background-image: url('${escapeHtml(profile.coverImageUrl)}');"` : '';
+            const avatar = profile.profilePhotoUrl
+                ? `<img src="${escapeHtml(profile.profilePhotoUrl)}" alt="">`
+                : escapeHtml(initials(profile));
+            const experience = (profile.experience || []).slice(0, 3).map((item) => `
+                <div class="experience-item">
+                    ${item.title ? `<div class="experience-title">${escapeHtml(item.title)}</div>` : ''}
+                    ${item.organization || item.period ? `<div class="experience-meta">${escapeHtml([item.organization, item.period].filter(Boolean).join(' · '))}</div>` : ''}
+                    ${item.description ? `<div class="bio">${escapeHtml(item.description)}</div>` : ''}
+                </div>
+            `).join('');
+            const featuredLinks = (profile.featuredLinks || [])
+                .filter((item) => item.label && item.url)
+                .slice(0, 4)
+                .map((item) => `<a class="featured-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.label)}</a>`)
+                .join('');
             const contacts = [
                 profile.contactEmail ? `<a class="contact-link" href="mailto:${escapeHtml(profile.contactEmail)}">Email</a>` : '',
                 profile.linkedinUrl ? `<a class="contact-link" href="${escapeHtml(profile.linkedinUrl)}" target="_blank" rel="noopener">LinkedIn</a>` : ''
@@ -250,17 +340,24 @@
 
             return `
                 <article class="profile-card">
-                    <div class="profile-head">
-                        <div class="avatar">${escapeHtml(initials(profile))}</div>
-                        <div class="profile-main">
-                            <div class="profile-name">${escapeHtml(profile.fullName || 'Partecipante')}</div>
-                            ${subtitle ? `<div class="profile-subtitle">${escapeHtml(subtitle)}</div>` : ''}
-                            ${location ? `<div class="profile-location">${escapeHtml(location)}</div>` : ''}
+                    <div class="profile-cover"${coverStyle}></div>
+                    <div class="profile-body">
+                        <div class="profile-head">
+                            <div class="avatar">${avatar}</div>
+                            <div class="profile-main">
+                                <div class="profile-name">${escapeHtml(profile.fullName || 'Partecipante')}</div>
+                                ${subtitle ? `<div class="profile-subtitle">${escapeHtml(subtitle)}</div>` : ''}
+                                ${profile.headline && subtitle !== profile.headline ? `<div class="profile-location">${escapeHtml(profile.headline)}</div>` : ''}
+                                ${location ? `<div class="profile-location">${escapeHtml(location)}</div>` : ''}
+                            </div>
                         </div>
+                        ${profile.bio ? `<div class="profile-section"><div class="profile-section-title">Informazioni</div><div class="bio">${escapeHtml(profile.bio)}</div></div>` : ''}
+                        ${profile.collaborationGoals ? `<div class="profile-section"><div class="profile-section-title">Collaborazioni</div><div class="bio">${escapeHtml(profile.collaborationGoals)}</div></div>` : ''}
+                        ${(skills || interests || availability) ? `<div class="chips">${availability}${skills}${interests}</div>` : ''}
+                        ${experience ? `<div class="profile-section"><div class="profile-section-title">Esperienza</div><div class="experience-list">${experience}</div></div>` : ''}
+                        ${featuredLinks ? `<div class="profile-section"><div class="profile-section-title">In evidenza</div><div class="featured-links">${featuredLinks}</div></div>` : ''}
+                        ${contacts ? `<div class="contact-row">${contacts}</div>` : ''}
                     </div>
-                    ${profile.bio ? `<div class="bio">${escapeHtml(profile.bio)}</div>` : ''}
-                    ${(skills || interests || availability) ? `<div class="chips">${availability}${skills}${interests}</div>` : ''}
-                    ${contacts ? `<div class="contact-row">${contacts}</div>` : ''}
                 </article>
             `;
         }
@@ -291,10 +388,15 @@
             document.getElementById('city').value = profile.city || '';
             document.getElementById('country').value = profile.country || '';
             document.getElementById('bio').value = profile.bio || '';
+            document.getElementById('collaboration-goals').value = profile.collaborationGoals || '';
+            document.getElementById('profile-photo-url').value = profile.profilePhotoUrl || '';
+            document.getElementById('cover-image-url').value = profile.coverImageUrl || '';
             document.getElementById('skills').value = listToInput(profile.skills);
             document.getElementById('interests').value = listToInput(profile.interests);
             document.getElementById('linkedin-url').value = profile.linkedinUrl || '';
             document.getElementById('contact-email').value = profile.contactEmail || '';
+            document.getElementById('experience').value = experienceToText(profile.experience);
+            document.getElementById('featured-links').value = featuredLinksToText(profile.featuredLinks);
             document.getElementById('is-visible').checked = Boolean(profile.isVisible);
             document.getElementById('available-for-contact').checked = profile.availableForContact !== false;
             document.getElementById('show-email').checked = Boolean(profile.showEmail);
@@ -309,10 +411,15 @@
                 city: document.getElementById('city').value,
                 country: document.getElementById('country').value,
                 bio: document.getElementById('bio').value,
+                collaborationGoals: document.getElementById('collaboration-goals').value,
+                profilePhotoUrl: document.getElementById('profile-photo-url').value,
+                coverImageUrl: document.getElementById('cover-image-url').value,
                 skills: splitList(document.getElementById('skills').value),
                 interests: splitList(document.getElementById('interests').value),
                 linkedinUrl: document.getElementById('linkedin-url').value,
                 contactEmail: document.getElementById('contact-email').value,
+                experience: parseExperience(document.getElementById('experience').value),
+                featuredLinks: parseFeaturedLinks(document.getElementById('featured-links').value),
                 isVisible: document.getElementById('is-visible').checked,
                 availableForContact: document.getElementById('available-for-contact').checked,
                 showEmail: document.getElementById('show-email').checked,

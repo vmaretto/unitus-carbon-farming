@@ -2939,7 +2939,7 @@ Buono studio!</textarea>
         <!-- ============================================ -->
         <section id="surveys">
             <header>
-                <h2>📋 Questionari di feedback</h2>
+                <h2>📋 Questionari</h2>
                 <p class="section-description">Crea questionari per studenti e docenti, lancia campagne e leggi i risultati aggregati.</p>
             </header>
 
@@ -3239,7 +3239,7 @@ Buono studio!</textarea>
         <section id="student-progress">
             <header>
                 <h2>📈 Progressi studenti</h2>
-                <p class="section-description">Vista complessiva di frequenza, lezioni completate, quiz, materiali consultati e domande/feedback inviati dagli studenti.</p>
+                <p class="section-description">Vista complessiva di frequenza, lezioni completate, quiz, questionari, eventi, materiali consultati e domande/risposte degli studenti.</p>
             </header>
 
             <div class="progress-dashboard">
@@ -3295,15 +3295,17 @@ Buono studio!</textarea>
                                 <th>Ruolo</th>
                                 <th>Presenza</th>
                                 <th>Lezioni</th>
-                                <th>Quiz</th>
+                                <th>Quiz L/M</th>
+                                <th>Questionari</th>
+                                <th>Eventi</th>
                                 <th>Materiali</th>
                                 <th>Domande</th>
-                                <th>Feedback</th>
+                                <th>Risposte</th>
                                 <th>Ultima attività</th>
                             </tr>
                         </thead>
                         <tbody id="sp-table-body">
-                            <tr><td colspan="10" class="empty-state">Caricamento progressi...</td></tr>
+                            <tr><td colspan="13" class="empty-state">Caricamento progressi...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -6470,7 +6472,6 @@ Buono studio!</textarea>
                                                 ${typeIcons[item.resourceType] || '📎'} ${escapeHtml(item.title)}
                                             </div>
                                             <div class="admin-resource-item-meta">ID: ${escapeHtml(item.id)}</div>
-                                            ${fileName ? `<div class="admin-resource-item-meta">File: ${escapeHtml(fileName)}</div>` : ''}
                                             <div class="admin-resource-item-meta">
                                                 ${escapeHtml(item.teacherName || 'Nessun docente')} · ${escapeHtml(item.source || 'admin')} · ${escapeHtml(status)}
                                             </div>
@@ -6904,7 +6905,6 @@ Buono studio!</textarea>
                     <div style="font-size: 0.72rem; color: var(--gray-500); margin-top: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
                         ID: ${escapeHtml(item.id)}
                     </div>
-                    ${fileName ? `<div style="font-size: 0.78rem; color: var(--gray-500); margin-top: 4px;">📎 ${escapeHtml(fileName)}</div>` : ''}
                 </td>
                 <td data-type>${typeIcons[item.resourceType] || ''} ${escapeHtml(item.resourceType)}</td>
                 <td>${linkBadge}</td>
@@ -11316,9 +11316,19 @@ Buono studio!</textarea>
                     <div class="subvalue">${summary.totalLessons || 0} lezioni pubblicate</div>
                 </div>
                 <div class="progress-summary-card">
-                    <div class="label">Quiz superati</div>
-                    <div class="value">${summary.quizPassRate || 0}%</div>
-                    <div class="subvalue">${summary.quizAttempts || 0} tentativi completati</div>
+                    <div class="label">Quiz completati</div>
+                    <div class="value">${summary.totalQuizzesCompleted || 0}</div>
+                    <div class="subvalue">Lezioni ${summary.lessonQuizCompleted || 0} · Moduli ${summary.moduleQuizCompleted || 0} · ${summary.quizPassRate || 0}% di superamento</div>
+                </div>
+                <div class="progress-summary-card">
+                    <div class="label">Questionari compilati</div>
+                    <div class="value">${summary.surveysCompleted || 0}</div>
+                    <div class="subvalue">Compilazioni concluse dagli studenti</div>
+                </div>
+                <div class="progress-summary-card">
+                    <div class="label">Eventi risposti</div>
+                    <div class="value">${summary.eventsResponded || 0}</div>
+                    <div class="subvalue">${summary.eventsRegistered || 0} parteciperanno · ${summary.eventsDeclined || 0} non parteciperanno</div>
                 </div>
                 <div class="progress-summary-card">
                     <div class="label">Domande inviate</div>
@@ -11326,9 +11336,9 @@ Buono studio!</textarea>
                     <div class="subvalue">Richieste di supporto e chiarimento</div>
                 </div>
                 <div class="progress-summary-card">
-                    <div class="label">Feedback ricevuti</div>
+                    <div class="label">Risposte del docente</div>
                     <div class="value">${summary.repliesReceived || 0}</div>
-                    <div class="subvalue">Risposte del docente e commenti</div>
+                    <div class="subvalue">Commenti e riscontri ai quesiti</div>
                 </div>
             `;
         }
@@ -11388,12 +11398,20 @@ Buono studio!</textarea>
                     <div class="value">${summary.avgQuizBestScore === null || summary.avgQuizBestScore === undefined ? '—' : `${summary.avgQuizBestScore}%`}</div>
                 </div>
                 <div class="progress-mini">
-                    <div class="label">Materiali consultati</div>
-                    <div class="value">${summary.materialsViewed || 0}/${summary.totalResources || 0}</div>
+                    <div class="label">Quiz completati</div>
+                    <div class="value">${summary.totalQuizzesCompleted || 0}</div>
                 </div>
                 <div class="progress-mini">
-                    <div class="label">Presenze totali</div>
-                    <div class="value">${(summary.inPerson || 0) + (summary.remoteLive || 0) + (summary.remotePartial || 0) + (summary.async || 0)}</div>
+                    <div class="label">Questionari compilati</div>
+                    <div class="value">${summary.surveysCompleted || 0}</div>
+                </div>
+                <div class="progress-mini">
+                    <div class="label">Eventi risposti</div>
+                    <div class="value">${summary.eventsResponded || 0}</div>
+                </div>
+                <div class="progress-mini">
+                    <div class="label">Materiali consultati</div>
+                    <div class="value">${summary.materialsViewed || 0}/${summary.totalResources || 0}</div>
                 </div>
             `;
         }
@@ -11408,6 +11426,11 @@ Buono studio!</textarea>
                     : 0;
                 const avgLesson = summary.avgLessonProgress ?? 0;
                 const avgQuiz = summary.avgQuizBestScore === null || summary.avgQuizBestScore === undefined ? '—' : `${summary.avgQuizBestScore}%`;
+                const totalQuizzesCompleted = summary.totalQuizzesCompleted ?? 0;
+                const totalSurveysCompleted = summary.surveysCompleted ?? 0;
+                const totalEventsResponded = summary.eventsResponded ?? 0;
+                const totalEventsRegistered = summary.eventsRegistered ?? 0;
+                const totalEventsDeclined = summary.eventsDeclined ?? 0;
                 const totalQuestions = summary.questionsAsked ?? 0;
                 const totalReplies = summary.repliesReceived ?? 0;
                 const latestActivity = items.reduce((latest, item) => {
@@ -11425,7 +11448,10 @@ Buono studio!</textarea>
                             <div class="student-progress-detail-summary-item"><span>Media complessiva</span><strong>${avgOverall}%</strong></div>
                             <div class="student-progress-detail-summary-item"><span>Media lezioni</span><strong>${avgLesson}%</strong></div>
                             <div class="student-progress-detail-summary-item"><span>Media quiz</span><strong>${avgQuiz}</strong></div>
-                            <div class="student-progress-detail-summary-item"><span>Domande / feedback</span><strong>${totalQuestions} / ${totalReplies}</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Quiz completati</span><strong>${totalQuizzesCompleted}</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Questionari compilati</span><strong>${totalSurveysCompleted}</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Eventi risposti</span><strong>${totalEventsResponded} (${totalEventsRegistered} sì, ${totalEventsDeclined} no)</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Domande / risposte</span><strong>${totalQuestions} / ${totalReplies}</strong></div>
                         </div>
                         <div class="student-progress-detail-summary-item"><span>Ultima attività</span><strong>${escapeHtml(formatProgressDate(latestActivity))}</strong></div>
                     </div>
@@ -11443,10 +11469,16 @@ Buono studio!</textarea>
                 <div class="student-progress-detail-list">
                     <div class="student-progress-detail-item"><span>Presenze totali</span><strong>${student.attendance.total}</strong></div>
                     <div class="student-progress-detail-item"><span>Lezioni completate</span><strong>${student.lessons.completed}/${student.lessons.total} (${student.lessons.percent}%)</strong></div>
+                    <div class="student-progress-detail-item"><span>Quiz lezioni</span><strong>${student.quizzes.lessonCompleted}</strong></div>
+                    <div class="student-progress-detail-item"><span>Quiz moduli</span><strong>${student.quizzes.moduleCompleted}</strong></div>
+                    <div class="student-progress-detail-item"><span>Quiz completati</span><strong>${student.quizzes.completed}</strong></div>
                     <div class="student-progress-detail-item"><span>Miglior quiz</span><strong>${student.quizzes.bestScore === null || student.quizzes.bestScore === undefined ? '—' : `${student.quizzes.bestScore}%`}</strong></div>
+                    <div class="student-progress-detail-item"><span>Questionari compilati</span><strong>${student.surveys.completed}</strong></div>
+                    <div class="student-progress-detail-item"><span>Eventi: sì</span><strong>${student.events.registered}</strong></div>
+                    <div class="student-progress-detail-item"><span>Eventi: no</span><strong>${student.events.declined}</strong></div>
                     <div class="student-progress-detail-item"><span>Materiali consultati</span><strong>${student.materials.viewed}/${student.materials.total} (${student.materials.percent}%)</strong></div>
                     <div class="student-progress-detail-item"><span>Domande inviate</span><strong>${student.questions.asked}</strong></div>
-                    <div class="student-progress-detail-item"><span>Feedback ricevuti</span><strong>${student.questions.repliesReceived}</strong></div>
+                    <div class="student-progress-detail-item"><span>Risposte del docente</span><strong>${student.questions.repliesReceived}</strong></div>
                     <div class="student-progress-detail-item"><span>Ultima attività</span><strong>${escapeHtml(formatProgressDate(student.lastActivityAt))}</strong></div>
                 </div>
             `;
@@ -11455,8 +11487,8 @@ Buono studio!</textarea>
         function renderProgressTable(students) {
             const tbody = document.getElementById('sp-table-body');
             if (!tbody) return;
-                if (!students || !students.length) {
-                tbody.innerHTML = '<tr><td colspan="10" class="empty-state">Nessuno studente trovato per questa edizione.</td></tr>';
+            if (!students || !students.length) {
+                tbody.innerHTML = '<tr><td colspan="13" class="empty-state">Nessuno studente trovato per questa edizione.</td></tr>';
                 return;
             }
 
@@ -11471,7 +11503,9 @@ Buono studio!</textarea>
                         <td>${student.role === 'guest' ? '👁️ Ospite' : escapeHtml(student.role || 'student')}</td>
                         <td>${student.attendance.total} ${student.attendance.inPerson ? `(${student.attendance.inPerson} in sito)` : ''}</td>
                         <td>${student.lessons.completed}/${student.lessons.total} (${student.lessons.percent}%)</td>
-                        <td>${student.quizzes.bestScore === null || student.quizzes.bestScore === undefined ? '—' : `${student.quizzes.bestScore}%`}</td>
+                        <td>L ${student.quizzes.lessonCompleted} · M ${student.quizzes.moduleCompleted}</td>
+                        <td>${student.surveys.completed}</td>
+                        <td>${student.events.registered} sì · ${student.events.declined} no</td>
                         <td>${student.materials.viewed}/${student.materials.total} (${student.materials.percent}%)</td>
                         <td>${student.questions.asked}</td>
                         <td>${student.questions.repliesReceived}</td>

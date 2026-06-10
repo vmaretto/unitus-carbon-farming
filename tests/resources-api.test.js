@@ -552,8 +552,8 @@ test('GET /api/admin/student-progress aggrega frequenza, quiz, materiali e doman
         };
       }
 
-      if (statement.includes('FROM quiz_attempts qa') && statement.includes('qa.completed_at IS NOT NULL')) {
-        assert.deepEqual(params, [['student-1', 'student-2'], ['quiz-1', 'quiz-2']]);
+      if (statement.includes('FROM quiz_attempts qa') && statement.includes('JOIN quizzes q ON q.id = qa.quiz_id')) {
+        assert.deepEqual(params, [['student-1', 'student-2'], ['lesson-1'], ['module-1']]);
         return {
           rows: [
             {
@@ -562,6 +562,9 @@ test('GET /api/admin/student-progress aggrega frequenza, quiz, materiali e doman
               passedAttempts: 1,
               bestScore: 90,
               avgScore: '90.00',
+              lessonQuizCompleted: 1,
+              moduleQuizCompleted: 1,
+              quizzesCompleted: 2,
               lastQuizAt: '2026-05-06T11:00:00.000Z'
             },
             {
@@ -570,7 +573,50 @@ test('GET /api/admin/student-progress aggrega frequenza, quiz, materiali e doman
               passedAttempts: 0,
               bestScore: 60,
               avgScore: '60.00',
+              lessonQuizCompleted: 0,
+              moduleQuizCompleted: 1,
+              quizzesCompleted: 1,
               lastQuizAt: '2026-05-05T11:00:00.000Z'
+            }
+          ]
+        };
+      }
+
+      if (statement.includes('FROM survey_invitations i') && statement.includes('JOIN survey_campaigns c ON c.id = i.campaign_id')) {
+        assert.deepEqual(params, [['student-1', 'student-2']]);
+        return {
+          rows: [
+            {
+              userId: 'student-1',
+              surveysCompleted: 3,
+              lastSurveyAt: '2026-05-06T12:30:00.000Z'
+            },
+            {
+              userId: 'student-2',
+              surveysCompleted: 1,
+              lastSurveyAt: '2026-05-05T12:30:00.000Z'
+            }
+          ]
+        };
+      }
+
+      if (statement.includes('FROM event_registrations r') && statement.includes('response_status = \'registered\'')) {
+        assert.deepEqual(params, [['student-1', 'student-2']]);
+        return {
+          rows: [
+            {
+              userId: 'student-1',
+              eventsRegistered: 2,
+              eventsDeclined: 1,
+              eventsResponded: 3,
+              lastEventAt: '2026-05-06T12:45:00.000Z'
+            },
+            {
+              userId: 'student-2',
+              eventsRegistered: 0,
+              eventsDeclined: 1,
+              eventsResponded: 1,
+              lastEventAt: '2026-05-05T12:45:00.000Z'
             }
           ]
         };
@@ -614,10 +660,22 @@ test('GET /api/admin/student-progress aggrega frequenza, quiz, materiali e doman
   assert.equal(res.body.summary.cohortCompletedLessons, 1);
   assert.equal(res.body.summary.totalLessons, 1);
   assert.equal(res.body.summary.totalResources, 4);
+  assert.equal(res.body.summary.totalQuizzesCompleted, 3);
+  assert.equal(res.body.summary.lessonQuizCompleted, 1);
+  assert.equal(res.body.summary.moduleQuizCompleted, 2);
+  assert.equal(res.body.summary.surveysCompleted, 4);
+  assert.equal(res.body.summary.eventsResponded, 4);
   assert.equal(res.body.summary.quizPassRate, 50);
   assert.equal(res.body.students[0].userId, 'student-1');
   assert.equal(res.body.students[0].overallPercent, 91);
   assert.equal(res.body.students[1].overallPercent, 15);
+  assert.equal(res.body.students[0].quizzes.lessonCompleted, 1);
+  assert.equal(res.body.students[0].quizzes.moduleCompleted, 1);
+  assert.equal(res.body.students[0].quizzes.completed, 2);
+  assert.equal(res.body.students[0].surveys.completed, 3);
+  assert.equal(res.body.students[0].events.registered, 2);
+  assert.equal(res.body.students[0].events.declined, 1);
+  assert.equal(res.body.students[0].events.responded, 3);
   assert.deepEqual(res.body.attendanceBreakdown, [
     { key: 'inPerson', label: '🏫 In sito', count: 1 },
     { key: 'remoteLive', label: '💻 Online', count: 0 },

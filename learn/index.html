@@ -495,22 +495,27 @@
                     const dateStr = formatEventDate(ev.startsAt);
                     const deadlineStr = formatEventDate(ev.registrationDeadline);
                     const deadlinePassed = ev.registrationDeadline && new Date(ev.registrationDeadline).getTime() < Date.now();
-                    const full = ev.capacity && ev.registeredCount >= ev.capacity && !ev.isRegistered;
+                    const full = ev.capacity && ev.registeredCount >= ev.capacity && ev.responseStatus !== 'registered';
                     const seats = ev.capacity
                         ? `${ev.registeredCount}/${ev.capacity} iscritti`
                         : `${ev.registeredCount} iscritti`;
-                    let actionBtn;
-                    if (ev.isRegistered) {
-                        actionBtn = `<button class="event-btn" disabled style="background:#dcfce7;color:#166534;border:1px solid #6ee7b7;cursor:default;">✓ Iscritto</button>`;
-                    } else if (!ev.registrationOpen) {
-                        actionBtn = `<button class="event-btn" disabled style="background:#e5e7eb;color:#6b7280;cursor:not-allowed;">Iscrizioni chiuse</button>`;
-                    } else if (deadlinePassed) {
-                        actionBtn = `<button class="event-btn" disabled style="background:#e5e7eb;color:#6b7280;cursor:not-allowed;">Termine scaduto</button>`;
-                    } else if (full) {
-                        actionBtn = `<button class="event-btn" disabled style="background:#e5e7eb;color:#6b7280;cursor:not-allowed;">Posti esauriti</button>`;
-                    } else {
-                        actionBtn = `<button class="event-btn" data-event-register="${ev.id}" style="background:var(--green-700,#245a3d);color:#fff;border:none;">Iscriviti</button>`;
-                    }
+                    const currentResponse = ev.responseStatus === 'registered'
+                        ? 'Parteciperò'
+                        : ev.responseStatus === 'declined'
+                            ? 'Non parteciperò'
+                            : 'Nessuna risposta';
+                    const registerDisabled = (!ev.registrationOpen || deadlinePassed || full) && ev.responseStatus !== 'registered';
+                    const registerStateStyle = ev.responseStatus === 'registered'
+                        ? 'background:#dcfce7;color:#166534;border:1px solid #86efac;'
+                        : 'background:var(--green-700,#245a3d);color:#fff;border:none;';
+                    const declineStateStyle = ev.responseStatus === 'declined'
+                        ? 'background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;'
+                        : 'background:#fff;color:#991b1b;border:1px solid #fca5a5;';
+                    const registerLabel = registerDisabled && ev.responseStatus !== 'registered'
+                        ? (full ? 'Posti esauriti' : (deadlinePassed ? 'Termine scaduto' : 'Iscrizioni chiuse'))
+                        : 'Parteciperò';
+                    const registerButton = `<button class="event-btn" data-event-response="${ev.id}:registered" ${registerDisabled ? 'disabled' : ''} style="${registerStateStyle}${registerDisabled && ev.responseStatus !== 'registered' ? 'opacity:0.55;cursor:not-allowed;' : ''}">${registerLabel}</button>`;
+                    const declineButton = `<button class="event-btn" data-event-response="${ev.id}:declined" style="${declineStateStyle}">${ev.responseStatus === 'declined' ? '✓ Non parteciperò' : 'Non parteciperò'}</button>`;
                     return `
                         <div style="padding:16px; border:1px solid #e5e7eb; border-radius:14px; margin-bottom:12px; background:#fff;">
                             <div style="display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap; align-items:flex-start;">
@@ -520,9 +525,10 @@
                                     ${ev.location ? `<div style="color:#6b7280; font-size:0.9rem;">📍 ${ev.location}</div>` : ''}
                                     ${ev.description ? `<div style="margin-top:8px; color:#374151; font-size:0.92rem;">${ev.description}</div>` : ''}
                                     <div style="margin-top:8px; color:#6b7280; font-size:0.82rem;">${seats}</div>
+                                    <div style="margin-top:4px; color:#374151; font-size:0.82rem;">La tua risposta: <strong>${currentResponse}</strong></div>
                                     ${deadlineStr && !ev.isRegistered ? `<div style="margin-top:4px; color:${deadlinePassed ? '#b91c1c' : '#b45309'}; font-size:0.82rem;">⏳ Iscrizioni entro il ${deadlineStr}</div>` : ''}
                                 </div>
-                                <div style="flex-shrink:0;">${actionBtn}</div>
+                                <div style="flex-shrink:0; display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">${registerButton}${declineButton}</div>
                             </div>
                         </div>
                     `;
@@ -540,24 +546,31 @@
         }
 
         document.getElementById('events-section').addEventListener('click', async (e) => {
-            const regBtn = e.target.closest('[data-event-register]');
-            if (!regBtn) return;
-            // Conferma obbligatoria: l'iscrizione è definitiva e non annullabile.
-            if (!confirm('Confermi l\'iscrizione a questo evento?\n\n⚠️ L\'iscrizione è DEFINITIVA e non potrà essere annullata dalla tua area. Riceverai una email di conferma.')) return;
-            regBtn.disabled = true;
+            const btn = e.target.closest('[data-event-response]');
+            if (!btn) return;
+            const [eventId, responseStatus] = btn.dataset.eventResponse.split(':');
+            btn.disabled = true;
             try {
-                const res = await fetch(`/api/lms/events/${regBtn.dataset.eventRegister}/register`, {
-                    method: 'POST', headers: { 'Authorization': 'Bearer ' + token }
+                const res = await fetch(`/api/lms/events/${eventId}/response`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ responseStatus })
                 });
                 if (!res.ok) {
                     const data = await res.json().catch(() => ({}));
-                    alert(data.error || 'Iscrizione non riuscita');
-                    regBtn.disabled = false;
+                    alert(data.error || 'Operazione non riuscita');
+                    btn.disabled = false;
                     return;
                 }
-                alert('Iscrizione confermata! Ti abbiamo inviato una email di conferma.');
+                alert(responseStatus === 'registered' ? 'Risposta salvata: parteciperai all\'evento.' : 'Risposta salvata: non parteciperai all\'evento.');
                 await loadEvents();
-            } catch (err) { alert('Iscrizione non riuscita'); regBtn.disabled = false; }
+            } catch (err) {
+                alert('Operazione non riuscita');
+                btn.disabled = false;
+            }
         });
 
         refreshCurrentUser().then(loadDashboard).then(loadPendingSurveys).then(loadEvents);

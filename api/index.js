@@ -10,6 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const { put, del } = require('@vercel/blob');
 const { generateClientTokenFromReadWriteToken } = require('@vercel/blob/client');
+const cheerio = require('cheerio');
 const JSZip = require('jszip');
 const { OpenAI } = require('openai');
 const { PDFDocument, rgb, degrees, StandardFonts } = require('pdf-lib');
@@ -31,6 +32,26 @@ const MATERIALS_UPLOAD_FINAL_MAX_BYTES = 20 * 1024 * 1024;
 const MATERIALS_UPLOAD_INGEST_MAX_BYTES = 50 * 1024 * 1024;
 const BLOB_CLIENT_TOKEN_MAX_BYTES = 250 * 1024 * 1024;
 const PDF_COMPRESSION_THRESHOLD_BYTES = RESOURCE_UPLOAD_MAX_BYTES;
+async function createBlobClientToken({ pathname, maximumSizeInBytes, contentType }) {
+  const clientToken = await generateClientTokenFromReadWriteToken({
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+    access: 'public',
+    pathname,
+    maximumSizeInBytes,
+    allowedContentTypes: contentType ? [contentType] : undefined,
+    validUntil: Date.now() + 30 * 60 * 1000,
+    addRandomSuffix: false,
+    allowOverwrite: false
+  });
+
+  return {
+    clientToken,
+    uploadUrl: 'https://blob.vercel-storage.com',
+    pathname,
+    maximumSizeInBytes
+  };
+}
+
 async function compressPdfWithPdfLib(buffer) {
   const sourceDoc = await PDFDocument.load(buffer, {
     updateMetadata: false,
@@ -158,25 +179,7 @@ app.post('/api/blob/client-token', requireAdminOrTeacher, async (req, res) => {
       : MATERIALS_UPLOAD_FINAL_MAX_BYTES;
 
     const contentType = String(req.body?.contentType || '').trim() || null;
-    const allowedContentTypes = contentType ? [contentType] : undefined;
-
-    const clientToken = await generateClientTokenFromReadWriteToken({
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-      access: 'public',
-      pathname,
-      maximumSizeInBytes,
-      allowedContentTypes,
-      validUntil: Date.now() + 30 * 60 * 1000,
-      addRandomSuffix: false,
-      allowOverwrite: false
-    });
-
-    res.json({
-      clientToken,
-      uploadUrl: 'https://blob.vercel-storage.com',
-      pathname,
-      maximumSizeInBytes
-    });
+    res.json(await createBlobClientToken({ pathname, maximumSizeInBytes, contentType }));
   } catch (error) {
     console.error('Error generating blob client token:', error);
     res.status(500).json({ error: error.message || 'Impossibile generare il token upload' });
@@ -1320,6 +1323,84 @@ app.post('/api/admin/conference-registrations/import-xlsx', requireAdmin, upload
 // EVENTI — iscrizioni studenti (es. visite aziendali)
 // =============================================================================
 
+async function setEventResponse({ eventId, userId, responseStatus }) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: eventRows } = await client.query(`
+      SELECT id, title, location, starts_at AS "startsAt", capacity,
+             registration_open AS "registrationOpen",
+             registration_deadline AS "registrationDeadline"
+      FROM events
+      WHERE id = $1
+      FOR UPDATE
+    `, [eventId]);
+    const event = eventRows[0];
+    if (!event) {
+      await client.query('ROLLBACK');
+      return { error: { status: 404, message: 'Evento non trovato' } };
+    }
+
+    const { rows: existingRows } = await client.query(
+      'SELECT id, response_status AS "responseStatus" FROM event_registrations WHERE event_id = $1 AND user_id = $2 FOR UPDATE',
+      [eventId, userId]
+    );
+    const existing = existingRows[0] || null;
+    if (existing && existing.responseStatus === responseStatus) {
+      await client.query('COMMIT');
+      return { ok: true, alreadyResponded: true, responseStatus };
+    }
+
+    if (responseStatus === 'registered') {
+      if (!event.registrationOpen) {
+        await client.query('ROLLBACK');
+        return { error: { status: 409, message: 'Le iscrizioni per questo evento sono chiuse' } };
+      }
+      if (event.registrationDeadline && new Date(event.registrationDeadline).getTime() < Date.now()) {
+        await client.query('ROLLBACK');
+        return { error: { status: 409, message: 'Il termine per iscriversi a questo evento è scaduto' } };
+      }
+      if (event.capacity && (!existing || existing.responseStatus !== 'registered')) {
+        const { rows: countRows } = await client.query(
+          "SELECT COUNT(*)::int AS n FROM event_registrations WHERE event_id = $1 AND response_status = 'registered'",
+          [eventId]
+        );
+        if (countRows[0].n >= event.capacity) {
+          await client.query('ROLLBACK');
+          return { error: { status: 409, message: 'Posti esauriti per questo evento' } };
+        }
+      }
+    }
+
+    const { rows: savedRows } = await client.query(`
+      INSERT INTO event_registrations (event_id, user_id, response_status)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (event_id, user_id) DO UPDATE SET
+        response_status = EXCLUDED.response_status,
+        updated_at = NOW()
+      RETURNING id, response_status AS "responseStatus", (xmax = 0) AS "inserted"
+    `, [eventId, userId, responseStatus]);
+
+    await client.query('COMMIT');
+    return {
+      ok: true,
+      inserted: savedRows[0]?.inserted === true,
+      responseStatus: savedRows[0]?.responseStatus || responseStatus,
+      changed: !existing || existing.responseStatus !== responseStatus
+    };
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error('Error rolling back event response transaction', rollbackError);
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 // Studente: elenco eventi aperti con stato iscrizione personale
 app.get('/api/lms/events', requireStudent, async (req, res) => {
   if (!ensurePool(res)) return;
@@ -1329,74 +1410,53 @@ app.get('/api/lms/events', requireStudent, async (req, res) => {
       SELECT e.id, e.title, e.description, e.location, e.starts_at AS "startsAt",
              e.capacity, e.registration_open AS "registrationOpen",
              e.registration_deadline AS "registrationDeadline",
-             COUNT(r.id)::int AS "registeredCount",
-             BOOL_OR(r.user_id = $1) AS "isRegistered"
+             COUNT(*) FILTER (WHERE r.response_status = 'registered')::int AS "registeredCount",
+             COUNT(*) FILTER (WHERE r.response_status = 'declined')::int AS "declinedCount",
+             MAX(CASE WHEN r.user_id = $1 THEN r.response_status END) AS "responseStatus"
       FROM events e
       LEFT JOIN event_registrations r ON r.event_id = e.id
       GROUP BY e.id
-      HAVING e.registration_open = true OR BOOL_OR(r.user_id = $1) = true
+      HAVING e.registration_open = true OR MAX(CASE WHEN r.user_id = $1 THEN r.response_status END) IS NOT NULL
       ORDER BY e.starts_at NULLS LAST, e.created_at DESC
     `, [userId]);
-    res.json(rows.map(row => ({ ...row, isRegistered: row.isRegistered === true })));
+    res.json(rows.map(row => ({
+      ...row,
+      responseStatus: row.responseStatus || null,
+      isRegistered: row.responseStatus === 'registered',
+      isDeclined: row.responseStatus === 'declined'
+    })));
   } catch (error) {
     console.error('Error fetching events', error);
     res.status(500).json({ error: 'Unable to retrieve events' });
   }
 });
 
-// Studente: iscriviti a un evento
-app.post('/api/lms/events/:id/register', requireStudent, requireNonGuest, async (req, res) => {
+async function handleEventResponseRequest(req, res, responseStatus) {
   if (!ensurePool(res)) return;
   const userId = req.user.userId;
   if (!userId) return res.status(400).json({ error: 'Utente non valido' });
+  if (!['registered', 'declined'].includes(responseStatus)) {
+    return res.status(400).json({ error: 'responseStatus must be registered or declined' });
+  }
   try {
-    const { rows: eventRows } = await pool.query(
-      `SELECT id, title, location, starts_at AS "startsAt", capacity,
-              registration_open AS "registrationOpen",
-              registration_deadline AS "registrationDeadline"
-       FROM events WHERE id = $1`,
-      [req.params.id]
-    );
-    const event = eventRows[0];
-    if (!event) return res.status(404).json({ error: 'Evento non trovato' });
-
-    const { rows: existing } = await pool.query(
-      'SELECT id FROM event_registrations WHERE event_id = $1 AND user_id = $2',
-      [event.id, userId]
-    );
-    if (existing.length) return res.json({ ok: true, alreadyRegistered: true });
-
-    if (!event.registrationOpen) {
-      return res.status(409).json({ error: 'Le iscrizioni per questo evento sono chiuse' });
-    }
-    if (event.registrationDeadline && new Date(event.registrationDeadline).getTime() < Date.now()) {
-      return res.status(409).json({ error: 'Il termine per iscriversi a questo evento è scaduto' });
-    }
-    if (event.capacity) {
-      const { rows: countRows } = await pool.query(
-        'SELECT COUNT(*)::int AS n FROM event_registrations WHERE event_id = $1',
-        [event.id]
-      );
-      if (countRows[0].n >= event.capacity) {
-        return res.status(409).json({ error: 'Posti esauriti per questo evento' });
-      }
+    const result = await setEventResponse({ eventId: req.params.id, userId, responseStatus });
+    if (result.error) {
+      return res.status(result.error.status || 500).json({ error: result.error.message });
     }
 
-    const { rows: inserted } = await pool.query(
-      'INSERT INTO event_registrations (event_id, user_id) VALUES ($1, $2) ON CONFLICT (event_id, user_id) DO NOTHING RETURNING id',
-      [event.id, userId]
-    );
-
-    // Email di conferma (best-effort: non blocca l'iscrizione se l'invio fallisce).
-    // Inviata solo per una nuova iscrizione effettiva (inserted.length > 0).
-    if (inserted.length) {
+    if (responseStatus === 'registered' && result.changed) {
       try {
         const { rows: userRows } = await pool.query(
           'SELECT email, first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1',
           [userId]
         );
+        const { rows: eventRows } = await pool.query(
+          'SELECT title, location, starts_at AS "startsAt" FROM events WHERE id = $1',
+          [req.params.id]
+        );
         const student = userRows[0];
-        if (student && student.email) {
+        const event = eventRows[0];
+        if (student && student.email && event) {
           await sendEmail({
             to: student.email,
             subject: `Conferma iscrizione: ${event.title}`,
@@ -1408,11 +1468,27 @@ app.post('/api/lms/events/:id/register', requireStudent, requireNonGuest, async 
       }
     }
 
-    res.json({ ok: true });
+    res.json({ ok: true, responseStatus });
   } catch (error) {
-    console.error('Error registering to event', error);
-    res.status(500).json({ error: 'Iscrizione non riuscita' });
+    console.error('Error saving event response', error);
+    res.status(500).json({ error: 'Risposta non riuscita' });
   }
+}
+
+// Studente: risponde a un evento (parteciperà / non parteciperà)
+app.post('/api/lms/events/:id/response', requireStudent, requireNonGuest, async (req, res) => {
+  const responseStatus = String(req.body?.responseStatus || req.body?.response || '').trim();
+  return handleEventResponseRequest(req, res, responseStatus);
+});
+
+// Compatibilità: vecchia route iscrizione => RSVP "parteciperò"
+app.post('/api/lms/events/:id/register', requireStudent, requireNonGuest, async (req, res) => {
+  return handleEventResponseRequest(req, res, 'registered');
+});
+
+// Compatibilità: declinazione esplicita
+app.post('/api/lms/events/:id/decline', requireStudent, requireNonGuest, async (req, res) => {
+  return handleEventResponseRequest(req, res, 'declined');
 });
 
 // Studente: l'iscrizione a un evento è definitiva e NON può essere annullata
@@ -1432,7 +1508,8 @@ app.get('/api/admin/events', requireAdmin, async (req, res) => {
              e.capacity, e.registration_open AS "registrationOpen",
              e.registration_deadline AS "registrationDeadline",
              e.calendar_lesson_id AS "calendarLessonId",
-             COUNT(r.id)::int AS "registeredCount",
+             COUNT(*) FILTER (WHERE r.response_status = 'registered')::int AS "registeredCount",
+             COUNT(*) FILTER (WHERE r.response_status = 'declined')::int AS "declinedCount",
              e.created_at AS "createdAt"
       FROM events e
       LEFT JOIN event_registrations r ON r.event_id = e.id
@@ -1533,11 +1610,13 @@ app.get('/api/admin/events/:id/registrations', requireAdmin, async (req, res) =>
       SELECT r.id,
              COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.email, 'Studente') AS "studentName",
              u.email AS "studentEmail",
-             r.created_at AS "registeredAt"
+             r.response_status AS "responseStatus",
+             r.created_at AS "registeredAt",
+             r.updated_at AS "updatedAt"
       FROM event_registrations r
       LEFT JOIN users u ON u.id = r.user_id
       WHERE r.event_id = $1
-      ORDER BY r.created_at ASC
+      ORDER BY r.response_status DESC, r.created_at ASC
     `, [req.params.id]);
     res.json(rows);
   } catch (error) {
@@ -12100,6 +12179,8 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
     let quizRows = [];
     let resourceRows = [];
     let questionRows = [];
+    let surveyRows = [];
+    let eventRows = [];
     let totalResourceRows = [{ total: 0 }];
     let completedLessonRows = [{ total: 0 }];
 
@@ -12174,29 +12255,46 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
         `, [studentIds, calendarLessonIds]));
       }
 
-      const { rows: quizIdRows } = await pool.query(`
-        SELECT id
-        FROM quizzes
-        WHERE is_published = true
-          AND (lms_lesson_id = ANY($1::uuid[]) OR lms_module_id = ANY($2::uuid[]))
-      `, [lessonIds, moduleIds]);
-      const quizIds = quizIdRows.map((row) => row.id);
+      ({ rows: quizRows } = await pool.query(`
+        SELECT qa.user_id AS "userId",
+               COUNT(*)::int AS "attempts",
+               COUNT(*) FILTER (WHERE qa.passed)::int AS "passedAttempts",
+               MAX(COALESCE(qa.percentage, qa.score))::int AS "bestScore",
+               COALESCE(AVG(COALESCE(qa.percentage, qa.score)), 0)::numeric(5,2) AS "avgScore",
+               COUNT(DISTINCT qa.quiz_id) FILTER (WHERE q.lms_lesson_id IS NOT NULL)::int AS "lessonQuizCompleted",
+               COUNT(DISTINCT qa.quiz_id) FILTER (WHERE q.lms_module_id IS NOT NULL)::int AS "moduleQuizCompleted",
+               COUNT(DISTINCT qa.quiz_id)::int AS "quizzesCompleted",
+               MAX(qa.completed_at) AS "lastQuizAt"
+        FROM quiz_attempts qa
+        JOIN quizzes q ON q.id = qa.quiz_id
+        WHERE qa.user_id = ANY($1::uuid[])
+          AND qa.completed_at IS NOT NULL
+          AND q.is_published = true
+          AND (q.lms_lesson_id = ANY($2::uuid[]) OR q.lms_module_id = ANY($3::uuid[]))
+        GROUP BY qa.user_id
+      `, [studentIds, lessonIds, moduleIds]));
 
-      if (quizIds.length) {
-        ({ rows: quizRows } = await pool.query(`
-          SELECT qa.user_id AS "userId",
-                 COUNT(*)::int AS "attempts",
-                 COUNT(*) FILTER (WHERE qa.passed)::int AS "passedAttempts",
-                 MAX(COALESCE(qa.percentage, qa.score))::int AS "bestScore",
-                 COALESCE(AVG(COALESCE(qa.percentage, qa.score)), 0)::numeric(5,2) AS "avgScore",
-                 MAX(qa.completed_at) AS "lastQuizAt"
-          FROM quiz_attempts qa
-          WHERE qa.user_id = ANY($1::uuid[])
-            AND qa.quiz_id = ANY($2::uuid[])
-            AND qa.completed_at IS NOT NULL
-          GROUP BY qa.user_id
-        `, [studentIds, quizIds]));
-      }
+      ({ rows: surveyRows } = await pool.query(`
+        SELECT i.user_id AS "userId",
+               COUNT(*) FILTER (WHERE i.completed_at IS NOT NULL)::int AS "surveysCompleted",
+               MAX(i.completed_at) AS "lastSurveyAt"
+        FROM survey_invitations i
+        JOIN survey_campaigns c ON c.id = i.campaign_id
+        JOIN surveys s ON s.id = c.survey_id
+        WHERE i.user_id = ANY($1::uuid[])
+        GROUP BY i.user_id
+      `, [studentIds]));
+
+      ({ rows: eventRows } = await pool.query(`
+        SELECT r.user_id AS "userId",
+               COUNT(*) FILTER (WHERE r.response_status = 'registered')::int AS "eventsRegistered",
+               COUNT(*) FILTER (WHERE r.response_status = 'declined')::int AS "eventsDeclined",
+               COUNT(*)::int AS "eventsResponded",
+               MAX(r.updated_at) AS "lastEventAt"
+        FROM event_registrations r
+        WHERE r.user_id = ANY($1::uuid[])
+        GROUP BY r.user_id
+      `, [studentIds]));
 
       ({ rows: questionRows } = await pool.query(`
         SELECT sq.user_id AS "userId",
@@ -12216,6 +12314,8 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
     const quizMap = new Map(quizRows.map((row) => [row.userId, row]));
     const resourceMap = new Map(resourceRows.map((row) => [row.userId, row]));
     const questionMap = new Map(questionRows.map((row) => [row.userId, row]));
+    const surveyMap = new Map(surveyRows.map((row) => [row.userId, row]));
+    const eventMap = new Map(eventRows.map((row) => [row.userId, row]));
 
     const totalLessons = lessonRows.length;
     const totalResources = Number(totalResourceRows[0]?.total || 0);
@@ -12227,16 +12327,25 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
       const quiz = quizMap.get(student.userId) || {};
       const resources = resourceMap.get(student.userId) || {};
       const questions = questionMap.get(student.userId) || {};
+      const surveys = surveyMap.get(student.userId) || {};
+      const events = eventMap.get(student.userId) || {};
 
       const attendanceTotal = Number(attendance.total || 0);
       const completedLessons = Math.min(totalLessons, Math.max(Number(progress.completedLessons || 0), attendanceTotal));
       const lessonProgressPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
       const attendancePercent = totalLessons > 0 ? Math.round((attendanceTotal / totalLessons) * 100) : 0;
       const quizBestScore = quiz.bestScore === null || quiz.bestScore === undefined ? null : Number(quiz.bestScore);
+      const lessonQuizCompleted = Number(quiz.lessonQuizCompleted || 0);
+      const moduleQuizCompleted = Number(quiz.moduleQuizCompleted || 0);
+      const quizzesCompleted = Number(quiz.quizzesCompleted || (lessonQuizCompleted + moduleQuizCompleted));
       const materialsViewed = Number(resources.viewedResources || 0);
       const materialsPercent = totalResources > 0 ? Math.round((materialsViewed / totalResources) * 100) : 0;
       const askedQuestions = Number(questions.questionsAsked || 0);
       const repliesReceived = Number(questions.repliesReceived || 0);
+      const surveysCompleted = Number(surveys.surveysCompleted || 0);
+      const eventsRegistered = Number(events.eventsRegistered || 0);
+      const eventsDeclined = Number(events.eventsDeclined || 0);
+      const eventsResponded = Number(events.eventsResponded || 0);
       const overallPercent = Math.round((
         lessonProgressPercent +
         Math.min(attendancePercent, 100) +
@@ -12249,7 +12358,9 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
         progress.lastProgressAt,
         quiz.lastQuizAt,
         resources.lastResourceAt,
-        questions.lastQuestionAt
+        questions.lastQuestionAt,
+        surveys.lastSurveyAt,
+        events.lastEventAt
       ].filter(Boolean).sort((a, b) => new Date(b) - new Date(a))[0] || null;
 
       return {
@@ -12271,13 +12382,24 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
           attempts: Number(quiz.attempts || 0),
           passedAttempts: Number(quiz.passedAttempts || 0),
           bestScore: quizBestScore,
-          avgScore: quiz.avgScore === null || quiz.avgScore === undefined ? null : Number(quiz.avgScore)
+          avgScore: quiz.avgScore === null || quiz.avgScore === undefined ? null : Number(quiz.avgScore),
+          lessonCompleted: lessonQuizCompleted,
+          moduleCompleted: moduleQuizCompleted,
+          completed: quizzesCompleted
         },
         materials: {
           viewed: materialsViewed,
           total: totalResources,
           percent: materialsPercent,
           views: Number(resources.resourceViews || 0)
+        },
+        surveys: {
+          completed: surveysCompleted
+        },
+        events: {
+          registered: eventsRegistered,
+          declined: eventsDeclined,
+          responded: eventsResponded
         },
         questions: {
           asked: askedQuestions,
@@ -12301,11 +12423,18 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
       acc.async += student.attendance.async;
       acc.quizAttempts += student.quizzes.attempts;
       acc.quizPassed += student.quizzes.passedAttempts;
+      acc.lessonQuizCompleted += student.quizzes.lessonCompleted;
+      acc.moduleQuizCompleted += student.quizzes.moduleCompleted;
+      acc.quizCompleted += student.quizzes.completed;
       if (student.quizzes.bestScore !== null && student.quizzes.bestScore !== undefined) {
         acc.quizBestScoreTotal += student.quizzes.bestScore;
         acc.quizBestScoreCount += 1;
       }
       acc.materialsViewed += student.materials.viewed;
+      acc.surveysCompleted += student.surveys.completed;
+      acc.eventsRegistered += student.events.registered;
+      acc.eventsDeclined += student.events.declined;
+      acc.eventsResponded += student.events.responded;
       acc.questionsAsked += student.questions.asked;
       acc.repliesReceived += student.questions.repliesReceived;
       return acc;
@@ -12322,9 +12451,16 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
       async: 0,
       quizAttempts: 0,
       quizPassed: 0,
+      lessonQuizCompleted: 0,
+      moduleQuizCompleted: 0,
+      quizCompleted: 0,
       quizBestScoreTotal: 0,
       quizBestScoreCount: 0,
       materialsViewed: 0,
+      surveysCompleted: 0,
+      eventsRegistered: 0,
+      eventsDeclined: 0,
+      eventsResponded: 0,
       questionsAsked: 0,
       repliesReceived: 0
     });
@@ -12332,6 +12468,7 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
     summary.totalLessons = totalLessons;
     summary.cohortCompletedLessons = cohortCompletedLessons;
     summary.totalResources = totalResources;
+    summary.totalQuizzesCompleted = summary.quizCompleted;
     summary.avgLessonProgress = summary.studentsCount ? Math.round(summary.lessonProgressPercentTotal / summary.studentsCount) : 0;
     summary.avgQuizBestScore = summary.quizBestScoreCount ? Math.round(summary.quizBestScoreTotal / summary.quizBestScoreCount) : null;
     summary.quizPassRate = summary.quizAttempts ? Math.round((summary.quizPassed / summary.quizAttempts) * 100) : 0;

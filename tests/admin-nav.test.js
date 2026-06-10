@@ -26,7 +26,8 @@ test('il menu admin separa Area riservata / Piattaforma e Sito pubblico', () => 
   assert.match(html, /<th>Copertina<\/th>/);
   assert.match(html, /👁️ Ospite \(solo consultazione\)/);
   assert.match(html, /Domande inviate/);
-  assert.match(html, /Feedback ricevuti/);
+  assert.match(html, /Risposte del docente/);
+  assert.doesNotMatch(html, /Feedback ricevuti/);
   assert.doesNotMatch(html, /slice\(0, 8\)/);
   assert.equal((html.match(/<section id="/g) || []).length, 18);
 });

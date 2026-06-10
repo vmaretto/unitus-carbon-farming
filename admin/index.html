@@ -1565,6 +1565,7 @@
                 <a href="#surveys" data-section="surveys">📋 Questionari</a>
                 <a href="#attendance" data-section="attendance">✅ Presenze</a>
                 <a href="#student-progress" data-section="student-progress">📈 Progressi studenti</a>
+                <a href="#network" data-section="network">🌐 Network</a>
             </div>
             <div class="sidebar-group">
                 <div class="sidebar-group-title">Produzione</div>
@@ -3315,6 +3316,90 @@ Buono studio!</textarea>
         </section>
 
         <!-- ============================================ -->
+        <!-- NETWORK -->
+        <!-- ============================================ -->
+        <section id="network">
+            <header>
+                <h2>🌐 Network</h2>
+                <p class="section-description">Configura le funzioni sociali, controlla profili e monitora attività, post e richieste di contatto.</p>
+            </header>
+
+            <div style="display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items:start;">
+                <div style="background:white; border:1px solid var(--gray-200); border-radius:12px; padding:18px;">
+                    <h3 style="margin:0 0 14px;">Configurazione</h3>
+                    <form id="network-settings-form" style="display:grid; gap:12px;">
+                        <label style="display:flex; gap:10px; align-items:flex-start; font-weight:600;">
+                            <input type="checkbox" id="network-enabled-toggle" style="margin-top:4px;">
+                            <span>Abilita Network</span>
+                        </label>
+                        <label style="display:flex; gap:10px; align-items:flex-start; font-weight:600;">
+                            <input type="checkbox" id="network-profiles-toggle" style="margin-top:4px;">
+                            <span>Profili studenti</span>
+                        </label>
+                        <label style="display:flex; gap:10px; align-items:flex-start; font-weight:600;">
+                            <input type="checkbox" id="network-posts-toggle" style="margin-top:4px;">
+                            <span>Post nel feed</span>
+                        </label>
+                        <label style="display:flex; gap:10px; align-items:flex-start; font-weight:600;">
+                            <input type="checkbox" id="network-intro-toggle" style="margin-top:4px;">
+                            <span>Richieste di contatto</span>
+                        </label>
+                        <label style="display:flex; gap:10px; align-items:flex-start; font-weight:600;">
+                            <input type="checkbox" id="network-photos-toggle" style="margin-top:4px;">
+                            <span>Foto profilo e copertina</span>
+                        </label>
+                        <label style="display:flex; gap:10px; align-items:flex-start; font-weight:600;">
+                            <input type="checkbox" id="network-links-toggle" style="margin-top:4px;">
+                            <span>Anteprime link nei post</span>
+                        </label>
+                        <div class="actions">
+                            <button type="submit" class="primary" id="network-settings-save">Salva configurazione</button>
+                        </div>
+                        <div id="network-settings-status" class="empty-state" style="display:none; text-align:left;"></div>
+                    </form>
+                </div>
+
+                <div style="background:white; border:1px solid var(--gray-200); border-radius:12px; padding:18px;">
+                    <h3 style="margin:0 0 14px;">Statistiche</h3>
+                    <div id="network-stats" style="display:grid; gap:10px;"></div>
+                </div>
+            </div>
+
+            <div style="margin-top:16px; background:white; border:1px solid var(--gray-200); border-radius:12px; padding:18px;">
+                <h3 style="margin:0 0 14px;">Profili</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Ruolo</th>
+                                <th>Visibile</th>
+                                <th>Follower</th>
+                                <th>Following</th>
+                                <th>Post</th>
+                                <th>Ultimo aggiornamento</th>
+                            </tr>
+                        </thead>
+                        <tbody id="network-profiles-body">
+                            <tr><td colspan="7" class="empty-state">Caricamento profili...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div style="margin-top:16px; display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+                <div style="background:white; border:1px solid var(--gray-200); border-radius:12px; padding:18px;">
+                    <h3 style="margin:0 0 14px;">Post recenti</h3>
+                    <div id="network-posts-list" style="display:grid; gap:12px;"></div>
+                </div>
+                <div style="background:white; border:1px solid var(--gray-200); border-radius:12px; padding:18px;">
+                    <h3 style="margin:0 0 14px;">Richieste di contatto</h3>
+                    <div id="network-requests-list" style="display:grid; gap:12px;"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================ -->
         <!-- PRODUZIONE CONTENUTI -->
         <!-- ============================================ -->
         <section id="workflow">
@@ -3953,7 +4038,8 @@ Buono studio!</textarea>
                     () => typeof loadStudentQuestions === 'function' ? loadStudentQuestions() : Promise.resolve(),
                     () => typeof loadSurveysSection === 'function' ? loadSurveysSection() : Promise.resolve(),
                     () => typeof loadConferenceRegistrations === 'function' ? loadConferenceRegistrations() : Promise.resolve(),
-                    () => typeof loadAdminEvents === 'function' ? loadAdminEvents() : Promise.resolve()
+                    () => typeof loadAdminEvents === 'function' ? loadAdminEvents() : Promise.resolve(),
+                    () => typeof loadNetworkSection === 'function' ? loadNetworkSection() : Promise.resolve()
                 ];
 
                 for (const task of startupTasks) {
@@ -5565,6 +5651,11 @@ Buono studio!</textarea>
 
         // ===== EVENTI (iscrizioni studenti) =====
         let adminEvents = [];
+        let adminNetworkSettings = null;
+        let adminNetworkProfiles = [];
+        let adminNetworkPosts = [];
+        let adminNetworkRequests = [];
+        let adminNetworkStats = null;
 
         function formatAdminEventDate(value) {
             if (!value) return 'Data non impostata';
@@ -5640,6 +5731,153 @@ Buono studio!</textarea>
                 list.innerHTML = '<div class="empty-state">Errore nel caricamento eventi.</div>';
             }
         }
+
+        function setNetworkSettingsForm(settings) {
+            if (!settings) return;
+            safeSetChecked('#network-enabled-toggle', settings.networkEnabled);
+            safeSetChecked('#network-profiles-toggle', settings.profilesEnabled);
+            safeSetChecked('#network-posts-toggle', settings.postsEnabled);
+            safeSetChecked('#network-intro-toggle', settings.introRequestsEnabled);
+            safeSetChecked('#network-photos-toggle', settings.profilePhotosEnabled);
+            safeSetChecked('#network-links-toggle', settings.linkPreviewsEnabled);
+        }
+
+        function renderNetworkStats() {
+            const container = document.getElementById('network-stats');
+            if (!container) return;
+            if (!adminNetworkStats) {
+                container.innerHTML = '<div class="empty-state" style="margin:0;">Nessuna statistica disponibile.</div>';
+                return;
+            }
+            container.innerHTML = [
+                ['Notifiche non lette', adminNetworkStats.unreadCount || 0],
+                ['Follow', adminNetworkStats.followCount || 0],
+                ['Like', adminNetworkStats.likeCount || 0],
+                ['Commenti', adminNetworkStats.commentCount || 0],
+                ['Richieste contatto', adminNetworkStats.introRequestCount || 0]
+            ].map(([label, value]) => `
+                <div style="display:flex; justify-content:space-between; gap:12px; border:1px solid var(--gray-200); border-radius:10px; padding:10px 12px;">
+                    <span style="color:var(--gray-600); font-weight:600;">${escapeHtml(label)}</span>
+                    <strong>${escapeHtml(String(value))}</strong>
+                </div>
+            `).join('');
+        }
+
+        function renderNetworkProfiles() {
+            const body = document.getElementById('network-profiles-body');
+            if (!body) return;
+            if (!adminNetworkProfiles.length) {
+                body.innerHTML = '<tr><td colspan="7" class="empty-state">Nessun profilo network disponibile.</td></tr>';
+                return;
+            }
+            body.innerHTML = adminNetworkProfiles.map((profile) => `
+                <tr>
+                    <td><strong>${escapeHtml([profile.firstName, profile.lastName].filter(Boolean).join(' ') || '—')}</strong><div style="color:var(--gray-500); font-size:12px;">${escapeHtml(profile.email || profile.userEmail || '')}</div></td>
+                    <td>${escapeHtml([profile.roleTitle, profile.organization].filter(Boolean).join(' · ') || profile.headline || '—')}</td>
+                    <td>${profile.isVisible ? 'Sì' : 'No'}</td>
+                    <td>${escapeHtml(String(profile.followersCount || 0))}</td>
+                    <td>${escapeHtml(String(profile.followingCount || 0))}</td>
+                    <td>${escapeHtml(String(profile.postsCount || 0))}</td>
+                    <td>${escapeHtml(profile.updatedAt ? new Date(profile.updatedAt).toLocaleString('it-IT') : '—')}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderNetworkPosts() {
+            const list = document.getElementById('network-posts-list');
+            if (!list) return;
+            if (!adminNetworkPosts.length) {
+                list.innerHTML = '<div class="empty-state">Nessun post disponibile.</div>';
+                return;
+            }
+            list.innerHTML = adminNetworkPosts.map((post) => `
+                <article style="border:1px solid var(--gray-200); border-radius:12px; padding:12px;">
+                    <div style="font-weight:600;">${escapeHtml(post.author?.fullName || '—')}</div>
+                    <div style="color:var(--gray-500); font-size:12px; margin-bottom:8px;">${escapeHtml(formatAdminEventDate(post.createdAt))} · ${escapeHtml(String(post.likeCount || 0))} like · ${escapeHtml(String(post.commentCount || 0))} commenti</div>
+                    <div style="white-space:pre-wrap; color:var(--gray-700);">${escapeHtml(post.body || '')}</div>
+                    ${post.linkUrl ? `<div style="margin-top:8px;"><a href="${escapeHtml(post.linkUrl)}" target="_blank" rel="noopener">${escapeHtml(post.linkTitle || post.linkUrl)}</a></div>` : ''}
+                    ${post.mediaUrl ? `<div style="margin-top:8px; font-size:12px; color:var(--gray-500);">Media: ${escapeHtml(post.mediaUrl)}</div>` : ''}
+                </article>
+            `).join('');
+        }
+
+        function renderNetworkRequests() {
+            const list = document.getElementById('network-requests-list');
+            if (!list) return;
+            if (!adminNetworkRequests.length) {
+                list.innerHTML = '<div class="empty-state">Nessuna richiesta di contatto disponibile.</div>';
+                return;
+            }
+            list.innerHTML = adminNetworkRequests.map((request) => `
+                <article style="border:1px solid var(--gray-200); border-radius:12px; padding:12px;">
+                    <div style="font-weight:600;">${escapeHtml([request.senderFirstName, request.senderLastName].filter(Boolean).join(' ') || '—')} → ${escapeHtml([request.recipientFirstName, request.recipientLastName].filter(Boolean).join(' ') || '—')}</div>
+                    <div style="color:var(--gray-500); font-size:12px; margin-bottom:8px;">${escapeHtml(request.status || 'pending')} · ${escapeHtml(formatAdminEventDate(request.createdAt))}</div>
+                    ${request.message ? `<div style="color:var(--gray-700); white-space:pre-wrap;">${escapeHtml(request.message)}</div>` : ''}
+                </article>
+            `).join('');
+        }
+
+        async function loadNetworkSection() {
+            const settingsForm = document.getElementById('network-settings-form');
+            if (!settingsForm) return;
+            try {
+                const [settings, stats, profiles, posts, requests] = await Promise.all([
+                    apiRequest('/api/admin/network/settings'),
+                    apiRequest('/api/admin/network/notifications'),
+                    apiRequest('/api/admin/network/profiles'),
+                    apiRequest('/api/admin/network/posts'),
+                    apiRequest('/api/admin/network/intro-requests')
+                ]);
+                adminNetworkSettings = settings || null;
+                adminNetworkStats = stats || null;
+                adminNetworkProfiles = Array.isArray(profiles) ? profiles : [];
+                adminNetworkPosts = Array.isArray(posts) ? posts : [];
+                adminNetworkRequests = Array.isArray(requests) ? requests : [];
+                setNetworkSettingsForm(adminNetworkSettings);
+                renderNetworkStats();
+                renderNetworkProfiles();
+                renderNetworkPosts();
+                renderNetworkRequests();
+            } catch (error) {
+                const status = document.getElementById('network-settings-status');
+                if (status) {
+                    status.style.display = 'block';
+                    status.textContent = error.message || 'Errore nel caricamento del network';
+                }
+            }
+        }
+
+        document.getElementById('network-settings-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const status = document.getElementById('network-settings-status');
+            if (status) {
+                status.style.display = 'block';
+                status.textContent = 'Salvataggio...';
+            }
+            try {
+                const updated = await apiRequest('/api/admin/network/settings', {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        networkEnabled: safeChecked('#network-enabled-toggle'),
+                        profilesEnabled: safeChecked('#network-profiles-toggle'),
+                        postsEnabled: safeChecked('#network-posts-toggle'),
+                        introRequestsEnabled: safeChecked('#network-intro-toggle'),
+                        profilePhotosEnabled: safeChecked('#network-photos-toggle'),
+                        linkPreviewsEnabled: safeChecked('#network-links-toggle')
+                    })
+                });
+                adminNetworkSettings = updated || adminNetworkSettings;
+                if (status) {
+                    status.textContent = 'Configurazione salvata.';
+                }
+                showToast('Configurazione network salvata');
+            } catch (error) {
+                if (status) {
+                    status.textContent = error.message || 'Errore nel salvataggio';
+                }
+                showToast(error.message || 'Errore nel salvataggio', 'error');
+            }
+        });
 
         function resetEventForm() {
             document.getElementById('event-id').value = '';

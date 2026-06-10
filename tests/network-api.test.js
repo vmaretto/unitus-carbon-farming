@@ -26,16 +26,28 @@ function createJsonRes() {
 
 async function runRoute(layer, req, res) {
   const stack = layer.route.stack;
-  let index = 0;
-
-  async function next(error) {
-    if (error) throw error;
-    const item = stack[index++];
-    if (!item) return;
-    await item.handle(req, res, next);
-  }
-
-  await next();
+  await new Promise((resolve, reject) => {
+    const dispatch = (index, error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      const item = stack[index];
+      if (!item) {
+        resolve();
+        return;
+      }
+      try {
+        const maybe = item.handle(req, res, (nextError) => dispatch(index + 1, nextError));
+        Promise.resolve(maybe).then(() => {
+          if (index === stack.length - 1) resolve();
+        }).catch(reject);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    dispatch(0);
+  });
 }
 
 function authHeaders() {
@@ -55,6 +67,19 @@ test('PUT /api/lms/network/profile salva il profilo normalizzato', async (t) => 
     async query(sql, params = []) {
       const statement = String(sql).replace(/\s+/g, ' ').trim();
       queries.push({ statement, params });
+
+      if (statement.startsWith('SELECT key, value FROM network_settings')) {
+        return {
+          rows: [
+            { key: 'network_enabled', value: 'true' },
+            { key: 'profiles_enabled', value: 'true' },
+            { key: 'posts_enabled', value: 'true' },
+            { key: 'intro_requests_enabled', value: 'true' },
+            { key: 'profile_photos_enabled', value: 'true' },
+            { key: 'link_previews_enabled', value: 'true' }
+          ]
+        };
+      }
 
       if (statement.startsWith('INSERT INTO network_profiles')) {
         assert.equal(params[7], 'Project work e partnership');
@@ -148,7 +173,7 @@ test('PUT /api/lms/network/profile salva il profilo normalizzato', async (t) => 
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.fullName, 'Ada Lovelace');
   assert.equal(res.body.contactEmail, 'ada@example.com');
-  assert.equal(queries.length, 2);
+  assert.equal(queries.length, 3);
 });
 
 test('GET /api/lms/network/profiles espone solo contatti consentiti', async (t) => {
@@ -156,6 +181,18 @@ test('GET /api/lms/network/profiles espone solo contatti consentiti', async (t) 
     async query(sql, params = []) {
       assert.deepEqual(params, []);
       const statement = String(sql).replace(/\s+/g, ' ').trim();
+      if (statement.startsWith('SELECT key, value FROM network_settings')) {
+        return {
+          rows: [
+            { key: 'network_enabled', value: 'true' },
+            { key: 'profiles_enabled', value: 'true' },
+            { key: 'posts_enabled', value: 'true' },
+            { key: 'intro_requests_enabled', value: 'true' },
+            { key: 'profile_photos_enabled', value: 'true' },
+            { key: 'link_previews_enabled', value: 'true' }
+          ]
+        };
+      }
       assert.match(statement, /WHERE p\.is_visible = true/);
       assert.match(statement, /u\.is_active = true/);
       return {
@@ -221,6 +258,19 @@ test('POST /api/lms/network/intro-requests crea una richiesta verso profili disp
       const statement = String(sql).replace(/\s+/g, ' ').trim();
       queries.push({ statement, params });
 
+      if (statement.startsWith('SELECT key, value FROM network_settings')) {
+        return {
+          rows: [
+            { key: 'network_enabled', value: 'true' },
+            { key: 'profiles_enabled', value: 'true' },
+            { key: 'posts_enabled', value: 'true' },
+            { key: 'intro_requests_enabled', value: 'true' },
+            { key: 'profile_photos_enabled', value: 'true' },
+            { key: 'link_previews_enabled', value: 'true' }
+          ]
+        };
+      }
+
       if (statement.startsWith('SELECT p.user_id FROM network_profiles')) {
         assert.equal(params[0], '22222222-2222-4222-8222-222222222222');
         assert.match(statement, /p\.is_visible = true/);
@@ -241,6 +291,12 @@ test('POST /api/lms/network/intro-requests crea una richiesta verso profili disp
             updatedAt: '2026-06-09T12:00:00.000Z'
           }]
         };
+      }
+
+      if (statement.startsWith('INSERT INTO network_notifications')) {
+        assert.equal(params[0], '22222222-2222-4222-8222-222222222222');
+        assert.equal(params[1], 'intro_request');
+        return { rows: [{ id: 'notif-1' }] };
       }
 
       throw new Error(`query inattesa: ${statement}`);
@@ -266,7 +322,7 @@ test('POST /api/lms/network/intro-requests crea una richiesta verso profili disp
 
   assert.equal(res.statusCode, 201);
   assert.equal(res.body.status, 'pending');
-  assert.equal(queries.length, 2);
+  assert.equal(queries.length, 4);
 });
 
 test('POST /api/lms/network/posts pubblica un post nel feed riservato', async (t) => {
@@ -276,19 +332,44 @@ test('POST /api/lms/network/posts pubblica un post nel feed riservato', async (t
       const statement = String(sql).replace(/\s+/g, ' ').trim();
       queries.push({ statement, params });
 
+      if (statement.startsWith('SELECT key, value FROM network_settings')) {
+        return {
+          rows: [
+            { key: 'network_enabled', value: 'true' },
+            { key: 'profiles_enabled', value: 'true' },
+            { key: 'posts_enabled', value: 'true' },
+            { key: 'intro_requests_enabled', value: 'true' },
+            { key: 'profile_photos_enabled', value: 'true' },
+            { key: 'link_previews_enabled', value: 'true' }
+          ]
+        };
+      }
+
       if (statement.startsWith('INSERT INTO network_posts')) {
         assert.equal(params[0], '11111111-1111-4111-8111-111111111111');
         assert.equal(params[1], 'Cerco partner per un progetto pilota su MRV.');
         assert.equal(params[2], 'https://example.com/project');
         assert.equal(params[3], 'Scheda progetto');
-        assert.deepEqual(params[4], ['MRV', 'Suolo']);
+        assert.equal(params[4], null);
+        assert.equal(params[5], null);
+        assert.equal(params[6], null);
+        assert.equal(params[7], null);
+        assert.equal(params[8], null);
+        assert.equal(params[9], null);
+        assert.deepEqual(params[10], ['MRV', 'Suolo']);
         return {
           rows: [{
             id: 'post-1',
             body: params[1],
             linkUrl: params[2],
             linkTitle: params[3],
-            tags: params[4],
+            mediaUrl: params[4],
+            mediaAlt: params[5],
+            linkPreviewTitle: params[6],
+            linkPreviewDescription: params[7],
+            linkPreviewImageUrl: params[8],
+            linkPreviewSiteName: params[9],
+            tags: params[10],
             visibility: 'network',
             createdAt: '2026-06-09T12:00:00.000Z',
             updatedAt: '2026-06-09T12:00:00.000Z',
@@ -339,5 +420,5 @@ test('POST /api/lms/network/posts pubblica un post nel feed riservato', async (t
   assert.equal(res.body.body, 'Cerco partner per un progetto pilota su MRV.');
   assert.equal(res.body.author.fullName, 'Ada Lovelace');
   assert.equal(res.body.canDelete, true);
-  assert.equal(queries.length, 2);
+  assert.equal(queries.length, 3);
 });

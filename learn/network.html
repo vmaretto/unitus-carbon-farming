@@ -73,11 +73,41 @@
         .chip.interest { background: #fff7ed; color: #9a3412; }
         .contact-row { display: flex; flex-wrap: wrap; gap: 8px; }
         .contact-link { color: var(--green-700); background: var(--green-100); text-decoration: none; border-radius: 10px; padding: 7px 10px; font-size: 0.8rem; font-weight: 700; }
+        .profile-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+        .stat-badge { border: 1px solid var(--gray-200); border-radius: 10px; padding: 7px 10px; background: #fafafa; color: var(--gray-700); font-size: 0.8rem; font-weight: 700; }
+        .profile-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .upload-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .upload-row input[type="file"] { display: none; }
+        .upload-btn { border: 1px solid var(--gray-200); background: white; color: var(--green-700); border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer; }
+        .network-note { font-size: 0.78rem; color: var(--gray-500); line-height: 1.4; }
+        .post-meta-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .post-engagement { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .reaction-btn { border: 1px solid var(--gray-200); background: #fafafa; color: var(--green-700); border-radius: 999px; padding: 7px 11px; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+        .reaction-btn.active { background: var(--green-100); border-color: rgba(44,122,75,0.3); }
+        .post-media { border-radius: 14px; overflow: hidden; border: 1px solid var(--gray-200); background: #fafafa; }
+        .post-media img { display: block; width: 100%; height: auto; max-height: 420px; object-fit: cover; }
+        .link-preview { border: 1px solid var(--gray-200); border-radius: 14px; overflow: hidden; display: grid; grid-template-columns: 132px minmax(0, 1fr); background: #fafafa; text-decoration: none; color: inherit; }
+        .link-preview.no-image { grid-template-columns: 1fr; }
+        .link-preview-image { width: 100%; height: 100%; min-height: 132px; object-fit: cover; background: #e5efe8; }
+        .link-preview-body { padding: 12px; display: grid; gap: 6px; }
+        .link-preview-site { font-size: 0.72rem; font-weight: 800; color: var(--green-700); text-transform: uppercase; letter-spacing: 0.02em; }
+        .link-preview-title { font-weight: 800; color: var(--gray-900); }
+        .link-preview-description { font-size: 0.84rem; color: var(--gray-700); line-height: 1.45; }
+        .comment-thread { display: grid; gap: 8px; margin-top: 4px; }
+        .comment-item { border-top: 1px solid var(--gray-200); padding-top: 10px; display: grid; gap: 6px; }
+        .comment-head { display: flex; gap: 8px; align-items: center; }
+        .comment-compose { display: grid; gap: 8px; margin-top: 8px; }
+        .comment-compose textarea { min-height: 76px; }
+        .notification-list { display: grid; gap: 10px; }
+        .notification-item { border: 1px solid var(--gray-200); border-radius: 12px; padding: 12px; display: grid; gap: 6px; }
+        .notification-item.unread { background: #f7fbf8; border-color: rgba(44,122,75,0.22); }
+        .notification-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .request-list { display: grid; gap: 10px; }
         .request-item { border: 1px solid var(--gray-200); border-radius: 12px; padding: 12px; display: grid; gap: 6px; }
         .request-meta { color: var(--gray-500); font-size: 0.78rem; }
         .post-composer { display: grid; gap: 12px; margin-bottom: 16px; }
         .post-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .post-options.media { grid-template-columns: 1fr 1fr 1fr; }
         .feed { display: grid; gap: 12px; }
         .post-card { border: 1px solid var(--gray-200); border-radius: 14px; padding: 14px; display: grid; gap: 12px; background: white; }
         .post-header { display: flex; gap: 10px; align-items: center; }
@@ -169,10 +199,18 @@
                     </label>
                     <label>Foto profilo
                         <input id="profile-photo-url" name="profilePhotoUrl" type="url" placeholder="https://.../foto.jpg" autocomplete="url">
-                        <span class="hint">Puoi usare un URL immagine pubblico, anche copiato da LinkedIn se disponibile.</span>
+                        <div class="upload-row">
+                            <button class="upload-btn" type="button" data-upload-target="profile-photo-url" data-upload-prefix="network/profile-photos">Carica immagine</button>
+                            <input id="profile-photo-file" type="file" accept="image/*">
+                        </div>
+                        <span class="hint">Puoi usare un URL immagine pubblico oppure caricare un file immagine.</span>
                     </label>
                     <label>Immagine copertina
                         <input id="cover-image-url" name="coverImageUrl" type="url" placeholder="https://.../cover.jpg" autocomplete="url">
+                        <div class="upload-row">
+                            <button class="upload-btn" type="button" data-upload-target="cover-image-url" data-upload-prefix="network/cover-images">Carica copertina</button>
+                            <input id="cover-image-file" type="file" accept="image/*">
+                        </div>
                     </label>
                     <label>Competenze
                         <input id="skills" name="skills" placeholder="MRV, crediti carbonio, suolo" autocomplete="off">
@@ -222,12 +260,19 @@
                         <label>Condividi un aggiornamento
                             <textarea id="post-body" maxlength="1600" placeholder="Condividi un progetto, una domanda, un'opportunità o una riflessione utile al network."></textarea>
                         </label>
-                        <div class="post-options">
+                        <div class="post-options media">
                             <label>Link opzionale
                                 <input id="post-link-url" type="url" placeholder="https://...">
                             </label>
                             <label>Titolo link
                                 <input id="post-link-title" maxlength="160" placeholder="Titolo o descrizione breve">
+                            </label>
+                            <label>Media immagine
+                                <input id="post-media-url" type="url" placeholder="https://.../immagine.jpg">
+                                <div class="upload-row">
+                                    <button class="upload-btn" type="button" data-upload-target="post-media-url" data-upload-prefix="network/post-media">Carica immagine</button>
+                                    <input id="post-media-file" type="file" accept="image/*">
+                                </div>
                             </label>
                         </div>
                         <label>Tag
@@ -247,6 +292,13 @@
                     <h2>Networking</h2>
                     <div class="request-list" id="intro-requests">
                         <div class="loading">Caricamento richieste...</div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <h2>Notifiche</h2>
+                    <div class="notification-list" id="network-notifications">
+                        <div class="loading">Caricamento notifiche...</div>
                     </div>
                 </section>
 
@@ -283,11 +335,15 @@
         const previewEl = document.getElementById('profile-preview');
         const requestsEl = document.getElementById('intro-requests');
         const feedEl = document.getElementById('network-feed');
+        const notificationsEl = document.getElementById('network-notifications');
         const statusEl = document.getElementById('profile-status');
         const saveBtn = document.getElementById('save-btn');
         let profiles = [];
         let introRequests = [];
         let posts = [];
+        let notifications = [];
+        let networkConfig = {};
+        const postComments = new Map();
         let currentProfile = null;
         let currentUserId = null;
 
@@ -404,6 +460,78 @@
                 .join('\n');
         }
 
+        function buildBlobUploadPath(prefix, fileName) {
+            const safeName = String(fileName || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+            const extensionMatch = safeName.match(/(\.[^.]+)$/);
+            const extension = extensionMatch ? extensionMatch[1].toLowerCase() : '';
+            const baseName = extension ? safeName.slice(0, -extension.length) : safeName;
+            const randomPart = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+                ? crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            return `${prefix}/${randomPart}-${baseName}${extension}`;
+        }
+
+        async function requestNetworkBlobToken(pathname, maximumSizeInBytes, contentType) {
+            return api('/api/lms/network/blob-token', {
+                method: 'POST',
+                body: JSON.stringify({
+                    pathname,
+                    maximumSizeInBytes,
+                    contentType
+                })
+            });
+        }
+
+        async function uploadFileDirectToBlob(file, { prefix, maxSizeBytes = 12 * 1024 * 1024, contentType }) {
+            const pathname = buildBlobUploadPath(prefix, file.name);
+            const tokenResponse = await requestNetworkBlobToken(pathname, maxSizeBytes, contentType || file.type || 'application/octet-stream');
+            const uploadUrl = tokenResponse.uploadUrl || 'https://blob.vercel-storage.com';
+            const requestId = `${pathname}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
+            const response = await fetch(`${uploadUrl}/?pathname=${encodeURIComponent(pathname)}`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${tokenResponse.clientToken}`,
+                    'x-api-version': '12',
+                    'x-api-blob-request-id': requestId,
+                    'x-content-length': String(file.size),
+                    'x-vercel-blob-access': 'public',
+                    'x-content-type': contentType || file.type || 'application/octet-stream'
+                },
+                body: file
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error?.message || errorData.error || `Upload fallito (${response.status})`);
+            }
+            const blob = await response.json();
+            return blob.url || blob.pathname || pathname;
+        }
+
+        async function handleFileUpload(targetInputId, fileInputId, prefix) {
+            const fileInput = document.getElementById(fileInputId);
+            const targetInput = document.getElementById(targetInputId);
+            const file = fileInput?.files?.[0];
+            if (!file) return;
+            statusEl.textContent = 'Caricamento immagine...';
+            statusEl.className = 'status';
+            try {
+                const url = await uploadFileDirectToBlob(file, {
+                    prefix,
+                    maxSizeBytes: 12 * 1024 * 1024,
+                    contentType: file.type || 'application/octet-stream'
+                });
+                targetInput.value = url;
+                renderPreview();
+                statusEl.textContent = 'Immagine caricata.';
+                statusEl.className = 'status ok';
+            } catch (error) {
+                statusEl.textContent = error.message;
+                statusEl.className = 'status error';
+            } finally {
+                fileInput.value = '';
+            }
+        }
+
         function renderProfile(profile, options = {}) {
             const isOwn = options.isOwn || profile.userId === currentUserId;
             const subtitle = [profile.roleTitle, profile.organization].filter(Boolean).join(' · ') || profile.headline || '';
@@ -414,6 +542,11 @@
             const avatar = profile.profilePhotoUrl
                 ? `<img src="${escapeHtml(profile.profilePhotoUrl)}" alt="">`
                 : escapeHtml(initials(profile));
+            const stats = [
+                `<span class="stat-badge">${Number(profile.followersCount || 0)} follower</span>`,
+                `<span class="stat-badge">${Number(profile.followingCount || 0)} following</span>`,
+                `<span class="stat-badge">${Number(profile.postsCount || 0)} post</span>`
+            ].join('');
             const experience = (profile.experience || []).slice(0, 3).map((item) => `
                 <div class="experience-item">
                     ${item.title ? `<div class="experience-title">${escapeHtml(item.title)}</div>` : ''}
@@ -431,8 +564,13 @@
                 profile.linkedinUrl ? `<a class="contact-link" href="${escapeHtml(profile.linkedinUrl)}" target="_blank" rel="noopener">LinkedIn</a>` : ''
             ].filter(Boolean).join('');
             const availability = profile.availableForContact ? '<span class="chip">Disponibile</span>' : '';
+            const isFollowing = Boolean(profile.isFollowing);
+            const isConnected = Boolean(profile.isConnected);
             const requestButton = !isOwn && profile.availableForContact
                 ? `<button class="btn btn-secondary request-contact-btn" type="button" data-user-id="${escapeHtml(profile.userId)}" data-name="${escapeHtml(profile.fullName || 'partecipante')}">Richiedi contatto</button>`
+                : '';
+            const followButton = !isOwn
+                ? `<button class="btn btn-ghost follow-btn" type="button" data-user-id="${escapeHtml(profile.userId)}" data-following="${isFollowing ? 'true' : 'false'}">${isFollowing ? 'Smetti di seguire' : 'Segui'}</button>`
                 : '';
 
             return `
@@ -448,12 +586,14 @@
                                 ${location ? `<div class="profile-location">${escapeHtml(location)}</div>` : ''}
                             </div>
                         </div>
+                        <div class="profile-stats">${stats}</div>
+                        ${isConnected ? '<div class="chip">Connessione reciproca</div>' : ''}
                         ${profile.bio ? `<div class="profile-section"><div class="profile-section-title">Informazioni</div><div class="bio">${escapeHtml(profile.bio)}</div></div>` : ''}
                         ${profile.collaborationGoals ? `<div class="profile-section"><div class="profile-section-title">Collaborazioni</div><div class="bio">${escapeHtml(profile.collaborationGoals)}</div></div>` : ''}
                         ${(skills || interests || availability) ? `<div class="chips">${availability}${skills}${interests}</div>` : ''}
                         ${experience ? `<div class="profile-section"><div class="profile-section-title">Esperienza</div><div class="experience-list">${experience}</div></div>` : ''}
                         ${featuredLinks ? `<div class="profile-section"><div class="profile-section-title">In evidenza</div><div class="featured-links">${featuredLinks}</div></div>` : ''}
-                        ${(contacts || requestButton) ? `<div class="contact-row">${contacts}${requestButton}</div>` : ''}
+                        ${(contacts || requestButton || followButton) ? `<div class="profile-actions contact-row">${contacts}${requestButton}${followButton}</div>` : ''}
                     </div>
                 </article>
             `;
@@ -517,6 +657,55 @@
             return date.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
 
+        function notificationText(notification) {
+            const payload = notification.payload || {};
+            switch (notification.type) {
+                case 'follow':
+                    return 'Nuovo follower';
+                case 'post_like':
+                    return 'Il tuo post ha ricevuto un like';
+                case 'post_comment':
+                    return payload.commentBody ? `Nuovo commento: ${payload.commentBody}` : 'Nuovo commento';
+                case 'intro_request':
+                    return 'Nuova richiesta di contatto';
+                case 'intro_request_accepted':
+                    return 'La tua richiesta è stata accettata';
+                case 'intro_request_declined':
+                    return 'La tua richiesta è stata rifiutata';
+                default:
+                    return notification.type;
+            }
+        }
+
+        function renderCommentsForPost(postId) {
+            const comments = postComments.get(postId) || [];
+            if (!comments.length) {
+                return '<div class="empty" style="padding:16px;">Nessun commento ancora presente.</div>';
+            }
+            return comments.map((comment) => {
+                const author = comment.author || {};
+                const avatar = author.profilePhotoUrl
+                    ? `<img src="${escapeHtml(author.profilePhotoUrl)}" alt="">`
+                    : escapeHtml(initials({ firstName: author.fullName?.split(' ')[0], lastName: author.fullName?.split(' ').slice(1).join(' ') }));
+                const deleteButton = comment.canDelete
+                    ? `<button class="btn-link delete-comment-btn" type="button" data-post-id="${escapeHtml(postId)}" data-comment-id="${escapeHtml(comment.id)}">Elimina</button>`
+                    : '';
+                return `
+                    <article class="comment-item">
+                        <div class="comment-head">
+                            <div class="avatar" style="width:34px;height:34px;border-width:2px;">${avatar}</div>
+                            <div class="post-author">
+                                <strong>${escapeHtml(author.fullName || 'Partecipante')}</strong>
+                                <span>${escapeHtml([author.roleTitle, author.organization, formatDate(comment.createdAt)].filter(Boolean).join(' · '))}</span>
+                            </div>
+                        </div>
+                        <div class="post-body" style="font-size:0.9rem;">${escapeHtml(comment.body)}</div>
+                        <div class="post-actions">${deleteButton}</div>
+                    </article>
+                `;
+            }).join('');
+        }
+
         function renderPosts() {
             if (!posts.length) {
                 feedEl.innerHTML = '<div class="empty">Ancora nessun post. Condividi il primo aggiornamento con il network.</div>';
@@ -535,12 +724,26 @@
                     ? `<img src="${escapeHtml(author.profilePhotoUrl)}" alt="">`
                     : escapeHtml(initials(avatarProfile));
                 const tags = (post.tags || []).map((tag) => `<span class="chip">${escapeHtml(tag)}</span>`).join('');
-                const link = post.linkUrl
-                    ? `<a class="post-link" href="${escapeHtml(post.linkUrl)}" target="_blank" rel="noopener">${escapeHtml(post.linkTitle || post.linkUrl)}</a>`
+                const linkPreview = post.linkPreview
+                    ? `<a class="link-preview ${post.linkPreview.imageUrl ? '' : 'no-image'}" href="${escapeHtml(post.linkUrl || '#')}" target="_blank" rel="noopener">
+                        ${post.linkPreview.imageUrl ? `<img class="link-preview-image" src="${escapeHtml(post.linkPreview.imageUrl)}" alt="">` : ''}
+                        <div class="link-preview-body">
+                            ${post.linkPreview.siteName ? `<div class="link-preview-site">${escapeHtml(post.linkPreview.siteName)}</div>` : ''}
+                            <div class="link-preview-title">${escapeHtml(post.linkPreview.title || post.linkTitle || post.linkUrl)}</div>
+                            ${post.linkPreview.description ? `<div class="link-preview-description">${escapeHtml(post.linkPreview.description)}</div>` : ''}
+                        </div>
+                      </a>`
+                    : (post.linkUrl ? `<a class="post-link" href="${escapeHtml(post.linkUrl)}" target="_blank" rel="noopener">${escapeHtml(post.linkTitle || post.linkUrl)}</a>` : '');
+                const media = post.mediaUrl
+                    ? `<div class="post-media"><img src="${escapeHtml(post.mediaUrl)}" alt="${escapeHtml(post.mediaAlt || '')}"></div>`
                     : '';
                 const deleteButton = post.canDelete
                     ? `<button class="btn-link delete-post-btn" type="button" data-post-id="${escapeHtml(post.id)}">Elimina</button>`
                     : '';
+                const likeButton = `<button class="reaction-btn like-post-btn ${post.isLiked ? 'active' : ''}" type="button" data-post-id="${escapeHtml(post.id)}">${post.isLiked ? 'Mi piace' : 'Like'} · ${Number(post.likeCount || 0)}</button>`;
+                const commentButton = `<button class="reaction-btn toggle-comments-btn" type="button" data-post-id="${escapeHtml(post.id)}">Commenti · ${Number(post.commentCount || 0)}</button>`;
+                const commentsOpen = postComments.has(post.id);
+                const comments = commentsOpen ? renderCommentsForPost(post.id) : '';
                 return `
                     <article class="post-card">
                         <div class="post-header">
@@ -551,14 +754,46 @@
                             </div>
                         </div>
                         <div class="post-body">${escapeHtml(post.body)}</div>
-                        ${link}
-                        <div class="post-actions">
-                            <div class="chips">${tags}</div>
+                        ${media}
+                        ${linkPreview}
+                        <div class="post-engagement">
+                            ${likeButton}
+                            ${commentButton}
                             ${deleteButton}
                         </div>
+                        <div class="post-actions">
+                            <div class="chips">${tags}</div>
+                        </div>
+                        ${commentsOpen ? `
+                            <div class="comment-thread">
+                                ${comments}
+                                <form class="comment-compose" data-post-id="${escapeHtml(post.id)}">
+                                    <textarea maxlength="1200" placeholder="Scrivi un commento..."></textarea>
+                                    <div class="button-row">
+                                        <button class="btn btn-secondary" type="submit">Invia commento</button>
+                                    </div>
+                                </form>
+                            </div>
+                        ` : ''}
                     </article>
                 `;
             }).join('');
+        }
+
+        function renderNotifications() {
+            if (!notifications.length) {
+                notificationsEl.innerHTML = '<div class="empty">Nessuna notifica.</div>';
+                return;
+            }
+
+            notificationsEl.innerHTML = notifications.map((notification) => `
+                <article class="notification-item ${notification.isRead ? '' : 'unread'}">
+                    <strong>${escapeHtml(notificationText(notification))}</strong>
+                    <div class="request-meta">${escapeHtml(formatDate(notification.createdAt))}</div>
+                    ${notification.payload?.message ? `<div class="bio">${escapeHtml(notification.payload.message)}</div>` : ''}
+                    ${!notification.isRead ? `<div class="notification-actions"><button class="btn btn-ghost mark-notification-read-btn" type="button" data-notification-id="${escapeHtml(notification.id)}">Segna come letta</button></div>` : ''}
+                </article>
+            `).join('');
         }
 
         function renderDirectory() {
@@ -630,68 +865,145 @@
 
         async function loadNetwork() {
             try {
-                const [profile, list, requests, feed] = await Promise.all([
+                const [config, profile, list, requests, feed, notificationList] = await Promise.all([
+                    api('/api/lms/network/config'),
                     api('/api/lms/network/profile'),
                     api('/api/lms/network/profiles'),
                     api('/api/lms/network/intro-requests'),
-                    api('/api/lms/network/posts')
+                    api('/api/lms/network/posts'),
+                    api('/api/lms/network/notifications')
                 ]);
+                networkConfig = config || {};
                 if (profile) fillForm(profile);
                 profiles = Array.isArray(list) ? list : [];
                 introRequests = Array.isArray(requests) ? requests : [];
                 posts = Array.isArray(feed) ? feed : [];
+                notifications = Array.isArray(notificationList) ? notificationList : [];
                 renderDirectory();
                 renderRequests();
                 renderPosts();
+                renderNotifications();
             } catch (error) {
                 directoryEl.innerHTML = '<div class="empty">Errore nel caricamento del network.</div>';
                 requestsEl.innerHTML = '<div class="empty">Errore nel caricamento delle richieste.</div>';
                 feedEl.innerHTML = '<div class="empty">Errore nel caricamento del feed.</div>';
+                notificationsEl.innerHTML = '<div class="empty">Errore nel caricamento notifiche.</div>';
                 statusEl.textContent = error.message;
                 statusEl.className = 'status error';
+            }
+        }
+
+        async function loadCommentsForPost(postId) {
+            const comments = await api(`/api/lms/network/posts/${encodeURIComponent(postId)}/comments`);
+            postComments.set(postId, Array.isArray(comments) ? comments : []);
+            return postComments.get(postId);
+        }
+
+        async function ensureCommentsLoaded(postId) {
+            if (!postComments.has(postId)) {
+                await loadCommentsForPost(postId);
             }
         }
 
         function parseLinkedinImport(text, url) {
             const lines = String(text || '')
                 .split('\n')
-                .map((line) => line.trim())
+                .map((line) => line.replace(/\s+/g, ' ').trim())
                 .filter(Boolean)
-                .filter((line) => !/^(connect|message|follow|more|activity|posts|comments)$/i.test(line));
-            const lowerIndex = (label) => lines.findIndex((line) => line.toLowerCase() === label);
-            const aboutIndex = lowerIndex('about') >= 0 ? lowerIndex('about') : lowerIndex('informazioni');
-            const experienceIndex = lowerIndex('experience') >= 0 ? lowerIndex('experience') : lowerIndex('esperienza');
-            const skillsIndex = lowerIndex('skills') >= 0 ? lowerIndex('skills') : lowerIndex('competenze');
-            const locationLine = lines.find((line) => /italia|italy|roma|milano|viterbo|napoli|torino|bologna|firenze/i.test(line));
-
+                .filter((line) => !/^(connect|message|follow|more|activity|posts|comments|stai seguendo|segui|aggiungi sezione profilo|aggiungi sezione|messaggio)/i.test(line));
             const result = {};
-            if (url) result.linkedinUrl = url;
-            if (lines[1] && !/linkedin/i.test(lines[1])) result.headline = lines[1];
+            if (url) result.linkedinUrl = url.trim();
+
+            const emailLine = lines.find((line) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(line));
+            if (emailLine) result.contactEmail = emailLine;
+
+            const urlLine = lines.find((line) => /^https?:\/\//i.test(line) && /linkedin\.com|linktr\.ee|notion\.so|site|portfolio|website/i.test(line));
+            if (urlLine && !result.linkedinUrl) {
+                result.linkedinUrl = urlLine;
+            }
+
+            const sectionLabels = {
+                about: ['about', 'informazioni', 'summary', 'sommario'],
+                experience: ['experience', 'esperienza', 'work experience', 'professional experience'],
+                skills: ['skills', 'competenze', 'competenze principali'],
+                featured: ['featured', 'in evidenza', 'highlights'],
+                contact: ['contact info', 'informazioni di contatto']
+            };
+
+            const sectionIndexes = {};
+            Object.entries(sectionLabels).forEach(([key, labels]) => {
+                const idx = lines.findIndex((line) => labels.some((label) => line.toLowerCase() === label));
+                if (idx >= 0) sectionIndexes[key] = idx;
+            });
+
+            const locationLine = lines.find((line) => /\b(italia|italy|france|spain|germany|united states|rome|roma|milano|viterbo|napoli|torino|bologna|firenze|london|berlin|paris)\b/i.test(line) && /,/.test(line));
             if (locationLine) {
                 const parts = locationLine.split(',').map((part) => part.trim()).filter(Boolean);
                 result.city = parts[0] || '';
                 result.country = parts.slice(1).join(', ') || '';
             }
-            if (aboutIndex >= 0) {
-                const end = [experienceIndex, skillsIndex].filter((index) => index > aboutIndex).sort((a, b) => a - b)[0] || Math.min(lines.length, aboutIndex + 7);
-                result.bio = lines.slice(aboutIndex + 1, end).join('\n').slice(0, 900);
-            }
-            if (experienceIndex >= 0) {
-                const end = skillsIndex > experienceIndex ? skillsIndex : Math.min(lines.length, experienceIndex + 12);
-                const experienceLines = lines.slice(experienceIndex + 1, end)
-                    .filter((line) => !/^(show all|mostra tutto)/i.test(line))
-                    .slice(0, 8);
-                const firstTitle = experienceLines.find((line) => !/\d{4}|present|presente|oggi|anni|mesi|year|month/i.test(line));
-                const firstOrg = experienceLines.find((line) => line !== firstTitle && !/\d{4}|present|presente|oggi|anni|mesi|year|month/i.test(line));
-                if (firstTitle) result.roleTitle = firstTitle;
-                if (firstOrg) result.organization = firstOrg;
+
+            const nameIndex = 0;
+            const headlineCandidates = lines.slice(nameIndex + 1, Math.min(lines.length, 8))
+                .filter((line) => !/^(linkedin|profile|profi|overview|visualizza)/i.test(line));
+            const headline = headlineCandidates.find((line) => !locationLine || line !== locationLine) || '';
+            if (headline) result.headline = headline;
+
+            const pickSectionText = (startKey, endKeys = []) => {
+                const start = sectionIndexes[startKey];
+                if (start === undefined) return '';
+                const endCandidates = endKeys
+                    .map((key) => sectionIndexes[key])
+                    .filter((index) => index !== undefined && index > start)
+                    .sort((a, b) => a - b);
+                const end = endCandidates[0] || Math.min(lines.length, start + 10);
+                return lines.slice(start + 1, end)
+                    .filter((line) => !/^(show all|mostra tutto|show more|mostra di più)$/i.test(line))
+                    .join('\n')
+                    .trim();
+            };
+
+            const aboutText = pickSectionText('about', ['experience', 'skills', 'featured', 'contact']);
+            if (aboutText) result.bio = aboutText.slice(0, 900);
+
+            const experienceText = pickSectionText('experience', ['skills', 'featured', 'contact']);
+            if (experienceText) {
+                const experienceLines = experienceText
+                    .split('\n')
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                    .slice(0, 16);
                 result.experience = experienceLines.join('\n');
+                const firstTitle = experienceLines.find((line) => !/\b(19|20)\d{2}\b|present|presente|oggi|year|month/i.test(line));
+                const firstOrg = experienceLines.find((line, index) => index > 0 && line !== firstTitle && !/\b(19|20)\d{2}\b|present|presente|oggi|year|month/i.test(line));
+                if (firstTitle && !result.roleTitle) result.roleTitle = firstTitle;
+                if (firstOrg && !result.organization) result.organization = firstOrg;
             }
-            if (skillsIndex >= 0) {
-                result.skills = lines.slice(skillsIndex + 1, skillsIndex + 12)
-                    .filter((line) => !/^(show all|mostra tutto)/i.test(line))
+
+            const skillsText = pickSectionText('skills', ['featured', 'contact']);
+            if (skillsText) {
+                result.skills = skillsText
+                    .split('\n')
+                    .map((line) => line.replace(/^[•\-*]\s*/, '').trim())
+                    .filter(Boolean)
                     .join(', ');
             }
+
+            const featuredText = pickSectionText('featured', ['contact']);
+            if (featuredText) {
+                result.featuredLinks = featuredText
+                    .split('\n')
+                    .map((line) => line.replace(/^[•\-*]\s*/, '').trim())
+                    .filter(Boolean)
+                    .map((line) => {
+                        const match = line.match(/^(.*?)\s*\|\s*(https?:\/\/\S+)$/);
+                        if (match) return { label: match[1].trim(), url: match[2].trim() };
+                        const urlMatch = line.match(/https?:\/\/\S+/);
+                        return urlMatch ? { label: line.replace(urlMatch[0], '').trim() || urlMatch[0], url: urlMatch[0].trim() } : null;
+                    })
+                    .filter(Boolean);
+            }
+
             return result;
         }
 
@@ -701,6 +1013,7 @@
                 document.getElementById('linkedin-import-url').value
             );
             if (imported.linkedinUrl) document.getElementById('linkedin-url').value = imported.linkedinUrl;
+            if (imported.contactEmail && !document.getElementById('contact-email').value) document.getElementById('contact-email').value = imported.contactEmail;
             if (imported.headline && !document.getElementById('headline').value) document.getElementById('headline').value = imported.headline;
             if (imported.organization && !document.getElementById('organization').value) document.getElementById('organization').value = imported.organization;
             if (imported.roleTitle && !document.getElementById('role-title').value) document.getElementById('role-title').value = imported.roleTitle;
@@ -709,6 +1022,9 @@
             if (imported.bio && !document.getElementById('bio').value) document.getElementById('bio').value = imported.bio;
             if (imported.experience && !document.getElementById('experience').value) document.getElementById('experience').value = imported.experience;
             if (imported.skills && !document.getElementById('skills').value) document.getElementById('skills').value = imported.skills;
+            if (Array.isArray(imported.featuredLinks) && imported.featuredLinks.length && !document.getElementById('featured-links').value) {
+                document.getElementById('featured-links').value = featuredLinksToText(imported.featuredLinks);
+            }
             renderPreview();
             statusEl.textContent = 'Informazioni LinkedIn importate. Controlla i campi e salva il profilo.';
             statusEl.className = 'status ok';
@@ -750,6 +1066,25 @@
 
         document.getElementById('refresh-preview-btn').addEventListener('click', renderPreview);
         document.getElementById('linkedin-import-btn').addEventListener('click', applyLinkedinImport);
+        document.querySelectorAll('[data-upload-target]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const targetInputId = button.dataset.uploadTarget;
+                const prefix = button.dataset.uploadPrefix;
+                const fileInputId = targetInputId === 'profile-photo-url'
+                    ? 'profile-photo-file'
+                    : targetInputId === 'cover-image-url'
+                        ? 'cover-image-file'
+                        : 'post-media-file';
+                const fileInput = document.getElementById(fileInputId);
+                if (!fileInput) return;
+                fileInput.value = '';
+                fileInput.click();
+            });
+        });
+
+        document.getElementById('profile-photo-file').addEventListener('change', () => handleFileUpload('profile-photo-url', 'profile-photo-file', 'network/profile-photos'));
+        document.getElementById('cover-image-file').addEventListener('change', () => handleFileUpload('cover-image-url', 'cover-image-file', 'network/cover-images'));
+        document.getElementById('post-media-file').addEventListener('change', () => handleFileUpload('post-media-url', 'post-media-file', 'network/post-media'));
 
         document.getElementById('post-form').addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -762,11 +1097,14 @@
                         body: document.getElementById('post-body').value,
                         linkUrl: document.getElementById('post-link-url').value,
                         linkTitle: document.getElementById('post-link-title').value,
+                        mediaUrl: document.getElementById('post-media-url').value,
+                        mediaAlt: document.getElementById('post-body').value.slice(0, 120),
                         tags: splitList(document.getElementById('post-tags').value)
                     })
                 });
                 posts = [created, ...posts];
                 document.getElementById('post-form').reset();
+                postComments.clear();
                 renderPosts();
                 statusEl.textContent = 'Post pubblicato nel network.';
                 statusEl.className = 'status ok';
@@ -794,6 +1132,80 @@
             }
         });
 
+        feedEl.addEventListener('click', async (event) => {
+            const button = event.target.closest('.like-post-btn');
+            if (!button) return;
+            const postId = button.dataset.postId;
+            try {
+                const post = posts.find((item) => item.id === postId);
+                const method = post?.isLiked ? 'DELETE' : 'POST';
+                await api(`/api/lms/network/posts/${encodeURIComponent(postId)}/likes`, { method });
+                const updated = await api('/api/lms/network/posts');
+                posts = Array.isArray(updated) ? updated : posts;
+                renderPosts();
+            } catch (error) {
+                statusEl.textContent = error.message;
+                statusEl.className = 'status error';
+            }
+        });
+
+        feedEl.addEventListener('click', async (event) => {
+            const button = event.target.closest('.toggle-comments-btn');
+            if (!button) return;
+            const postId = button.dataset.postId;
+            try {
+                if (postComments.has(postId)) {
+                    postComments.delete(postId);
+                } else {
+                    await loadCommentsForPost(postId);
+                }
+                renderPosts();
+            } catch (error) {
+                statusEl.textContent = error.message;
+                statusEl.className = 'status error';
+            }
+        });
+
+        feedEl.addEventListener('submit', async (event) => {
+            const form = event.target.closest('.comment-compose');
+            if (!form) return;
+            event.preventDefault();
+            const postId = form.dataset.postId;
+            const textarea = form.querySelector('textarea');
+            const body = textarea.value.trim();
+            if (!body) return;
+            try {
+                await api(`/api/lms/network/posts/${encodeURIComponent(postId)}/comments`, {
+                    method: 'POST',
+                    body: JSON.stringify({ body })
+                });
+                await loadCommentsForPost(postId);
+                const refreshed = await api('/api/lms/network/posts');
+                posts = Array.isArray(refreshed) ? refreshed : posts;
+                renderPosts();
+                statusEl.textContent = 'Commento pubblicato.';
+                statusEl.className = 'status ok';
+            } catch (error) {
+                statusEl.textContent = error.message;
+                statusEl.className = 'status error';
+            }
+        });
+
+        feedEl.addEventListener('click', async (event) => {
+            const button = event.target.closest('.delete-comment-btn');
+            if (!button) return;
+            try {
+                await api(`/api/lms/network/comments/${encodeURIComponent(button.dataset.commentId)}`, { method: 'DELETE' });
+                await loadCommentsForPost(button.dataset.postId);
+                const refreshed = await api('/api/lms/network/posts');
+                posts = Array.isArray(refreshed) ? refreshed : posts;
+                renderPosts();
+            } catch (error) {
+                statusEl.textContent = error.message;
+                statusEl.className = 'status error';
+            }
+        });
+
         directoryEl.addEventListener('click', async (event) => {
             const button = event.target.closest('.request-contact-btn');
             if (!button) return;
@@ -814,6 +1226,30 @@
             }
         });
 
+        directoryEl.addEventListener('click', async (event) => {
+            const button = event.target.closest('.follow-btn');
+            if (!button) return;
+            const userId = button.dataset.userId;
+            const following = button.dataset.following === 'true';
+            try {
+                await api(following ? `/api/lms/network/follows/${encodeURIComponent(userId)}` : '/api/lms/network/follows', {
+                    method: following ? 'DELETE' : 'POST',
+                    body: following ? undefined : JSON.stringify({ targetUserId: userId })
+                });
+                const updated = await api('/api/lms/network/profiles');
+                profiles = Array.isArray(updated) ? updated : profiles;
+                const refreshedProfile = await api('/api/lms/network/profile');
+                if (refreshedProfile) fillForm(refreshedProfile);
+                renderDirectory();
+                renderPreview();
+                statusEl.textContent = following ? 'Follow rimosso.' : 'Follow aggiunto.';
+                statusEl.className = 'status ok';
+            } catch (error) {
+                statusEl.textContent = error.message;
+                statusEl.className = 'status error';
+            }
+        });
+
         requestsEl.addEventListener('click', async (event) => {
             const button = event.target.closest('.intro-status-btn');
             if (!button) return;
@@ -826,6 +1262,19 @@
                 renderRequests();
                 statusEl.textContent = 'Richiesta aggiornata.';
                 statusEl.className = 'status ok';
+            } catch (error) {
+                statusEl.textContent = error.message;
+                statusEl.className = 'status error';
+            }
+        });
+
+        notificationsEl.addEventListener('click', async (event) => {
+            const button = event.target.closest('.mark-notification-read-btn');
+            if (!button) return;
+            try {
+                await api(`/api/lms/network/notifications/${encodeURIComponent(button.dataset.notificationId)}/read`, { method: 'PATCH' });
+                notifications = await api('/api/lms/network/notifications');
+                renderNotifications();
             } catch (error) {
                 statusEl.textContent = error.message;
                 statusEl.className = 'status error';

@@ -22,6 +22,7 @@ test('il menu admin separa Area riservata / Piattaforma e Sito pubblico', () => 
   assert.match(html, /<th>Fonte<\/th>/);
   assert.match(html, /href="#blog" data-section="blog">📝 Blog</);
   assert.match(html, /href="#partners" data-section="partners">🤝 Partner</);
+  assert.match(html, /href="#network" data-section="network">🌐 Network</);
   assert.match(html, /<th>Ruolo<\/th>/);
   assert.match(html, /<th>Copertina<\/th>/);
   assert.match(html, /👁️ Ospite \(solo consultazione\)/);
@@ -29,7 +30,7 @@ test('il menu admin separa Area riservata / Piattaforma e Sito pubblico', () => 
   assert.match(html, /Risposte del docente/);
   assert.doesNotMatch(html, /Feedback ricevuti/);
   assert.doesNotMatch(html, /slice\(0, 8\)/);
-  assert.equal((html.match(/<section id="/g) || []).length, 18);
+  assert.equal((html.match(/<section id="/g) || []).length, 19);
 });
 
 test('la sezione LMS admin non contiene debug temporanei e usa cache lezioni per modulo', () => {
@@ -46,6 +47,7 @@ test('la sezione LMS admin non contiene debug temporanei e usa cache lezioni per
   assert.match(html, /function handleHashRoute\(\)/);
   assert.match(html, /window\.addEventListener\('hashchange', handleHashRoute\)/);
   assert.match(html, /document\.querySelectorAll\('\.admin-main section'\)/);
+  assert.match(html, /<section id="network">/);
 });
 
 test('i grafici progressi studenti usano barre visibili dedicate', () => {

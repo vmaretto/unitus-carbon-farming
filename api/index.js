@@ -4690,14 +4690,20 @@ function createPublicUploadsPath(...parts) {
 }
 
 async function saveBlogCoverToStorage(buffer, postId) {
-  const fileName = `${postId}-${Date.now()}.png`;
+  return saveImageToStorage(buffer, {
+    folder: 'blog-covers',
+    fileName: `${postId}-${Date.now()}.png`,
+    contentType: 'image/png'
+  });
+}
 
+async function saveImageToStorage(buffer, { folder, fileName, contentType = 'image/png' }) {
   if (process.env.CLOUDINARY_URL) {
     const uploadResult = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         {
-          folder: 'blog-covers',
-          public_id: `${postId}-${Date.now()}`,
+          folder,
+          public_id: fileName.replace(/\.[^.]+$/, ''),
           resource_type: 'image'
         },
         (error, result) => {
@@ -4715,24 +4721,24 @@ async function saveBlogCoverToStorage(buffer, postId) {
   }
 
   if (process.env.BLOB_READ_WRITE_TOKEN) {
-    const blob = await put(`blog-covers/${fileName}`, buffer, {
+    const blob = await put(`${folder}/${fileName}`, buffer, {
       access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN,
       addRandomSuffix: false,
-      contentType: 'image/png'
+      contentType
     });
     return blob.url;
   }
 
   if (process.env.VERCEL) {
-    throw new Error('Storage cover non configurato su Vercel. Imposta CLOUDINARY_URL oppure BLOB_READ_WRITE_TOKEN.');
+    throw new Error('Storage immagini non configurato su Vercel. Imposta CLOUDINARY_URL oppure BLOB_READ_WRITE_TOKEN.');
   }
 
-  const uploadDir = createPublicUploadsPath('uploads', 'blog-covers');
+  const uploadDir = createPublicUploadsPath('uploads', folder);
   await fs.promises.mkdir(uploadDir, { recursive: true });
   const filePath = path.join(uploadDir, fileName);
   await fs.promises.writeFile(filePath, buffer);
-  return `/uploads/blog-covers/${fileName}`;
+  return `/uploads/${folder}/${fileName}`;
 }
 
 async function generateBlogCoverImage(prompt) {
@@ -9682,6 +9688,31 @@ function normalizeNetworkUrl(value) {
   return text;
 }
 
+const NETWORK_SETTING_DEFAULTS = {
+  network_enabled: 'true',
+  profiles_enabled: 'true',
+  posts_enabled: 'true',
+  intro_requests_enabled: 'true',
+  profile_photos_enabled: 'true',
+  link_previews_enabled: 'true'
+};
+
+async function loadNetworkSettings(client = pool) {
+  const settings = { ...NETWORK_SETTING_DEFAULTS };
+  if (!client) return settings;
+  const { rows } = await client.query('SELECT key, value FROM network_settings');
+  rows.forEach((row) => {
+    if (row && row.key) {
+      settings[row.key] = String(row.value ?? '');
+    }
+  });
+  return settings;
+}
+
+function isNetworkFlagEnabled(settings, key) {
+  return String(settings?.[key] ?? NETWORK_SETTING_DEFAULTS[key] ?? 'false').toLowerCase() === 'true';
+}
+
 function normalizeNetworkEntries(value, allowedKeys, maxItems = 5) {
   if (!Array.isArray(value)) return [];
   return value
@@ -9730,6 +9761,12 @@ function buildNetworkProfile(row, options = {}) {
     showEmail: Boolean(row.showEmail),
     showLinkedin: Boolean(row.showLinkedin),
     availableForContact: Boolean(row.availableForContact),
+    followersCount: Number(row.followersCount ?? 0),
+    followingCount: Number(row.followingCount ?? 0),
+    postsCount: Number(row.postsCount ?? 0),
+    isFollowing: Boolean(row.isFollowing),
+    isFollowedBy: Boolean(row.isFollowedBy),
+    isConnected: Boolean(row.isConnected),
     updatedAt: row.updatedAt
   };
 }
@@ -9763,10 +9800,23 @@ function buildNetworkPost(row) {
     body: row.body,
     linkUrl: row.linkUrl,
     linkTitle: row.linkTitle,
+    mediaUrl: row.mediaUrl || null,
+    mediaAlt: row.mediaAlt || null,
+    linkPreview: row.linkPreviewTitle || row.linkPreviewDescription || row.linkPreviewImageUrl || row.linkPreviewSiteName
+      ? {
+          title: row.linkPreviewTitle || null,
+          description: row.linkPreviewDescription || null,
+          imageUrl: row.linkPreviewImageUrl || null,
+          siteName: row.linkPreviewSiteName || null
+        }
+      : null,
     tags: row.tags || [],
     visibility: row.visibility,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    likeCount: Number(row.likeCount ?? 0),
+    commentCount: Number(row.commentCount ?? 0),
+    isLiked: Boolean(row.isLiked),
     author: {
       userId: row.authorUserId,
       fullName: [row.authorFirstName, row.authorLastName].filter(Boolean).join(' ').trim(),
@@ -9779,9 +9829,150 @@ function buildNetworkPost(row) {
   };
 }
 
+function buildNetworkComment(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    postId: row.postId,
+    body: row.body,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    canDelete: Boolean(row.canDelete),
+    author: {
+      userId: row.authorUserId,
+      fullName: [row.authorFirstName, row.authorLastName].filter(Boolean).join(' ').trim(),
+      headline: row.authorHeadline,
+      organization: row.authorOrganization,
+      roleTitle: row.authorRoleTitle,
+      profilePhotoUrl: row.authorProfilePhotoUrl || row.authorAvatarUrl || null
+    }
+  };
+}
+
+function buildNetworkNotification(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    type: row.type,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    payload: row.payload || {},
+    isRead: Boolean(row.isRead),
+    createdAt: row.createdAt,
+    readAt: row.readAt
+  };
+}
+
+function buildNetworkAdminProfile(row) {
+  const profile = buildNetworkProfile(row, { exposePrivate: true });
+  if (!profile) return null;
+  return {
+    ...profile,
+    email: row.userEmail || null,
+    userAvatarUrl: row.userAvatarUrl || null,
+    createdAt: row.createdAt || null
+  };
+}
+
+async function fetchNetworkLinkPreview(linkUrl) {
+  if (!linkUrl) return null;
+  if (process.env.NODE_ENV === 'test') return null;
+  try {
+    const response = await fetch(linkUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; CarbonFarmingMasterBot/1.0)'
+      }
+    });
+    if (!response.ok) return null;
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    const pick = (...selectors) => {
+      for (const selector of selectors) {
+        const value = $(selector).attr('content') || $(selector).attr('value') || $(selector).text();
+        if (value && String(value).trim()) return String(value).trim();
+      }
+      return '';
+    };
+    const resolveUrl = (value) => {
+      if (!value) return null;
+      try {
+        return new URL(value, linkUrl).toString();
+      } catch (_) {
+        return null;
+      }
+    };
+    const title = pick('meta[property="og:title"]', 'meta[name="twitter:title"]', 'title') || null;
+    const description = pick('meta[property="og:description"]', 'meta[name="description"]', 'meta[name="twitter:description"]') || null;
+    const imageUrl = resolveUrl(pick('meta[property="og:image"]', 'meta[name="twitter:image"]'));
+    const siteName = pick('meta[property="og:site_name"]') || null;
+    if (!title && !description && !imageUrl && !siteName) return null;
+    return {
+      title,
+      description,
+      imageUrl,
+      siteName
+    };
+  } catch (error) {
+    console.warn('Network link preview failed:', error.message);
+    return null;
+  }
+}
+
+async function insertNetworkNotification({ userId, type, entityType, entityId = null, payload = {} }) {
+  if (!pool) return null;
+  const { rows } = await pool.query(`
+    INSERT INTO network_notifications (user_id, type, entity_type, entity_id, payload, is_read, created_at)
+    VALUES ($1, $2, $3, $4, $5::jsonb, false, NOW())
+    RETURNING id
+  `, [userId, type, entityType, entityId, JSON.stringify(payload || {})]);
+  return rows[0]?.id || null;
+}
+
+app.get('/api/lms/network/config', requireStudent, async (_req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const settings = await loadNetworkSettings();
+    res.json({
+      networkEnabled: isNetworkFlagEnabled(settings, 'network_enabled'),
+      profilesEnabled: isNetworkFlagEnabled(settings, 'profiles_enabled'),
+      postsEnabled: isNetworkFlagEnabled(settings, 'posts_enabled'),
+      introRequestsEnabled: isNetworkFlagEnabled(settings, 'intro_requests_enabled'),
+      profilePhotosEnabled: isNetworkFlagEnabled(settings, 'profile_photos_enabled'),
+      linkPreviewsEnabled: isNetworkFlagEnabled(settings, 'link_previews_enabled')
+    });
+  } catch (error) {
+    console.error('Get network config error:', error);
+    res.status(500).json({ error: 'Errore nel recupero configurazione network' });
+  }
+});
+
+app.post('/api/lms/network/blob-token', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const pathname = String(req.body?.pathname || '').trim().replace(/^\/+/, '');
+    if (!pathname.startsWith('network/')) {
+      return res.status(400).json({ error: 'Percorso upload non valido' });
+    }
+
+    const requestedMaxSize = Number(req.body?.maximumSizeInBytes || 0);
+    const maximumSizeInBytes = Number.isFinite(requestedMaxSize) && requestedMaxSize > 0
+      ? Math.min(requestedMaxSize, BLOB_CLIENT_TOKEN_MAX_BYTES)
+      : Math.min(12 * 1024 * 1024, BLOB_CLIENT_TOKEN_MAX_BYTES);
+    const contentType = String(req.body?.contentType || '').trim() || null;
+    res.json(await createBlobClientToken({ pathname, maximumSizeInBytes, contentType }));
+  } catch (error) {
+    console.error('Error generating network blob token:', error);
+    res.status(500).json({ error: error.message || 'Impossibile generare il token upload' });
+  }
+});
+
 app.get('/api/lms/network/profile', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled') || !isNetworkFlagEnabled(networkSettings, 'profiles_enabled')) {
+      return res.status(503).json({ error: 'Network non disponibile al momento' });
+    }
     const { rows } = await pool.query(`
       SELECT u.id AS "userId", u.email AS "userEmail",
              u.first_name AS "firstName", u.last_name AS "lastName", u.role,
@@ -9799,6 +9990,25 @@ app.get('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
              COALESCE(p.show_email, false) AS "showEmail",
              COALESCE(p.show_linkedin, true) AS "showLinkedin",
              COALESCE(p.available_for_contact, true) AS "availableForContact",
+             (SELECT COUNT(*)::int FROM network_follows f WHERE f.following_user_id = u.id) AS "followersCount",
+             (SELECT COUNT(*)::int FROM network_follows f WHERE f.follower_user_id = u.id) AS "followingCount",
+             (SELECT COUNT(*)::int FROM network_posts post WHERE post.author_user_id = u.id AND post.is_deleted = false) AS "postsCount",
+             EXISTS (
+               SELECT 1 FROM network_follows f
+               WHERE f.follower_user_id = $1 AND f.following_user_id = u.id
+             ) AS "isFollowing",
+             EXISTS (
+               SELECT 1 FROM network_follows f
+               WHERE f.follower_user_id = u.id AND f.following_user_id = $1
+             ) AS "isFollowedBy",
+             EXISTS (
+               SELECT 1
+               FROM network_follows f1
+               JOIN network_follows f2
+                 ON f1.follower_user_id = f2.following_user_id
+                AND f1.following_user_id = f2.follower_user_id
+               WHERE f1.follower_user_id = $1 AND f1.following_user_id = u.id
+             ) AS "isConnected",
              p.updated_at AS "updatedAt"
       FROM users u
       LEFT JOIN network_profiles p ON p.user_id = u.id
@@ -9816,6 +10026,14 @@ app.get('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
 app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled') || !isNetworkFlagEnabled(networkSettings, 'profiles_enabled')) {
+      return res.status(403).json({ error: 'La modifica del profilo network è temporaneamente disabilitata' });
+    }
+    if (!isNetworkFlagEnabled(networkSettings, 'profile_photos_enabled')) {
+      req.body.profilePhotoUrl = null;
+      req.body.coverImageUrl = null;
+    }
     const payload = {
       headline: normalizeNetworkText(req.body.headline, 160),
       organization: normalizeNetworkText(req.body.organization, 160),
@@ -9912,6 +10130,10 @@ app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
 app.get('/api/lms/network/profiles', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled') || !isNetworkFlagEnabled(networkSettings, 'profiles_enabled')) {
+      return res.json([]);
+    }
     const { rows } = await pool.query(`
       SELECT u.id AS "userId", u.email AS "userEmail",
              u.first_name AS "firstName", u.last_name AS "lastName", u.role,
@@ -9926,6 +10148,25 @@ app.get('/api/lms/network/profiles', requireStudent, requireNonGuest, async (req
              p.is_visible AS "isVisible", p.show_email AS "showEmail",
              p.show_linkedin AS "showLinkedin",
              p.available_for_contact AS "availableForContact",
+             (SELECT COUNT(*)::int FROM network_follows f WHERE f.following_user_id = u.id) AS "followersCount",
+             (SELECT COUNT(*)::int FROM network_follows f WHERE f.follower_user_id = u.id) AS "followingCount",
+             (SELECT COUNT(*)::int FROM network_posts post WHERE post.author_user_id = u.id AND post.is_deleted = false) AS "postsCount",
+             EXISTS (
+               SELECT 1 FROM network_follows f
+               WHERE f.follower_user_id = $1 AND f.following_user_id = u.id
+             ) AS "isFollowing",
+             EXISTS (
+               SELECT 1 FROM network_follows f
+               WHERE f.follower_user_id = u.id AND f.following_user_id = $1
+             ) AS "isFollowedBy",
+             EXISTS (
+               SELECT 1
+               FROM network_follows f1
+               JOIN network_follows f2
+                 ON f1.follower_user_id = f2.following_user_id
+                AND f1.following_user_id = f2.follower_user_id
+               WHERE f1.follower_user_id = $1 AND f1.following_user_id = u.id
+             ) AS "isConnected",
              p.updated_at AS "updatedAt"
       FROM network_profiles p
       JOIN users u ON u.id = p.user_id
@@ -9945,6 +10186,10 @@ app.get('/api/lms/network/profiles', requireStudent, requireNonGuest, async (req
 app.get('/api/lms/network/intro-requests', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled') || !isNetworkFlagEnabled(networkSettings, 'intro_requests_enabled')) {
+      return res.json([]);
+    }
     const { rows } = await pool.query(`
       SELECT r.id, r.status, r.message,
              r.created_at AS "createdAt", r.updated_at AS "updatedAt",
@@ -9978,6 +10223,10 @@ app.get('/api/lms/network/intro-requests', requireStudent, requireNonGuest, asyn
 app.post('/api/lms/network/intro-requests', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled') || !isNetworkFlagEnabled(networkSettings, 'intro_requests_enabled')) {
+      return res.status(403).json({ error: 'Le richieste di contatto sono temporaneamente disabilitate' });
+    }
     const recipientUserId = normalizeNetworkText(req.body.recipientUserId, 80);
     const message = normalizeNetworkText(req.body.message, 700);
 
@@ -10012,6 +10261,14 @@ app.post('/api/lms/network/intro-requests', requireStudent, requireNonGuest, asy
       RETURNING id, status, message, created_at AS "createdAt", updated_at AS "updatedAt"
     `, [req.user.userId, recipientUserId, message]);
 
+    await insertNetworkNotification({
+      userId: recipientUserId,
+      type: 'intro_request',
+      entityType: 'network_intro_request',
+      entityId: rows[0].id,
+      payload: { senderUserId: req.user.userId, message }
+    });
+
     res.status(201).json(rows[0]);
   } catch (error) {
     console.error('Create network intro request error:', error);
@@ -10022,9 +10279,22 @@ app.post('/api/lms/network/intro-requests', requireStudent, requireNonGuest, asy
 app.patch('/api/lms/network/intro-requests/:id', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled') || !isNetworkFlagEnabled(networkSettings, 'intro_requests_enabled')) {
+      return res.status(403).json({ error: 'Le richieste di contatto sono temporaneamente disabilitate' });
+    }
     const status = normalizeNetworkText(req.body.status, 20);
     if (!['accepted', 'declined', 'archived'].includes(status)) {
       return res.status(400).json({ error: 'Stato richiesta non valido' });
+    }
+
+    const ownerRes = await pool.query(`
+      SELECT sender_user_id AS "senderUserId", recipient_user_id AS "recipientUserId"
+      FROM network_intro_requests
+      WHERE id = $1
+    `, [req.params.id]);
+    if (!ownerRes.rows.length) {
+      return res.status(404).json({ error: 'Richiesta non trovata' });
     }
 
     const { rows } = await pool.query(`
@@ -10040,6 +10310,17 @@ app.patch('/api/lms/network/intro-requests/:id', requireStudent, requireNonGuest
       return res.status(404).json({ error: 'Richiesta non trovata' });
     }
 
+    const targetUserId = ownerRes.rows[0].senderUserId;
+    if (targetUserId && targetUserId !== req.user.userId) {
+      await insertNetworkNotification({
+        userId: targetUserId,
+        type: `intro_request_${status}`,
+        entityType: 'network_intro_request',
+        entityId: req.params.id,
+        payload: { status }
+      });
+    }
+
     res.json(rows[0]);
   } catch (error) {
     console.error('Update network intro request error:', error);
@@ -10050,9 +10331,19 @@ app.patch('/api/lms/network/intro-requests/:id', requireStudent, requireNonGuest
 app.get('/api/lms/network/posts', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled') || !isNetworkFlagEnabled(networkSettings, 'posts_enabled')) {
+      return res.json([]);
+    }
     const { rows } = await pool.query(`
       SELECT post.id, post.body, post.link_url AS "linkUrl",
-             post.link_title AS "linkTitle", post.tags, post.visibility,
+             post.link_title AS "linkTitle", post.media_url AS "mediaUrl",
+             post.media_alt AS "mediaAlt",
+             post.link_preview_title AS "linkPreviewTitle",
+             post.link_preview_description AS "linkPreviewDescription",
+             post.link_preview_image_url AS "linkPreviewImageUrl",
+             post.link_preview_site_name AS "linkPreviewSiteName",
+             post.tags, post.visibility,
              post.created_at AS "createdAt", post.updated_at AS "updatedAt",
              post.author_user_id AS "authorUserId",
              u.first_name AS "authorFirstName", u.last_name AS "authorLastName",
@@ -10061,6 +10352,12 @@ app.get('/api/lms/network/posts', requireStudent, requireNonGuest, async (req, r
              p.organization AS "authorOrganization",
              p.role_title AS "authorRoleTitle",
              p.profile_photo_url AS "authorProfilePhotoUrl",
+             (SELECT COUNT(*)::int FROM network_post_likes l WHERE l.post_id = post.id) AS "likeCount",
+             (SELECT COUNT(*)::int FROM network_post_comments c WHERE c.post_id = post.id AND c.is_deleted = false) AS "commentCount",
+             EXISTS (
+               SELECT 1 FROM network_post_likes l
+               WHERE l.post_id = post.id AND l.user_id = $1
+             ) AS "isLiked",
              (post.author_user_id = $1) AS "canDelete"
       FROM network_posts post
       JOIN users u ON u.id = post.author_user_id
@@ -10081,24 +10378,53 @@ app.get('/api/lms/network/posts', requireStudent, requireNonGuest, async (req, r
 app.post('/api/lms/network/posts', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled') || !isNetworkFlagEnabled(networkSettings, 'posts_enabled')) {
+      return res.status(403).json({ error: 'La pubblicazione dei post è temporaneamente disabilitata' });
+    }
     const body = normalizeNetworkText(req.body.body, 1600);
     const linkUrl = normalizeNetworkUrl(req.body.linkUrl);
     const linkTitle = normalizeNetworkText(req.body.linkTitle, 160);
+    const mediaUrl = normalizeNetworkUrl(req.body.mediaUrl);
+    const mediaAlt = normalizeNetworkText(req.body.mediaAlt, 180);
     const tags = normalizeNetworkList(req.body.tags).slice(0, 8);
 
     if (!body || body.length < 3) {
       return res.status(400).json({ error: 'Scrivi un contenuto per pubblicare il post' });
     }
 
+    const allowLinkPreviews = isNetworkFlagEnabled(networkSettings, 'link_previews_enabled');
+    const linkPreview = allowLinkPreviews && linkUrl ? await fetchNetworkLinkPreview(linkUrl) : null;
+
     const { rows } = await pool.query(`
       INSERT INTO network_posts (
-        author_user_id, body, link_url, link_title, tags, visibility, created_at, updated_at
+        author_user_id, body, link_url, link_title, media_url, media_alt,
+        link_preview_title, link_preview_description, link_preview_image_url, link_preview_site_name,
+        tags, visibility, created_at, updated_at
       )
-      VALUES ($1, $2, $3, $4, $5::text[], 'network', NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+              $11::text[], 'network', NOW(), NOW())
       RETURNING id, body, link_url AS "linkUrl", link_title AS "linkTitle",
+                media_url AS "mediaUrl", media_alt AS "mediaAlt",
+                link_preview_title AS "linkPreviewTitle",
+                link_preview_description AS "linkPreviewDescription",
+                link_preview_image_url AS "linkPreviewImageUrl",
+                link_preview_site_name AS "linkPreviewSiteName",
                 tags, visibility, created_at AS "createdAt", updated_at AS "updatedAt",
                 author_user_id AS "authorUserId", true AS "canDelete"
-    `, [req.user.userId, body, linkUrl, linkTitle, tags]);
+    `, [
+      req.user.userId,
+      body,
+      linkUrl,
+      linkTitle,
+      mediaUrl,
+      mediaAlt,
+      linkPreview?.title || null,
+      linkPreview?.description || null,
+      linkPreview?.imageUrl || null,
+      linkPreview?.siteName || null,
+      tags
+    ]);
 
     const authorRes = await pool.query(`
       SELECT u.first_name AS "authorFirstName", u.last_name AS "authorLastName",
@@ -10112,7 +10438,13 @@ app.post('/api/lms/network/posts', requireStudent, requireNonGuest, async (req, 
       WHERE u.id = $1
     `, [req.user.userId]);
 
-    res.status(201).json(buildNetworkPost({ ...rows[0], ...authorRes.rows[0] }));
+    res.status(201).json(buildNetworkPost({
+      ...rows[0],
+      ...authorRes.rows[0],
+      likeCount: 0,
+      commentCount: 0,
+      isLiked: false
+    }));
   } catch (error) {
     console.error('Create network post error:', error);
     res.status(500).json({ error: 'Errore nella pubblicazione del post' });
@@ -10122,6 +10454,10 @@ app.post('/api/lms/network/posts', requireStudent, requireNonGuest, async (req, 
 app.delete('/api/lms/network/posts/:id', requireStudent, requireNonGuest, async (req, res) => {
   if (!ensurePool(res)) return;
   try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled') || !isNetworkFlagEnabled(networkSettings, 'posts_enabled')) {
+      return res.status(403).json({ error: 'La gestione dei post è temporaneamente disabilitata' });
+    }
     const { rows } = await pool.query(`
       UPDATE network_posts
       SET is_deleted = true, updated_at = NOW()
@@ -10139,6 +10475,410 @@ app.delete('/api/lms/network/posts/:id', requireStudent, requireNonGuest, async 
   } catch (error) {
     console.error('Delete network post error:', error);
     res.status(500).json({ error: 'Errore nella cancellazione del post' });
+  }
+});
+
+app.get('/api/lms/network/posts/:id/comments', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled')) {
+      return res.json([]);
+    }
+    const { rows } = await pool.query(`
+      SELECT c.id, c.post_id AS "postId", c.body, c.created_at AS "createdAt",
+             c.updated_at AS "updatedAt",
+             c.user_id AS "authorUserId",
+             u.first_name AS "authorFirstName", u.last_name AS "authorLastName",
+             u.avatar_url AS "authorAvatarUrl",
+             p.headline AS "authorHeadline",
+             p.organization AS "authorOrganization",
+             p.role_title AS "authorRoleTitle",
+             p.profile_photo_url AS "authorProfilePhotoUrl",
+             (c.user_id = $2) AS "canDelete"
+      FROM network_post_comments c
+      JOIN users u ON u.id = c.user_id
+      LEFT JOIN network_profiles p ON p.user_id = u.id
+      WHERE c.post_id = $1 AND c.is_deleted = false
+      ORDER BY c.created_at ASC
+      LIMIT 200
+    `, [req.params.id, req.user.userId]);
+    res.json(rows.map(buildNetworkComment));
+  } catch (error) {
+    console.error('List network comments error:', error);
+    res.status(500).json({ error: 'Errore nel recupero commenti' });
+  }
+});
+
+app.post('/api/lms/network/posts/:id/comments', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled')) {
+      return res.status(403).json({ error: 'Commenti non disponibili' });
+    }
+    const body = normalizeNetworkText(req.body.body, 1200);
+    if (!body || body.length < 2) {
+      return res.status(400).json({ error: 'Scrivi un commento valido' });
+    }
+    const postRes = await pool.query('SELECT author_user_id AS "authorUserId" FROM network_posts WHERE id = $1 AND is_deleted = false', [req.params.id]);
+    if (!postRes.rows.length) {
+      return res.status(404).json({ error: 'Post non trovato' });
+    }
+    const { rows } = await pool.query(`
+      INSERT INTO network_post_comments (post_id, user_id, body, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW())
+      RETURNING id, post_id AS "postId", body, created_at AS "createdAt", updated_at AS "updatedAt",
+                user_id AS "authorUserId", true AS "canDelete"
+    `, [req.params.id, req.user.userId, body]);
+    const authorRes = await pool.query(`
+      SELECT u.first_name AS "authorFirstName", u.last_name AS "authorLastName",
+             u.avatar_url AS "authorAvatarUrl",
+             p.headline AS "authorHeadline",
+             p.organization AS "authorOrganization",
+             p.role_title AS "authorRoleTitle",
+             p.profile_photo_url AS "authorProfilePhotoUrl"
+      FROM users u
+      LEFT JOIN network_profiles p ON p.user_id = u.id
+      WHERE u.id = $1
+    `, [req.user.userId]);
+    await insertNetworkNotification({
+      userId: postRes.rows[0].authorUserId,
+      type: 'post_comment',
+      entityType: 'network_post',
+      entityId: req.params.id,
+      payload: { postId: req.params.id, commentId: rows[0].id, commentBody: body }
+    });
+    res.status(201).json(buildNetworkComment({ ...rows[0], ...authorRes.rows[0] }));
+  } catch (error) {
+    console.error('Create network comment error:', error);
+    res.status(500).json({ error: 'Errore nella creazione commento' });
+  }
+});
+
+app.delete('/api/lms/network/comments/:id', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      UPDATE network_post_comments
+      SET is_deleted = true, updated_at = NOW()
+      WHERE id = $1 AND user_id = $2 AND is_deleted = false
+      RETURNING id
+    `, [req.params.id, req.user.userId]);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Commento non trovato' });
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Delete network comment error:', error);
+    res.status(500).json({ error: 'Errore nella cancellazione commento' });
+  }
+});
+
+app.post('/api/lms/network/posts/:id/likes', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled')) {
+      return res.status(403).json({ error: 'Like non disponibili' });
+    }
+    const postRes = await pool.query('SELECT author_user_id AS "authorUserId" FROM network_posts WHERE id = $1 AND is_deleted = false', [req.params.id]);
+    if (!postRes.rows.length) {
+      return res.status(404).json({ error: 'Post non trovato' });
+    }
+    await pool.query(`
+      INSERT INTO network_post_likes (post_id, user_id, created_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (post_id, user_id) DO NOTHING
+    `, [req.params.id, req.user.userId]);
+    if (postRes.rows[0].authorUserId !== req.user.userId) {
+      await insertNetworkNotification({
+        userId: postRes.rows[0].authorUserId,
+        type: 'post_like',
+        entityType: 'network_post',
+        entityId: req.params.id,
+        payload: { postId: req.params.id }
+      });
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Like network post error:', error);
+    res.status(500).json({ error: 'Errore nel mettere like al post' });
+  }
+});
+
+app.delete('/api/lms/network/posts/:id/likes', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    await pool.query(`
+      DELETE FROM network_post_likes
+      WHERE post_id = $1 AND user_id = $2
+    `, [req.params.id, req.user.userId]);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Unlike network post error:', error);
+    res.status(500).json({ error: 'Errore nel rimuovere il like' });
+  }
+});
+
+app.post('/api/lms/network/follows', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const targetUserId = normalizeNetworkText(req.body.targetUserId, 80);
+    if (!targetUserId || targetUserId === req.user.userId) {
+      return res.status(400).json({ error: 'Utente non valido' });
+    }
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled')) {
+      return res.status(403).json({ error: 'Follow non disponibili' });
+    }
+    const targetRes = await pool.query(`
+      SELECT p.user_id
+      FROM network_profiles p
+      JOIN users u ON u.id = p.user_id
+      WHERE p.user_id = $1 AND p.is_visible = true AND u.is_active = true
+    `, [targetUserId]);
+    if (!targetRes.rows.length) {
+      return res.status(404).json({ error: 'Profilo non trovato' });
+    }
+    await pool.query(`
+      INSERT INTO network_follows (follower_user_id, following_user_id, created_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (follower_user_id, following_user_id) DO NOTHING
+    `, [req.user.userId, targetUserId]);
+    await insertNetworkNotification({
+      userId: targetUserId,
+      type: 'follow',
+      entityType: 'network_profile',
+      entityId: targetUserId,
+      payload: { followerUserId: req.user.userId }
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Create follow error:', error);
+    res.status(500).json({ error: 'Errore nel follow' });
+  }
+});
+
+app.delete('/api/lms/network/follows/:userId', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    await pool.query(`
+      DELETE FROM network_follows
+      WHERE follower_user_id = $1 AND following_user_id = $2
+    `, [req.user.userId, req.params.userId]);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Delete follow error:', error);
+    res.status(500).json({ error: 'Errore nella rimozione follow' });
+  }
+});
+
+app.get('/api/lms/network/notifications', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, type, entity_type AS "entityType", entity_id AS "entityId",
+             payload, is_read AS "isRead", created_at AS "createdAt", read_at AS "readAt"
+      FROM network_notifications
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 100
+    `, [req.user.userId]);
+    res.json(rows.map(buildNetworkNotification));
+  } catch (error) {
+    console.error('Get network notifications error:', error);
+    res.status(500).json({ error: 'Errore nel recupero notifiche' });
+  }
+});
+
+app.patch('/api/lms/network/notifications/:id/read', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      UPDATE network_notifications
+      SET is_read = true, read_at = NOW()
+      WHERE id = $1 AND user_id = $2
+      RETURNING id
+    `, [req.params.id, req.user.userId]);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Notifica non trovata' });
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Mark notification read error:', error);
+    res.status(500).json({ error: 'Errore nell aggiornamento notifica' });
+  }
+});
+
+app.get('/api/admin/network/settings', requireAdmin, async (_req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const settings = await loadNetworkSettings();
+    res.json({
+      networkEnabled: isNetworkFlagEnabled(settings, 'network_enabled'),
+      profilesEnabled: isNetworkFlagEnabled(settings, 'profiles_enabled'),
+      postsEnabled: isNetworkFlagEnabled(settings, 'posts_enabled'),
+      introRequestsEnabled: isNetworkFlagEnabled(settings, 'intro_requests_enabled'),
+      profilePhotosEnabled: isNetworkFlagEnabled(settings, 'profile_photos_enabled'),
+      linkPreviewsEnabled: isNetworkFlagEnabled(settings, 'link_previews_enabled')
+    });
+  } catch (error) {
+    console.error('Get admin network settings error:', error);
+    res.status(500).json({ error: 'Errore nel recupero configurazione network' });
+  }
+});
+
+app.put('/api/admin/network/settings', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const payload = {
+      network_enabled: normalizeBoolean(req.body.networkEnabled, true),
+      profiles_enabled: normalizeBoolean(req.body.profilesEnabled, true),
+      posts_enabled: normalizeBoolean(req.body.postsEnabled, true),
+      intro_requests_enabled: normalizeBoolean(req.body.introRequestsEnabled, true),
+      profile_photos_enabled: normalizeBoolean(req.body.profilePhotosEnabled, true),
+      link_previews_enabled: normalizeBoolean(req.body.linkPreviewsEnabled, true)
+    };
+
+    const entries = Object.entries(payload);
+    for (const [key, value] of entries) {
+      await pool.query(`
+        INSERT INTO network_settings (key, value, updated_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+      `, [key, String(value)]);
+    }
+
+    res.json({
+      networkEnabled: normalizeBoolean(payload.network_enabled, true),
+      profilesEnabled: normalizeBoolean(payload.profiles_enabled, true),
+      postsEnabled: normalizeBoolean(payload.posts_enabled, true),
+      introRequestsEnabled: normalizeBoolean(payload.intro_requests_enabled, true),
+      profilePhotosEnabled: normalizeBoolean(payload.profile_photos_enabled, true),
+      linkPreviewsEnabled: normalizeBoolean(payload.link_previews_enabled, true)
+    });
+  } catch (error) {
+    console.error('Update admin network settings error:', error);
+    res.status(500).json({ error: 'Errore nel salvataggio configurazione network' });
+  }
+});
+
+app.get('/api/admin/network/profiles', requireAdmin, async (_req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT u.id AS "userId", u.email AS "userEmail",
+             u.first_name AS "firstName", u.last_name AS "lastName", u.role,
+             u.avatar_url AS "userAvatarUrl",
+             p.headline, p.organization, p.role_title AS "roleTitle",
+             p.city, p.country, p.bio, p.skills, p.interests,
+             p.profile_photo_url AS "profilePhotoUrl",
+             p.cover_image_url AS "coverImageUrl",
+             p.collaboration_goals AS "collaborationGoals",
+             p.experience, p.featured_links AS "featuredLinks",
+             p.linkedin_url AS "linkedinUrl", p.contact_email AS "contactEmail",
+             p.is_visible AS "isVisible", p.show_email AS "showEmail",
+             p.show_linkedin AS "showLinkedin",
+             p.available_for_contact AS "availableForContact",
+             (SELECT COUNT(*)::int FROM network_follows f WHERE f.following_user_id = u.id) AS "followersCount",
+             (SELECT COUNT(*)::int FROM network_follows f WHERE f.follower_user_id = u.id) AS "followingCount",
+             (SELECT COUNT(*)::int FROM network_posts post WHERE post.author_user_id = u.id AND post.is_deleted = false) AS "postsCount",
+             u.created_at AS "createdAt",
+             p.updated_at AS "updatedAt"
+      FROM users u
+      LEFT JOIN network_profiles p ON p.user_id = u.id
+      WHERE u.role <> 'admin'
+      ORDER BY COALESCE(p.updated_at, u.created_at) DESC NULLS LAST, u.last_name ASC, u.first_name ASC
+      LIMIT 250
+    `);
+    res.json(rows.map(buildNetworkAdminProfile));
+  } catch (error) {
+    console.error('List admin network profiles error:', error);
+    res.status(500).json({ error: 'Errore nel recupero profili network' });
+  }
+});
+
+app.get('/api/admin/network/posts', requireAdmin, async (_req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT post.id, post.body, post.link_url AS "linkUrl",
+             post.link_title AS "linkTitle", post.media_url AS "mediaUrl",
+             post.media_alt AS "mediaAlt",
+             post.link_preview_title AS "linkPreviewTitle",
+             post.link_preview_description AS "linkPreviewDescription",
+             post.link_preview_image_url AS "linkPreviewImageUrl",
+             post.link_preview_site_name AS "linkPreviewSiteName",
+             post.tags, post.visibility,
+             post.created_at AS "createdAt", post.updated_at AS "updatedAt",
+             post.author_user_id AS "authorUserId",
+             u.first_name AS "authorFirstName", u.last_name AS "authorLastName",
+             u.avatar_url AS "authorAvatarUrl",
+             p.headline AS "authorHeadline",
+             p.organization AS "authorOrganization",
+             p.role_title AS "authorRoleTitle",
+             p.profile_photo_url AS "authorProfilePhotoUrl",
+             (SELECT COUNT(*)::int FROM network_post_likes l WHERE l.post_id = post.id) AS "likeCount",
+             (SELECT COUNT(*)::int FROM network_post_comments c WHERE c.post_id = post.id AND c.is_deleted = false) AS "commentCount",
+             (post.is_deleted = false) AS "isVisible"
+      FROM network_posts post
+      JOIN users u ON u.id = post.author_user_id
+      LEFT JOIN network_profiles p ON p.user_id = u.id
+      ORDER BY post.created_at DESC
+      LIMIT 200
+    `);
+    res.json(rows.map(buildNetworkPost));
+  } catch (error) {
+    console.error('List admin network posts error:', error);
+    res.status(500).json({ error: 'Errore nel recupero post network' });
+  }
+});
+
+app.get('/api/admin/network/intro-requests', requireAdmin, async (_req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT r.id, r.status, r.message,
+             r.created_at AS "createdAt", r.updated_at AS "updatedAt",
+             sender.id AS "senderUserId",
+             sender.first_name AS "senderFirstName", sender.last_name AS "senderLastName",
+             recipient.id AS "recipientUserId",
+             recipient.first_name AS "recipientFirstName", recipient.last_name AS "recipientLastName"
+      FROM network_intro_requests r
+      JOIN users sender ON sender.id = r.sender_user_id
+      JOIN users recipient ON recipient.id = r.recipient_user_id
+      ORDER BY r.created_at DESC
+      LIMIT 200
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error('List admin network intro requests error:', error);
+    res.status(500).json({ error: 'Errore nel recupero richieste network' });
+  }
+});
+
+app.get('/api/admin/network/notifications', requireAdmin, async (_req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT COUNT(*)::int AS unreadCount,
+             COUNT(*) FILTER (WHERE type = 'follow')::int AS followCount,
+             COUNT(*) FILTER (WHERE type = 'post_like')::int AS likeCount,
+             COUNT(*) FILTER (WHERE type = 'post_comment')::int AS commentCount,
+             COUNT(*) FILTER (WHERE type = 'intro_request')::int AS introRequestCount
+      FROM network_notifications
+    `);
+    res.json(rows[0] || {
+      unreadCount: 0,
+      followCount: 0,
+      likeCount: 0,
+      commentCount: 0,
+      introRequestCount: 0
+    });
+  } catch (error) {
+    console.error('Get admin network notifications summary error:', error);
+    res.status(500).json({ error: 'Errore nel recupero statistiche network' });
   }
 });
 

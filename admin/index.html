@@ -1883,6 +1883,17 @@
                 </div>
             </form>
 
+            <div id="faculty-overview" style="margin: 24px 0 18px; padding: 18px; border: 1px solid var(--gray-200); border-radius: 16px; background: #f8faf9;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+                    <div>
+                        <h3 style="margin:0 0 4px; color: var(--green-700); font-size: 1.05rem;">Riepilogo faculty</h3>
+                        <p style="margin:0; color: var(--gray-600); font-size: 0.9rem;">Ore, lezioni, moduli e documenti del docente selezionato.</p>
+                    </div>
+                    <span id="faculty-overview-status" style="font-size:0.85rem; color: var(--gray-500);">Caricamento...</span>
+                </div>
+                <div id="faculty-overview-content" style="display:grid; gap:14px;"></div>
+            </div>
+
             <div class="table-wrapper">
                 <table>
                     <thead>
@@ -4700,6 +4711,88 @@ Buono studio!</textarea>
             const emptyRow = tableBody.querySelector(emptySelector);
             if (!emptyRow) return;
             emptyRow.style.display = hasRows ? 'none' : '';
+        }
+
+        function renderFacultyOverview(items = []) {
+            const content = document.getElementById('faculty-overview-content');
+            const status = document.getElementById('faculty-overview-status');
+            if (!content || !status) return;
+
+            if (!items.length) {
+                content.innerHTML = '<div class="empty-state">Nessun dato faculty disponibile.</div>';
+                status.textContent = 'Nessun docente trovato';
+                return;
+            }
+
+            const selectedId = state.editingFacultyId || items[0]?.id || null;
+            const selected = items.find((item) => item.id === selectedId) || items[0];
+
+            status.textContent = selected ? `Focus su ${selected.name || 'docente'}` : 'Riepilogo faculty';
+            content.innerHTML = `
+                <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:10px;">
+                    ${[
+                        { label: 'Lezioni', value: selected.totalLessons || 0 },
+                        { label: 'Ore totali', value: selected.lessonHours || 0 },
+                        { label: 'Lezioni completate', value: selected.completedLessons || 0 },
+                        { label: 'Ore completate', value: selected.completedLessonHours || 0 }
+                    ].map((item) => `
+                        <div style="background:white; border:1px solid var(--gray-200); border-radius:14px; padding:12px;">
+                            <div style="font-size:0.78rem; color:var(--gray-500); font-weight:700;">${escapeHtml(item.label)}</div>
+                            <div style="font-size:1.35rem; font-weight:800; color:var(--green-900); margin-top:4px;">${escapeHtml(String(item.value))}</div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:14px;">
+                    <div style="background:white; border:1px solid var(--gray-200); border-radius:14px; padding:14px;">
+                        <div style="font-size:0.9rem; font-weight:800; color:var(--green-900); margin-bottom:10px;">Documento e stato</div>
+                        <div style="display:grid; gap:8px; font-size:0.9rem; color:var(--gray-700);">
+                            <div><strong>Incarico ricevuto:</strong> ${selected.appointmentReceived ? 'Sì' : 'No'}</div>
+                            <div><strong>Liberatoria firmata:</strong> ${selected.releaseSigned ? 'Sì' : 'No'}</div>
+                            <div><strong>Docente completato:</strong> ${selected.isFinished ? 'Sì' : 'No'}</div>
+                            <div><strong>Moduli:</strong> ${selected.totalModules || 0}</div>
+                        </div>
+                    </div>
+                    <div style="background:white; border:1px solid var(--gray-200); border-radius:14px; padding:14px;">
+                        <div style="font-size:0.9rem; font-weight:800; color:var(--green-900); margin-bottom:10px;">Lezioni e moduli</div>
+                        <div style="display:grid; gap:8px; font-size:0.9rem; color:var(--gray-700); max-height:220px; overflow:auto;">
+                            <div>
+                                <strong>Moduli:</strong>
+                                <div style="margin-top:4px; display:flex; flex-wrap:wrap; gap:6px;">
+                                    ${(selected.modules || []).length
+                                        ? selected.modules.map((mod) => `<span class="chip">${escapeHtml(mod.name || 'Modulo')}</span>`).join('')
+                                        : '<span style="color:var(--gray-500);">Nessun modulo associato</span>'}
+                                </div>
+                            </div>
+                            <div>
+                                <strong>Documenti:</strong>
+                                <div style="margin-top:4px; display:grid; gap:6px;">
+                                    ${(selected.documents || []).length
+                                        ? selected.documents.map((doc) => `
+                                            <div style="padding:8px 10px; border:1px solid var(--gray-200); border-radius:10px; background:#fafafa;">
+                                                <div style="font-weight:700;">${escapeHtml(doc.title || 'Documento')}</div>
+                                                <div style="font-size:0.8rem; color:var(--gray-500);">${escapeHtml(doc.type || '—')} · ${Number(doc.signatureCount || 0)} firme · ${Number(doc.consentCount || 0)} consensi</div>
+                                            </div>
+                                        `).join('')
+                                        : '<span style="color:var(--gray-500);">Nessun documento</span>'}
+                                </div>
+                            </div>
+                            <div>
+                                <strong>Lezioni:</strong>
+                                <div style="margin-top:4px; display:grid; gap:6px;">
+                                    ${(selected.lessons || []).length
+                                        ? selected.lessons.slice(0, 6).map((lesson) => `
+                                            <div style="padding:8px 10px; border:1px solid var(--gray-200); border-radius:10px; background:#fafafa;">
+                                                <div style="font-weight:700;">${escapeHtml(lesson.title || 'Lezione')}</div>
+                                                <div style="font-size:0.8rem; color:var(--gray-500);">${escapeHtml(lesson.moduleName || 'Nessun modulo')} · ${escapeHtml(lesson.status || 'draft')}</div>
+                                            </div>
+                                        `).join('')
+                                        : '<span style="color:var(--gray-500);">Nessuna lezione</span>'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
         function resetFacultyForm() {
@@ -8449,8 +8542,12 @@ Buono studio!</textarea>
             tableBody.querySelectorAll('tr:not([data-empty-faculty])').forEach((row) => row.remove());
 
             try {
-                const items = await apiRequest('/api/faculty');
+                const [items, overview] = await Promise.all([
+                    apiRequest('/api/faculty'),
+                    apiRequest('/api/admin/faculty-overview')
+                ]);
                 state.faculty = items;
+                renderFacultyOverview(Array.isArray(overview) ? overview : []);
 
                 if (items.length === 0) {
                     document.querySelector('[data-empty-faculty]').style.display = '';
@@ -8519,6 +8616,7 @@ Buono studio!</textarea>
                 if (typeof fillTeacherMaterialsFilterOptions === 'function') fillTeacherMaterialsFilterOptions();
             } catch (error) {
                 state.faculty = [];
+                renderFacultyOverview([]);
                 updateBlogReviewerSelect();
                 if (typeof updateManualPreliminaryQuizTeacherSelect === 'function') updateManualPreliminaryQuizTeacherSelect();
                 if (typeof updateManualPreliminaryQuizLessonSelect === 'function') updateManualPreliminaryQuizLessonSelect();

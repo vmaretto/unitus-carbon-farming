@@ -8320,8 +8320,8 @@ app.get('/api/calendar/feed.ics', async (req, res) => {
              COALESCE(l.status, 'confirmed') AS status
       FROM lessons l
       LEFT JOIN faculty f ON f.id = l.teacher_id
-      WHERE COALESCE(l.status, 'scheduled') = 'confirmed'
-        AND l.start_datetime >= NOW()
+      WHERE COALESCE(l.status, 'scheduled') <> 'cancelled'
+        AND l.start_datetime IS NOT NULL
       ORDER BY l.start_datetime ASC
     `);
 

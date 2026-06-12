@@ -13,6 +13,23 @@ function formatUtcDateTime(value) {
   return iso.replace(/\.\d{3}Z$/, 'Z');
 }
 
+// iCalendar (RFC 5545) ammette per un VEVENT solo TENTATIVE, CONFIRMED, CANCELLED.
+// Gli status del DB lezioni sono draft/confirmed/completed/cancelled: senza questa
+// mappatura uno STATUS:DRAFT o STATUS:COMPLETED rende l'evento invalido e Apple/Google
+// Calendar scartano l'intero file ("No valid events were found").
+function mapIcsStatus(value) {
+  switch (String(value || '').trim().toLowerCase()) {
+    case 'cancelled':
+    case 'canceled':
+      return 'CANCELLED';
+    case 'confirmed':
+    case 'completed':
+      return 'CONFIRMED';
+    default:
+      return 'TENTATIVE';
+  }
+}
+
 function buildEventDescription(lesson) {
   const teacherName = lesson.teacherName || lesson.externalTeacherName || lesson.teacher || '';
   const parts = [];
@@ -50,7 +67,7 @@ function buildCalendarFeed(lessons, options) {
     rows.push(`SUMMARY:${escapeIcsText(lesson.title || 'Lezione')}`);
     if (description) rows.push(`DESCRIPTION:${escapeIcsText(description)}`);
     if (lesson.locationPhysical) rows.push(`LOCATION:${escapeIcsText(lesson.locationPhysical)}`);
-    rows.push(`STATUS:${String(lesson.status || 'CONFIRMED').toUpperCase()}`);
+    rows.push(`STATUS:${mapIcsStatus(lesson.status || 'confirmed')}`);
     rows.push('END:VEVENT');
   });
 
@@ -61,5 +78,6 @@ function buildCalendarFeed(lessons, options) {
 module.exports = {
   escapeIcsText,
   formatUtcDateTime,
+  mapIcsStatus,
   buildCalendarFeed
 };

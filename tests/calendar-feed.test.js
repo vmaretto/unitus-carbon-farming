@@ -3,14 +3,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { buildCalendarFeed } = require('../api/calendar-ics');
+const { buildCalendarFeed, mapIcsStatus } = require('../api/calendar-ics');
 const apiModule = require('../api/index.js');
 
 class FakeCalendarPool {
   async query(sql, params = []) {
     const normalized = String(sql).replace(/\s+/g, ' ').trim();
 
-    if (normalized.includes('FROM lessons l LEFT JOIN faculty f ON f.id = l.teacher_id') && normalized.includes("COALESCE(l.status, 'scheduled') = 'confirmed'")) {
+    if (normalized.includes('FROM lessons l LEFT JOIN faculty f ON f.id = l.teacher_id') && normalized.includes("COALESCE(l.status, 'scheduled') <> 'cancelled'")) {
       return {
         rows: [
           {
@@ -23,6 +23,17 @@ class FakeCalendarPool {
             locationPhysical: 'Via IV Novembre 144',
             teacherName: 'Mario Rossi',
             status: 'confirmed'
+          },
+          {
+            id: 'lesson-2',
+            title: 'Tecniche agronomiche',
+            description: 'Lezione in bozza',
+            startDatetime: '2026-06-12T12:00:00.000Z',
+            endDatetime: '2026-06-12T17:00:00.000Z',
+            durationMinutes: 300,
+            locationPhysical: null,
+            teacherName: 'Raffaele Casa',
+            status: 'draft'
           }
         ]
       };
@@ -73,6 +84,25 @@ test('buildCalendarFeed genera un VCALENDAR valido con VEVENT completi', () => {
   assert.match(ics, /SUMMARY:Titolo lezione/);
 });
 
+test('mapIcsStatus produce solo valori VEVENT validi (RFC 5545)', () => {
+  assert.equal(mapIcsStatus('draft'), 'TENTATIVE');
+  assert.equal(mapIcsStatus('completed'), 'CONFIRMED');
+  assert.equal(mapIcsStatus('confirmed'), 'CONFIRMED');
+  assert.equal(mapIcsStatus('cancelled'), 'CANCELLED');
+  assert.equal(mapIcsStatus('boh'), 'TENTATIVE');
+});
+
+test('buildCalendarFeed non emette mai STATUS:DRAFT o STATUS:COMPLETED', () => {
+  const ics = buildCalendarFeed([
+    { id: 'l-draft', title: 'Bozza', startDatetime: '2026-06-12T12:00:00.000Z', durationMinutes: 60, status: 'draft' },
+    { id: 'l-done', title: 'Conclusa', startDatetime: '2026-06-13T12:00:00.000Z', durationMinutes: 60, status: 'completed' }
+  ]);
+  assert.doesNotMatch(ics, /STATUS:DRAFT/);
+  assert.doesNotMatch(ics, /STATUS:COMPLETED/);
+  assert.match(ics, /STATUS:TENTATIVE/);
+  assert.match(ics, /STATUS:CONFIRMED/);
+});
+
 test('GET /api/calendar/feed.ics risponde con text/calendar e almeno un VEVENT', async () => {
   apiModule.__setPool(new FakeCalendarPool());
 
@@ -113,6 +143,10 @@ test('GET /api/calendar/feed.ics risponde con text/calendar e almeno un VEVENT',
   assert.match(res.body, /BEGIN:VEVENT/);
   assert.match(res.body, /UID:lesson-1@carbonfarmingmaster\.it/);
   assert.match(res.body, /SUMMARY:Seminario introduttivo/);
+  // le lezioni in bozza devono comparire nel feed e con uno STATUS valido
+  assert.match(res.body, /UID:lesson-2@carbonfarmingmaster\.it/);
+  assert.match(res.body, /STATUS:TENTATIVE/);
+  assert.doesNotMatch(res.body, /STATUS:DRAFT/);
 });
 
 test('GET /api/calendar/lessons/:id.ics risponde con il file del singolo evento', async () => {

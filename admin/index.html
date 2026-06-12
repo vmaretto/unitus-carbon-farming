@@ -4724,7 +4724,7 @@ Buono studio!</textarea>
                 return;
             }
 
-            const selectedId = state.editingFacultyId || items[0]?.id || null;
+            const selectedId = state.facultyOverviewFocusId || state.editingFacultyId || items[0]?.id || null;
             const selected = items.find((item) => item.id === selectedId) || items[0];
 
             status.textContent = selected ? `Focus su ${selected.name || 'docente'}` : 'Riepilogo faculty';

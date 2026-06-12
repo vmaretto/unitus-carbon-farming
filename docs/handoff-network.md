@@ -22,6 +22,25 @@ Il pezzo lasciato a metà (consensi privacy) è stato implementato in Fase 1:
 Restano per il futuro: vista admin di accountability dei consensi (Fase 1+), profili
 docente navigabili (Fase 2), bacheca opportunità partner (Fase 3).
 
+## Aggiornamento 2026-06-12 (2) — Admin consensi + Fase 2 + Fase 3a
+
+- **Vista admin consensi**: `GET /api/admin/network/profiles` espone i campi consenso e
+  la tabella admin mostra la colonna "Consenso (interno / esterno)" con data e versione.
+- **Fase 2 — docenti nell'area studente**: `GET /api/lms/network/faculty` (riusa la
+  tabella `faculty`, aggrega i moduli/lezioni insegnati); sezione "Docenti del Master"
+  in `learn/network.html` con contatto tesi/mentorship via mailto e link profilo.
+- **Fase 3a — bacheca opportunità**: migrazione `065_network_opportunities.sql`
+  (`network_opportunities` + `network_opportunity_applications`). API studente
+  (lista pubblicate + `POST .../:id/apply`) e API admin (CRUD + lista candidature).
+  Sezione "Opportunità" studente in `learn/network.html`; pannello di gestione nella
+  sezione Network di `admin/index.html` (form, pubblica/ritira, elimina, candidature).
+- Test in `tests/network-api.test.js` per faculty e candidatura opportunità (8 test
+  network, 68 totali, tutti verdi).
+
+Non implementata (rinviata, da confermare): **Fase 3b** — login partner + vista filtrata
+sui profili con consenso esterno. L'infrastruttura dati (`external_visible` + consenso)
+è già pronta.
+
 ## Stato generale
 
 Il network non è solo un'idea o un prompt: nel repo esiste già una prima implementazione funzionale.

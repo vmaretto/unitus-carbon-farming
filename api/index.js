@@ -10008,6 +10008,55 @@ function buildNetworkProfile(row, options = {}) {
   };
 }
 
+function buildNetworkFaculty(row) {
+  if (!row) return null;
+  const modules = Array.isArray(row.modules) ? row.modules.filter((m) => m && m.id) : [];
+  return {
+    id: row.id,
+    name: row.name,
+    role: row.role || null,
+    bio: row.bio || null,
+    photoUrl: row.photoUrl || null,
+    profileLink: row.profileLink || null,
+    contactEmail: row.email || null,
+    modules,
+    moduleNames: modules.map((m) => m.name).filter(Boolean),
+    lessonsCount: Number(row.lessonsCount ?? 0)
+  };
+}
+
+const NETWORK_OPPORTUNITY_TYPES = ['stage', 'tesi', 'lavoro', 'altro'];
+
+function normalizeOpportunityType(value) {
+  const v = String(value || '').trim().toLowerCase();
+  return NETWORK_OPPORTUNITY_TYPES.includes(v) ? v : 'lavoro';
+}
+
+function buildNetworkOpportunity(row, options = {}) {
+  if (!row) return null;
+  const base = {
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    organization: row.organization || null,
+    location: row.location || null,
+    description: row.description || null,
+    applyUrl: row.applyUrl || null,
+    contactEmail: row.contactEmail || null,
+    deadline: row.deadline || null,
+    createdAt: row.createdAt || null,
+    updatedAt: row.updatedAt || null
+  };
+  if (options.includeAdminFields) {
+    base.isPublished = Boolean(row.isPublished);
+    base.applicationsCount = Number(row.applicationsCount ?? 0);
+  } else {
+    base.hasApplied = Boolean(row.hasApplied);
+    base.applicationStatus = row.applicationStatus || null;
+  }
+  return base;
+}
+
 function buildNetworkIntroRequest(row) {
   if (!row) return null;
   return {
@@ -10463,6 +10512,98 @@ app.get('/api/lms/network/profiles', requireStudent, requireNonGuest, async (req
   } catch (error) {
     console.error('List network profiles error:', error);
     res.status(500).json({ error: 'Errore nel recupero network' });
+  }
+});
+
+// Fase 2 — profili docente navigabili dall'area studente. Riusa la tabella faculty
+// esistente (dati già pubblici sul sito) e mostra "chi ha insegnato cosa" aggregando
+// i moduli/lezioni assegnati al docente, con un contatto per tesi/mentorship.
+app.get('/api/lms/network/faculty', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled')) {
+      return res.json([]);
+    }
+    const { rows } = await pool.query(`
+      SELECT f.id, f.name, f.role, f.email, f.bio,
+             f.photo_url AS "photoUrl", f.profile_link AS "profileLink",
+             COALESCE(
+               JSON_AGG(DISTINCT JSONB_BUILD_OBJECT('id', m.id, 'name', m.name))
+                 FILTER (WHERE m.id IS NOT NULL),
+               '[]'::json
+             ) AS modules,
+             COUNT(DISTINCT l.id)::int AS "lessonsCount"
+      FROM faculty f
+      LEFT JOIN lessons l ON l.teacher_id = f.id
+      LEFT JOIN modules m ON m.id = l.module_id
+      WHERE f.is_published = true
+      GROUP BY f.id, f.name, f.role, f.email, f.bio, f.photo_url, f.profile_link, f.sort_order, f.created_at
+      ORDER BY f.sort_order NULLS LAST, f.created_at ASC
+    `);
+    res.json(rows.map(buildNetworkFaculty));
+  } catch (error) {
+    console.error('List network faculty error:', error);
+    res.status(500).json({ error: 'Errore nel recupero docenti' });
+  }
+});
+
+// Fase 3a — bacheca opportunità (lato studente): solo opportunità pubblicate,
+// con lo stato della candidatura dello studente corrente.
+app.get('/api/lms/network/opportunities', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled')) {
+      return res.json([]);
+    }
+    const { rows } = await pool.query(`
+      SELECT o.id, o.title, o.type, o.organization, o.location, o.description,
+             o.apply_url AS "applyUrl", o.contact_email AS "contactEmail",
+             o.deadline, o.created_at AS "createdAt", o.updated_at AS "updatedAt",
+             (a.id IS NOT NULL) AS "hasApplied",
+             a.status AS "applicationStatus"
+      FROM network_opportunities o
+      LEFT JOIN network_opportunity_applications a
+        ON a.opportunity_id = o.id AND a.user_id = $1
+      WHERE o.is_published = true
+      ORDER BY o.deadline ASC NULLS LAST, o.created_at DESC
+    `, [req.user.userId]);
+    res.json(rows.map((row) => buildNetworkOpportunity(row)));
+  } catch (error) {
+    console.error('List network opportunities error:', error);
+    res.status(500).json({ error: 'Errore nel recupero opportunità' });
+  }
+});
+
+app.post('/api/lms/network/opportunities/:id/apply', requireStudent, requireNonGuest, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const networkSettings = await loadNetworkSettings();
+    if (!isNetworkFlagEnabled(networkSettings, 'network_enabled')) {
+      return res.status(403).json({ error: 'Bacheca opportunità non disponibile al momento' });
+    }
+    const { rows: opp } = await pool.query(
+      'SELECT id FROM network_opportunities WHERE id = $1 AND is_published = true LIMIT 1',
+      [req.params.id]
+    );
+    if (!opp.length) return res.status(404).json({ error: 'Opportunità non trovata' });
+
+    const message = normalizeNetworkText(req.body?.message, 1000);
+    const { rows } = await pool.query(`
+      INSERT INTO network_opportunity_applications (opportunity_id, user_id, message, status)
+      VALUES ($1, $2, $3, 'submitted')
+      ON CONFLICT (opportunity_id, user_id) DO UPDATE SET
+        message = EXCLUDED.message,
+        status = 'submitted',
+        updated_at = NOW()
+      RETURNING id, status, message, created_at AS "createdAt", updated_at AS "updatedAt"
+    `, [req.params.id, req.user.userId, message]);
+
+    res.status(201).json({ ...rows[0], hasApplied: true });
+  } catch (error) {
+    console.error('Apply to opportunity error:', error);
+    res.status(500).json({ error: 'Errore durante la candidatura' });
   }
 });
 
@@ -11064,6 +11205,11 @@ app.get('/api/admin/network/profiles', requireAdmin, async (_req, res) => {
              p.is_visible AS "isVisible", p.show_email AS "showEmail",
              p.show_linkedin AS "showLinkedin",
              p.available_for_contact AS "availableForContact",
+             COALESCE(p.external_visible, false) AS "externalVisible",
+             p.internal_consent_at AS "internalConsentAt",
+             p.internal_consent_version AS "internalConsentVersion",
+             p.external_consent_at AS "externalConsentAt",
+             p.external_consent_version AS "externalConsentVersion",
              (SELECT COUNT(*)::int FROM network_follows f WHERE f.following_user_id = u.id) AS "followersCount",
              (SELECT COUNT(*)::int FROM network_follows f WHERE f.follower_user_id = u.id) AS "followingCount",
              (SELECT COUNT(*)::int FROM network_posts post WHERE post.author_user_id = u.id AND post.is_deleted = false) AS "postsCount",
@@ -11162,6 +11308,142 @@ app.get('/api/admin/network/notifications', requireAdmin, async (_req, res) => {
   } catch (error) {
     console.error('Get admin network notifications summary error:', error);
     res.status(500).json({ error: 'Errore nel recupero statistiche network' });
+  }
+});
+
+// Fase 3a — gestione admin della bacheca opportunità.
+app.get('/api/admin/network/opportunities', requireAdmin, async (_req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT o.id, o.title, o.type, o.organization, o.location, o.description,
+             o.apply_url AS "applyUrl", o.contact_email AS "contactEmail",
+             o.deadline, o.is_published AS "isPublished",
+             o.created_at AS "createdAt", o.updated_at AS "updatedAt",
+             (SELECT COUNT(*)::int FROM network_opportunity_applications a WHERE a.opportunity_id = o.id) AS "applicationsCount"
+      FROM network_opportunities o
+      ORDER BY o.created_at DESC
+      LIMIT 250
+    `);
+    res.json(rows.map((row) => buildNetworkOpportunity(row, { includeAdminFields: true })));
+  } catch (error) {
+    console.error('List admin opportunities error:', error);
+    res.status(500).json({ error: 'Errore nel recupero opportunità' });
+  }
+});
+
+app.post('/api/admin/network/opportunities', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const title = normalizeNetworkText(req.body?.title, 200);
+    const description = normalizeNetworkText(req.body?.description, 4000);
+    if (!title || !description) {
+      return res.status(400).json({ error: 'Titolo e descrizione sono obbligatori' });
+    }
+    const { rows } = await pool.query(`
+      INSERT INTO network_opportunities
+        (title, type, organization, location, description, apply_url, contact_email, deadline, is_published)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, title, type, organization, location, description,
+                apply_url AS "applyUrl", contact_email AS "contactEmail",
+                deadline, is_published AS "isPublished",
+                created_at AS "createdAt", updated_at AS "updatedAt"
+    `, [
+      title,
+      normalizeOpportunityType(req.body?.type),
+      normalizeNetworkText(req.body?.organization, 200),
+      normalizeNetworkText(req.body?.location, 200),
+      description,
+      normalizeNetworkUrl(req.body?.applyUrl),
+      normalizeNetworkText(req.body?.contactEmail, 200),
+      req.body?.deadline || null,
+      normalizeBoolean(req.body?.isPublished, false)
+    ]);
+    res.status(201).json(buildNetworkOpportunity(rows[0], { includeAdminFields: true }));
+  } catch (error) {
+    console.error('Create opportunity error:', error);
+    res.status(500).json({ error: 'Errore nella creazione opportunità' });
+  }
+});
+
+app.put('/api/admin/network/opportunities/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const title = normalizeNetworkText(req.body?.title, 200);
+    const description = normalizeNetworkText(req.body?.description, 4000);
+    if (!title || !description) {
+      return res.status(400).json({ error: 'Titolo e descrizione sono obbligatori' });
+    }
+    const { rows } = await pool.query(`
+      UPDATE network_opportunities SET
+        title = $2, type = $3, organization = $4, location = $5, description = $6,
+        apply_url = $7, contact_email = $8, deadline = $9, is_published = $10,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, title, type, organization, location, description,
+                apply_url AS "applyUrl", contact_email AS "contactEmail",
+                deadline, is_published AS "isPublished",
+                created_at AS "createdAt", updated_at AS "updatedAt"
+    `, [
+      req.params.id,
+      title,
+      normalizeOpportunityType(req.body?.type),
+      normalizeNetworkText(req.body?.organization, 200),
+      normalizeNetworkText(req.body?.location, 200),
+      description,
+      normalizeNetworkUrl(req.body?.applyUrl),
+      normalizeNetworkText(req.body?.contactEmail, 200),
+      req.body?.deadline || null,
+      normalizeBoolean(req.body?.isPublished, false)
+    ]);
+    if (!rows.length) return res.status(404).json({ error: 'Opportunità non trovata' });
+    res.json(buildNetworkOpportunity(rows[0], { includeAdminFields: true }));
+  } catch (error) {
+    console.error('Update opportunity error:', error);
+    res.status(500).json({ error: 'Errore nell\'aggiornamento opportunità' });
+  }
+});
+
+app.delete('/api/admin/network/opportunities/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM network_opportunities WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Opportunità non trovata' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete opportunity error:', error);
+    res.status(500).json({ error: 'Errore nell\'eliminazione opportunità' });
+  }
+});
+
+app.get('/api/admin/network/opportunities/:id/applications', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT a.id, a.status, a.message,
+             a.created_at AS "createdAt", a.updated_at AS "updatedAt",
+             u.id AS "userId", u.first_name AS "firstName", u.last_name AS "lastName",
+             u.email AS "userEmail"
+      FROM network_opportunity_applications a
+      JOIN users u ON u.id = a.user_id
+      WHERE a.opportunity_id = $1
+      ORDER BY a.created_at DESC
+    `, [req.params.id]);
+    res.json(rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      message: row.message || null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      applicant: {
+        userId: row.userId,
+        fullName: [row.firstName, row.lastName].filter(Boolean).join(' ').trim(),
+        email: row.userEmail || null
+      }
+    })));
+  } catch (error) {
+    console.error('List opportunity applications error:', error);
+    res.status(500).json({ error: 'Errore nel recupero candidature' });
   }
 });
 

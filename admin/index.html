@@ -3385,6 +3385,7 @@ Buono studio!</textarea>
                                 <th>Nome</th>
                                 <th>Ruolo</th>
                                 <th>Visibile</th>
+                                <th>Consenso (interno / esterno)</th>
                                 <th>Follower</th>
                                 <th>Following</th>
                                 <th>Post</th>
@@ -3392,7 +3393,7 @@ Buono studio!</textarea>
                             </tr>
                         </thead>
                         <tbody id="network-profiles-body">
-                            <tr><td colspan="7" class="empty-state">Caricamento profili...</td></tr>
+                            <tr><td colspan="8" class="empty-state">Caricamento profili...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -3407,6 +3408,51 @@ Buono studio!</textarea>
                     <h3 style="margin:0 0 14px;">Richieste di contatto</h3>
                     <div id="network-requests-list" style="display:grid; gap:12px;"></div>
                 </div>
+            </div>
+
+            <div style="margin-top:16px; background:white; border:1px solid var(--gray-200); border-radius:12px; padding:18px;">
+                <h3 style="margin:0 0 14px;">Bacheca opportunità (stage / tesi / lavoro)</h3>
+                <form id="opportunity-form" style="display:grid; gap:10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items:end;">
+                    <input type="hidden" id="opportunity-id">
+                    <label style="display:grid; gap:4px; font-size:13px;">Titolo *
+                        <input type="text" id="opportunity-title" required>
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Tipo
+                        <select id="opportunity-type">
+                            <option value="lavoro">Lavoro</option>
+                            <option value="stage">Stage</option>
+                            <option value="tesi">Tesi</option>
+                            <option value="altro">Altro</option>
+                        </select>
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Organizzazione
+                        <input type="text" id="opportunity-organization">
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Luogo
+                        <input type="text" id="opportunity-location">
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Link esterno
+                        <input type="url" id="opportunity-apply-url" placeholder="https://...">
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Email di contatto
+                        <input type="text" id="opportunity-contact-email">
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Scadenza
+                        <input type="date" id="opportunity-deadline">
+                    </label>
+                    <label style="display:flex; gap:8px; align-items:center; font-size:13px;">
+                        <input type="checkbox" id="opportunity-published"> Pubblicata (visibile agli studenti)
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px; grid-column:1/-1;">Descrizione *
+                        <textarea id="opportunity-description" rows="3" required></textarea>
+                    </label>
+                    <div style="grid-column:1/-1; display:flex; gap:8px;">
+                        <button type="submit" class="primary" id="opportunity-save">Salva opportunità</button>
+                        <button type="button" class="secondary" id="opportunity-reset" style="display:none;">Annulla modifica</button>
+                        <span id="opportunity-status" style="align-self:center; font-size:13px;"></span>
+                    </div>
+                </form>
+                <div id="opportunity-list-admin" style="display:grid; gap:12px; margin-top:16px;"></div>
             </div>
         </section>
 
@@ -5825,6 +5871,7 @@ Buono studio!</textarea>
         let adminNetworkPosts = [];
         let adminNetworkRequests = [];
         let adminNetworkStats = null;
+        let adminNetworkOpportunities = [];
 
         function formatAdminEventDate(value) {
             if (!value) return 'Data non impostata';
@@ -5936,14 +5983,23 @@ Buono studio!</textarea>
             const body = document.getElementById('network-profiles-body');
             if (!body) return;
             if (!adminNetworkProfiles.length) {
-                body.innerHTML = '<tr><td colspan="7" class="empty-state">Nessun profilo network disponibile.</td></tr>';
+                body.innerHTML = '<tr><td colspan="8" class="empty-state">Nessun profilo network disponibile.</td></tr>';
                 return;
             }
+            const consentCell = (granted, at, version) => {
+                if (!granted) return '<span style="color:var(--gray-400);">—</span>';
+                const date = at ? new Date(at).toLocaleDateString('it-IT') : '—';
+                return `✅ ${escapeHtml(date)}${version ? ` <span style="color:var(--gray-500);">v${escapeHtml(String(version))}</span>` : ''}`;
+            };
             body.innerHTML = adminNetworkProfiles.map((profile) => `
                 <tr>
                     <td><strong>${escapeHtml([profile.firstName, profile.lastName].filter(Boolean).join(' ') || '—')}</strong><div style="color:var(--gray-500); font-size:12px;">${escapeHtml(profile.email || profile.userEmail || '')}</div></td>
                     <td>${escapeHtml([profile.roleTitle, profile.organization].filter(Boolean).join(' · ') || profile.headline || '—')}</td>
                     <td>${profile.isVisible ? 'Sì' : 'No'}</td>
+                    <td style="font-size:12px; line-height:1.6;">
+                        <div title="Visibilità interna">Interno: ${consentCell(profile.isVisible, profile.internalConsentAt, profile.internalConsentVersion)}</div>
+                        <div title="Visibilità esterna">Esterno: ${consentCell(profile.externalVisible, profile.externalConsentAt, profile.externalConsentVersion)}</div>
+                    </td>
                     <td>${escapeHtml(String(profile.followersCount || 0))}</td>
                     <td>${escapeHtml(String(profile.followingCount || 0))}</td>
                     <td>${escapeHtml(String(profile.postsCount || 0))}</td>
@@ -5986,27 +6042,181 @@ Buono studio!</textarea>
             `).join('');
         }
 
+        const OPPORTUNITY_TYPE_LABELS = { stage: 'Stage', tesi: 'Tesi', lavoro: 'Lavoro', altro: 'Altro' };
+
+        function renderNetworkOpportunities() {
+            const list = document.getElementById('opportunity-list-admin');
+            if (!list) return;
+            if (!adminNetworkOpportunities.length) {
+                list.innerHTML = '<div class="empty-state">Nessuna opportunità. Crea la prima con il form qui sopra.</div>';
+                return;
+            }
+            list.innerHTML = adminNetworkOpportunities.map((op) => {
+                const meta = [op.organization, op.location].filter(Boolean).join(' · ');
+                const deadline = op.deadline ? `Scadenza ${new Date(op.deadline).toLocaleDateString('it-IT')}` : '';
+                return `
+                    <article style="border:1px solid var(--gray-200); border-radius:12px; padding:12px;">
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <span style="font-size:11px; font-weight:700; text-transform:uppercase; background:var(--gray-100); border-radius:999px; padding:2px 8px;">${escapeHtml(OPPORTUNITY_TYPE_LABELS[op.type] || op.type || '—')}</span>
+                            <strong>${escapeHtml(op.title || '—')}</strong>
+                            <span style="font-size:12px; font-weight:700; color:${op.isPublished ? 'var(--green-700, #137a4f)' : 'var(--gray-500)'};">${op.isPublished ? '● Pubblicata' : '○ Bozza'}</span>
+                            <span style="font-size:12px; color:var(--gray-500);">${escapeHtml(String(op.applicationsCount || 0))} candidature</span>
+                        </div>
+                        ${meta || deadline ? `<div style="color:var(--gray-500); font-size:12px; margin-top:4px;">${escapeHtml([meta, deadline].filter(Boolean).join(' · '))}</div>` : ''}
+                        <div style="color:var(--gray-700); font-size:13px; white-space:pre-wrap; margin-top:8px;">${escapeHtml(op.description || '')}</div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                            <button type="button" class="secondary" data-op-edit="${escapeHtml(op.id)}">Modifica</button>
+                            <button type="button" class="secondary" data-op-toggle="${escapeHtml(op.id)}">${op.isPublished ? 'Ritira' : 'Pubblica'}</button>
+                            <button type="button" class="secondary" data-op-applications="${escapeHtml(op.id)}">Candidature (${escapeHtml(String(op.applicationsCount || 0))})</button>
+                            <button type="button" class="secondary" data-op-delete="${escapeHtml(op.id)}" style="color:var(--red-700, #b42318);">Elimina</button>
+                        </div>
+                        <div class="op-applications-box" id="op-apps-${escapeHtml(op.id)}" style="display:none; margin-top:10px; border-top:1px solid var(--gray-200); padding-top:10px;"></div>
+                    </article>`;
+            }).join('');
+
+            list.querySelectorAll('[data-op-edit]').forEach((b) => b.addEventListener('click', () => editOpportunity(b.getAttribute('data-op-edit'))));
+            list.querySelectorAll('[data-op-toggle]').forEach((b) => b.addEventListener('click', () => toggleOpportunityPublished(b.getAttribute('data-op-toggle'))));
+            list.querySelectorAll('[data-op-delete]').forEach((b) => b.addEventListener('click', () => deleteOpportunity(b.getAttribute('data-op-delete'))));
+            list.querySelectorAll('[data-op-applications]').forEach((b) => b.addEventListener('click', () => toggleOpportunityApplications(b.getAttribute('data-op-applications'))));
+        }
+
+        function opportunityFormData() {
+            return {
+                title: document.getElementById('opportunity-title').value.trim(),
+                type: document.getElementById('opportunity-type').value,
+                organization: document.getElementById('opportunity-organization').value.trim(),
+                location: document.getElementById('opportunity-location').value.trim(),
+                applyUrl: document.getElementById('opportunity-apply-url').value.trim(),
+                contactEmail: document.getElementById('opportunity-contact-email').value.trim(),
+                deadline: document.getElementById('opportunity-deadline').value || null,
+                isPublished: document.getElementById('opportunity-published').checked,
+                description: document.getElementById('opportunity-description').value.trim()
+            };
+        }
+
+        function resetOpportunityForm() {
+            document.getElementById('opportunity-id').value = '';
+            document.getElementById('opportunity-form').reset();
+            document.getElementById('opportunity-reset').style.display = 'none';
+            document.getElementById('opportunity-save').textContent = 'Salva opportunità';
+        }
+
+        function editOpportunity(id) {
+            const op = adminNetworkOpportunities.find((o) => o.id === id);
+            if (!op) return;
+            document.getElementById('opportunity-id').value = op.id;
+            document.getElementById('opportunity-title').value = op.title || '';
+            document.getElementById('opportunity-type').value = op.type || 'lavoro';
+            document.getElementById('opportunity-organization').value = op.organization || '';
+            document.getElementById('opportunity-location').value = op.location || '';
+            document.getElementById('opportunity-apply-url').value = op.applyUrl || '';
+            document.getElementById('opportunity-contact-email').value = op.contactEmail || '';
+            document.getElementById('opportunity-deadline').value = op.deadline ? String(op.deadline).slice(0, 10) : '';
+            document.getElementById('opportunity-published').checked = Boolean(op.isPublished);
+            document.getElementById('opportunity-description').value = op.description || '';
+            document.getElementById('opportunity-reset').style.display = '';
+            document.getElementById('opportunity-save').textContent = 'Aggiorna opportunità';
+            document.getElementById('opportunity-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        async function toggleOpportunityPublished(id) {
+            const op = adminNetworkOpportunities.find((o) => o.id === id);
+            if (!op) return;
+            try {
+                await apiRequest(`/api/admin/network/opportunities/${id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ ...op, isPublished: !op.isPublished })
+                });
+                await loadNetworkSection();
+            } catch (error) {
+                alert(error.message || 'Errore nell\'aggiornamento');
+            }
+        }
+
+        async function deleteOpportunity(id) {
+            if (!confirm('Eliminare questa opportunità e tutte le candidature associate?')) return;
+            try {
+                await apiRequest(`/api/admin/network/opportunities/${id}`, { method: 'DELETE' });
+                await loadNetworkSection();
+            } catch (error) {
+                alert(error.message || 'Errore nell\'eliminazione');
+            }
+        }
+
+        async function toggleOpportunityApplications(id) {
+            const box = document.getElementById(`op-apps-${id}`);
+            if (!box) return;
+            if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+            box.style.display = 'block';
+            box.innerHTML = '<div class="empty-state">Caricamento candidature...</div>';
+            try {
+                const apps = await apiRequest(`/api/admin/network/opportunities/${id}/applications`);
+                if (!Array.isArray(apps) || !apps.length) {
+                    box.innerHTML = '<div class="empty-state">Nessuna candidatura.</div>';
+                    return;
+                }
+                box.innerHTML = apps.map((a) => `
+                    <div style="font-size:13px; padding:6px 0; border-bottom:1px solid var(--gray-100);">
+                        <strong>${escapeHtml(a.applicant?.fullName || '—')}</strong>
+                        <span style="color:var(--gray-500);"> · ${escapeHtml(a.applicant?.email || '')} · ${escapeHtml(a.status || '')} · ${escapeHtml(formatAdminEventDate(a.createdAt))}</span>
+                        ${a.message ? `<div style="color:var(--gray-700); white-space:pre-wrap; margin-top:2px;">${escapeHtml(a.message)}</div>` : ''}
+                    </div>`).join('');
+            } catch (error) {
+                box.innerHTML = `<div class="empty-state">${escapeHtml(error.message || 'Errore')}</div>`;
+            }
+        }
+
+        const opportunityFormEl = document.getElementById('opportunity-form');
+        if (opportunityFormEl) {
+            opportunityFormEl.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const status = document.getElementById('opportunity-status');
+                const id = document.getElementById('opportunity-id').value;
+                const data = opportunityFormData();
+                if (!data.title || !data.description) {
+                    if (status) status.textContent = 'Titolo e descrizione sono obbligatori.';
+                    return;
+                }
+                if (status) status.textContent = 'Salvataggio...';
+                try {
+                    await apiRequest(id ? `/api/admin/network/opportunities/${id}` : '/api/admin/network/opportunities', {
+                        method: id ? 'PUT' : 'POST',
+                        body: JSON.stringify(data)
+                    });
+                    resetOpportunityForm();
+                    if (status) status.textContent = 'Salvato.';
+                    await loadNetworkSection();
+                } catch (error) {
+                    if (status) status.textContent = error.message || 'Errore nel salvataggio.';
+                }
+            });
+            document.getElementById('opportunity-reset').addEventListener('click', resetOpportunityForm);
+        }
+
         async function loadNetworkSection() {
             const settingsForm = document.getElementById('network-settings-form');
             if (!settingsForm) return;
             try {
-                const [settings, stats, profiles, posts, requests] = await Promise.all([
+                const [settings, stats, profiles, posts, requests, opportunities] = await Promise.all([
                     apiRequest('/api/admin/network/settings'),
                     apiRequest('/api/admin/network/notifications'),
                     apiRequest('/api/admin/network/profiles'),
                     apiRequest('/api/admin/network/posts'),
-                    apiRequest('/api/admin/network/intro-requests')
+                    apiRequest('/api/admin/network/intro-requests'),
+                    apiRequest('/api/admin/network/opportunities').catch(() => [])
                 ]);
                 adminNetworkSettings = settings || null;
                 adminNetworkStats = stats || null;
                 adminNetworkProfiles = Array.isArray(profiles) ? profiles : [];
                 adminNetworkPosts = Array.isArray(posts) ? posts : [];
                 adminNetworkRequests = Array.isArray(requests) ? requests : [];
+                adminNetworkOpportunities = Array.isArray(opportunities) ? opportunities : [];
                 setNetworkSettingsForm(adminNetworkSettings);
                 renderNetworkStats();
                 renderNetworkProfiles();
                 renderNetworkPosts();
                 renderNetworkRequests();
+                renderNetworkOpportunities();
             } catch (error) {
                 const status = document.getElementById('network-settings-status');
                 if (status) {

@@ -486,3 +486,114 @@ test('POST /api/lms/network/posts pubblica un post nel feed riservato', async (t
   assert.equal(res.body.canDelete, true);
   assert.equal(queries.length, 3);
 });
+
+test('GET /api/lms/network/faculty elenca i docenti con i moduli insegnati', async (t) => {
+  apiModule.__setPool({
+    async query(sql) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      if (statement.startsWith('SELECT key, value FROM network_settings')) {
+        return { rows: [{ key: 'network_enabled', value: 'true' }] };
+      }
+      if (statement.startsWith('SELECT f.id, f.name, f.role, f.email, f.bio')) {
+        assert.match(statement, /WHERE f\.is_published = true/);
+        return {
+          rows: [{
+            id: 'fac-1',
+            name: 'Prof. Tommaso Chiti',
+            role: 'Docente',
+            email: 'chiti@example.com',
+            bio: 'Soil carbon dynamics',
+            photoUrl: null,
+            profileLink: 'https://example.com/chiti',
+            modules: [{ id: 'mod-1', name: 'Sequestro del carbonio' }],
+            lessonsCount: 4
+          }]
+        };
+      }
+      throw new Error(`query inattesa: ${statement}`);
+    }
+  });
+  t.after(() => apiModule.__setPool(null));
+
+  const layer = findRoute('/api/lms/network/faculty', 'get');
+  assert.ok(layer, 'route GET /api/lms/network/faculty non trovata');
+  const res = createJsonRes();
+  await runRoute(layer, { method: 'GET', url: '/api/lms/network/faculty', headers: authHeaders(), query: {} }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.length, 1);
+  assert.equal(res.body[0].name, 'Prof. Tommaso Chiti');
+  assert.equal(res.body[0].contactEmail, 'chiti@example.com');
+  assert.deepEqual(res.body[0].moduleNames, ['Sequestro del carbonio']);
+  assert.equal(res.body[0].lessonsCount, 4);
+});
+
+test('POST /api/lms/network/opportunities/:id/apply registra la candidatura', async (t) => {
+  const queries = [];
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      queries.push({ statement, params });
+      if (statement.startsWith('SELECT key, value FROM network_settings')) {
+        return { rows: [{ key: 'network_enabled', value: 'true' }] };
+      }
+      if (statement.startsWith('SELECT id FROM network_opportunities')) {
+        assert.equal(params[0], 'opp-1');
+        assert.match(statement, /is_published = true/);
+        return { rows: [{ id: 'opp-1' }] };
+      }
+      if (statement.startsWith('INSERT INTO network_opportunity_applications')) {
+        assert.equal(params[0], 'opp-1');
+        assert.equal(params[1], '11111111-1111-4111-8111-111111111111');
+        assert.equal(params[2], 'Sono interessata, ho esperienza in MRV.');
+        return { rows: [{ id: 'app-1', status: 'submitted', message: params[2], createdAt: 'x', updatedAt: 'x' }] };
+      }
+      throw new Error(`query inattesa: ${statement}`);
+    }
+  });
+  t.after(() => apiModule.__setPool(null));
+
+  const layer = findRoute('/api/lms/network/opportunities/:id/apply', 'post');
+  assert.ok(layer, 'route POST apply non trovata');
+  const res = createJsonRes();
+  await runRoute(layer, {
+    method: 'POST',
+    url: '/api/lms/network/opportunities/opp-1/apply',
+    params: { id: 'opp-1' },
+    headers: authHeaders(),
+    body: { message: 'Sono interessata, ho esperienza in MRV.' }
+  }, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.body.hasApplied, true);
+  assert.equal(res.body.status, 'submitted');
+  assert.equal(queries.length, 3);
+});
+
+test('POST /api/lms/network/opportunities/:id/apply restituisce 404 se non pubblicata', async (t) => {
+  apiModule.__setPool({
+    async query(sql) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      if (statement.startsWith('SELECT key, value FROM network_settings')) {
+        return { rows: [{ key: 'network_enabled', value: 'true' }] };
+      }
+      if (statement.startsWith('SELECT id FROM network_opportunities')) {
+        return { rows: [] };
+      }
+      throw new Error(`query inattesa: ${statement}`);
+    }
+  });
+  t.after(() => apiModule.__setPool(null));
+
+  const layer = findRoute('/api/lms/network/opportunities/:id/apply', 'post');
+  const res = createJsonRes();
+  await runRoute(layer, {
+    method: 'POST',
+    url: '/api/lms/network/opportunities/ghost/apply',
+    params: { id: 'ghost' },
+    headers: authHeaders(),
+    body: {}
+  }, res);
+
+  assert.equal(res.statusCode, 404);
+});

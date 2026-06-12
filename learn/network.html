@@ -46,6 +46,24 @@
         .status.error { color: var(--red-700); }
         .filters { display: grid; grid-template-columns: minmax(180px, 1.2fr) repeat(2, minmax(140px, 0.8fr)); gap: 12px; margin-bottom: 18px; }
         .directory { display: grid; gap: 12px; }
+        .faculty-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+        .faculty-card { border: 1px solid var(--gray-200); border-radius: 14px; padding: 14px; background: white; display: grid; gap: 8px; }
+        .faculty-card .fc-name { font-weight: 800; color: var(--green-900); }
+        .faculty-card .fc-role { font-size: 0.78rem; color: var(--gray-500); font-weight: 600; }
+        .faculty-card .fc-bio { font-size: 0.82rem; color: var(--gray-700); line-height: 1.4; }
+        .faculty-card .fc-modules { display: flex; flex-wrap: wrap; gap: 6px; }
+        .fc-tag { font-size: 0.72rem; font-weight: 700; background: var(--green-100); color: var(--green-700); border-radius: 999px; padding: 3px 9px; }
+        .fc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+        .fc-link { font-size: 0.8rem; font-weight: 700; color: var(--green-700); text-decoration: none; }
+        .opportunity-list { display: grid; gap: 12px; }
+        .opportunity-card { border: 1px solid var(--gray-200); border-radius: 14px; padding: 14px; background: white; display: grid; gap: 8px; }
+        .opportunity-card .op-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .opportunity-card .op-title { font-weight: 800; color: var(--green-900); }
+        .op-type { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; background: var(--green-700); color: white; border-radius: 999px; padding: 3px 9px; }
+        .op-meta { font-size: 0.78rem; color: var(--gray-500); }
+        .op-desc { font-size: 0.85rem; color: var(--gray-700); line-height: 1.45; white-space: pre-wrap; }
+        .op-apply-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .op-applied { font-size: 0.8rem; font-weight: 700; color: var(--green-700); }
         .stack { display: grid; gap: 18px; }
         .hint { color: var(--gray-500); font-size: 0.75rem; line-height: 1.35; margin-top: -2px; }
         .import-panel { background: #f8faf9; border: 1px solid rgba(36,90,61,0.14); border-radius: 14px; padding: 14px; display: grid; gap: 12px; }
@@ -316,6 +334,22 @@
                 </section>
 
                 <section class="card">
+                    <h2>Docenti del Master</h2>
+                    <p class="hint">Contatta i docenti per tesi, mentorship o approfondimenti. Trovi anche i moduli che hanno tenuto.</p>
+                    <div class="faculty-grid" id="faculty-grid">
+                        <div class="loading">Caricamento docenti...</div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <h2>Opportunità</h2>
+                    <p class="hint">Stage, tesi e offerte di lavoro pubblicate dal Master. Candidati direttamente da qui.</p>
+                    <div class="opportunity-list" id="opportunity-list">
+                        <div class="loading">Caricamento opportunità...</div>
+                    </div>
+                </section>
+
+                <section class="card">
                     <h2>Directory</h2>
                     <div class="filters">
                         <input id="search-filter" placeholder="Cerca nome, azienda, ruolo">
@@ -351,10 +385,14 @@
         const notificationsEl = document.getElementById('network-notifications');
         const statusEl = document.getElementById('profile-status');
         const saveBtn = document.getElementById('save-btn');
+        const facultyEl = document.getElementById('faculty-grid');
+        const opportunitiesEl = document.getElementById('opportunity-list');
         let profiles = [];
         let introRequests = [];
         let posts = [];
         let notifications = [];
+        let faculty = [];
+        let opportunities = [];
         let networkConfig = {};
         const postComments = new Map();
         let currentProfile = null;
@@ -809,6 +847,84 @@
             `).join('');
         }
 
+        function renderFaculty() {
+            if (!facultyEl) return;
+            if (!faculty.length) {
+                facultyEl.innerHTML = '<div class="empty">Nessun docente disponibile.</div>';
+                return;
+            }
+            facultyEl.innerHTML = faculty.map((f) => {
+                const modules = (f.moduleNames || []).slice(0, 4)
+                    .map((name) => `<span class="fc-tag">${escapeHtml(name)}</span>`).join('');
+                const actions = [];
+                if (f.contactEmail) {
+                    const subject = encodeURIComponent('Master Carbon Farming - Richiesta tesi/mentorship');
+                    actions.push(`<a class="fc-link" href="mailto:${escapeHtml(f.contactEmail)}?subject=${subject}">✉️ Tesi / mentorship</a>`);
+                }
+                if (f.profileLink) {
+                    actions.push(`<a class="fc-link" href="${escapeHtml(f.profileLink)}" target="_blank" rel="noopener">🔗 Profilo</a>`);
+                }
+                return `
+                    <article class="faculty-card">
+                        <div class="fc-name">${escapeHtml(f.name || '—')}</div>
+                        ${f.role ? `<div class="fc-role">${escapeHtml(f.role)}</div>` : ''}
+                        ${f.bio ? `<div class="fc-bio">${escapeHtml(f.bio)}</div>` : ''}
+                        ${modules ? `<div class="fc-modules">${modules}</div>` : ''}
+                        ${f.lessonsCount ? `<div class="op-meta">${escapeHtml(String(f.lessonsCount))} lezioni nel calendario</div>` : ''}
+                        ${actions.length ? `<div class="fc-actions">${actions.join('')}</div>` : ''}
+                    </article>`;
+            }).join('');
+        }
+
+        function renderOpportunities() {
+            if (!opportunitiesEl) return;
+            if (!opportunities.length) {
+                opportunitiesEl.innerHTML = '<div class="empty">Nessuna opportunità pubblicata al momento.</div>';
+                return;
+            }
+            const typeLabels = { stage: 'Stage', tesi: 'Tesi', lavoro: 'Lavoro', altro: 'Altro' };
+            opportunitiesEl.innerHTML = opportunities.map((op) => {
+                const meta = [op.organization, op.location].filter(Boolean).join(' · ');
+                const deadline = op.deadline ? `Scadenza: ${new Date(op.deadline).toLocaleDateString('it-IT')}` : '';
+                const link = op.applyUrl ? `<a class="fc-link" href="${escapeHtml(op.applyUrl)}" target="_blank" rel="noopener">🔗 Dettagli esterni</a>` : '';
+                const applyControl = op.hasApplied
+                    ? `<span class="op-applied">✅ Candidatura inviata${op.applicationStatus && op.applicationStatus !== 'submitted' ? ` (${escapeHtml(op.applicationStatus)})` : ''}</span>`
+                    : `<button class="btn btn-secondary" data-apply="${escapeHtml(op.id)}" type="button">Candidati</button>`;
+                return `
+                    <article class="opportunity-card">
+                        <div class="op-head">
+                            <span class="op-type">${escapeHtml(typeLabels[op.type] || op.type || 'Altro')}</span>
+                            <span class="op-title">${escapeHtml(op.title || '—')}</span>
+                        </div>
+                        ${meta ? `<div class="op-meta">${escapeHtml(meta)}</div>` : ''}
+                        ${deadline ? `<div class="op-meta">${escapeHtml(deadline)}</div>` : ''}
+                        <div class="op-desc">${escapeHtml(op.description || '')}</div>
+                        <div class="op-apply-row">${applyControl}${link}</div>
+                    </article>`;
+            }).join('');
+            opportunitiesEl.querySelectorAll('[data-apply]').forEach((btn) => {
+                btn.addEventListener('click', () => applyToOpportunity(btn.getAttribute('data-apply'), btn));
+            });
+        }
+
+        async function applyToOpportunity(opportunityId, btn) {
+            if (!opportunityId) return;
+            const message = (window.prompt('Aggiungi un messaggio per la candidatura (facoltativo):') || '').trim();
+            if (btn) { btn.disabled = true; btn.textContent = 'Invio...'; }
+            try {
+                await api(`/api/lms/network/opportunities/${opportunityId}/apply`, {
+                    method: 'POST',
+                    body: JSON.stringify({ message })
+                });
+                const op = opportunities.find((o) => o.id === opportunityId);
+                if (op) { op.hasApplied = true; op.applicationStatus = 'submitted'; }
+                renderOpportunities();
+            } catch (error) {
+                if (btn) { btn.disabled = false; btn.textContent = 'Candidati'; }
+                window.alert(error.message || 'Errore durante la candidatura.');
+            }
+        }
+
         function renderDirectory() {
             const search = document.getElementById('search-filter').value.trim().toLowerCase();
             const skill = document.getElementById('skill-filter').value.trim();
@@ -898,13 +1014,15 @@
 
         async function loadNetwork() {
             try {
-                const [config, profile, list, requests, feed, notificationList] = await Promise.all([
+                const [config, profile, list, requests, feed, notificationList, facultyList, opportunityList] = await Promise.all([
                     api('/api/lms/network/config'),
                     api('/api/lms/network/profile'),
                     api('/api/lms/network/profiles'),
                     api('/api/lms/network/intro-requests'),
                     api('/api/lms/network/posts'),
-                    api('/api/lms/network/notifications')
+                    api('/api/lms/network/notifications'),
+                    api('/api/lms/network/faculty').catch(() => []),
+                    api('/api/lms/network/opportunities').catch(() => [])
                 ]);
                 networkConfig = config || {};
                 if (profile) fillForm(profile);
@@ -912,10 +1030,14 @@
                 introRequests = Array.isArray(requests) ? requests : [];
                 posts = Array.isArray(feed) ? feed : [];
                 notifications = Array.isArray(notificationList) ? notificationList : [];
+                faculty = Array.isArray(facultyList) ? facultyList : [];
+                opportunities = Array.isArray(opportunityList) ? opportunityList : [];
                 renderDirectory();
                 renderRequests();
                 renderPosts();
                 renderNotifications();
+                renderFaculty();
+                renderOpportunities();
             } catch (error) {
                 directoryEl.innerHTML = '<div class="empty">Errore nel caricamento del network.</div>';
                 requestsEl.innerHTML = '<div class="empty">Errore nel caricamento delle richieste.</div>';

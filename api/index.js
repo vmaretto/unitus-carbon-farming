@@ -10683,7 +10683,7 @@ app.get('/api/lms/network/profiles', requireStudent, requireNonGuest, async (req
         AND u.is_active = true
       ORDER BY u.last_name ASC, u.first_name ASC
       LIMIT 300
-    `);
+    `, [req.user.userId]);
 
     res.json(rows.map(buildNetworkProfile));
   } catch (error) {

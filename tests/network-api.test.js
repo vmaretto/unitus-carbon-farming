@@ -243,9 +243,9 @@ test('PUT /api/lms/network/profile registra il consenso esterno solo se opt-in',
 test('GET /api/lms/network/profiles espone solo contatti consentiti', async (t) => {
   apiModule.__setPool({
     async query(sql, params = []) {
-      assert.deepEqual(params, []);
       const statement = String(sql).replace(/\s+/g, ' ').trim();
       if (statement.startsWith('SELECT key, value FROM network_settings')) {
+        assert.deepEqual(params, []);
         return {
           rows: [
             { key: 'network_enabled', value: 'true' },
@@ -259,6 +259,7 @@ test('GET /api/lms/network/profiles espone solo contatti consentiti', async (t) 
       }
       assert.match(statement, /WHERE p\.is_visible = true/);
       assert.match(statement, /u\.is_active = true/);
+      assert.deepEqual(params, ['11111111-1111-4111-8111-111111111111']);
       return {
         rows: [
           {

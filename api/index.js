@@ -6076,6 +6076,11 @@ function buildFacultyOverviewRow(row) {
   };
 }
 
+function csvEscape(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
 app.patch('/api/admin/faculty-overview/:id', requireAdmin, async (req, res) => {
   if (!ensurePool(res)) {
     return;
@@ -6255,6 +6260,178 @@ app.get('/api/admin/faculty-overview', requireAdmin, async (_req, res) => {
   } catch (error) {
     console.error('Error fetching faculty overview', error);
     res.status(500).json({ error: 'Unable to retrieve faculty overview' });
+  }
+});
+
+app.get('/api/admin/faculty-overview.csv', requireAdmin, async (_req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  try {
+    const { rows } = await pool.query(`
+      WITH lesson_stats AS (
+        SELECT
+          l.teacher_id AS faculty_id,
+          COUNT(*)::int AS total_lessons,
+          COUNT(*) FILTER (WHERE COALESCE(l.status, 'draft') = 'completed')::int AS completed_lessons,
+          ROUND(COALESCE(SUM(COALESCE(l.duration_minutes, 0)), 0)::numeric / 60.0, 1) AS lesson_hours,
+          ROUND(COALESCE(SUM(COALESCE(l.duration_minutes, 0)) FILTER (WHERE COALESCE(l.status, 'draft') = 'completed'), 0)::numeric / 60.0, 1) AS completed_lesson_hours,
+          COUNT(DISTINCT m.id)::int AS total_modules,
+          COALESCE(
+            (
+              SELECT JSONB_AGG(module_item ORDER BY module_name)
+              FROM (
+                SELECT DISTINCT m2.id, m2.name AS module_name, JSONB_BUILD_OBJECT('id', m2.id, 'name', m2.name) AS module_item
+                FROM lessons l2
+                LEFT JOIN modules m2 ON m2.id = l2.module_id
+                WHERE l2.teacher_id = l.teacher_id AND m2.id IS NOT NULL
+              ) module_rows
+            ),
+            '[]'::jsonb
+          ) AS modules,
+          COALESCE(
+            (
+              SELECT JSONB_AGG(lesson_item ORDER BY start_datetime DESC)
+              FROM (
+                SELECT
+                  l2.start_datetime,
+                  JSONB_BUILD_OBJECT(
+                    'id', l2.id,
+                    'title', l2.title,
+                    'moduleId', m2.id,
+                    'moduleName', m2.name,
+                    'startDatetime', l2.start_datetime,
+                    'status', l2.status,
+                    'durationMinutes', l2.duration_minutes
+                  ) AS lesson_item
+                FROM lessons l2
+                LEFT JOIN modules m2 ON m2.id = l2.module_id
+                WHERE l2.teacher_id = l.teacher_id
+              ) lesson_rows
+            ),
+            '[]'::jsonb
+          ) AS lessons
+        FROM lessons l
+        LEFT JOIN modules m ON m.id = l.module_id
+        WHERE l.teacher_id IS NOT NULL
+        GROUP BY l.teacher_id
+      ),
+      document_signatures AS (
+        SELECT
+          document_id,
+          COUNT(*)::int AS signature_count,
+          COUNT(*) FILTER (WHERE consent_given)::int AS consent_count
+        FROM teacher_document_signatures
+        GROUP BY document_id
+      ),
+      document_stats AS (
+        SELECT
+          td.faculty_id,
+          BOOL_OR(
+            (
+              LOWER(COALESCE(td.type, '')) LIKE '%incarico%'
+              OR LOWER(COALESCE(td.title, '')) LIKE '%incarico%'
+            )
+            AND COALESCE(ds.signature_count, 0) > 0
+          ) AS appointment_received,
+          BOOL_OR(
+            (
+              LOWER(COALESCE(td.type, '')) LIKE '%liberatoria%'
+              OR LOWER(COALESCE(td.type, '')) LIKE '%release%'
+              OR LOWER(COALESCE(td.title, '')) LIKE '%liberatoria%'
+              OR LOWER(COALESCE(td.title, '')) LIKE '%release%'
+            )
+            AND COALESCE(ds.signature_count, 0) > 0
+          ) AS release_signed,
+          COALESCE(
+            JSONB_AGG(
+              JSONB_BUILD_OBJECT(
+                'id', td.id,
+                'title', td.title,
+                'type', td.type,
+                'signatureCount', COALESCE(ds.signature_count, 0),
+                'consentCount', COALESCE(ds.consent_count, 0)
+              )
+              ORDER BY td.created_at DESC
+            ) FILTER (WHERE td.id IS NOT NULL),
+            '[]'::jsonb
+          ) AS documents
+        FROM teacher_documents td
+        LEFT JOIN document_signatures ds ON ds.document_id = td.id
+        WHERE td.faculty_id IS NOT NULL
+        GROUP BY td.faculty_id
+      ),
+      override_stats AS (
+        SELECT
+          faculty_id,
+          appointment_received_manual AS "appointmentReceivedManual",
+          received_hours AS "receivedHours",
+          notes
+        FROM faculty_overview_overrides
+      )
+      SELECT
+        f.id,
+        f.name,
+        f.role,
+        f.email,
+        f.bio,
+        f.photo_url AS "photoUrl",
+        f.profile_link AS "profileLink",
+        f.sort_order AS "sortOrder",
+        f.is_published AS "isPublished",
+        f.is_active AS "isActive",
+        f.can_view_all_materials AS "canViewAllMaterials",
+        COALESCE(ls.total_lessons, 0) AS "totalLessons",
+        COALESCE(ls.completed_lessons, 0) AS "completedLessons",
+        COALESCE(ls.lesson_hours, 0) AS "lessonHours",
+        COALESCE(ls.completed_lesson_hours, 0) AS "completedLessonHours",
+        COALESCE(ls.total_modules, 0) AS "totalModules",
+        COALESCE(ls.modules, '[]'::jsonb) AS modules,
+        COALESCE(ls.lessons, '[]'::jsonb) AS lessons,
+        os."appointmentReceivedManual",
+        os."receivedHours",
+        os.notes,
+        COALESCE(ds.appointment_received, false) AS "appointmentReceived",
+        COALESCE(ds.release_signed, false) AS "releaseSigned",
+        COALESCE(ds.documents, '[]'::jsonb) AS documents
+      FROM faculty f
+      LEFT JOIN lesson_stats ls ON ls.faculty_id = f.id
+      LEFT JOIN document_stats ds ON ds.faculty_id = f.id
+      LEFT JOIN override_stats os ON os.faculty_id = f.id
+      ORDER BY f.sort_order NULLS LAST, f.created_at ASC
+    `);
+
+    let csv = 'nome,ruolo,email,visibile,attivo,accesso_materiali,incarico_manual,ore_ricevute,ore_totali,ore_completate,lezioni_totali,lezioni_completate,moduli_totali,liberatoria_firmata,documenti_count,moduli,lezioni,note\n';
+    rows.map(buildFacultyOverviewRow).forEach((row) => {
+      csv += [
+        csvEscape(row.name),
+        csvEscape(row.role),
+        csvEscape(row.email),
+        csvEscape(row.isPublished ? 'SI' : 'NO'),
+        csvEscape(row.isActive ? 'SI' : 'NO'),
+        csvEscape(row.canViewAllMaterials ? 'SI' : 'NO'),
+        csvEscape(row.appointmentReceivedManual === null ? '' : (row.appointmentReceivedManual ? 'SI' : 'NO')),
+        csvEscape(row.receivedHours ?? ''),
+        csvEscape(row.lessonHours),
+        csvEscape(row.completedLessonHours),
+        csvEscape(row.totalLessons),
+        csvEscape(row.completedLessons),
+        csvEscape(row.totalModules),
+        csvEscape(row.releaseSigned ? 'SI' : 'NO'),
+        csvEscape(Array.isArray(row.documents) ? row.documents.length : 0),
+        csvEscape(JSON.stringify(row.modules || [])),
+        csvEscape(JSON.stringify(row.lessons || [])),
+        csvEscape(row.notes || '')
+      ].join(',') + '\n';
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="faculty_overview.csv"');
+    res.send('\uFEFF' + csv);
+  } catch (error) {
+    console.error('Export faculty overview csv error', error);
+    res.status(500).json({ error: 'Unable to export faculty overview' });
   }
 });
 

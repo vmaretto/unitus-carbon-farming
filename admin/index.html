@@ -1889,7 +1889,10 @@
                         <h3 style="margin:0 0 4px; color: var(--green-700); font-size: 1.05rem;">Riepilogo faculty</h3>
                         <p style="margin:0; color: var(--gray-600); font-size: 0.9rem;">Ore, lezioni, moduli e documenti del docente selezionato.</p>
                     </div>
-                    <span id="faculty-overview-status" style="font-size:0.85rem; color: var(--gray-500);">Caricamento...</span>
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <span id="faculty-overview-status" style="font-size:0.85rem; color: var(--gray-500);">Caricamento...</span>
+                        <button type="button" class="secondary" id="faculty-overview-export">Scarica CSV</button>
+                    </div>
                 </div>
                 <div id="faculty-overview-content" style="display:grid; gap:14px;"></div>
             </div>
@@ -4914,6 +4917,30 @@ Buono studio!</textarea>
                 showToast('Dati faculty salvati');
             } catch (error) {
                 if (status) status.textContent = error.message || 'Errore nel salvataggio';
+            }
+        });
+
+        document.getElementById('faculty-overview-export').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/admin/faculty-overview.csv', {
+                    headers: {
+                        Authorization: adminToken ? `Bearer ${adminToken}` : ''
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error('Errore esportazione CSV');
+                }
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'faculty_overview.csv';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (error) {
+                showToast(error.message || 'Errore esportazione CSV', 'error');
             }
         });
 

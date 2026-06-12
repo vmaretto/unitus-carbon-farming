@@ -9895,6 +9895,10 @@ function normalizeNetworkEntries(value, allowedKeys, maxItems = 5) {
     .slice(0, maxItems);
 }
 
+// Versione corrente del testo di consenso del network. Va incrementata quando il
+// testo dell'informativa cambia, così da poter richiedere un nuovo consenso esplicito.
+const NETWORK_CONSENT_VERSION = '1.0';
+
 function buildNetworkProfile(row, options = {}) {
   if (!row) return null;
   const exposePrivate = Boolean(options.exposePrivate);
@@ -9924,6 +9928,16 @@ function buildNetworkProfile(row, options = {}) {
     showEmail: Boolean(row.showEmail),
     showLinkedin: Boolean(row.showLinkedin),
     availableForContact: Boolean(row.availableForContact),
+    // I dati di consenso sono privati: si espongono solo al titolare del profilo,
+    // mai nella directory verso gli altri partecipanti.
+    ...(exposePrivate ? {
+      externalVisible: Boolean(row.externalVisible),
+      consentVersion: NETWORK_CONSENT_VERSION,
+      internalConsentAt: row.internalConsentAt || null,
+      internalConsentVersion: row.internalConsentVersion || null,
+      externalConsentAt: row.externalConsentAt || null,
+      externalConsentVersion: row.externalConsentVersion || null
+    } : {}),
     followersCount: Number(row.followersCount ?? 0),
     followingCount: Number(row.followingCount ?? 0),
     postsCount: Number(row.postsCount ?? 0),
@@ -10101,7 +10115,8 @@ app.get('/api/lms/network/config', requireStudent, async (_req, res) => {
       postsEnabled: isNetworkFlagEnabled(settings, 'posts_enabled'),
       introRequestsEnabled: isNetworkFlagEnabled(settings, 'intro_requests_enabled'),
       profilePhotosEnabled: isNetworkFlagEnabled(settings, 'profile_photos_enabled'),
-      linkPreviewsEnabled: isNetworkFlagEnabled(settings, 'link_previews_enabled')
+      linkPreviewsEnabled: isNetworkFlagEnabled(settings, 'link_previews_enabled'),
+      consentVersion: NETWORK_CONSENT_VERSION
     });
   } catch (error) {
     console.error('Get network config error:', error);
@@ -10153,6 +10168,11 @@ app.get('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
              COALESCE(p.show_email, false) AS "showEmail",
              COALESCE(p.show_linkedin, true) AS "showLinkedin",
              COALESCE(p.available_for_contact, true) AS "availableForContact",
+             COALESCE(p.external_visible, false) AS "externalVisible",
+             p.internal_consent_at AS "internalConsentAt",
+             p.internal_consent_version AS "internalConsentVersion",
+             p.external_consent_at AS "externalConsentAt",
+             p.external_consent_version AS "externalConsentVersion",
              (SELECT COUNT(*)::int FROM network_follows f WHERE f.following_user_id = u.id) AS "followersCount",
              (SELECT COUNT(*)::int FROM network_follows f WHERE f.follower_user_id = u.id) AS "followingCount",
              (SELECT COUNT(*)::int FROM network_posts post WHERE post.author_user_id = u.id AND post.is_deleted = false) AS "postsCount",
@@ -10216,17 +10236,28 @@ app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
       isVisible: normalizeBoolean(req.body.isVisible, false),
       showEmail: normalizeBoolean(req.body.showEmail, false),
       showLinkedin: normalizeBoolean(req.body.showLinkedin, true),
-      availableForContact: normalizeBoolean(req.body.availableForContact, true)
+      availableForContact: normalizeBoolean(req.body.availableForContact, true),
+      externalVisible: normalizeBoolean(req.body.externalVisible, false)
     };
 
+    // Consenso GDPR: il timestamp/versione viene registrato solo quando il consenso
+    // viene concesso per la prima volta (o sotto una nuova versione del testo). Alla
+    // revoca si abbassa il flag ma si conserva lo storico del consenso prestato.
     const { rows } = await pool.query(`
       INSERT INTO network_profiles (
         user_id, headline, organization, role_title, city, country, bio,
         collaboration_goals, profile_photo_url, cover_image_url, experience, featured_links,
         skills, interests, linkedin_url, contact_email, is_visible,
-        show_email, show_linkedin, available_for_contact, updated_at
+        show_email, show_linkedin, available_for_contact, external_visible,
+        internal_consent_at, internal_consent_version,
+        external_consent_at, external_consent_version, updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::text[], $14::text[], $15, $16, $17, $18, $19, $20, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::text[], $14::text[], $15, $16, $17, $18, $19, $20, $21,
+        CASE WHEN $17 THEN NOW() ELSE NULL END,
+        CASE WHEN $17 THEN $22::text ELSE NULL END,
+        CASE WHEN $21 THEN NOW() ELSE NULL END,
+        CASE WHEN $21 THEN $22::text ELSE NULL END,
+        NOW())
       ON CONFLICT (user_id) DO UPDATE SET
         headline = EXCLUDED.headline,
         organization = EXCLUDED.organization,
@@ -10247,6 +10278,27 @@ app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
         show_email = EXCLUDED.show_email,
         show_linkedin = EXCLUDED.show_linkedin,
         available_for_contact = EXCLUDED.available_for_contact,
+        external_visible = EXCLUDED.external_visible,
+        internal_consent_at = CASE
+          WHEN EXCLUDED.is_visible AND (network_profiles.internal_consent_at IS NULL OR network_profiles.internal_consent_version IS DISTINCT FROM $22::text)
+            THEN NOW()
+          ELSE network_profiles.internal_consent_at
+        END,
+        internal_consent_version = CASE
+          WHEN EXCLUDED.is_visible AND (network_profiles.internal_consent_at IS NULL OR network_profiles.internal_consent_version IS DISTINCT FROM $22::text)
+            THEN $22::text
+          ELSE network_profiles.internal_consent_version
+        END,
+        external_consent_at = CASE
+          WHEN EXCLUDED.external_visible AND (network_profiles.external_consent_at IS NULL OR network_profiles.external_consent_version IS DISTINCT FROM $22::text)
+            THEN NOW()
+          ELSE network_profiles.external_consent_at
+        END,
+        external_consent_version = CASE
+          WHEN EXCLUDED.external_visible AND (network_profiles.external_consent_at IS NULL OR network_profiles.external_consent_version IS DISTINCT FROM $22::text)
+            THEN $22::text
+          ELSE network_profiles.external_consent_version
+        END,
         updated_at = NOW()
       RETURNING user_id AS "userId", headline, organization, role_title AS "roleTitle",
                 city, country, bio, collaboration_goals AS "collaborationGoals",
@@ -10255,7 +10307,13 @@ app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
                 skills, interests, linkedin_url AS "linkedinUrl",
                 contact_email AS "contactEmail", is_visible AS "isVisible",
                 show_email AS "showEmail", show_linkedin AS "showLinkedin",
-                available_for_contact AS "availableForContact", updated_at AS "updatedAt"
+                available_for_contact AS "availableForContact",
+                external_visible AS "externalVisible",
+                internal_consent_at AS "internalConsentAt",
+                internal_consent_version AS "internalConsentVersion",
+                external_consent_at AS "externalConsentAt",
+                external_consent_version AS "externalConsentVersion",
+                updated_at AS "updatedAt"
     `, [
       req.user.userId,
       payload.headline,
@@ -10276,7 +10334,9 @@ app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
       payload.isVisible,
       payload.showEmail,
       payload.showLinkedin,
-      payload.availableForContact
+      payload.availableForContact,
+      payload.externalVisible,
+      NETWORK_CONSENT_VERSION
     ]);
 
     const userRes = await pool.query(

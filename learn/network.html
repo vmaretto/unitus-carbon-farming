@@ -32,6 +32,9 @@
         .checks { display: grid; gap: 10px; padding-top: 2px; }
         .check { display: flex; gap: 10px; align-items: flex-start; font-size: 0.86rem; color: var(--gray-700); font-weight: 500; }
         .check input { width: 16px; height: 16px; margin-top: 1px; accent-color: var(--green-500); flex-shrink: 0; }
+        .check span { line-height: 1.4; }
+        .consent { border: 1px solid var(--gray-200, #e5e7eb); border-radius: 10px; padding: 14px 16px; margin: 0; display: grid; gap: 12px; }
+        .consent legend { font-size: 0.8rem; font-weight: 700; color: var(--gray-700); padding: 0 6px; }
         .btn { border: 0; border-radius: 12px; padding: 12px 18px; font: inherit; font-weight: 700; cursor: pointer; }
         .btn-primary { background: linear-gradient(135deg, var(--green-700), var(--green-500)); color: white; }
         .btn-secondary { background: var(--green-100); color: var(--green-700); }
@@ -232,12 +235,22 @@
                         <textarea id="featured-links" name="featuredLinks" placeholder="Sito aziendale | https://example.com"></textarea>
                         <span class="hint">Una riga per link: etichetta | URL.</span>
                     </label>
+                    <fieldset class="consent">
+                        <legend>Visibilità e consenso privacy</legend>
+                        <p class="hint">Il tuo profilo è privato finché non dai il consenso. Puoi modificarlo o revocarlo in qualsiasi momento da questa pagina.</p>
+                        <label class="check"><input id="is-visible" name="isVisible" type="checkbox">
+                            <span><strong>Visibilità interna.</strong> Acconsento a rendere il mio profilo visibile agli altri studenti, alumni e docenti del Master nella directory riservata.</span>
+                        </label>
+                        <label class="check"><input id="external-visible" name="externalVisible" type="checkbox">
+                            <span><strong>Visibilità esterna (facoltativa).</strong> Acconsento a rendere il mio profilo visibile anche a partner del Master ed eventuali soggetti esterni. Spento di default, revocabile.</span>
+                        </label>
+                    </fieldset>
                     <div class="checks">
-                        <label class="check"><input id="is-visible" name="isVisible" type="checkbox">Mostra il mio profilo nella directory</label>
                         <label class="check"><input id="available-for-contact" name="availableForContact" type="checkbox">Disponibile a essere contattato</label>
                         <label class="check"><input id="show-email" name="showEmail" type="checkbox">Mostra email agli altri partecipanti</label>
                         <label class="check"><input id="show-linkedin" name="showLinkedin" type="checkbox">Mostra LinkedIn agli altri partecipanti</label>
                     </div>
+                    <p class="hint" id="consent-state"></p>
                     <div class="button-row">
                         <button class="btn btn-primary" id="save-btn" type="submit">Salva profilo</button>
                         <button class="btn btn-ghost" id="refresh-preview-btn" type="button">Aggiorna anteprima</button>
@@ -833,9 +846,11 @@
             document.getElementById('experience').value = experienceToText(profile.experience);
             document.getElementById('featured-links').value = featuredLinksToText(profile.featuredLinks);
             document.getElementById('is-visible').checked = Boolean(profile.isVisible);
+            document.getElementById('external-visible').checked = Boolean(profile.externalVisible);
             document.getElementById('available-for-contact').checked = profile.availableForContact !== false;
             document.getElementById('show-email').checked = Boolean(profile.showEmail);
             document.getElementById('show-linkedin').checked = profile.showLinkedin !== false;
+            renderConsentState(profile);
             renderPreview();
         }
 
@@ -857,10 +872,28 @@
                 experience: parseExperience(document.getElementById('experience').value),
                 featuredLinks: parseFeaturedLinks(document.getElementById('featured-links').value),
                 isVisible: document.getElementById('is-visible').checked,
+                externalVisible: document.getElementById('external-visible').checked,
                 availableForContact: document.getElementById('available-for-contact').checked,
                 showEmail: document.getElementById('show-email').checked,
                 showLinkedin: document.getElementById('show-linkedin').checked
             };
+        }
+
+        function renderConsentState(profile) {
+            const el = document.getElementById('consent-state');
+            if (!el) return;
+            const fmt = (iso) => {
+                if (!iso) return null;
+                const d = new Date(iso);
+                return Number.isFinite(d.getTime()) ? d.toLocaleDateString('it-IT') : null;
+            };
+            const parts = [];
+            const internal = fmt(profile.internalConsentAt);
+            const external = fmt(profile.externalConsentAt);
+            if (profile.isVisible && internal) parts.push(`Consenso visibilità interna prestato il ${internal} (v${profile.internalConsentVersion || '—'}).`);
+            if (profile.externalVisible && external) parts.push(`Consenso visibilità esterna prestato il ${external} (v${profile.externalConsentVersion || '—'}).`);
+            if (!profile.isVisible && !profile.externalVisible) parts.push('Profilo non visibile: nessun consenso attivo.');
+            el.textContent = parts.join(' ');
         }
 
         async function loadNetwork() {

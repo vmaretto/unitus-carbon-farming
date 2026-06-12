@@ -93,6 +93,8 @@ test('PUT /api/lms/network/profile salva il profilo normalizzato', async (t) => 
         assert.equal(params[16], true);
         assert.equal(params[17], true);
         assert.equal(params[18], false);
+        assert.equal(params[20], false, 'externalVisible default a false');
+        assert.equal(typeof params[21], 'string', 'la versione del consenso deve essere passata');
         return {
           rows: [{
             userId: params[0],
@@ -115,6 +117,11 @@ test('PUT /api/lms/network/profile salva il profilo normalizzato', async (t) => 
             showEmail: params[17],
             showLinkedin: params[18],
             availableForContact: params[19],
+            externalVisible: params[20],
+            internalConsentAt: params[16] ? '2026-06-09T12:00:00.000Z' : null,
+            internalConsentVersion: params[16] ? params[21] : null,
+            externalConsentAt: params[20] ? '2026-06-09T12:00:00.000Z' : null,
+            externalConsentVersion: params[20] ? params[21] : null,
             updatedAt: '2026-06-09T12:00:00.000Z'
           }]
         };
@@ -173,7 +180,64 @@ test('PUT /api/lms/network/profile salva il profilo normalizzato', async (t) => 
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.fullName, 'Ada Lovelace');
   assert.equal(res.body.contactEmail, 'ada@example.com');
+  // Consenso interno prestato (isVisible=true) registrato con timestamp e versione,
+  // visibilità esterna spenta di default.
+  assert.equal(res.body.externalVisible, false);
+  assert.ok(res.body.internalConsentAt, 'consenso interno deve avere timestamp');
+  assert.ok(res.body.internalConsentVersion, 'consenso interno deve avere versione');
+  assert.equal(res.body.externalConsentAt, null);
   assert.equal(queries.length, 3);
+});
+
+test('PUT /api/lms/network/profile registra il consenso esterno solo se opt-in', async (t) => {
+  let insertParams = null;
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      if (statement.startsWith('SELECT key, value FROM network_settings')) {
+        return {
+          rows: [
+            { key: 'network_enabled', value: 'true' },
+            { key: 'profiles_enabled', value: 'true' },
+            { key: 'profile_photos_enabled', value: 'true' }
+          ]
+        };
+      }
+      if (statement.startsWith('INSERT INTO network_profiles')) {
+        insertParams = params;
+        return {
+          rows: [{
+            userId: params[0],
+            isVisible: params[16],
+            externalVisible: params[20],
+            externalConsentAt: params[20] ? '2026-06-09T12:00:00.000Z' : null,
+            externalConsentVersion: params[20] ? params[21] : null,
+            updatedAt: '2026-06-09T12:00:00.000Z'
+          }]
+        };
+      }
+      if (statement.startsWith('SELECT email AS "userEmail"')) {
+        return { rows: [{ userEmail: 'student@example.com', firstName: 'Ada', lastName: 'Lovelace', role: 'student', userAvatarUrl: null }] };
+      }
+      throw new Error(`query inattesa: ${statement}`);
+    }
+  });
+  t.after(() => apiModule.__setPool(null));
+
+  const layer = findRoute('/api/lms/network/profile', 'put');
+  const req = {
+    method: 'PUT',
+    url: '/api/lms/network/profile',
+    headers: authHeaders(),
+    body: { headline: 'Test', isVisible: true, externalVisible: true }
+  };
+  const res = createJsonRes();
+  await runRoute(layer, req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(insertParams[20], true, 'externalVisible deve essere true quando opt-in');
+  assert.equal(res.body.externalVisible, true);
+  assert.ok(res.body.externalConsentAt, 'consenso esterno deve avere timestamp quando concesso');
 });
 
 test('GET /api/lms/network/profiles espone solo contatti consentiti', async (t) => {

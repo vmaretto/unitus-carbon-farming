@@ -4056,6 +4056,16 @@ async function initDatabase() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS faculty_overview_overrides (
+      faculty_id UUID PRIMARY KEY REFERENCES faculty(id) ON DELETE CASCADE,
+      appointment_received_manual BOOLEAN,
+      received_hours NUMERIC(6, 1),
+      notes TEXT,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS conference_registrations (
       id UUID PRIMARY KEY,
       full_name TEXT NOT NULL,
@@ -6057,11 +6067,49 @@ function buildFacultyOverviewRow(row) {
     completedLessons: Number(row.completedLessons || 0),
     totalModules: Number(row.totalModules || 0),
     isFinished: Boolean(row.isFinished),
+    appointmentReceivedManual: row.appointmentReceivedManual === null ? null : Boolean(row.appointmentReceivedManual),
+    receivedHours: row.receivedHours === null || row.receivedHours === undefined ? null : Number(row.receivedHours),
+    notes: row.notes || '',
     documents: Array.isArray(row.documents) ? row.documents : [],
     modules: Array.isArray(row.modules) ? row.modules : [],
     lessons: Array.isArray(row.lessons) ? row.lessons : []
   };
 }
+
+app.patch('/api/admin/faculty-overview/:id', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  try {
+    const facultyId = req.params.id;
+    const appointmentReceivedManual = req.body?.appointmentReceivedManual;
+    const receivedHours = req.body?.receivedHours;
+    const notes = typeof req.body?.notes === 'string' ? req.body.notes.trim() : '';
+
+    const { rows } = await pool.query(`
+      INSERT INTO faculty_overview_overrides (faculty_id, appointment_received_manual, received_hours, notes, updated_at)
+      VALUES ($1, $2, $3, $4, NOW())
+      ON CONFLICT (faculty_id)
+      DO UPDATE SET
+        appointment_received_manual = EXCLUDED.appointment_received_manual,
+        received_hours = EXCLUDED.received_hours,
+        notes = EXCLUDED.notes,
+        updated_at = NOW()
+      RETURNING faculty_id, appointment_received_manual AS "appointmentReceivedManual", received_hours AS "receivedHours", notes
+    `, [
+      facultyId,
+      appointmentReceivedManual === null || appointmentReceivedManual === undefined ? null : Boolean(appointmentReceivedManual),
+      receivedHours === '' || receivedHours === null || receivedHours === undefined ? null : Number(receivedHours),
+      notes || null
+    ]);
+
+    res.json(rows[0] || null);
+  } catch (error) {
+    console.error('Update faculty overview override error', error);
+    res.status(500).json({ error: 'Unable to update faculty overview' });
+  }
+});
 
 app.get('/api/admin/faculty-overview', requireAdmin, async (_req, res) => {
   if (!ensurePool(res)) {
@@ -6161,6 +6209,14 @@ app.get('/api/admin/faculty-overview', requireAdmin, async (_req, res) => {
         LEFT JOIN document_signatures ds ON ds.document_id = td.id
         WHERE td.faculty_id IS NOT NULL
         GROUP BY td.faculty_id
+      ),
+      override_stats AS (
+        SELECT
+          faculty_id,
+          appointment_received_manual AS "appointmentReceivedManual",
+          received_hours AS "receivedHours",
+          notes
+        FROM faculty_overview_overrides
       )
       SELECT
         f.id,
@@ -6181,6 +6237,9 @@ app.get('/api/admin/faculty-overview', requireAdmin, async (_req, res) => {
         COALESCE(ls.total_modules, 0) AS "totalModules",
         COALESCE(ls.modules, '[]'::jsonb) AS modules,
         COALESCE(ls.lessons, '[]'::jsonb) AS lessons,
+        os."appointmentReceivedManual",
+        os."receivedHours",
+        os.notes,
         COALESCE(ds.appointment_received, false) AS "appointmentReceived",
         COALESCE(ds.release_signed, false) AS "releaseSigned",
         COALESCE(ds.documents, '[]'::jsonb) AS documents,
@@ -6188,6 +6247,7 @@ app.get('/api/admin/faculty-overview', requireAdmin, async (_req, res) => {
       FROM faculty f
       LEFT JOIN lesson_stats ls ON ls.faculty_id = f.id
       LEFT JOIN document_stats ds ON ds.faculty_id = f.id
+      LEFT JOIN override_stats os ON os.faculty_id = f.id
       ORDER BY f.sort_order NULLS LAST, f.created_at ASC
     `);
 

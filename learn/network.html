@@ -184,10 +184,11 @@
                 <h2>Il mio profilo</h2>
                 <details class="import-panel">
                     <summary>Importa da LinkedIn</summary>
-                    <label>URL profilo LinkedIn
+                    <p class="hint" style="margin-top:0">LinkedIn non consente la lettura automatica del profilo dall'URL. Per compilare i campi: apri il tuo profilo su LinkedIn, seleziona e copia il testo della pagina (headline, Informazioni, Esperienza, Competenze) e incollalo qui sotto.</p>
+                    <label>URL profilo LinkedIn (solo il link)
                         <input id="linkedin-import-url" type="url" placeholder="https://www.linkedin.com/in/...">
                     </label>
-                    <label>Testo copiato dal profilo LinkedIn
+                    <label>Testo copiato dal profilo LinkedIn (per compilare i campi)
                         <textarea id="linkedin-import-text" placeholder="Incolla qui headline, informazioni, esperienza e competenze copiate dal tuo profilo LinkedIn."></textarea>
                     </label>
                     <div class="button-row">
@@ -1167,8 +1168,9 @@
         }
 
         function applyLinkedinImport() {
+            const importText = document.getElementById('linkedin-import-text').value;
             const imported = parseLinkedinImport(
-                document.getElementById('linkedin-import-text').value,
+                importText,
                 document.getElementById('linkedin-import-url').value
             );
             if (imported.linkedinUrl) document.getElementById('linkedin-url').value = imported.linkedinUrl;
@@ -1185,8 +1187,16 @@
                 document.getElementById('featured-links').value = featuredLinksToText(imported.featuredLinks);
             }
             renderPreview();
-            statusEl.textContent = 'Informazioni LinkedIn importate. Controlla i campi e salva il profilo.';
-            statusEl.className = 'status ok';
+            // Senza testo incollato non c'è nulla da analizzare: LinkedIn non può
+            // essere letto dall'URL (blocca l'accesso automatico). Guidiamo l'utente
+            // invece di dargli un falso "importato".
+            if (!importText.trim()) {
+                statusEl.textContent = 'Link LinkedIn salvato nel profilo. Per compilare automaticamente headline, esperienza e competenze, apri il tuo profilo su LinkedIn, seleziona e copia il testo della pagina, e incollalo nella casella "Testo copiato dal profilo LinkedIn".';
+                statusEl.className = 'status';
+            } else {
+                statusEl.textContent = 'Informazioni LinkedIn importate. Controlla i campi e salva il profilo.';
+                statusEl.className = 'status ok';
+            }
         }
 
         document.getElementById('profile-form').addEventListener('submit', async (event) => {

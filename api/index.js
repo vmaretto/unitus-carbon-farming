@@ -4049,10 +4049,20 @@ async function initDatabase() {
     ADD COLUMN IF NOT EXISTS profile_link TEXT;
   `);
   
-  // Add email column if it doesn't exist  
+  // Add email column if it doesn't exist
   await pool.query(`
     ALTER TABLE faculty
     ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+  `);
+
+  // Academic band (fascia) and pro-bono flag
+  await pool.query(`
+    ALTER TABLE faculty
+    ADD COLUMN IF NOT EXISTS band TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE faculty
+    ADD COLUMN IF NOT EXISTS is_pro_bono BOOLEAN NOT NULL DEFAULT FALSE;
   `);
 
   await pool.query(`
@@ -5831,7 +5841,7 @@ async function removeQuizFromLessonMaterials(quizId) {
 
 // Whitelist colonne aggiornabili per tabella (sicurezza)
 const ALLOWED_UPDATE_FIELDS = {
-  faculty: ['name', 'first_name', 'last_name', 'role', 'email', 'bio', 'photo_url', 'profile_link', 'sort_order', 'is_published', 'is_active', 'can_view_all_materials'],
+  faculty: ['name', 'first_name', 'last_name', 'role', 'email', 'bio', 'photo_url', 'profile_link', 'sort_order', 'is_published', 'is_active', 'can_view_all_materials', 'band', 'is_pro_bono'],
   blog_posts: ['title', 'slug', 'content', 'excerpt', 'cover_image_url', 'author', 'source_module', 'cover_image_prompt', 'reviewer_teacher_id', 'sources', 'tags', 'is_published', 'published_at', 'seo_title', 'meta_description', 'focus_keyword', 'pillar_slug', 'cover_alt'],
   partners: ['name', 'logo_url', 'partner_type', 'description', 'website_url', 'sort_order', 'is_published'],
   modules: ['name', 'ssd', 'cfu', 'hours', 'description', 'sort_order', 'course_id', 'is_published'],
@@ -5879,7 +5889,7 @@ app.get('/api/faculty', async (req, res) => {
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const sql = `
-      SELECT id, name, role, email, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished", can_view_all_materials AS "canViewAllMaterials"
+      SELECT id, name, role, email, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished", can_view_all_materials AS "canViewAllMaterials", band, is_pro_bono AS "isProBono"
       FROM faculty
       ${where}
       ORDER BY sort_order NULLS LAST, created_at ASC
@@ -5898,7 +5908,7 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
     return;
   }
 
-  const { name, role, email, bio, photoUrl, profileLink, sortOrder, isPublished, canViewAllMaterials } = req.body;
+  const { name, role, email, bio, photoUrl, profileLink, sortOrder, isPublished, canViewAllMaterials, band, isProBono } = req.body;
   const normalizedEmail = normalizeEmail(email);
 
   if (!name) {
@@ -5907,6 +5917,7 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
 
   // Normalizza URL della foto (converte GitHub blob in raw)
   const normalizedPhotoUrl = normalizeImageUrl(photoUrl);
+  const normalizedBand = typeof band === 'string' ? band.trim() : '';
 
   try {
     if (normalizedEmail) {
@@ -5926,9 +5937,9 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
 
     const id = uuidv4();
     const insert = `
-      INSERT INTO faculty (id, name, role, email, bio, photo_url, profile_link, sort_order, is_published, can_view_all_materials)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING id, name, role, email, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished", can_view_all_materials AS "canViewAllMaterials"
+      INSERT INTO faculty (id, name, role, email, bio, photo_url, profile_link, sort_order, is_published, can_view_all_materials, band, is_pro_bono)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING id, name, role, email, bio, photo_url AS "photoUrl", profile_link AS "profileLink", sort_order AS "sortOrder", is_published AS "isPublished", can_view_all_materials AS "canViewAllMaterials", band, is_pro_bono AS "isProBono"
     `;
     const values = [
       id,
@@ -5940,7 +5951,9 @@ app.post('/api/faculty', requireAdmin, async (req, res) => {
       profileLink || null,
       typeof sortOrder === 'number' ? sortOrder : null,
       Boolean(isPublished),
-      Boolean(canViewAllMaterials)
+      Boolean(canViewAllMaterials),
+      normalizedBand || null,
+      Boolean(isProBono)
     ];
 
     const { rows } = await pool.query(insert, values);
@@ -5961,11 +5974,14 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
   }
 
   const { id } = req.params;
-  const { name, role, email, bio, photoUrl, profileLink, sortOrder, isPublished, canViewAllMaterials, can_view_all_materials } = req.body;
+  const { name, role, email, bio, photoUrl, profileLink, sortOrder, isPublished, canViewAllMaterials, can_view_all_materials, band, isProBono } = req.body;
   const normalizedEmail = email === undefined ? undefined : normalizeEmail(email);
 
   // Normalizza URL della foto (converte GitHub blob in raw)
   const normalizedPhotoUrl = photoUrl !== undefined ? normalizeImageUrl(photoUrl) : undefined;
+  const normalizedBand = band === undefined
+    ? undefined
+    : (typeof band === 'string' && band.trim() ? band.trim() : null);
 
   try {
     if (normalizedEmail) {
@@ -5994,7 +6010,9 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
       is_published: typeof isPublished === 'boolean' ? isPublished : undefined,
       can_view_all_materials: typeof canViewAllMaterials === 'boolean'
         ? canViewAllMaterials
-        : (typeof can_view_all_materials === 'boolean' ? can_view_all_materials : undefined)
+        : (typeof can_view_all_materials === 'boolean' ? can_view_all_materials : undefined),
+      band: normalizedBand,
+      is_pro_bono: typeof isProBono === 'boolean' ? isProBono : undefined
     };
 
     const { query, values } = buildUpdateQuery('faculty', updateFields, id);
@@ -6015,7 +6033,9 @@ app.put('/api/faculty/:id', requireAdmin, async (req, res) => {
       profileLink: row.profile_link,
       sortOrder: row.sort_order,
       isPublished: row.is_published,
-      canViewAllMaterials: row.can_view_all_materials
+      canViewAllMaterials: row.can_view_all_materials,
+      band: row.band,
+      isProBono: row.is_pro_bono
     });
   } catch (error) {
     if (isFacultyEmailUniqueViolation(error)) {
@@ -6059,6 +6079,8 @@ function buildFacultyOverviewRow(row) {
     isPublished: Boolean(row.isPublished),
     isActive: Boolean(row.isActive),
     canViewAllMaterials: Boolean(row.canViewAllMaterials),
+    band: row.band || null,
+    isProBono: Boolean(row.isProBono),
     appointmentReceived: Boolean(row.appointmentReceived),
     releaseSigned: Boolean(row.releaseSigned),
     lessonHours: Number(row.lessonHours || 0),
@@ -6235,6 +6257,8 @@ app.get('/api/admin/faculty-overview', requireAdmin, async (_req, res) => {
         f.is_published AS "isPublished",
         f.is_active AS "isActive",
         f.can_view_all_materials AS "canViewAllMaterials",
+        f.band,
+        f.is_pro_bono AS "isProBono",
         COALESCE(ls.total_lessons, 0) AS "totalLessons",
         COALESCE(ls.completed_lessons, 0) AS "completedLessons",
         COALESCE(ls.lesson_hours, 0) AS "lessonHours",
@@ -6382,6 +6406,8 @@ app.get('/api/admin/faculty-overview.csv', requireAdmin, async (_req, res) => {
         f.is_published AS "isPublished",
         f.is_active AS "isActive",
         f.can_view_all_materials AS "canViewAllMaterials",
+        f.band,
+        f.is_pro_bono AS "isProBono",
         COALESCE(ls.total_lessons, 0) AS "totalLessons",
         COALESCE(ls.completed_lessons, 0) AS "completedLessons",
         COALESCE(ls.lesson_hours, 0) AS "lessonHours",
@@ -6402,11 +6428,13 @@ app.get('/api/admin/faculty-overview.csv', requireAdmin, async (_req, res) => {
       ORDER BY f.sort_order NULLS LAST, f.created_at ASC
     `);
 
-    let csv = 'nome,ruolo,email,visibile,attivo,accesso_materiali,incarico_manual,ore_ricevute,ore_totali,ore_completate,lezioni_totali,lezioni_completate,moduli_totali,liberatoria_firmata,documenti_count,moduli,lezioni,note\n';
+    let csv = 'nome,ruolo,fascia,titolo_gratuito,email,visibile,attivo,accesso_materiali,incarico_manual,ore_ricevute,ore_totali,ore_completate,lezioni_totali,lezioni_completate,moduli_totali,liberatoria_firmata,documenti_count,moduli,lezioni,note\n';
     rows.map(buildFacultyOverviewRow).forEach((row) => {
       csv += [
         csvEscape(row.name),
         csvEscape(row.role),
+        csvEscape(row.band || ''),
+        csvEscape(row.isProBono ? 'SI' : 'NO'),
         csvEscape(row.email),
         csvEscape(row.isPublished ? 'SI' : 'NO'),
         csvEscape(row.isActive ? 'SI' : 'NO'),
@@ -6432,6 +6460,143 @@ app.get('/api/admin/faculty-overview.csv', requireAdmin, async (_req, res) => {
   } catch (error) {
     console.error('Export faculty overview csv error', error);
     res.status(500).json({ error: 'Unable to export faculty overview' });
+  }
+});
+
+app.get('/api/admin/lessons.csv', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) {
+    return;
+  }
+
+  try {
+    const { module_id, teacher_id, status, month, year } = req.query;
+    const filters = [];
+    const values = [];
+
+    if (module_id) {
+      filters.push(`l.module_id = $${filters.length + 1}`);
+      values.push(module_id);
+    }
+    if (teacher_id) {
+      filters.push(`l.teacher_id = $${filters.length + 1}`);
+      values.push(teacher_id);
+    }
+    if (status) {
+      filters.push(`l.status = $${filters.length + 1}`);
+      values.push(status);
+    }
+    if (month && year) {
+      filters.push(`EXTRACT(MONTH FROM l.start_datetime AT TIME ZONE 'Europe/Rome') = $${filters.length + 1}`);
+      values.push(parseInt(month, 10));
+      filters.push(`EXTRACT(YEAR FROM l.start_datetime AT TIME ZONE 'Europe/Rome') = $${filters.length + 1}`);
+      values.push(parseInt(year, 10));
+    } else if (year) {
+      filters.push(`EXTRACT(YEAR FROM l.start_datetime AT TIME ZONE 'Europe/Rome') = $${filters.length + 1}`);
+      values.push(parseInt(year, 10));
+    }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+    const { rows } = await pool.query(`
+      SELECT
+        l.id,
+        TO_CHAR(l.start_datetime AT TIME ZONE 'Europe/Rome', 'YYYY-MM-DD') AS start_date,
+        TO_CHAR(l.start_datetime AT TIME ZONE 'Europe/Rome', 'HH24:MI') AS start_time,
+        TO_CHAR(
+          COALESCE(l.end_datetime, l.start_datetime + (COALESCE(l.duration_minutes, 0) || ' minutes')::interval)
+            AT TIME ZONE 'Europe/Rome',
+          'HH24:MI'
+        ) AS end_time,
+        COALESCE(l.duration_minutes, 0) AS duration_minutes,
+        l.title,
+        COALESCE(l.description, '') AS description,
+        COALESCE(l.status, 'draft') AS status,
+        COALESCE(l.location_physical, '') AS location_physical,
+        COALESCE(l.location_remote, '') AS location_remote,
+        COALESCE(l.notes, '') AS notes,
+        m.id AS module_id,
+        COALESCE(m.name, '') AS module_name,
+        COALESCE(m.ssd, '') AS module_ssd,
+        COALESCE(m.cfu, 0) AS module_cfu,
+        f.id AS teacher_id,
+        COALESCE(f.name, '') AS teacher_name,
+        COALESCE(f.email, '') AS teacher_email,
+        COALESCE(f.role, '') AS teacher_role,
+        COALESCE(f.band, '') AS teacher_band,
+        COALESCE(f.is_pro_bono, FALSE) AS teacher_pro_bono,
+        COALESCE(l.external_teacher_name, '') AS external_teacher_name,
+        COALESCE(JSONB_ARRAY_LENGTH(l.materials), 0) AS materials_count,
+        TO_CHAR(l.created_at AT TIME ZONE 'Europe/Rome', 'YYYY-MM-DD HH24:MI') AS created_at,
+        TO_CHAR(l.updated_at AT TIME ZONE 'Europe/Rome', 'YYYY-MM-DD HH24:MI') AS updated_at
+      FROM lessons l
+      LEFT JOIN modules m ON m.id = l.module_id
+      LEFT JOIN faculty f ON f.id = l.teacher_id
+      ${where}
+      ORDER BY l.start_datetime ASC
+    `, values);
+
+    const header = [
+      'id',
+      'data',
+      'ora_inizio',
+      'ora_fine',
+      'durata_min',
+      'titolo',
+      'descrizione',
+      'stato',
+      'aula_fisica',
+      'link_streaming',
+      'note',
+      'modulo_id',
+      'modulo_nome',
+      'modulo_ssd',
+      'modulo_cfu',
+      'docente_id',
+      'docente_nome',
+      'docente_email',
+      'docente_ruolo',
+      'docente_fascia',
+      'docente_titolo_gratuito',
+      'docente_esterno',
+      'materiali_count',
+      'creata_il',
+      'aggiornata_il'
+    ].join(',') + '\n';
+
+    const body = rows.map((row) => [
+      csvEscape(row.id),
+      csvEscape(row.start_date),
+      csvEscape(row.start_time),
+      csvEscape(row.end_time),
+      csvEscape(row.duration_minutes),
+      csvEscape(row.title),
+      csvEscape(row.description),
+      csvEscape(row.status),
+      csvEscape(row.location_physical),
+      csvEscape(row.location_remote),
+      csvEscape(row.notes),
+      csvEscape(row.module_id || ''),
+      csvEscape(row.module_name),
+      csvEscape(row.module_ssd),
+      csvEscape(row.module_cfu),
+      csvEscape(row.teacher_id || ''),
+      csvEscape(row.teacher_name),
+      csvEscape(row.teacher_email),
+      csvEscape(row.teacher_role),
+      csvEscape(row.teacher_band),
+      csvEscape(row.teacher_pro_bono ? 'SI' : 'NO'),
+      csvEscape(row.external_teacher_name),
+      csvEscape(row.materials_count),
+      csvEscape(row.created_at || ''),
+      csvEscape(row.updated_at || '')
+    ].join(',')).join('\n') + (rows.length ? '\n' : '');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="lezioni_calendario.csv"');
+    res.send('\uFEFF' + header + body);
+  } catch (error) {
+    console.error('Export lessons csv error', error);
+    res.status(500).json({ error: 'Unable to export lessons' });
   }
 });
 

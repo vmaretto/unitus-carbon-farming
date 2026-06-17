@@ -1720,6 +1720,7 @@
                 <div style="display: flex; gap: 8px;">
                     <button type="button" class="secondary" id="view-calendar" data-active="true">Calendario</button>
                     <button type="button" class="secondary" id="view-list">Lista</button>
+                    <button type="button" class="secondary" id="lessons-export-csv" title="Scarica tutte le lezioni in formato CSV">⬇ CSV lezioni</button>
                 </div>
             </div>
 
@@ -1866,6 +1867,21 @@
                         Ordine di visualizzazione
                         <input type="number" id="faculty-order" name="sortOrder" min="0" placeholder="Es. 1">
                     </label>
+                    <label>
+                        Fascia / inquadramento
+                        <input type="text" id="faculty-band" name="band" list="faculty-band-options" placeholder="Es. Professore Ordinario">
+                        <datalist id="faculty-band-options">
+                            <option value="Professore Ordinario"></option>
+                            <option value="Professore Associato"></option>
+                            <option value="Ricercatore RTD-A"></option>
+                            <option value="Ricercatore RTD-B"></option>
+                            <option value="Ricercatore Universitario"></option>
+                            <option value="Docente a contratto"></option>
+                            <option value="Cultore della materia"></option>
+                            <option value="Esperto esterno"></option>
+                            <option value="Professionista"></option>
+                        </datalist>
+                    </label>
                 </div>
                 <label style="margin-top: 18px;">
                     Biografia breve
@@ -1877,6 +1893,11 @@
                         <input type="checkbox" id="faculty-published">
                         <span class="slider"></span>
                         Visibile sul sito
+                    </label>
+                    <label class="switch">
+                        <input type="checkbox" id="faculty-pro-bono">
+                        <span class="slider"></span>
+                        A titolo gratuito
                     </label>
                     <button class="primary" type="submit">Salva docente</button>
                     <button class="secondary" type="button" id="faculty-reset" hidden>Annulla modifica</button>
@@ -1903,6 +1924,7 @@
                         <tr>
                             <th>Nome</th>
                             <th>Ruolo</th>
+                            <th>Fascia</th>
                             <th>Email / Login</th>
                             <th>Visibilità</th>
                             <th>Materiali Master</th>
@@ -1912,7 +1934,7 @@
                     </thead>
                     <tbody id="faculty-table-body">
                         <tr class="empty-state" data-empty-faculty>
-                            <td colspan="7">Non ci sono docenti configurati. Aggiungi il primo docente con il modulo qui sopra.</td>
+                            <td colspan="8">Non ci sono docenti configurati. Aggiungi il primo docente con il modulo qui sopra.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -4777,7 +4799,17 @@ Buono studio!</textarea>
             const selected = items.find((item) => item.id === selectedId) || items[0];
 
             status.textContent = selected ? `Focus su ${selected.name || 'docente'}` : 'Riepilogo faculty';
+            const bandChip = selected.band
+                ? `<span style="background: var(--blue-100, #dbeafe); color: var(--blue-700, #1d4ed8); padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;">Fascia: ${escapeHtml(selected.band)}</span>`
+                : `<span style="color: var(--gray-500); font-size: 0.8rem;">Fascia non indicata</span>`;
+            const proBonoChip = selected.isProBono
+                ? '<span style="background:#fef3c7; color:#92400e; padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;">A titolo gratuito</span>'
+                : '<span style="background:#dcfce7; color:#166534; padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;">Retribuito</span>';
             content.innerHTML = `
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                    ${bandChip}
+                    ${proBonoChip}
+                </div>
                 <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:10px;">
                     ${[
                         { label: 'Lezioni', value: selected.totalLessons || 0 },
@@ -4944,11 +4976,37 @@ Buono studio!</textarea>
             }
         });
 
+        document.getElementById('lessons-export-csv')?.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/admin/lessons.csv', {
+                    headers: {
+                        Authorization: adminToken ? `Bearer ${adminToken}` : ''
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error('Errore esportazione CSV lezioni');
+                }
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'lezioni_calendario.csv';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (error) {
+                showToast(error.message || 'Errore esportazione CSV lezioni', 'error');
+            }
+        });
+
         function resetFacultyForm() {
             const form = document.getElementById('faculty-form');
             form.reset();
             document.getElementById('faculty-published').checked = false;
             document.getElementById('faculty-profile-link').value = '';
+            document.getElementById('faculty-band').value = '';
+            document.getElementById('faculty-pro-bono').checked = false;
             document.getElementById('faculty-reset').hidden = true;
             state.editingFacultyId = null;
             const button = form.querySelector('button.primary');
@@ -8885,6 +8943,13 @@ Buono studio!</textarea>
                          <button class="action" onclick="window.open('/teachers/', '_blank')" style="font-size: 0.75rem; background: var(--green-500);">👁️ Pannello</button>` : 
                         `<button class="action" onclick="enableTeacherLogin('${item.id}')" style="font-size: 0.75rem; background: var(--orange-500);">🔓 Abilita Login</button>`;
                     
+                    const bandLabel = item.band
+                        ? `<span style="background: var(--blue-100, #dbeafe); color: var(--blue-700, #1d4ed8); padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">${escapeHtml(item.band)}</span>`
+                        : '<span style="color: var(--gray-400); font-size: 0.8rem;">—</span>';
+                    const proBonoBadge = item.isProBono
+                        ? '<div style="margin-top: 4px;"><span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 700;">A titolo gratuito</span></div>'
+                        : '';
+
                     row.innerHTML = `
                         <td>
                             <div style="font-weight: 600;">${item.name}</div>
@@ -8895,6 +8960,7 @@ Buono studio!</textarea>
                                 ${item.role || 'Docente'}
                             </span>
                         </td>
+                        <td>${bandLabel}${proBonoBadge}</td>
                         <td>${emailDisplay}</td>
                         <td>
                             <span style="background: ${item.isVisible ? 'var(--green-100)' : 'var(--gray-100)'}; color: ${item.isVisible ? 'var(--green-700)' : 'var(--gray-600)'}; padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
@@ -9037,7 +9103,9 @@ Buono studio!</textarea>
                 profileLink: document.getElementById('faculty-profile-link').value.trim() || null,
                 bio: document.getElementById('faculty-bio').value.trim() || null,
                 sortOrder: document.getElementById('faculty-order').value === '' ? null : Number(document.getElementById('faculty-order').value),
-                isPublished: document.getElementById('faculty-published').checked
+                isPublished: document.getElementById('faculty-published').checked,
+                band: document.getElementById('faculty-band').value.trim() || null,
+                isProBono: document.getElementById('faculty-pro-bono').checked
             };
 
             if (!payload.name) {
@@ -9082,6 +9150,8 @@ Buono studio!</textarea>
                 document.getElementById('faculty-bio').value = current.bio || '';
                 document.getElementById('faculty-order').value = current.sortOrder ?? '';
                 document.getElementById('faculty-published').checked = Boolean(current.isPublished);
+                document.getElementById('faculty-band').value = current.band || '';
+                document.getElementById('faculty-pro-bono').checked = Boolean(current.isProBono);
                 document.getElementById('faculty-reset').hidden = false;
                 document.getElementById('faculty-form').querySelector('button.primary').textContent = 'Aggiorna docente';
                 state.editingFacultyId = id;

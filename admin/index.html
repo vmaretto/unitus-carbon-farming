@@ -4827,6 +4827,17 @@ Buono studio!</textarea>
                     <div style="background:white; border:1px solid var(--gray-200); border-radius:14px; padding:14px; display:grid; gap:10px;">
                         <div style="font-size:0.9rem; font-weight:800; color:var(--green-900);">Stato manuale</div>
                         <label style="display:grid; gap:6px; font-size:0.85rem; color:var(--gray-700);">
+                            <span>Fascia / inquadramento</span>
+                            <input id="faculty-overview-band" type="text" list="faculty-band-options" value="${escapeHtml(selected.band || '')}" placeholder="Es. Professore Ordinario">
+                        </label>
+                        <label style="display:grid; gap:6px; font-size:0.85rem; color:var(--gray-700);">
+                            <span>A titolo gratuito</span>
+                            <select id="faculty-overview-pro-bono">
+                                <option value="false" ${selected.isProBono ? '' : 'selected'}>No (retribuito)</option>
+                                <option value="true" ${selected.isProBono ? 'selected' : ''}>Sì (gratuito)</option>
+                            </select>
+                        </label>
+                        <label style="display:grid; gap:6px; font-size:0.85rem; color:var(--gray-700);">
                             <span>Incarico ricevuto</span>
                             <select id="faculty-overview-appointment">
                                 <option value="">Da definire</option>
@@ -4926,12 +4937,16 @@ Buono studio!</textarea>
                 const appointmentRaw = document.getElementById('faculty-overview-appointment').value;
                 const receivedHoursRaw = document.getElementById('faculty-overview-received-hours').value;
                 const notes = document.getElementById('faculty-overview-notes').value;
+                const band = document.getElementById('faculty-overview-band').value.trim();
+                const proBonoRaw = document.getElementById('faculty-overview-pro-bono').value;
                 const updated = await apiRequest(`/api/admin/faculty-overview/${facultyId}`, {
                     method: 'PATCH',
                     body: JSON.stringify({
                         appointmentReceivedManual: appointmentRaw === '' ? null : appointmentRaw === 'true',
                         receivedHours: receivedHoursRaw === '' ? null : Number(receivedHoursRaw),
-                        notes
+                        notes,
+                        band: band || null,
+                        isProBono: proBonoRaw === 'true'
                     })
                 });
                 const index = Array.isArray(state.facultyOverviewData)
@@ -4943,8 +4958,21 @@ Buono studio!</textarea>
                         ...updated
                     };
                 }
+                if (Array.isArray(state.faculty)) {
+                    const facultyIndex = state.faculty.findIndex((item) => item.id === facultyId);
+                    if (facultyIndex >= 0) {
+                        state.faculty[facultyIndex] = {
+                            ...state.faculty[facultyIndex],
+                            band: updated.band ?? state.faculty[facultyIndex].band,
+                            isProBono: typeof updated.isProBono === 'boolean'
+                                ? updated.isProBono
+                                : state.faculty[facultyIndex].isProBono
+                        };
+                    }
+                }
                 renderFacultyOverview(state.facultyOverviewData);
                 setFacultyOverviewFocus(facultyId);
+                if (typeof loadFaculty === 'function') loadFaculty();
                 if (status) status.textContent = 'Dati manuali salvati.';
                 showToast('Dati faculty salvati');
             } catch (error) {

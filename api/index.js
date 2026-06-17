@@ -6113,6 +6113,24 @@ app.patch('/api/admin/faculty-overview/:id', requireAdmin, async (req, res) => {
     const appointmentReceivedManual = req.body?.appointmentReceivedManual;
     const receivedHours = req.body?.receivedHours;
     const notes = typeof req.body?.notes === 'string' ? req.body.notes.trim() : '';
+    const bandProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'band');
+    const proBonoProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'isProBono');
+
+    if (bandProvided || proBonoProvided) {
+      const facultyFields = {};
+      if (bandProvided) {
+        const raw = req.body.band;
+        facultyFields.band = typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+      }
+      if (proBonoProvided) {
+        facultyFields.is_pro_bono = Boolean(req.body.isProBono);
+      }
+      const { query, values } = buildUpdateQuery('faculty', facultyFields, facultyId);
+      const facultyUpdate = await pool.query(query, values);
+      if (!facultyUpdate.rows.length) {
+        return res.status(404).json({ error: 'Faculty member not found' });
+      }
+    }
 
     const { rows } = await pool.query(`
       INSERT INTO faculty_overview_overrides (faculty_id, appointment_received_manual, received_hours, notes, updated_at)
@@ -6131,7 +6149,16 @@ app.patch('/api/admin/faculty-overview/:id', requireAdmin, async (req, res) => {
       notes || null
     ]);
 
-    res.json(rows[0] || null);
+    const { rows: facultyRows } = await pool.query(
+      'SELECT band, is_pro_bono AS "isProBono" FROM faculty WHERE id = $1',
+      [facultyId]
+    );
+    const merged = {
+      ...(rows[0] || { faculty_id: facultyId }),
+      band: facultyRows[0]?.band || null,
+      isProBono: Boolean(facultyRows[0]?.isProBono)
+    };
+    res.json(merged);
   } catch (error) {
     console.error('Update faculty overview override error', error);
     res.status(500).json({ error: 'Unable to update faculty overview' });

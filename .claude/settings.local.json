@@ -26,7 +26,15 @@
       "Bash(git -C /Users/vmaretto/Projects/unitus-carbon-farming add:*)",
       "Bash(git -C /Users/vmaretto/Projects/unitus-carbon-farming commit -m \"$\\(cat <<''EOF''\nAdd background image texture to green sections in newsletter\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(grep:*)",
-      "Bash(vercel env ls:*)"
+      "Bash(vercel env ls:*)",
+      "Bash(node --test tests/calendar-feed.test.js)",
+      "Bash(node *)",
+      "Bash(head -4 /tmp/full_index.patch)",
+      "Read(//private/tmp/**)",
+      "Bash(sed -n '163,$p' /tmp/full_index.patch)",
+      "Bash(git apply *)",
+      "Bash(git push *)",
+      "Bash(git stash *)"
     ]
   }
 }

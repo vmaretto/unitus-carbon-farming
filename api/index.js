@@ -8900,6 +8900,112 @@ app.get('/api/lessons/:id', async (req, res) => {
   }
 });
 
+// Export CSV delle lezioni del calendario (solo admin). Accetta gli stessi
+// filtri opzionali di /api/lessons (module_id, teacher_id, status, month, year)
+// così l'export può rispecchiare la vista corrente; senza filtri esporta tutto.
+const LESSON_STATUS_LABELS = {
+  draft: 'Bozza',
+  confirmed: 'Confermata',
+  completed: 'Completata',
+  cancelled: 'Annullata'
+};
+
+app.get('/api/admin/lessons.csv', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  try {
+    const { module_id, teacher_id, status, month, year } = req.query;
+    const filters = [];
+    const values = [];
+
+    if (module_id) {
+      values.push(module_id);
+      filters.push(`l.module_id = $${values.length}`);
+    }
+    if (teacher_id) {
+      values.push(teacher_id);
+      filters.push(`l.teacher_id = $${values.length}`);
+    }
+    if (status) {
+      values.push(status);
+      filters.push(`l.status = $${values.length}`);
+    }
+    if (month && year) {
+      values.push(parseInt(month, 10));
+      filters.push(`EXTRACT(MONTH FROM l.start_datetime) = $${values.length}`);
+      values.push(parseInt(year, 10));
+      filters.push(`EXTRACT(YEAR FROM l.start_datetime) = $${values.length}`);
+    } else if (year) {
+      values.push(parseInt(year, 10));
+      filters.push(`EXTRACT(YEAR FROM l.start_datetime) = $${values.length}`);
+    }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+    const { rows } = await pool.query(`
+      SELECT l.start_datetime AS "startDatetime",
+             l.end_datetime AS "endDatetime",
+             l.duration_minutes AS "durationMinutes",
+             l.title,
+             m.name AS "moduleName",
+             COALESCE(f.name, l.external_teacher_name) AS "teacherName",
+             CASE WHEN f.id IS NULL AND l.external_teacher_name IS NOT NULL THEN 'esterno' ELSE 'interno' END AS "teacherType",
+             l.status,
+             l.location_physical AS "locationPhysical",
+             l.location_remote AS "locationRemote",
+             l.notes,
+             (SELECT COUNT(*)::int FROM attendance a WHERE a.lesson_id = l.id) AS "attendanceCount"
+      FROM lessons l
+      LEFT JOIN modules m ON l.module_id = m.id
+      LEFT JOIN faculty f ON l.teacher_id = f.id
+      ${where}
+      ORDER BY l.start_datetime ASC
+    `, values);
+
+    const fmtDate = (value) => {
+      if (!value) return '';
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' });
+    };
+    const fmtTime = (value) => {
+      if (!value) return '';
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+    };
+
+    let csv = 'data,ora_inizio,ora_fine,titolo,modulo,docente,tipo_docente,ore,stato,completata,luogo_fisico,luogo_remoto,presenze,note\n';
+    rows.forEach((row) => {
+      const statusKey = row.status || 'draft';
+      const hours = row.durationMinutes ? (Number(row.durationMinutes) / 60).toFixed(1).replace('.', ',') : '';
+      csv += [
+        csvEscape(fmtDate(row.startDatetime)),
+        csvEscape(fmtTime(row.startDatetime)),
+        csvEscape(fmtTime(row.endDatetime)),
+        csvEscape(row.title),
+        csvEscape(row.moduleName || ''),
+        csvEscape(row.teacherName || ''),
+        csvEscape(row.teacherType || ''),
+        csvEscape(hours),
+        csvEscape(LESSON_STATUS_LABELS[statusKey] || statusKey),
+        csvEscape(statusKey === 'completed' ? 'SI' : 'NO'),
+        csvEscape(row.locationPhysical || ''),
+        csvEscape(row.locationRemote || ''),
+        csvEscape(row.attendanceCount ?? 0),
+        csvEscape(row.notes || '')
+      ].join(',') + '\n';
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="calendario_lezioni.csv"');
+    res.send('﻿' + csv);
+  } catch (error) {
+    console.error('Export lessons csv error', error);
+    res.status(500).json({ error: 'Unable to export lessons' });
+  }
+});
+
 app.get('/api/calendar/feed.ics', async (req, res) => {
   if (!ensurePool(res)) return;
 

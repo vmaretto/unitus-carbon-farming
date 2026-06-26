@@ -41,6 +41,11 @@
         .btn-ghost { background: white; color: var(--green-700); border: 1px solid var(--gray-200); }
         .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
         .button-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .segmented { display: inline-flex; border: 1px solid var(--gray-200); border-radius: 10px; overflow: hidden; width: max-content; background: #fafafa; }
+        .segmented button { border: 0; background: transparent; color: var(--gray-700); padding: 9px 13px; font: inherit; font-size: 0.82rem; font-weight: 800; cursor: pointer; }
+        .segmented button.active { background: var(--green-100); color: var(--green-700); }
+        .article-fields { display: none; gap: 10px; }
+        .article-fields.active { display: grid; }
         .status { min-height: 20px; font-size: 0.86rem; color: var(--gray-500); }
         .status.ok { color: var(--green-700); }
         .status.error { color: var(--red-700); }
@@ -154,6 +159,13 @@
         .post-author strong { display: block; color: var(--green-900); overflow-wrap: anywhere; }
         .post-author span { display: block; color: var(--gray-500); font-size: 0.78rem; margin-top: 2px; }
         .post-body { color: var(--gray-900); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .article-card { border: 1px solid var(--gray-200); border-radius: 14px; overflow: hidden; background: #fbfdfb; display: grid; gap: 0; }
+        .article-card img { width: 100%; max-height: 340px; object-fit: cover; display: block; background: #e5efe8; }
+        .article-content { padding: 16px; display: grid; gap: 9px; }
+        .article-kicker { color: var(--green-700); font-size: 0.72rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; }
+        .article-title { color: var(--green-900); font-size: 1.25rem; line-height: 1.25; font-weight: 900; }
+        .article-abstract { color: var(--gray-700); font-size: 0.95rem; line-height: 1.5; }
+        .article-body { color: var(--gray-900); line-height: 1.55; white-space: pre-wrap; }
         .post-link { border: 1px solid var(--gray-200); border-radius: 12px; padding: 10px 12px; color: var(--green-700); text-decoration: none; font-weight: 700; overflow-wrap: anywhere; }
         .post-actions { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
         .btn-link { border: 0; background: none; color: var(--red-700); cursor: pointer; font: inherit; font-size: 0.82rem; font-weight: 700; padding: 0; }
@@ -311,6 +323,18 @@
                 <section class="card">
                     <h2>Feed</h2>
                     <form id="post-form" class="post-composer">
+                        <div class="segmented" role="group" aria-label="Tipo contenuto">
+                            <button class="active" id="post-mode-update" type="button" data-post-mode="update">Aggiornamento</button>
+                            <button id="post-mode-article" type="button" data-post-mode="article">Articolo</button>
+                        </div>
+                        <div class="article-fields" id="article-fields">
+                            <label>Titolo articolo
+                                <input id="article-title" maxlength="180" placeholder="Titolo dell'articolo">
+                            </label>
+                            <label>Abstract
+                                <textarea id="article-abstract" maxlength="600" placeholder="Sintesi breve dell'articolo."></textarea>
+                            </label>
+                        </div>
                         <label>Condividi un aggiornamento
                             <textarea id="post-body" maxlength="1600" placeholder="Condividi un progetto, una domanda, un'opportunità o una riflessione utile al network."></textarea>
                         </label>
@@ -807,6 +831,27 @@
             }).join('');
         }
 
+        function encodeArticlePost({ title, abstract, body }) {
+            return [
+                '[article]',
+                `title: ${String(title || '').trim()}`,
+                `abstract: ${String(abstract || '').trim()}`,
+                '',
+                String(body || '').trim()
+            ].join('\n').trim();
+        }
+
+        function parseArticlePost(body) {
+            const text = String(body || '');
+            if (!text.startsWith('[article]\n')) return null;
+            const lines = text.split('\n');
+            const title = (lines.find((line) => line.startsWith('title: ')) || '').replace(/^title:\s*/, '').trim();
+            const abstract = (lines.find((line) => line.startsWith('abstract: ')) || '').replace(/^abstract:\s*/, '').trim();
+            const firstBlank = lines.findIndex((line, index) => index > 0 && !line.trim());
+            const content = lines.slice(firstBlank >= 0 ? firstBlank + 1 : 3).join('\n').trim();
+            return { title, abstract, body: content };
+        }
+
         function renderPosts() {
             if (!posts.length) {
                 feedEl.innerHTML = '<div class="empty">Ancora nessun post. Condividi il primo aggiornamento con il network.</div>';
@@ -825,6 +870,7 @@
                     ? `<img src="${escapeHtml(author.profilePhotoUrl)}" alt="">`
                     : escapeHtml(initials(avatarProfile));
                 const tags = (post.tags || []).map((tag) => `<span class="chip">${escapeHtml(tag)}</span>`).join('');
+                const article = parseArticlePost(post.body);
                 const linkPreview = post.linkPreview
                     ? `<a class="link-preview ${post.linkPreview.imageUrl ? '' : 'no-image'}" href="${escapeHtml(post.linkUrl || '#')}" target="_blank" rel="noopener">
                         ${post.linkPreview.imageUrl ? `<img class="link-preview-image" src="${escapeHtml(post.linkPreview.imageUrl)}" alt="">` : ''}
@@ -837,6 +883,18 @@
                     : (post.linkUrl ? `<a class="post-link" href="${escapeHtml(post.linkUrl)}" target="_blank" rel="noopener">${escapeHtml(post.linkTitle || post.linkUrl)}</a>` : '');
                 const media = post.mediaUrl
                     ? `<div class="post-media"><img src="${escapeHtml(post.mediaUrl)}" alt="${escapeHtml(post.mediaAlt || '')}"></div>`
+                    : '';
+                const articleCard = article
+                    ? `<article class="article-card">
+                        ${post.mediaUrl ? `<img src="${escapeHtml(post.mediaUrl)}" alt="${escapeHtml(article.title || post.mediaAlt || '')}">` : ''}
+                        <div class="article-content">
+                            <div class="article-kicker">Articolo</div>
+                            ${article.title ? `<div class="article-title">${escapeHtml(article.title)}</div>` : ''}
+                            ${article.abstract ? `<div class="article-abstract">${escapeHtml(article.abstract)}</div>` : ''}
+                            ${article.body ? `<div class="article-body">${escapeHtml(article.body)}</div>` : ''}
+                            ${post.linkUrl ? `<a class="featured-link" href="${escapeHtml(post.linkUrl)}" target="_blank" rel="noopener">${escapeHtml(post.linkTitle || 'Leggi fonte')}</a>` : ''}
+                        </div>
+                    </article>`
                     : '';
                 const deleteButton = post.canDelete
                     ? `<button class="btn-link delete-post-btn" type="button" data-post-id="${escapeHtml(post.id)}">Elimina</button>`
@@ -854,9 +912,7 @@
                                 <span>${escapeHtml([subtitle, formatDate(post.createdAt)].filter(Boolean).join(' · '))}</span>
                             </div>
                         </div>
-                        <div class="post-body">${escapeHtml(post.body)}</div>
-                        ${media}
-                        ${linkPreview}
+                        ${article ? articleCard : `<div class="post-body">${escapeHtml(post.body)}</div>${media}${linkPreview}`}
                         <div class="post-engagement">
                             ${likeButton}
                             ${commentButton}
@@ -1456,24 +1512,51 @@
         document.getElementById('cover-image-file').addEventListener('change', () => handleFileUpload('cover-image-url', 'cover-image-file', 'network/cover-images'));
         document.getElementById('post-media-file').addEventListener('change', () => handleFileUpload('post-media-url', 'post-media-file', 'network/post-media'));
 
+        let currentPostMode = 'update';
+        function setPostMode(mode) {
+            currentPostMode = mode === 'article' ? 'article' : 'update';
+            document.querySelectorAll('[data-post-mode]').forEach((button) => {
+                button.classList.toggle('active', button.dataset.postMode === currentPostMode);
+            });
+            document.getElementById('article-fields').classList.toggle('active', currentPostMode === 'article');
+            document.getElementById('post-body').placeholder = currentPostMode === 'article'
+                ? "Scrivi il corpo dell'articolo."
+                : "Condividi un progetto, una domanda, un'opportunità o una riflessione utile al network.";
+        }
+        document.querySelectorAll('[data-post-mode]').forEach((button) => {
+            button.addEventListener('click', () => setPostMode(button.dataset.postMode));
+        });
+
         document.getElementById('post-form').addEventListener('submit', async (event) => {
             event.preventDefault();
             const publishBtn = document.getElementById('publish-post-btn');
             publishBtn.disabled = true;
             try {
+                const postBody = document.getElementById('post-body').value;
+                const articleTitle = document.getElementById('article-title').value;
+                const articleAbstract = document.getElementById('article-abstract').value;
+                if (currentPostMode === 'article' && !articleTitle.trim()) {
+                    throw new Error("Inserisci il titolo dell'articolo.");
+                }
+                const body = currentPostMode === 'article'
+                    ? encodeArticlePost({ title: articleTitle, abstract: articleAbstract, body: postBody })
+                    : postBody;
                 const created = await api('/api/lms/network/posts', {
                     method: 'POST',
                     body: JSON.stringify({
-                        body: document.getElementById('post-body').value,
+                        body,
                         linkUrl: document.getElementById('post-link-url').value,
-                        linkTitle: document.getElementById('post-link-title').value,
+                        linkTitle: document.getElementById('post-link-title').value || (currentPostMode === 'article' ? articleTitle : ''),
                         mediaUrl: document.getElementById('post-media-url').value,
-                        mediaAlt: document.getElementById('post-body').value.slice(0, 120),
-                        tags: splitList(document.getElementById('post-tags').value)
+                        mediaAlt: (currentPostMode === 'article' ? articleTitle : postBody).slice(0, 120),
+                        tags: currentPostMode === 'article'
+                            ? Array.from(new Set(['articolo', ...splitList(document.getElementById('post-tags').value)]))
+                            : splitList(document.getElementById('post-tags').value)
                     })
                 });
                 posts = [created, ...posts];
                 document.getElementById('post-form').reset();
+                setPostMode('update');
                 postComments.clear();
                 renderPosts();
                 statusEl.textContent = 'Post pubblicato nel network.';

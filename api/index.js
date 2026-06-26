@@ -16,6 +16,7 @@ const { OpenAI } = require('openai');
 const { PDFDocument, rgb, degrees, StandardFonts } = require('pdf-lib');
 const puppeteer = require('puppeteer');
 const mammoth = require('mammoth');
+const pdfParse = require('pdf-parse');
 const { v2: cloudinary } = require('cloudinary');
 const { parseBlogPostsFromDocxBuffer, slugify } = require('./blog-import');
 const { buildCalendarFeed } = require('./calendar-ics');
@@ -268,6 +269,25 @@ async function prepareCompressibleMaterialUpload(file, finalLimitBytes, uploadLa
   return { buffer: fileBuffer, compressed };
 }
 
+async function extractNetworkImportText(file) {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  if (ext === '.pdf') {
+    const parsed = await pdfParse(file.buffer);
+    return String(parsed.text || '').trim();
+  }
+  if (ext === '.docx') {
+    const { value } = await mammoth.extractRawText({ buffer: file.buffer });
+    return String(value || '').trim();
+  }
+  if (ext === '.doc') {
+    return String(file.buffer.toString('utf8') || '').trim();
+  }
+  if (ext === '.txt' || ext === '.md') {
+    return String(file.buffer.toString('utf8') || '').trim();
+  }
+  return '';
+}
+
 app.post('/api/blob/client-token', requireAdminOrTeacher, async (req, res) => {
   try {
     const pathname = String(req.body?.pathname || '').trim().replace(/^\/+/, '');
@@ -353,6 +373,18 @@ const uploadAttendanceFile = multer({
       return;
     }
     cb(new Error('Carica un file .csv o .xlsx valido'));
+  }
+});
+const uploadNetworkImportFile = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (['.pdf', '.doc', '.docx', '.txt', '.md'].includes(ext)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Carica un file PDF, DOC, DOCX, TXT o MD valido'));
   }
 });
 const BUILD_VERSION = '2026-04-10-v25-QUIZ-CONTENT-EXTRACTION'; // Per debug deploy
@@ -11114,6 +11146,23 @@ app.put('/api/lms/network/profile', requireStudent, requireNonGuest, async (req,
   } catch (error) {
     console.error('Update network profile error:', error);
     res.status(500).json({ error: 'Errore nel salvataggio profilo network' });
+  }
+});
+
+app.post('/api/lms/network/import-profile-file', requireStudent, requireNonGuest, uploadNetworkImportFile.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: 'Nessun file caricato' });
+    }
+    const text = await extractNetworkImportText(file);
+    if (!text) {
+      return res.status(400).json({ error: 'Impossibile estrarre testo dal file' });
+    }
+    res.json({ text });
+  } catch (error) {
+    console.error('Network import file error:', error);
+    res.status(500).json({ error: error.message || 'Errore nell import del file' });
   }
 });
 

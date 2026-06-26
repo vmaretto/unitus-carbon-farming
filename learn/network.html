@@ -191,6 +191,9 @@
                     <label>Testo copiato dal profilo LinkedIn (per compilare i campi)
                         <textarea id="linkedin-import-text" placeholder="Incolla qui headline, informazioni, esperienza e competenze copiate dal tuo profilo LinkedIn."></textarea>
                     </label>
+                    <label>Carica PDF o CV
+                        <input id="linkedin-import-file" type="file" accept=".pdf,.doc,.docx,.txt,.md,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown">
+                    </label>
                     <div class="button-row">
                         <button class="btn btn-secondary" id="linkedin-import-btn" type="button">Compila campi</button>
                         <span class="hint">L'import non pubblica nulla finché non premi Salva profilo.</span>
@@ -1167,10 +1170,33 @@
             return result;
         }
 
-        function applyLinkedinImport() {
+        async function extractProfileTextFromFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            const response = await fetch('/api/lms/network/import-profile-file', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
+                body: formData
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data.error || `Import fallito (${response.status})`);
+            }
+            return data;
+        }
+
+        async function applyLinkedinImport() {
             const importText = document.getElementById('linkedin-import-text').value;
+            const importFile = document.getElementById('linkedin-import-file')?.files?.[0];
+            let sourceText = importText;
+            if (importFile) {
+                const fileImported = await extractProfileTextFromFile(importFile);
+                sourceText = [sourceText, fileImported.text || ''].filter(Boolean).join('\n');
+            }
             const imported = parseLinkedinImport(
-                importText,
+                sourceText,
                 document.getElementById('linkedin-import-url').value
             );
             if (imported.linkedinUrl) document.getElementById('linkedin-url').value = imported.linkedinUrl;
@@ -1190,8 +1216,8 @@
             // Senza testo incollato non c'è nulla da analizzare: LinkedIn non può
             // essere letto dall'URL (blocca l'accesso automatico). Guidiamo l'utente
             // invece di dargli un falso "importato".
-            if (!importText.trim()) {
-                statusEl.textContent = 'Link LinkedIn salvato nel profilo. Per compilare automaticamente headline, esperienza e competenze, apri il tuo profilo su LinkedIn, seleziona e copia il testo della pagina, e incollalo nella casella "Testo copiato dal profilo LinkedIn".';
+            if (!importText.trim() && !importFile) {
+                statusEl.textContent = 'Link LinkedIn salvato nel profilo. Puoi anche incollare il testo del profilo oppure caricare un PDF/CV per compilare automaticamente i campi.';
                 statusEl.className = 'status';
             } else {
                 statusEl.textContent = 'Informazioni LinkedIn importate. Controlla i campi e salva il profilo.';

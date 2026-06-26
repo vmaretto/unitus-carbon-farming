@@ -2738,11 +2738,11 @@ app.get('/api/teachers/lessons', requireTeacher, async (req, res) => {
 app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'), async (req, res) => {
   if (!ensurePool(res)) return;
   
-  const { lesson_id, title, description } = req.body;
+  const { lesson_id, title, description, url } = req.body;
   const file = req.file;
   
-  if (!file || !lesson_id || !title) {
-    return res.status(400).json({ error: 'File, lesson_id e title sono obbligatori' });
+  if ((!file && !url) || !lesson_id || !title) {
+    return res.status(400).json({ error: 'File o URL, lesson_id e title sono obbligatori' });
   }
   
   try {
@@ -2766,32 +2766,40 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
       return res.status(403).json({ error: 'Non hai accesso a questa lezione' });
     }
 
-    const materialUpload = await prepareCompressibleMaterialUpload(file, MATERIALS_UPLOAD_FINAL_MAX_BYTES, 'materiali docente');
-    if (materialUpload.tooLarge) {
-      return res.status(413).json({ error: materialUpload.error });
-    }
-    
-    // Upload to Vercel Blob — con retry: il put fallisce a volte in modo
-    // transitorio su cold start / rete, ed era la causa di 500 intermittenti.
-    let url, pathname;
-    {
-      let lastErr;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          ({ url, pathname } = await put(file.originalname, materialUpload.buffer, {
-            access: 'public',
-            addRandomSuffix: true,
-            token: process.env.BLOB_READ_WRITE_TOKEN
-          }));
-          lastErr = null;
-          break;
-        } catch (putErr) {
-          lastErr = putErr;
-          console.warn(`Blob put attempt ${attempt}/3 failed:`, putErr && putErr.message);
-          await new Promise(r => setTimeout(r, 400 * attempt));
-        }
+    let storedUrl = String(url || '').trim();
+    let originalName = file ? file.originalname : storedUrl;
+    let mimeType = file ? file.mimetype : 'text/uri-list';
+
+    if (file) {
+      const materialUpload = await prepareCompressibleMaterialUpload(file, MATERIALS_UPLOAD_FINAL_MAX_BYTES, 'materiali docente');
+      if (materialUpload.tooLarge) {
+        return res.status(413).json({ error: materialUpload.error });
       }
-      if (lastErr) throw lastErr;
+
+      // Upload to Vercel Blob — con retry: il put fallisce a volte in modo
+      // transitorio su cold start / rete, ed era la causa di 500 intermittenti.
+      let blobUrl, pathname;
+      {
+        let lastErr;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            ({ url: blobUrl, pathname } = await put(file.originalname, materialUpload.buffer, {
+              access: 'public',
+              addRandomSuffix: true,
+              contentType: file.mimetype,
+              token: process.env.BLOB_READ_WRITE_TOKEN
+            }));
+            lastErr = null;
+            break;
+          } catch (putErr) {
+            lastErr = putErr;
+            console.warn(`Blob put attempt ${attempt}/3 failed:`, putErr && putErr.message);
+            await new Promise(r => setTimeout(r, 400 * attempt));
+          }
+        }
+        if (lastErr) throw lastErr;
+      }
+      storedUrl = blobUrl;
     }
 
     // Save to materials_pending
@@ -2800,9 +2808,9 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
       const insertPayload = buildMaterialsPendingInsertPayload({
         teacherFacultyId: req.teacher.id,
         lessonId: lesson_id,
-        url,
-        fileOriginalName: file.originalname,
-        fileMimeType: file.mimetype,
+        url: storedUrl,
+        fileOriginalName: originalName,
+        fileMimeType: mimeType,
         title,
         description
       });
@@ -2813,15 +2821,15 @@ app.post('/api/teachers/upload', requireTeacher, uploadMaterials.single('file'),
          (faculty_id, lesson_id, file_url, file_name, file_type, status)
          VALUES ($1, $2, $3, $4, $5, 'pending')
          RETURNING id`,
-        [req.teacher.id, lesson_id, url, file.originalname, file.mimetype]
+        [req.teacher.id, lesson_id, storedUrl, originalName, mimeType]
       ));
     }
     
     res.json({
       id: materials[0].id,
       message: 'Materiale caricato con successo. In attesa di approvazione.',
-      file_url: url,
-      filename: file.originalname
+      file_url: storedUrl,
+      filename: originalName
     });
     
   } catch (error) {
@@ -7507,26 +7515,20 @@ app.get('/api/resources', async (req, res) => {
              r.url, r.thumbnail_url AS "thumbnailUrl", r.file_size_bytes AS "fileSizeBytes",
              r.sort_order AS "sortOrder", r.is_published AS "isPublished",
              r.teacher_id AS "teacherId",
-             -- Per le risorse quiz LMS la lezione è collegata via quizzes.lms_lesson_id;
-             -- in tal caso deriviamo la lezione/modulo dalla lezione calendario collegata
-             COALESCE(r.lesson_id, ql.id) AS "lessonId",
+             r.lesson_id AS "lessonId",
              r.source, r.tags,
              r.extraction_status AS "extractionStatus", r.extracted_at AS "extractedAt",
              f.name AS "teacherName",
-             COALESCE(l.title, ql.title) AS "lessonTitle",
-             COALESCE(l.start_datetime, ql.start_datetime) AS "lessonStartDatetime",
-             COALESCE(m.name, qm.name) AS "moduleName",
+             l.title AS "lessonTitle",
+             l.start_datetime AS "lessonStartDatetime",
+             m.name AS "moduleName",
              r.created_at AS "createdAt", r.updated_at AS "updatedAt"
       FROM resources r
       LEFT JOIN faculty f ON f.id = r.teacher_id
       LEFT JOIN lessons l ON l.id = r.lesson_id
       LEFT JOIN modules m ON m.id = l.module_id
-      LEFT JOIN quizzes q ON q.resource_id = r.id
-      LEFT JOIN lms_lessons qll ON qll.id = q.lms_lesson_id
-      LEFT JOIN lessons ql ON ql.id = qll.calendar_lesson_id
-      LEFT JOIN modules qm ON qm.id = COALESCE(ql.module_id, qll.lms_module_id, q.lms_module_id)
       ${where}
-      ORDER BY r.sort_order NULLS LAST, COALESCE(l.start_datetime, ql.start_datetime) NULLS LAST, r.created_at DESC
+      ORDER BY r.sort_order NULLS LAST, l.start_datetime NULLS LAST, r.created_at DESC
     `;
 
     const { rows } = await pool.query(sql, values);
@@ -9687,8 +9689,23 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
         return false;
       });
 
-      lesson.publicMaterials = publicMaterials;
-      lesson.materials = publicMaterials;
+      const mergedPublicMaterials = [
+        ...publicMaterials,
+        ...publishedResources.map((resource) => ({
+          id: resource.id,
+          title: resource.title,
+          url: resource.url,
+          resourceType: resource.resourceType,
+          description: resource.description,
+          teacherName: resource.teacherName,
+          isPublished: resource.isPublished,
+          reviewStatus: resource.reviewStatus,
+          source: 'calendar_lesson'
+        }))
+      ];
+
+      lesson.publicMaterials = mergedPublicMaterials;
+      lesson.materials = mergedPublicMaterials;
 
       if (!lesson.linkedResources.length) {
         const fallbackTitles = [lesson.calendarLessonTitle, lesson.title].filter(Boolean);

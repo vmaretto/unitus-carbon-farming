@@ -2221,7 +2221,7 @@
                     <label style="grid-column: 1 / -1;">
                         URL risorsa *
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <input type="text" id="resource-url" name="url" required placeholder="https://vimeo.com/... o carica un file" style="flex: 1;">
+                            <input type="url" id="resource-url" name="url" required placeholder="https://vimeo.com/... o carica un file" style="flex: 1;">
                             <label style="margin: 0; padding: 8px 16px; background: var(--green-500); color: white; border-radius: 8px; cursor: pointer; white-space: nowrap;">
                                 📁 Carica file
                                 <input type="file" id="resource-file-input" style="display: none;" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.srt,.vtt,.mp3,.mp4,.m4a,.jpg,.jpeg,.png,.gif">
@@ -10554,7 +10554,7 @@ Buono studio!</textarea>
                                 <option value="link">🔗 Link</option>
                             </select>
                             <input type="text" data-material-name placeholder="Nome materiale" style="flex: 1; min-width: 120px;">
-                            <input type="text" data-material-url placeholder="URL o carica file" style="flex: 2; min-width: 150px;">
+                            <input type="url" data-material-url placeholder="URL o carica file" style="flex: 2; min-width: 150px;">
                             <label style="margin: 0; padding: 6px 12px; background: var(--green-500); color: white; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
                                 📁
                                 <input type="file" data-material-file style="display: none;" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.srt,.vtt,.mp3,.mp4,.m4a,.jpg,.jpeg,.png,.gif">
@@ -10746,7 +10746,8 @@ Buono studio!</textarea>
                 if (!url && !form.querySelector('[data-material-file]').files[0]) { 
                     showToast('Inserisci URL o carica un file', 'error'); return; 
                 }
-                currentMaterials.push({ type, name, url, sessionOnly: true });
+                const normalizedType = type === 'link' || /^https?:\/\//i.test(url) ? (type || 'link') : type;
+                currentMaterials.push({ type: normalizedType, name, url, sessionOnly: true });
                 renderMaterialsList();
                 nameInput.value = '';
                 urlInput.value = '';

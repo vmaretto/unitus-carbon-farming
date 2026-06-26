@@ -414,11 +414,15 @@
                     <label>Descrizione (opzionale)</label>
                     <textarea id="upload-description" rows="2" placeholder="Breve descrizione del contenuto"></textarea>
                 </div>
+                <div class="form-group">
+                    <label>URL materiale esterno (opzionale)</label>
+                    <input type="url" id="upload-url" placeholder="https://...">
+                </div>
                 <div class="upload-zone" id="upload-zone">
                     <p>📁 Trascina qui i file o clicca per selezionare</p>
-                    <p style="font-size: 13px; color: var(--gray-500);">PDF, DOC, DOCX, PPT, PPTX (max 4MB)</p>
+                    <p style="font-size: 13px; color: var(--gray-500);">PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, CSV, TXT, MD, SRT, VTT, MP3, MP4, M4A, JPG, PNG, GIF (max 4MB)</p>
                 </div>
-                <input type="file" id="file-input" class="hidden" accept=".pdf,.doc,.docx,.ppt,.pptx" multiple>
+                <input type="file" id="file-input" class="hidden" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.srt,.vtt,.mp3,.mp4,.m4a,.jpg,.jpeg,.png,.gif" multiple>
                 <div id="files-preview"></div>
                 <div style="display: flex; gap: 12px; margin-top: 16px;">
                     <button type="button" id="upload-cancel" class="btn-sm btn-gray" style="flex: 1;">Annulla</button>
@@ -1747,17 +1751,30 @@
 
         document.getElementById('upload-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (!fileInput.files.length) { showToast('Seleziona un file', 'error'); return; }
+            const uploadUrl = document.getElementById('upload-url').value.trim();
+            if (!fileInput.files.length && !uploadUrl) { showToast('Seleziona un file o inserisci un URL', 'error'); return; }
             const btn = document.getElementById('upload-submit');
             btn.disabled = true; btn.textContent = 'Caricamento...';
             try {
-                for (const file of fileInput.files) {
-                    const fd = new FormData();
-                    fd.append('file', file);
-                    fd.append('lesson_id', document.getElementById('upload-lesson-id').value);
-                    fd.append('title', document.getElementById('upload-title').value);
-                    fd.append('description', document.getElementById('upload-description').value);
-                    await apiCall('/api/teachers/upload', { method: 'POST', body: fd, headers: {} });
+                if (fileInput.files.length) {
+                    for (const file of fileInput.files) {
+                        const fd = new FormData();
+                        fd.append('file', file);
+                        fd.append('lesson_id', document.getElementById('upload-lesson-id').value);
+                        fd.append('title', document.getElementById('upload-title').value);
+                        fd.append('description', document.getElementById('upload-description').value);
+                        await apiCall('/api/teachers/upload', { method: 'POST', body: fd, headers: {} });
+                    }
+                } else {
+                    await apiCall('/api/teachers/upload', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            lesson_id: document.getElementById('upload-lesson-id').value,
+                            title: document.getElementById('upload-title').value,
+                            description: document.getElementById('upload-description').value,
+                            url: uploadUrl
+                        })
+                    });
                 }
                 showToast('Materiali caricati! In attesa di approvazione.', 'success');
                 closeUploadModal();

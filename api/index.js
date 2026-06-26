@@ -105,20 +105,20 @@ async function stampPdfWatermark(inputBuffer, { name, email, dateStr }) {
     const { width, height } = page.getSize();
 
     // Filigrana diagonale ripetuta, molto tenue
-    const wmSize = Math.max(12, Math.min(20, Math.round(width / 38)));
-    const step = 230;
+    const wmSize = Math.max(14, Math.min(24, Math.round(width / 32)));
+    const step = 190;
     for (let y = 40; y < height + step; y += step) {
       for (let x = -40; x < width + step; x += step * 1.3) {
         page.drawText(tag || 'Master Carbon Farming', {
           x, y, size: wmSize, font,
-          color: rgb(0.6, 0.6, 0.6), opacity: 0.12,
+          color: rgb(0.45, 0.45, 0.45), opacity: 0.22,
           rotate: degrees(35)
         });
       }
     }
 
     // Banda chiara + clausola a piè pagina
-    page.drawRectangle({ x: 0, y: 0, width, height: 24, color: rgb(0.96, 0.97, 0.96), opacity: 0.9 });
+    page.drawRectangle({ x: 0, y: 0, width, height: 26, color: rgb(0.94, 0.96, 0.94), opacity: 0.95 });
     let line = footer;
     const fSize = 7;
     const maxW = width - 24;

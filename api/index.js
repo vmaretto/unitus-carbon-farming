@@ -134,68 +134,103 @@ async function stampPdfWatermark(inputBuffer, { name, email, dateStr }) {
 }
 
 async function convertDocxBufferToPdfBuffer(docxBuffer, { title = 'Documento', name = '', email = '' } = {}) {
-  const { value: bodyHtml } = await mammoth.convertToHtml({ buffer: docxBuffer }, {
-    convertImage: mammoth.images.inline(async (element) => {
-      try {
-        const imageBuffer = await element.read('base64');
-        return {
-          src: `data:${element.contentType};base64,${imageBuffer}`
-        };
-      } catch (_error) {
-        return { src: '' };
-      }
-    })
-  });
+  const { value: bodyHtml } = await mammoth.convertToHtml({ buffer: docxBuffer });
+  const $ = cheerio.load(bodyHtml || '');
+  const pdfkit = require('pdfkit');
 
   const safeTitle = String(title || 'Documento').replace(/[<>&"]/g, '');
   const safeName = toWinAnsi([name, email].filter(Boolean).join(' - '));
-  const html = `
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <style>
-          @page { size: A4; margin: 22mm 16mm 24mm; }
-          body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; line-height: 1.45; color: #1f2937; }
-          h1, h2, h3, h4 { color: #14532d; margin: 0.9em 0 0.35em; }
-          p { margin: 0 0 0.75em; }
-          ul, ol { margin: 0 0 0.8em 1.3em; }
-          table { width: 100%; border-collapse: collapse; margin: 0 0 1em; }
-          td, th { border: 1px solid #d1d5db; padding: 6px 8px; vertical-align: top; }
-          img { max-width: 100%; height: auto; }
-          .doc-header { margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; }
-          .doc-title { font-size: 18pt; font-weight: 700; color: #14532d; margin: 0 0 4px; }
-          .doc-meta { font-size: 9pt; color: #6b7280; }
-          .watermark-note { position: fixed; bottom: 8mm; left: 16mm; right: 16mm; font-size: 8pt; color: #4b5563; }
-        </style>
-      </head>
-      <body>
-        <div class="doc-header">
-          <div class="doc-title">${safeTitle}</div>
-          <div class="doc-meta">${safeName || ''}</div>
-        </div>
-        <main>${bodyHtml || '<p></p>'}</main>
-        <div class="watermark-note">${DOWNLOAD_LICENSE_CLAUSE}</div>
-      </body>
-    </html>
-  `;
+  const doc = new pdfkit({ size: 'A4', margin: 48, bufferPages: true, autoFirstPage: true });
+  const chunks = [];
 
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-  try {
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdf = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '22mm', right: '16mm', bottom: '24mm', left: '16mm' }
-    });
-    return Buffer.from(pdf);
-  } finally {
-    await browser.close();
+  doc.on('data', (chunk) => chunks.push(chunk));
+
+  const writeStyledText = (text, opts = {}) => {
+    const fontSize = opts.fontSize || 11;
+    const color = opts.color || '#1f2937';
+    const bold = !!opts.bold;
+    const indent = opts.indent || 0;
+    const spacingAfter = opts.spacingAfter ?? 6;
+    const spacingBefore = opts.spacingBefore ?? 0;
+
+    if (spacingBefore) doc.moveDown(spacingBefore / fontSize);
+    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica')
+      .fontSize(fontSize)
+      .fillColor(color)
+      .text(toWinAnsi(text), { width: 500 - indent, indent, paragraphGap: spacingAfter, lineGap: 2 });
+    if (spacingAfter) doc.moveDown(spacingAfter / fontSize);
+  };
+
+  const children = $('body').children().toArray();
+  doc.font('Helvetica-Bold').fontSize(18).fillColor('#14532d').text(safeTitle, { align: 'left' });
+  if (safeName) {
+    doc.moveDown(0.35);
+    doc.font('Helvetica').fontSize(9).fillColor('#6b7280').text(safeName);
   }
+  doc.moveDown(0.8);
+
+  const renderNode = (node) => {
+    const tag = (node.tagName || '').toLowerCase();
+    const el = $(node);
+    if (!tag) return;
+    if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4') {
+      const size = { h1: 17, h2: 15, h3: 13, h4: 12 }[tag];
+      writeStyledText(el.text().trim(), { fontSize: size, bold: true, color: '#14532d', spacingBefore: 6, spacingAfter: 4 });
+      return;
+    }
+    if (tag === 'p') {
+      const text = el.text().replace(/\s+/g, ' ').trim();
+      if (text) writeStyledText(text, { fontSize: 11, spacingAfter: 5 });
+      return;
+    }
+    if (tag === 'ul' || tag === 'ol') {
+      const items = el.find('li').toArray();
+      items.forEach((item, idx) => {
+        const prefix = tag === 'ol' ? `${idx + 1}. ` : '• ';
+        const text = $(item).text().replace(/\s+/g, ' ').trim();
+        if (text) writeStyledText(prefix + text, { fontSize: 11, indent: 12, spacingAfter: 2 });
+      });
+      doc.moveDown(0.2);
+      return;
+    }
+    if (tag === 'table') {
+      const rows = [];
+      el.find('tr').each((_, tr) => {
+        const cells = [];
+        $(tr).find('th,td').each((__, cell) => {
+          cells.push($(cell).text().replace(/\s+/g, ' ').trim());
+        });
+        if (cells.length) rows.push(cells);
+      });
+      rows.forEach((cells) => writeStyledText(cells.join(' | '), { fontSize: 10, spacingAfter: 2 }));
+      doc.moveDown(0.3);
+      return;
+    }
+    if (tag === 'blockquote') {
+      const text = el.text().replace(/\s+/g, ' ').trim();
+      if (text) writeStyledText(text, { fontSize: 10, color: '#374151', indent: 10, spacingAfter: 4 });
+      return;
+    }
+
+    const text = el.text().replace(/\s+/g, ' ').trim();
+    if (text) writeStyledText(text, { fontSize: 11, spacingAfter: 4 });
+  };
+
+  children.forEach(renderNode);
+  if (!children.length) {
+    const rawText = (await mammoth.extractRawText({ buffer: docxBuffer })).value || '';
+    rawText.split(/\n{2,}/).forEach((block) => {
+      const text = block.replace(/\s+/g, ' ').trim();
+      if (text) writeStyledText(text, { fontSize: 11, spacingAfter: 5 });
+    });
+  }
+
+  const pdfBuffer = await new Promise((resolve, reject) => {
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+    doc.end();
+  });
+  return await stampPdfWatermark(pdfBuffer, { name, email, dateStr: new Date().toLocaleDateString('it-IT') });
 }
 
 async function prepareCompressibleMaterialUpload(file, finalLimitBytes, uploadLabel) {

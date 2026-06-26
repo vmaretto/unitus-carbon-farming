@@ -8547,20 +8547,64 @@ app.get('/api/resources/:id/download', requireStudent, requireNonGuest, async (r
       }
     }
 
+    function resolveDownloadTarget(rawUrl) {
+      const url = String(rawUrl || '').trim();
+      if (!url) return { kind: 'missing' };
+
+      if (url.startsWith('/upload/')) {
+        return { kind: 'local', path: path.join(__dirname, '..', url) };
+      }
+
+      let parsed;
+      try {
+        parsed = new URL(url);
+      } catch (e) {
+        return { kind: 'invalid' };
+      }
+
+      const host = parsed.hostname.toLowerCase();
+      if (host.endsWith('.public.blob.vercel-storage.com') || host === 'public.blob.vercel-storage.com') {
+        return { kind: 'remote', url };
+      }
+
+      if (host === 'docs.google.com') {
+        const match = parsed.pathname.match(/\/(document|spreadsheets|presentation)\/d\/([^/]+)/i);
+        if (!match) return { kind: 'unsupported', reason: 'Documento Google non riconosciuto' };
+        const [, type, id] = match;
+        const exportFormat = type.toLowerCase() === 'document' ? 'pdf'
+          : type.toLowerCase() === 'spreadsheets' ? 'xlsx'
+          : 'pdf';
+        return { kind: 'remote', url: `https://docs.google.com/${type}/d/${id}/export?format=${exportFormat}` };
+      }
+
+      if (host === 'drive.google.com') {
+        const fileMatch = url.match(/\/file\/d\/([^/]+)/i) || url.match(/[?&]id=([^&]+)/i);
+        if (fileMatch && fileMatch[1]) {
+          return { kind: 'remote', url: `https://drive.google.com/uc?export=download&id=${fileMatch[1]}` };
+        }
+        return { kind: 'unsupported', reason: 'Il link Google Drive sembra puntare a una cartella, non a un file' };
+      }
+
+      return { kind: 'remote', url };
+    }
+
     // Scarica i byte del file dal blob (domini consentiti) o da /upload locale
     let fileBuffer;
-    if (resource.url.startsWith('/upload/')) {
-      const fs = require('fs');
-      const fp = path.join(__dirname, '..', resource.url);
-      if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File non trovato' });
-      fileBuffer = fs.readFileSync(fp);
+    const target = resolveDownloadTarget(resource.url);
+    if (target.kind === 'missing') {
+      return res.status(404).json({ error: 'Documento non trovato' });
+    }
+    if (target.kind === 'invalid') {
+      return res.status(400).json({ error: 'URL non valido' });
+    }
+    if (target.kind === 'unsupported') {
+      return res.status(400).json({ error: target.reason || 'Il documento non è scaricabile da questo link' });
+    }
+    if (target.kind === 'local') {
+      if (!fs.existsSync(target.path)) return res.status(404).json({ error: 'File non trovato' });
+      fileBuffer = fs.readFileSync(target.path);
     } else {
-      let parsed;
-      try { parsed = new URL(resource.url); } catch (e) { return res.status(400).json({ error: 'URL non valido' }); }
-      if (!parsed.hostname.endsWith('.public.blob.vercel-storage.com') && parsed.hostname !== 'public.blob.vercel-storage.com') {
-        return res.status(403).json({ error: 'Dominio non consentito' });
-      }
-      const resp = await fetch(resource.url);
+      const resp = await fetch(target.url);
       if (!resp.ok) return res.status(502).json({ error: 'Impossibile recuperare il documento' });
       fileBuffer = Buffer.from(await resp.arrayBuffer());
     }

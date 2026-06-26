@@ -790,17 +790,20 @@
                 accept.style.opacity = check.checked ? '1' : '0.5';
             });
 
-            accept.addEventListener('click', async () => {
-                accept.disabled = true;
-                accept.textContent = 'Preparazione...';
-                try {
-                    const res = await fetch(`/api/resources/${resourceId}/download`, {
-                        headers: { 'Authorization': 'Bearer ' + token }
-                    });
-                    if (!res.ok) {
-                        const data = await res.json().catch(() => ({}));
-                        throw new Error(data.error || 'Download non riuscito');
-                    }
+                accept.addEventListener('click', async () => {
+                    accept.disabled = true;
+                    accept.textContent = 'Preparazione...';
+                    try {
+                        const res = await fetch(`/api/resources/${resourceId}/download`, {
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+                        if (!res.ok) {
+                            const data = await res.json().catch(() => ({}));
+                            if (data.error && /non è scaricabile|cartella|link esterno|URL non valido/i.test(data.error)) {
+                                throw new Error(data.error + '. Usa "Apri risorsa".');
+                            }
+                            throw new Error(data.error || 'Download non riuscito');
+                        }
                     const blob = await res.blob();
                     const dispo = res.headers.get('Content-Disposition') || '';
                     const m = dispo.match(/filename="([^"]+)"/);

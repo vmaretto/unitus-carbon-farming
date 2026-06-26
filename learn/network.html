@@ -1103,15 +1103,19 @@
             const emailLine = lines.find((line) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(line));
             if (emailLine) result.contactEmail = emailLine;
 
-            const urlLine = lines.find((line) => /^https?:\/\//i.test(line) && /linkedin\.com|linktr\.ee|notion\.so|site|portfolio|website/i.test(line));
+            const urlLine = lines.find((line) => /^(https?:\/\/|www\.)/i.test(line) && /linkedin\.com|linktr\.ee|notion\.so|site|portfolio|website/i.test(line));
             if (urlLine && !result.linkedinUrl) {
-                result.linkedinUrl = urlLine;
+                result.linkedinUrl = /^https?:\/\//i.test(urlLine) ? urlLine : `https://${urlLine}`;
             }
 
             const sectionLabels = {
                 about: ['about', 'informazioni', 'summary', 'sommario'],
                 experience: ['experience', 'esperienza', 'work experience', 'professional experience'],
                 skills: ['skills', 'competenze', 'competenze principali'],
+                topSkills: ['top skills', 'competenze principali'],
+                languages: ['languages', 'lingue'],
+                certifications: ['certifications', 'certificazioni'],
+                publications: ['publications', 'pubblicazioni'],
                 featured: ['featured', 'in evidenza', 'highlights'],
                 contact: ['contact info', 'informazioni di contatto']
             };
@@ -1126,13 +1130,28 @@
             if (locationLine) {
                 const parts = locationLine.split(',').map((part) => part.trim()).filter(Boolean);
                 result.city = parts[0] || '';
-                result.country = parts.slice(1).join(', ') || '';
+                result.country = parts.length > 2 ? parts[parts.length - 1] : (parts.slice(1).join(', ') || '');
             }
 
-            const nameIndex = 0;
-            const headlineCandidates = lines.slice(nameIndex + 1, Math.min(lines.length, 8))
-                .filter((line) => !/^(linkedin|profile|profi|overview|visualizza)/i.test(line));
-            const headline = headlineCandidates.find((line) => !locationLine || line !== locationLine) || '';
+            const firstMainSectionIndex = Math.min(
+                ...['about', 'experience']
+                    .map((key) => sectionIndexes[key])
+                    .filter((index) => index !== undefined)
+            );
+            const mainStart = Number.isFinite(firstMainSectionIndex) ? firstMainSectionIndex : Math.min(lines.length, 12);
+            const locationIndex = locationLine ? lines.indexOf(locationLine) : -1;
+            const identityEnd = locationIndex >= 0 && locationIndex < mainStart ? locationIndex : mainStart;
+            const identityStart = Math.max(0, identityEnd - 6);
+            const ignoredIdentityLine = /^(contact|top skills|languages|certifications|publications|summary|experience|\(linkedin\)|page \d+ of \d+|linkedin|profile)$/i;
+            const identityWindow = lines.slice(identityStart, identityEnd)
+                .filter((line) => !ignoredIdentityLine.test(line))
+                .filter((line) => !/^[+()\d\s-]{7,}$/.test(line))
+                .filter((line) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(line))
+                .filter((line) => !/^(https?:\/\/|www\.)/i.test(line));
+            const likelyNameIndex = identityWindow.findLastIndex((line) => /^[A-ZÀ-Ý][\p{L}'-]+(?:\s+[A-ZÀ-Ý][\p{L}'-]+){1,3}$/u.test(line));
+            const identityLines = likelyNameIndex >= 0 ? identityWindow.slice(likelyNameIndex + 1) : identityWindow;
+            const headline = identityLines.join(' | ') || lines.slice(0, Math.min(lines.length, 8))
+                .find((line) => !ignoredIdentityLine.test(line) && line !== locationLine && !/^(https?:\/\/|www\.)/i.test(line) && !/^[+()\d\s-]{7,}$/.test(line)) || '';
             if (headline) result.headline = headline;
 
             const pickSectionText = (startKey, endKeys = []) => {
@@ -1157,16 +1176,35 @@
                 const experienceLines = experienceText
                     .split('\n')
                     .map((line) => line.trim())
+                    .filter((line) => !/^page \d+ of \d+$/i.test(line))
                     .filter(Boolean)
-                    .slice(0, 16);
-                result.experience = experienceLines.join('\n');
-                const firstTitle = experienceLines.find((line) => !/\b(19|20)\d{2}\b|present|presente|oggi|year|month/i.test(line));
-                const firstOrg = experienceLines.find((line, index) => index > 0 && line !== firstTitle && !/\b(19|20)\d{2}\b|present|presente|oggi|year|month/i.test(line));
+                    .slice(0, 36);
+                const periodRegex = /\b(19|20)\d{2}\b|present|presente|oggi|month|months|year|years|mese|mesi|anno|anni/i;
+                const grouped = [];
+                for (let i = 0; i < experienceLines.length; i += 1) {
+                    if (!periodRegex.test(experienceLines[i]) || i < 2) continue;
+                    const period = experienceLines[i];
+                    let organization = experienceLines[i - 2];
+                    let title = experienceLines[i - 1];
+                    if (/^\d+\s+(years?|anni)\b/i.test(title) && i >= 3) {
+                        organization = experienceLines[i - 3];
+                        title = experienceLines[i - 1];
+                    }
+                    const description = experienceLines.slice(i + 1, i + 4)
+                        .filter((line) => !periodRegex.test(line))
+                        .join(' ');
+                    if (title || organization) grouped.push([title, organization, period, description].filter(Boolean).join(' | '));
+                    if (grouped.length >= 6) break;
+                }
+                result.experience = grouped.length ? grouped.join('\n') : experienceLines.join('\n');
+                const firstTitle = grouped[0]?.split('|')[0]?.trim() || experienceLines.find((line) => !periodRegex.test(line));
+                const firstOrg = grouped[0]?.split('|')[1]?.trim() || experienceLines.find((line, index) => index > 0 && line !== firstTitle && !periodRegex.test(line));
                 if (firstTitle && !result.roleTitle) result.roleTitle = firstTitle;
                 if (firstOrg && !result.organization) result.organization = firstOrg;
             }
 
-            const skillsText = pickSectionText('skills', ['featured', 'contact']);
+            const skillsText = pickSectionText('topSkills', ['languages', 'certifications', 'publications', 'about', 'experience'])
+                || pickSectionText('skills', ['featured', 'contact']);
             if (skillsText) {
                 result.skills = skillsText
                     .split('\n')
@@ -1246,6 +1284,7 @@
                 statusEl.textContent = 'Informazioni LinkedIn importate. Controlla i campi e salva il profilo.';
                 statusEl.className = 'status ok';
             }
+            return imported;
         }
 
         document.getElementById('profile-form').addEventListener('submit', async (event) => {
@@ -1254,6 +1293,18 @@
             statusEl.textContent = 'Salvataggio...';
             statusEl.className = 'status';
             try {
+                const importFile = document.getElementById('linkedin-import-file')?.files?.[0];
+                const importText = document.getElementById('linkedin-import-text')?.value?.trim();
+                const hasProfileContent = Boolean(
+                    document.getElementById('headline').value.trim()
+                    || document.getElementById('bio').value.trim()
+                    || document.getElementById('experience').value.trim()
+                    || document.getElementById('skills').value.trim()
+                );
+                if ((importFile || importText) && !hasProfileContent) {
+                    statusEl.textContent = 'Importazione profilo...';
+                    await applyLinkedinImport();
+                }
                 const updated = await api('/api/lms/network/profile', {
                     method: 'PUT',
                     body: JSON.stringify(readForm())
@@ -1268,8 +1319,13 @@
                 }
                 renderDirectory();
                 renderPreview();
-                statusEl.textContent = 'Profilo salvato.';
-                statusEl.className = 'status ok';
+                if (updated.isVisible) {
+                    statusEl.textContent = 'Profilo salvato e visibile nel network.';
+                    statusEl.className = 'status ok';
+                } else {
+                    statusEl.textContent = 'Profilo salvato, ma non visibile nel network: attiva la visibilità profilo prima di salvare.';
+                    statusEl.className = 'status error';
+                }
             } catch (error) {
                 statusEl.textContent = error.message;
                 statusEl.className = 'status error';

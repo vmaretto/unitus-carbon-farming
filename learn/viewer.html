@@ -821,6 +821,25 @@
                     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
                     closeModal();
                 } catch (err) {
+                    try {
+                        // Fallback: se il backend watermark fallisce, proviamo a scaricare
+                        // direttamente il file sorgente quando è un PDF pubblico.
+                        if (resourceType === 'pdf' && /^https?:\/\//i.test(fileUrl)) {
+                            const fallbackRes = await fetch(fileUrl);
+                            if (!fallbackRes.ok) throw new Error('Fallback download non riuscito');
+                            const blob = await fallbackRes.blob();
+                            const a = document.createElement('a');
+                            a.href = URL.createObjectURL(blob);
+                            a.download = (fileTitle || 'documento') + '.pdf';
+                            document.body.appendChild(a);
+                            a.click();
+                            setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+                            closeModal();
+                            return;
+                        }
+                    } catch (fallbackErr) {
+                        console.error('Fallback download failed', fallbackErr);
+                    }
                     alert(err.message || 'Download non riuscito');
                 } finally {
                     accept.textContent = 'Accetto e scarico';

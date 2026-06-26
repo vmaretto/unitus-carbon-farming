@@ -8813,6 +8813,169 @@ app.get('/api/resources/:id/download', requireStudent, requireNonGuest, async (r
   }
 });
 
+app.get('/api/admin/resources/:id/download-diagnostics', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+
+  const startedAt = Date.now();
+  const steps = [];
+  const mark = (stage, data = {}) => {
+    steps.push({ stage, elapsedMs: Date.now() - startedAt, ...data });
+  };
+  const fail = (stage, error, extra = {}) => {
+    const message = error?.message || String(error || 'Errore sconosciuto');
+    console.error(`Download diagnostics failed at ${stage}:`, error);
+    return res.json({
+      ok: false,
+      stage,
+      elapsedMs: Date.now() - startedAt,
+      error: message,
+      errorName: error?.name || null,
+      stack: error?.stack ? String(error.stack).split('\n').slice(0, 6) : [],
+      steps,
+      ...extra
+    });
+  };
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, title, resource_type AS "resourceType", url, is_published AS "isPublished"
+       FROM resources
+       WHERE id = $1`,
+      [req.params.id]
+    );
+    const resource = rows[0];
+    if (!resource || !resource.url) {
+      return res.status(404).json({ ok: false, error: 'Risorsa non trovata o senza URL' });
+    }
+    mark('resource_loaded', {
+      id: resource.id,
+      title: resource.title,
+      resourceType: resource.resourceType,
+      isPublished: resource.isPublished,
+      url: resource.url
+    });
+
+    function resolveDiagnosticTarget(rawUrl) {
+      const url = String(rawUrl || '').trim();
+      if (!url) return { kind: 'missing' };
+      if (url.startsWith('/upload/')) return { kind: 'local', path: path.join(__dirname, '..', url) };
+      let parsed;
+      try {
+        parsed = new URL(url);
+      } catch (_error) {
+        return { kind: 'invalid' };
+      }
+      const host = parsed.hostname.toLowerCase();
+      if (host === 'docs.google.com') {
+        const match = parsed.pathname.match(/\/(document|spreadsheets|presentation)\/d\/([^/]+)/i);
+        if (!match) return { kind: 'unsupported', reason: 'Documento Google non riconosciuto' };
+        const [, type, id] = match;
+        const exportFormat = type.toLowerCase() === 'document' ? 'pdf'
+          : type.toLowerCase() === 'spreadsheets' ? 'xlsx'
+          : 'pdf';
+        return { kind: 'remote', url: `https://docs.google.com/${type}/d/${id}/export?format=${exportFormat}` };
+      }
+      if (host === 'drive.google.com') {
+        const fileMatch = url.match(/\/file\/d\/([^/]+)/i) || url.match(/[?&]id=([^&]+)/i);
+        if (fileMatch && fileMatch[1]) return { kind: 'remote', url: `https://drive.google.com/uc?export=download&id=${fileMatch[1]}` };
+        return { kind: 'unsupported', reason: 'Il link Google Drive sembra puntare a una cartella, non a un file' };
+      }
+      return { kind: 'remote', url };
+    }
+
+    const target = resolveDiagnosticTarget(resource.url);
+    mark('target_resolved', target.kind === 'remote' ? { kind: target.kind, url: target.url } : target);
+    if (target.kind === 'missing' || target.kind === 'invalid' || target.kind === 'unsupported') {
+      return res.json({ ok: false, stage: 'target_resolved', steps, target });
+    }
+
+    let fileBuffer;
+    let sourceHeaders = {};
+    if (target.kind === 'local') {
+      if (!fs.existsSync(target.path)) return res.json({ ok: false, stage: 'local_file_missing', steps, target });
+      fileBuffer = fs.readFileSync(target.path);
+      mark('source_read', { bytes: fileBuffer.length, source: 'local' });
+    } else {
+      const fetchStartedAt = Date.now();
+      const resp = await fetch(target.url);
+      sourceHeaders = {
+        status: resp.status,
+        ok: resp.ok,
+        contentType: resp.headers.get('content-type'),
+        contentLength: resp.headers.get('content-length'),
+        contentDisposition: resp.headers.get('content-disposition')
+      };
+      mark('source_fetch_response', { durationMs: Date.now() - fetchStartedAt, headers: sourceHeaders });
+      if (!resp.ok) return res.json({ ok: false, stage: 'source_fetch_response', steps, sourceHeaders });
+      fileBuffer = Buffer.from(await resp.arrayBuffer());
+      mark('source_buffered', { bytes: fileBuffer.length });
+    }
+
+    const urlExt = (String(resource.url || '').split('?')[0].match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase();
+    const isPdf = urlExt === '.pdf' || resource.resourceType === 'pdf';
+    const isDocx = urlExt === '.docx' || /application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document/i.test(resource.url);
+    const dateStr = new Date().toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+    mark('type_detected', { urlExt, isPdf, isDocx });
+
+    let pdfBuffer = fileBuffer;
+    if (isDocx) {
+      try {
+        const conversionStartedAt = Date.now();
+        pdfBuffer = await convertDocxBufferToPdfBuffer(fileBuffer, {
+          title: resource.title,
+          name: 'Diagnostica',
+          email: 'diagnostica@carbonfarmingmaster.it'
+        });
+        mark('docx_converted', { durationMs: Date.now() - conversionStartedAt, bytes: pdfBuffer.length });
+      } catch (error) {
+        return fail('docx_converted', error);
+      }
+    }
+
+    if (isPdf || isDocx) {
+      try {
+        const loadStartedAt = Date.now();
+        const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
+        mark('pdf_loaded', { durationMs: Date.now() - loadStartedAt, pages: pdfDoc.getPageCount() });
+      } catch (error) {
+        return fail('pdf_loaded', error);
+      }
+
+      try {
+        const stampStartedAt = Date.now();
+        const stamped = await stampPdfWatermark(pdfBuffer, {
+          name: 'Diagnostica',
+          email: 'diagnostica@carbonfarmingmaster.it',
+          dateStr
+        });
+        mark('watermark_generated', { durationMs: Date.now() - stampStartedAt, bytes: stamped.length });
+        mark('headers_prepared', {
+          contentType: 'application/pdf',
+          contentDisposition: buildAttachmentDisposition(resource.title, '.pdf'),
+          contentLength: stamped.length
+        });
+        return res.json({
+          ok: true,
+          elapsedMs: Date.now() - startedAt,
+          sourceHeaders,
+          memoryUsage: process.memoryUsage(),
+          steps
+        });
+      } catch (error) {
+        return fail('watermark_generated', error);
+      }
+    }
+
+    mark('non_pdf_no_watermark', {
+      contentDisposition: buildAttachmentDisposition(resource.title, urlExt),
+      bytes: fileBuffer.length
+    });
+    return res.json({ ok: true, elapsedMs: Date.now() - startedAt, sourceHeaders, steps });
+  } catch (error) {
+    return fail('unhandled', error);
+  }
+});
+
 // ============================================
 // API MODULI
 // ============================================

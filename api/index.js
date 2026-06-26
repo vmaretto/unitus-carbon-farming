@@ -96,6 +96,24 @@ function toWinAnsi(value) {
     .replace(/[^\x00-\xFF]/g, '?');      // qualsiasi residuo fuori Latin-1 (WinAnsi)
 }
 
+function normalizeDownloadFilename(value, fallback = 'documento') {
+  const base = String(value || fallback)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/[\\/:*?"<>|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return (base || fallback).slice(0, 140).trim() || fallback;
+}
+
+function buildAttachmentDisposition(title, ext = '.pdf') {
+  const cleanExt = String(ext || '').startsWith('.') ? String(ext || '') : `.${ext}`;
+  const asciiName = `${normalizeDownloadFilename(title)}${cleanExt}`.replace(/"/g, '');
+  const utfName = `${String(title || 'documento').replace(/[\r\n"]/g, ' ').trim() || 'documento'}${cleanExt}`;
+  return `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(utfName)}`;
+}
+
 async function stampPdfWatermark(inputBuffer, { name, email, dateStr }) {
   const pdfDoc = await PDFDocument.load(inputBuffer, { ignoreEncryption: true });
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -232,7 +250,7 @@ async function convertDocxBufferToPdfBuffer(docxBuffer, { title = 'Documento', n
     doc.on('error', reject);
     doc.end();
   });
-  return await stampPdfWatermark(pdfBuffer, { name, email, dateStr: new Date().toLocaleDateString('it-IT') });
+  return pdfBuffer;
 }
 
 async function prepareCompressibleMaterialUpload(file, finalLimitBytes, uploadLabel) {
@@ -8746,49 +8764,46 @@ app.get('/api/resources/:id/download', requireStudent, requireNonGuest, async (r
 
     const urlExt = (String(resource.url || '').split('?')[0].match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase();
     const isPdf = urlExt === '.pdf' || resource.resourceType === 'pdf';
-    const safeTitle = String(resource.title || 'documento').replace(/[^\p{L}\p{N} ._-]/gu, '').trim() || 'documento';
     const dateStr = new Date().toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
 
     const isDocx = urlExt === '.docx' || /application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document/i.test(resource.url);
 
     if (isDocx) {
-      const pdfBuffer = await convertDocxBufferToPdfBuffer(fileBuffer, { title: resource.title, name, email });
-      let stamped;
       try {
-        stamped = await stampPdfWatermark(pdfBuffer, { name, email, dateStr });
+        const pdfBuffer = await convertDocxBufferToPdfBuffer(fileBuffer, { title: resource.title, name, email });
+        const stamped = await stampPdfWatermark(pdfBuffer, { name, email, dateStr });
+        res.set({
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': buildAttachmentDisposition(resource.title, '.pdf'),
+          'Content-Length': stamped.length
+        });
+        return res.send(stamped);
       } catch (wmErr) {
-        console.error('Watermark stamping failed for docx conversion, serving converted PDF', wmErr.message);
-        stamped = pdfBuffer;
+        console.error('Watermarked docx download failed:', wmErr);
+        return res.status(500).json({ error: 'Impossibile preparare il PDF con filigrana' });
       }
-      res.set({
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${safeTitle}.pdf"`,
-        'Content-Length': stamped.length
-      });
-      return res.send(stamped);
     }
 
     if (isPdf) {
-      let stamped;
       try {
-        stamped = await stampPdfWatermark(fileBuffer, { name, email, dateStr });
+        const stamped = await stampPdfWatermark(fileBuffer, { name, email, dateStr });
+        res.set({
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': buildAttachmentDisposition(resource.title, '.pdf'),
+          'Content-Length': stamped.length
+        });
+        return res.send(stamped);
       } catch (wmErr) {
-        console.error('Watermark stamping failed, serving original PDF', wmErr.message);
-        stamped = fileBuffer;
+        console.error('Watermarked PDF download failed:', wmErr);
+        return res.status(500).json({ error: 'Impossibile preparare il PDF con filigrana' });
       }
-      res.set({
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${safeTitle}.pdf"`,
-        'Content-Length': stamped.length
-      });
-      return res.send(stamped);
     }
 
     // Non-PDF: non è possibile imprimere la filigrana; serviamo l'originale come allegato.
     const ext = (resource.url.split('?')[0].match(/\.[a-z0-9]+$/i) || [''])[0];
     res.set({
       'Content-Type': 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${safeTitle}${ext}"`,
+      'Content-Disposition': buildAttachmentDisposition(resource.title, ext),
       'Content-Length': fileBuffer.length
     });
     return res.send(fileBuffer);

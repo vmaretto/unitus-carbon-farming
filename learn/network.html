@@ -1109,10 +1109,11 @@
             }
 
             const sectionLabels = {
-                about: ['about', 'informazioni', 'summary', 'sommario'],
-                experience: ['experience', 'esperienza', 'work experience', 'professional experience'],
-                skills: ['skills', 'competenze', 'competenze principali'],
+                about: ['about', 'informazioni', 'summary', 'sommario', 'profile', 'profilo', 'professional summary', 'executive summary', 'career summary', 'objective', 'profilo professionale'],
+                experience: ['experience', 'esperienza', 'work experience', 'professional experience', 'employment history', 'work history', 'career history', 'esperienza professionale', 'esperienze professionali', 'esperienze lavorative'],
+                skills: ['skills', 'competenze', 'competenze principali', 'technical skills', 'core competencies', 'key skills', 'skills & expertise', 'competenze tecniche', 'capacità e competenze'],
                 topSkills: ['top skills', 'competenze principali'],
+                education: ['education', 'formazione', 'istruzione', 'education and training', 'formazione accademica'],
                 languages: ['languages', 'lingue'],
                 certifications: ['certifications', 'certificazioni'],
                 publications: ['publications', 'pubblicazioni'],
@@ -1122,7 +1123,10 @@
 
             const sectionIndexes = {};
             Object.entries(sectionLabels).forEach(([key, labels]) => {
-                const idx = lines.findIndex((line) => labels.some((label) => line.toLowerCase() === label));
+                const idx = lines.findIndex((line) => {
+                    const normalized = line.toLowerCase().replace(/[:：]+$/, '').trim();
+                    return labels.some((label) => normalized === label);
+                });
                 if (idx >= 0) sectionIndexes[key] = idx;
             });
 
@@ -1168,15 +1172,24 @@
                     .trim();
             };
 
-            const aboutText = pickSectionText('about', ['experience', 'skills', 'featured', 'contact']);
+            const aboutText = pickSectionText('about', ['experience', 'skills', 'topSkills', 'education', 'languages', 'featured', 'contact']);
             if (aboutText) result.bio = aboutText.slice(0, 900);
+            if (!result.bio && mainStart > identityEnd + 1) {
+                const introText = lines.slice(identityEnd + 1, mainStart)
+                    .filter((line) => !ignoredIdentityLine.test(line))
+                    .filter((line) => !/^(https?:\/\/|www\.)/i.test(line))
+                    .join('\n')
+                    .trim();
+                if (introText && introText.length > 80) result.bio = introText.slice(0, 900);
+            }
 
-            const experienceText = pickSectionText('experience', ['skills', 'featured', 'contact']);
+            const experienceText = pickSectionText('experience', ['skills', 'topSkills', 'education', 'languages', 'certifications', 'featured', 'contact']);
             if (experienceText) {
                 const experienceLines = experienceText
                     .split('\n')
                     .map((line) => line.trim())
                     .filter((line) => !/^page \d+ of \d+$/i.test(line))
+                    .filter((line) => !Object.values(sectionLabels).flat().some((label) => line.toLowerCase().replace(/[:：]+$/, '').trim() === label))
                     .filter(Boolean)
                     .slice(0, 36);
                 const periodRegex = /\b(19|20)\d{2}\b|present|presente|oggi|month|months|year|years|mese|mesi|anno|anni/i;
@@ -1204,13 +1217,29 @@
             }
 
             const skillsText = pickSectionText('topSkills', ['languages', 'certifications', 'publications', 'about', 'experience'])
-                || pickSectionText('skills', ['featured', 'contact']);
+                || pickSectionText('skills', ['experience', 'education', 'languages', 'certifications', 'publications', 'featured', 'contact']);
             if (skillsText) {
                 result.skills = skillsText
                     .split('\n')
                     .map((line) => line.replace(/^[•\-*]\s*/, '').trim())
-                    .filter(Boolean)
+                    .filter((line) => line && !/^page \d+ of \d+$/i.test(line))
+                    .slice(0, 18)
                     .join(', ');
+            }
+            if (!result.skills) {
+                const skillCandidate = lines.slice(0, 140)
+                    .find((line) => /[,;•]/.test(line) && /\b(project|management|python|excel|sql|data|marketing|comunicazione|agronomia|sostenibil|carbon|mrv|ai|machine|ricerca|analisi|consulenza|telecomunicazioni)\b/i.test(line));
+                if (skillCandidate) {
+                    result.skills = skillCandidate
+                        .split(/[,;•]/)
+                        .map((item) => item.trim())
+                        .filter(Boolean)
+                        .slice(0, 12)
+                        .join(', ');
+                }
+            }
+            if (result.headline && !result.roleTitle) {
+                result.roleTitle = result.headline.split(/\s+\|\s+|\s+at\s+|\s+presso\s+|\s+-\s+|\s+–\s+/i)[0].trim().slice(0, 160);
             }
 
             const featuredText = pickSectionText('featured', ['contact']);

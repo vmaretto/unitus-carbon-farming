@@ -97,6 +97,10 @@
         .experience-meta { color: var(--gray-500); font-size: 0.78rem; }
         .featured-links { display: flex; flex-wrap: wrap; gap: 8px; }
         .featured-link { color: var(--green-700); background: var(--green-100); text-decoration: none; border-radius: 10px; padding: 7px 10px; font-size: 0.8rem; font-weight: 700; }
+        .profile-extra-list { display: grid; gap: 8px; }
+        .profile-extra { border: 1px solid var(--gray-200); border-radius: 12px; background: #fafcfb; overflow: hidden; }
+        .profile-extra summary { cursor: pointer; padding: 10px 12px; color: var(--green-900); font-weight: 800; font-size: 0.84rem; }
+        .profile-extra .bio { padding: 0 12px 12px; white-space: pre-wrap; }
         .bio { color: var(--gray-700); font-size: 0.9rem; line-height: 1.5; }
         .chips { display: flex; flex-wrap: wrap; gap: 6px; }
         .chip { background: var(--green-100); color: var(--green-700); border-radius: 999px; padding: 4px 9px; font-size: 0.75rem; font-weight: 700; }
@@ -269,8 +273,8 @@
                         <span class="hint">Una riga per esperienza: ruolo | organizzazione | periodo | descrizione.</span>
                     </label>
                     <label>Link in evidenza
-                        <textarea id="featured-links" name="featuredLinks" placeholder="Sito aziendale | https://example.com"></textarea>
-                        <span class="hint">Una riga per link: etichetta | URL.</span>
+                        <textarea id="featured-links" name="featuredLinks" placeholder="Sito aziendale | https://example.com&#10;Formazione :: Laurea, master, corsi rilevanti"></textarea>
+                        <span class="hint">Una riga per link: etichetta | URL. Per sezioni apribili: titolo :: testo.</span>
                     </label>
                     <fieldset class="consent">
                         <legend>Visibilità e consenso privacy</legend>
@@ -518,6 +522,10 @@
                 .map((line) => line.trim())
                 .filter(Boolean)
                 .map((line) => {
+                    const sectionMatch = line.match(/^([^:|]{2,80})\s*::\s*(.+)$/);
+                    if (sectionMatch) {
+                        return { label: sectionMatch[1].trim(), url: `text:${sectionMatch[2].trim()}` };
+                    }
                     const [label, ...rest] = line.split('|').map((part) => part.trim());
                     return { label, url: rest.join('|') };
                 })
@@ -624,11 +632,22 @@
                     ${item.description ? `<div class="bio">${escapeHtml(item.description)}</div>` : ''}
                 </div>
             `).join('');
-            const featuredLinks = (profile.featuredLinks || [])
+            const featuredItems = Array.isArray(profile.featuredLinks) ? profile.featuredLinks : [];
+            const featuredLinks = featuredItems
                 .filter((item) => item.label && item.url)
+                .filter((item) => !String(item.url || '').startsWith('text:'))
                 .slice(0, 4)
                 .map((item) => `<a class="featured-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.label)}</a>`)
                 .join('');
+            const profileExtras = featuredItems
+                .filter((item) => item.label && String(item.url || '').startsWith('text:'))
+                .slice(0, 6)
+                .map((item, index) => `
+                    <details class="profile-extra"${index === 0 ? ' open' : ''}>
+                        <summary>${escapeHtml(item.label)}</summary>
+                        <div class="bio">${escapeHtml(String(item.url || '').replace(/^text:/, ''))}</div>
+                    </details>
+                `).join('');
             const contacts = [
                 profile.contactEmail ? `<a class="contact-link" href="mailto:${escapeHtml(profile.contactEmail)}">Email</a>` : '',
                 profile.linkedinUrl ? `<a class="contact-link" href="${escapeHtml(profile.linkedinUrl)}" target="_blank" rel="noopener">LinkedIn</a>` : ''
@@ -674,6 +693,7 @@
                             ${(skills || interests) ? `<div class="chips">${skills}${interests}</div>` : ''}
                         </div>
                         ${experience ? `<div class="profile-section-card"><div class="profile-section-title">Esperienza</div><div class="experience-list">${experience}</div></div>` : ''}
+                        ${profileExtras ? `<div class="profile-section-card"><div class="profile-section-title">Dettagli profilo</div><div class="profile-extra-list">${profileExtras}</div></div>` : ''}
                         ${featuredLinks ? `<div class="profile-section-card"><div class="profile-section-title">In evidenza</div><div class="featured-links">${featuredLinks}</div></div>` : ''}
                     </div>
                 </article>
@@ -1171,6 +1191,13 @@
                     .join('\n')
                     .trim();
             };
+            const compactSection = (value, max = 900) => String(value || '')
+                .split('\n')
+                .map((line) => line.trim())
+                .filter((line) => line && !/^page \d+ of \d+$/i.test(line))
+                .filter((line) => !Object.values(sectionLabels).flat().some((label) => line.toLowerCase().replace(/[:：]+$/, '').trim() === label))
+                .join('\n')
+                .slice(0, max);
 
             const aboutText = pickSectionText('about', ['experience', 'skills', 'topSkills', 'education', 'languages', 'featured', 'contact']);
             if (aboutText) result.bio = aboutText.slice(0, 900);
@@ -1242,6 +1269,32 @@
                 result.roleTitle = result.headline.split(/\s+\|\s+|\s+at\s+|\s+presso\s+|\s+-\s+|\s+–\s+/i)[0].trim().slice(0, 160);
             }
 
+            const extraSections = [];
+            const addExtra = (label, value, max = 900) => {
+                const textValue = compactSection(value, max);
+                if (textValue) extraSections.push({ label, url: `text:${textValue}` });
+            };
+            addExtra('Formazione', pickSectionText('education', ['languages', 'certifications', 'publications', 'featured', 'contact']), 700);
+            addExtra('Certificazioni', pickSectionText('certifications', ['publications', 'education', 'languages', 'featured', 'contact']), 700);
+            addExtra('Lingue', pickSectionText('languages', ['certifications', 'publications', 'education', 'featured', 'contact']), 500);
+            addExtra('Pubblicazioni', pickSectionText('publications', ['about', 'experience', 'education', 'featured', 'contact']), 700);
+            const alreadyUsed = new Set();
+            ['about', 'experience', 'skills', 'topSkills', 'education', 'languages', 'certifications', 'publications', 'featured', 'contact'].forEach((key) => {
+                if (sectionIndexes[key] !== undefined) alreadyUsed.add(sectionIndexes[key]);
+            });
+            const residual = lines
+                .filter((line, index) => index < 180 && !alreadyUsed.has(index))
+                .filter((line) => !ignoredIdentityLine.test(line))
+                .filter((line) => !/^page \d+ of \d+$/i.test(line))
+                .filter((line) => line !== result.headline && line !== locationLine)
+                .filter((line) => line !== result.bio)
+                .filter((line) => !result.skills || !result.skills.includes(line))
+                .filter((line) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(line))
+                .filter((line) => !/^[A-ZÀ-Ý][\p{L}'-]+(?:\s+[A-ZÀ-Ý][\p{L}'-]+){1,3}$/u.test(line))
+                .slice(0, 24)
+                .join('\n');
+            if (residual.length > 320) addExtra('Altri dettagli dal CV', residual, 900);
+
             const featuredText = pickSectionText('featured', ['contact']);
             if (featuredText) {
                 result.featuredLinks = featuredText
@@ -1255,6 +1308,9 @@
                         return urlMatch ? { label: line.replace(urlMatch[0], '').trim() || urlMatch[0], url: urlMatch[0].trim() } : null;
                     })
                     .filter(Boolean);
+            }
+            if (extraSections.length) {
+                result.featuredLinks = [...(result.featuredLinks || []), ...extraSections].slice(0, 10);
             }
 
             return result;

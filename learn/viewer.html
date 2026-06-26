@@ -257,6 +257,68 @@
         .pdf-page-wrapper canvas {
             display: block;
         }
+
+        .document-placeholder {
+            width: min(720px, 92vw);
+            margin-top: 80px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 14px 40px rgba(0,0,0,0.28);
+            padding: 32px;
+            text-align: center;
+            color: var(--gray-700);
+        }
+
+        .document-placeholder-icon {
+            width: 72px;
+            height: 72px;
+            border-radius: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--green-100);
+            color: var(--green-700);
+            font-size: 2rem;
+            margin-bottom: 18px;
+        }
+
+        .document-placeholder h2 {
+            color: var(--green-900);
+            margin-bottom: 10px;
+        }
+
+        .document-placeholder p {
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .document-placeholder .placeholder-actions {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .document-placeholder .primary-action {
+            border: none;
+            border-radius: 10px;
+            background: var(--green-600);
+            color: white;
+            padding: 12px 18px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .document-placeholder .secondary-action {
+            border: 1px solid var(--gray-300);
+            border-radius: 10px;
+            background: white;
+            color: var(--gray-700);
+            padding: 12px 18px;
+            font-weight: 700;
+            text-decoration: none;
+        }
         
         /* === WATERMARK OVERLAY === */
         .watermark-overlay {
@@ -757,14 +819,57 @@
                 return;
             }
             
-            // Load PDF
-            loadPdf();
-
-            // Setup event listeners
-            setupEventListeners();
-
             // Setup download (con filigrana + consenso) se abbiamo l'id risorsa
             setupDownload();
+
+            if (isPdfFile) {
+                // Load PDF
+                loadPdf();
+
+                // Setup event listeners
+                setupEventListeners();
+            } else {
+                showDocumentPlaceholder();
+            }
+        }
+
+        function showDocumentPlaceholder() {
+            els.loading.style.display = 'none';
+            els.sidebar.style.display = 'none';
+            els.sidebarToggle.disabled = true;
+            els.prevPage.disabled = true;
+            els.nextPage.disabled = true;
+            els.pageInput.disabled = true;
+            els.zoomOut.disabled = true;
+            els.zoomIn.disabled = true;
+            els.zoomSelect.disabled = true;
+            els.presentationBtn.disabled = true;
+            els.totalPages.textContent = '-';
+
+            const extLabel = fileExt ? fileExt.replace('.', '').toUpperCase() : 'documento';
+            const canProtectedDownload = Boolean(resourceId && isPdfConvertibleFile);
+            els.pdfContainer.innerHTML = `
+                <div class="document-placeholder">
+                    <div class="document-placeholder-icon">📝</div>
+                    <h2>Documento ${extLabel}</h2>
+                    <p>
+                        Questo file non è un PDF e non può essere mostrato nel visualizzatore PDF.
+                    </p>
+                    <p>
+                        ${canProtectedDownload
+                            ? 'Puoi scaricarlo tramite il flusso protetto: il sistema preparerà il documento con filigrana personalizzata.'
+                            : 'Puoi tornare alla lezione e aprire la risorsa originale.'}
+                    </p>
+                    <div class="placeholder-actions">
+                        ${canProtectedDownload ? '<button type="button" class="primary-action" id="doc-placeholder-download">Scarica con filigrana</button>' : ''}
+                        <a class="secondary-action" href="${returnUrl}">Torna alla lezione</a>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('doc-placeholder-download')?.addEventListener('click', () => {
+                document.getElementById('download-btn')?.click();
+            });
         }
 
         // === DOWNLOAD CON FILIGRANA + CONSENSO ===

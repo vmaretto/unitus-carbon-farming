@@ -442,7 +442,7 @@
                         resourceId: r.id,
                         title: r.title,
                         url: r.url,
-                        assetType: r.resourceType === 'pdf' ? 'pdf' : (r.resourceType === 'document' ? 'slide' : r.resourceType || 'file')
+                        assetType: r.resourceType || 'file'
                     }));
                 renderMaterials(dedupeMaterials([...lessonMaterials, ...assetMaterials, ...linkedResources]));
 
@@ -703,12 +703,14 @@
             };
 
             container.innerHTML = assets.map(a => {
-                // Check if it's a PDF - open in protected viewer
-                const isPdf = a.assetType === 'pdf' || (a.url && a.url.toLowerCase().endsWith('.pdf'));
-                const href = isPdf
+                // PDF e DOCX con id risorsa passano dal viewer protetto per il download con filigrana.
+                const lowerUrl = (a.url || '').toLowerCase().split('?')[0];
+                const isPdf = a.assetType === 'pdf' || lowerUrl.endsWith('.pdf');
+                const isProtectedDocument = Boolean(a.resourceId && (isPdf || lowerUrl.endsWith('.docx')));
+                const href = isProtectedDocument
                     ? `/learn/viewer.html?url=${encodeURIComponent(a.url)}&title=${encodeURIComponent(a.title)}&return=${encodeURIComponent(window.location.href)}${a.resourceId ? '&id=' + encodeURIComponent(a.resourceId) : ''}${a.assetType ? '&type=' + encodeURIComponent(a.assetType) : ''}`
                     : escapeHtml(a.url);
-                const target = isPdf ? '' : 'target="_blank" rel="noopener"';
+                const target = isProtectedDocument ? '' : 'target="_blank" rel="noopener"';
                 
                 return `
                     <a class="asset-item" href="${href}" ${target} ${a.resourceId ? `data-resource-id="${escapeHtml(a.resourceId)}"` : ''}>

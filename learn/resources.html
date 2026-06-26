@@ -127,12 +127,14 @@
                     </a>
                 `;
             }
-            // Check if it's a PDF - open in protected viewer
-            const isPdf = item.resourceType === 'pdf' || (item.url && item.url.toLowerCase().endsWith('.pdf'));
-            const href = isPdf
+            // PDF e DOCX con id risorsa passano dal viewer protetto per il download con filigrana.
+            const lowerUrl = (item.url || '').toLowerCase().split('?')[0];
+            const isPdf = item.resourceType === 'pdf' || lowerUrl.endsWith('.pdf');
+            const isProtectedDocument = Boolean(item.id && (isPdf || lowerUrl.endsWith('.docx')));
+            const href = isProtectedDocument
                 ? `/learn/viewer.html?url=${encodeURIComponent(item.url)}&title=${encodeURIComponent(item.title)}&return=${encodeURIComponent(window.location.href)}&id=${encodeURIComponent(item.id)}&type=${encodeURIComponent(item.resourceType || 'pdf')}`
                 : item.url;
-            const target = isPdf ? '' : 'target="_blank" rel="noopener"';
+            const target = isProtectedDocument ? '' : 'target="_blank" rel="noopener"';
             
             const meta = (item.teacherName || item.lessonTitle)
                 ? `<p class="resource-meta" style="color:#6b7280;font-size:12px;margin-top:4px;">${item.teacherName ? `👨‍🏫 ${item.teacherName}` : ''}${item.lessonTitle ? ` · 📅 ${item.lessonTitle}` : ''}</p>`
@@ -145,7 +147,7 @@
                         ${item.description ? `<p class="resource-desc">${item.description}</p>` : ''}
                         ${meta}
                     </div>
-                    <span class="resource-arrow">${isPdf ? '🔒' : '→'}</span>
+                    <span class="resource-arrow">${isProtectedDocument ? '🔒' : '→'}</span>
                 </a>
             `;
         }

@@ -674,6 +674,7 @@
         const fileTitle = params.get('title') || 'Documento';
         const returnUrl = params.get('return') || '/learn/';
         const resourceId = params.get('id') || '';
+        const resourceType = params.get('type') || '';
         
         // Validate URL
         if (!fileUrl) {
@@ -767,6 +768,10 @@
         function setupDownload() {
             const btn = document.getElementById('download-btn');
             if (!btn || !resourceId) return; // download disponibile solo se la risorsa ha un id
+            if (resourceType && resourceType !== 'pdf') {
+                btn.style.display = 'none';
+                return;
+            }
             btn.style.display = '';
 
             const overlay = document.getElementById('dl-consent-overlay');

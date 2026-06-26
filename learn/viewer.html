@@ -677,6 +677,7 @@
         const resourceType = params.get('type') || '';
         const fileExt = (String(fileUrl || '').split('?')[0].match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase();
         const isPdfFile = fileExt === '.pdf';
+        const isPdfConvertibleFile = fileExt === '.pdf' || fileExt === '.docx';
         
         // Validate URL
         if (!fileUrl) {
@@ -770,7 +771,7 @@
         function setupDownload() {
             const btn = document.getElementById('download-btn');
             if (!btn || !resourceId) return; // download disponibile solo se la risorsa ha un id
-            if (!isPdfFile) {
+            if (!isPdfConvertibleFile) {
                 btn.style.display = 'none';
                 return;
             }

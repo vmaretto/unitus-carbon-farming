@@ -14,6 +14,8 @@ const cheerio = require('cheerio');
 const JSZip = require('jszip');
 const { OpenAI } = require('openai');
 const { PDFDocument, rgb, degrees, StandardFonts } = require('pdf-lib');
+const puppeteer = require('puppeteer');
+const mammoth = require('mammoth');
 const { v2: cloudinary } = require('cloudinary');
 const { parseBlogPostsFromDocxBuffer, slugify } = require('./blog-import');
 const { buildCalendarFeed } = require('./calendar-ics');
@@ -129,6 +131,71 @@ async function stampPdfWatermark(inputBuffer, { name, email, dateStr }) {
 
   const out = await pdfDoc.save({ useObjectStreams: true });
   return Buffer.from(out);
+}
+
+async function convertDocxBufferToPdfBuffer(docxBuffer, { title = 'Documento', name = '', email = '' } = {}) {
+  const { value: bodyHtml } = await mammoth.convertToHtml({ buffer: docxBuffer }, {
+    convertImage: mammoth.images.inline(async (element) => {
+      try {
+        const imageBuffer = await element.read('base64');
+        return {
+          src: `data:${element.contentType};base64,${imageBuffer}`
+        };
+      } catch (_error) {
+        return { src: '' };
+      }
+    })
+  });
+
+  const safeTitle = String(title || 'Documento').replace(/[<>&"]/g, '');
+  const safeName = toWinAnsi([name, email].filter(Boolean).join(' - '));
+  const html = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          @page { size: A4; margin: 22mm 16mm 24mm; }
+          body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; line-height: 1.45; color: #1f2937; }
+          h1, h2, h3, h4 { color: #14532d; margin: 0.9em 0 0.35em; }
+          p { margin: 0 0 0.75em; }
+          ul, ol { margin: 0 0 0.8em 1.3em; }
+          table { width: 100%; border-collapse: collapse; margin: 0 0 1em; }
+          td, th { border: 1px solid #d1d5db; padding: 6px 8px; vertical-align: top; }
+          img { max-width: 100%; height: auto; }
+          .doc-header { margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; }
+          .doc-title { font-size: 18pt; font-weight: 700; color: #14532d; margin: 0 0 4px; }
+          .doc-meta { font-size: 9pt; color: #6b7280; }
+          .watermark-note { position: fixed; bottom: 8mm; left: 16mm; right: 16mm; font-size: 8pt; color: #4b5563; }
+        </style>
+      </head>
+      <body>
+        <div class="doc-header">
+          <div class="doc-title">${safeTitle}</div>
+          <div class="doc-meta">${safeName || ''}</div>
+        </div>
+        <main>${bodyHtml || '<p></p>'}</main>
+        <div class="watermark-note">${DOWNLOAD_LICENSE_CLAUSE}</div>
+      </body>
+    </html>
+  `;
+
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdf = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '22mm', right: '16mm', bottom: '24mm', left: '16mm' }
+    });
+    return Buffer.from(pdf);
+  } finally {
+    await browser.close();
+  }
 }
 
 async function prepareCompressibleMaterialUpload(file, finalLimitBytes, uploadLabel) {
@@ -8613,6 +8680,25 @@ app.get('/api/resources/:id/download', requireStudent, requireNonGuest, async (r
     const isPdf = urlExt === '.pdf' || resource.resourceType === 'pdf';
     const safeTitle = String(resource.title || 'documento').replace(/[^\p{L}\p{N} ._-]/gu, '').trim() || 'documento';
     const dateStr = new Date().toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+
+    const isDocx = urlExt === '.docx' || /application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document/i.test(resource.url);
+
+    if (isDocx) {
+      const pdfBuffer = await convertDocxBufferToPdfBuffer(fileBuffer, { title: resource.title, name, email });
+      let stamped;
+      try {
+        stamped = await stampPdfWatermark(pdfBuffer, { name, email, dateStr });
+      } catch (wmErr) {
+        console.error('Watermark stamping failed for docx conversion, serving converted PDF', wmErr.message);
+        stamped = pdfBuffer;
+      }
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${safeTitle}.pdf"`,
+        'Content-Length': stamped.length
+      });
+      return res.send(stamped);
+    }
 
     if (isPdf) {
       let stamped;

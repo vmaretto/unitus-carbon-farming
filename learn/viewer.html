@@ -675,6 +675,8 @@
         const returnUrl = params.get('return') || '/learn/';
         const resourceId = params.get('id') || '';
         const resourceType = params.get('type') || '';
+        const fileExt = (String(fileUrl || '').split('?')[0].match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase();
+        const isPdfFile = fileExt === '.pdf';
         
         // Validate URL
         if (!fileUrl) {
@@ -768,7 +770,7 @@
         function setupDownload() {
             const btn = document.getElementById('download-btn');
             if (!btn || !resourceId) return; // download disponibile solo se la risorsa ha un id
-            if (resourceType && resourceType !== 'pdf') {
+            if (!isPdfFile) {
                 btn.style.display = 'none';
                 return;
             }
@@ -824,7 +826,7 @@
                     try {
                         // Fallback: se il backend watermark fallisce, proviamo a scaricare
                         // direttamente il file sorgente quando è un PDF pubblico.
-                        if (resourceType === 'pdf' && /^https?:\/\//i.test(fileUrl)) {
+                        if (isPdfFile && /^https?:\/\//i.test(fileUrl)) {
                             const fallbackRes = await fetch(fileUrl);
                             if (!fallbackRes.ok) throw new Error('Fallback download non riuscito');
                             const blob = await fallbackRes.blob();

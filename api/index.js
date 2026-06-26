@@ -8609,7 +8609,8 @@ app.get('/api/resources/:id/download', requireStudent, requireNonGuest, async (r
       fileBuffer = Buffer.from(await resp.arrayBuffer());
     }
 
-    const isPdf = resource.resourceType === 'pdf' || /\.pdf($|\?)/i.test(resource.url);
+    const urlExt = (String(resource.url || '').split('?')[0].match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase();
+    const isPdf = urlExt === '.pdf' || resource.resourceType === 'pdf';
     const safeTitle = String(resource.title || 'documento').replace(/[^\p{L}\p{N} ._-]/gu, '').trim() || 'documento';
     const dateStr = new Date().toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
 

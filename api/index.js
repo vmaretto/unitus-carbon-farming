@@ -5829,9 +5829,9 @@ async function getLmsQuizResourceContext(quizId) {
       url: 'data:application/json,' + encodeURIComponent(JSON.stringify(quizData)),
       isPublished: Boolean(quiz.isPublished),
       teacherId,
-      // Lesson quizzes use a backing resource only for teacher review workflow.
-      // They must not surface again as linked lesson resources in the student UI.
-      lessonId: quiz.lessonId ? null : (quiz.calendarLessonId || null)
+      // Keep the backing resource attached to the calendar lesson so it stays
+      // grouped with the right lesson in the admin resources view.
+      lessonId: quiz.lessonId ? (quiz.calendarLessonId || null) : null
     }
   };
 }

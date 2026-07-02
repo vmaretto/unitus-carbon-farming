@@ -13291,8 +13291,10 @@ FORMATO OUTPUT (JSON valido):
 
 Rispondi SOLO con il JSON, nessun altro testo.`;
 
+    const quizModel = process.env.QUIZ_MODEL || process.env.STUDY_COMPANION_MODEL || 'claude-haiku-4-5-20251001';
+
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: quizModel,
       max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }]
     });
@@ -13417,8 +13419,10 @@ FORMATO OUTPUT (JSON valido):
 
 Rispondi SOLO con il JSON, nessun altro testo.`;
 
+    const quizModel = process.env.QUIZ_MODEL || process.env.STUDY_COMPANION_MODEL || 'claude-haiku-4-5-20251001';
+
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: quizModel,
       max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }]
     });
@@ -16303,8 +16307,10 @@ FORMATO OUTPUT (JSON valido, niente altro testo):
   ]
 }`;
 
+    const feedbackModel = process.env.QUIZ_MODEL || process.env.STUDY_COMPANION_MODEL || 'claude-haiku-4-5-20251001';
+
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: feedbackModel,
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }]
     });

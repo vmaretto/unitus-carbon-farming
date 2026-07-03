@@ -367,18 +367,21 @@
                             }
                             
                             // Stato del link Zoom
-                            const zoomActive = lesson.locationRemote && now >= thirtyMinBefore && now <= endTime;
+                            const remoteLink = lesson.locationRemote || lesson.location_remote || lesson.remoteLink || '';
+                            const zoomActive = remoteLink && now >= thirtyMinBefore && now <= endTime;
                             let zoomHtml = '';
                             
-                            if (lesson.locationRemote) {
+                            if (remoteLink) {
                                 if (zoomActive) {
                                     const warningMsg = previousInProgress 
                                         ? `<br><small style="color: #fbbf24;">⚠️ Lezione precedente ancora in corso</small>` 
                                         : '';
-                                    zoomHtml = `<div style="text-align: right;"><a href="${lesson.locationRemote}" target="_blank" rel="noopener" class="zoom-btn active">Collegati</a>${warningMsg}</div>`;
+                                    zoomHtml = `<div style="text-align: right;"><a href="${remoteLink}" target="_blank" rel="noopener" class="zoom-btn active">Collegati</a>${warningMsg}</div>`;
                                 } else if (now < thirtyMinBefore) {
                                     const activeTime = thirtyMinBefore.toLocaleString('it-IT', { hour: '2-digit', minute: '2-digit' });
                                     zoomHtml = `<div style="text-align: right;"><span class="zoom-btn disabled">Collegati</span><br><small style="opacity:0.6;">Attivo dalle ${activeTime}</small></div>`;
+                                } else if (now > endTime) {
+                                    zoomHtml = `<div style="text-align: right;"><span class="zoom-btn disabled">Lezione conclusa</span></div>`;
                                 }
                             }
                             

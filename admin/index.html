@@ -6000,6 +6000,19 @@ Buono studio!</textarea>
             return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
         }
 
+        function eventResponseLabel(responseStatus) {
+            if (responseStatus === 'declined') return 'Non parteciperò';
+            if (responseStatus === 'registered') return 'Parteciperò';
+            return 'Risposta non specificata';
+        }
+
+        function eventResponseBadge(responseStatus) {
+            const isDeclined = responseStatus === 'declined';
+            const bg = isDeclined ? '#fff1f2' : '#ecfdf3';
+            const color = isDeclined ? '#b42318' : 'var(--green-700)';
+            return `<span style="display:inline-flex; align-items:center; border-radius:999px; padding:3px 9px; font-size:0.78rem; font-weight:700; background:${bg}; color:${color};">${escapeHtml(eventResponseLabel(responseStatus))}</span>`;
+        }
+
         async function populateEventLessonSelect() {
             const sel = document.getElementById('event-lesson');
             if (!sel) return;
@@ -6023,6 +6036,7 @@ Buono studio!</textarea>
             }
             list.innerHTML = adminEvents.map((ev) => {
                 const seats = ev.capacity ? `${ev.registeredCount}/${ev.capacity}` : `${ev.registeredCount}`;
+                const declinedCount = Number(ev.declinedCount || 0);
                 const statusPill = ev.registrationOpen
                     ? '<span class="status-pill" data-status="published">Iscrizioni aperte</span>'
                     : '<span class="status-pill" data-status="draft">Iscrizioni chiuse</span>';
@@ -6034,10 +6048,10 @@ Buono studio!</textarea>
                                 <div style="color:var(--gray-500); font-size:0.88rem; margin-top:4px;">📅 ${escapeHtml(formatAdminEventDate(ev.startsAt))}${ev.location ? ' • 📍 ' + escapeHtml(ev.location) : ''}</div>
                                 ${ev.registrationDeadline ? `<div style="color:var(--gray-500); font-size:0.84rem; margin-top:2px;">⏳ Iscrizioni entro: ${escapeHtml(formatAdminEventDate(ev.registrationDeadline))}</div>` : ''}
                                 ${ev.description ? `<div style="color:var(--gray-600); font-size:0.88rem; margin-top:6px;">${escapeHtml(ev.description)}</div>` : ''}
-                                <div style="margin-top:8px; font-weight:600; color:var(--green-700);">👥 ${seats} iscritti</div>
+                                <div style="margin-top:8px; font-weight:600; color:var(--green-700);">👥 ${seats} parteciperanno${declinedCount ? ` · ${declinedCount} non parteciperanno` : ''}</div>
                             </div>
                             <div class="actions" style="margin:0;">
-                                <button type="button" class="secondary" data-event-view="${ev.id}">Vedi iscritti</button>
+                                <button type="button" class="secondary" data-event-view="${ev.id}">Vedi risposte</button>
                                 <button type="button" class="secondary" data-event-edit="${ev.id}">Modifica</button>
                                 <button type="button" class="danger" data-event-del="${ev.id}">Elimina</button>
                             </div>
@@ -6448,10 +6462,10 @@ Buono studio!</textarea>
             }
             if (regDelBtn) {
                 const [eventId, regId] = regDelBtn.dataset.eventRegDel.split(':');
-                if (!confirm('Rimuovere questo iscritto?')) return;
+                if (!confirm('Rimuovere questa risposta?')) return;
                 try {
                     await apiRequest(`/api/admin/events/${eventId}/registrations/${regId}`, { method: 'DELETE' });
-                    showToast('Iscritto rimosso');
+                    showToast('Risposta rimossa');
                     loadAdminEvents();
                 } catch (err) { showToast(err.message || 'Errore', 'error'); }
                 return;
@@ -6460,22 +6474,23 @@ Buono studio!</textarea>
                 const id = viewBtn.dataset.eventView;
                 const box = document.querySelector(`[data-event-regs="${id}"]`);
                 if (!box) return;
-                if (box.style.display !== 'none') { box.style.display = 'none'; viewBtn.textContent = 'Vedi iscritti'; return; }
+                if (box.style.display !== 'none') { box.style.display = 'none'; viewBtn.textContent = 'Vedi risposte'; return; }
                 box.style.display = '';
-                viewBtn.textContent = 'Nascondi iscritti';
+                viewBtn.textContent = 'Nascondi risposte';
                 box.innerHTML = '<div class="empty-state">Caricamento...</div>';
                 try {
                     const regs = await apiRequest(`/api/admin/events/${id}/registrations`);
-                    if (!regs.length) { box.innerHTML = '<div class="empty-state">Nessun iscritto.</div>'; return; }
+                    if (!regs.length) { box.innerHTML = '<div class="empty-state">Nessuna risposta.</div>'; return; }
                     box.innerHTML = `
                         <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-                            <thead><tr style="text-align:left; color:var(--gray-500);"><th style="padding:6px;">Studente</th><th style="padding:6px;">Email</th><th style="padding:6px;">Iscritto il</th><th></th></tr></thead>
+                            <thead><tr style="text-align:left; color:var(--gray-500);"><th style="padding:6px;">Studente</th><th style="padding:6px;">Email</th><th style="padding:6px;">Risposta</th><th style="padding:6px;">Risposto il</th><th></th></tr></thead>
                             <tbody>
                                 ${regs.map((r) => `
                                     <tr style="border-top:1px solid var(--gray-200);">
                                         <td style="padding:6px;">${escapeHtml(r.studentName || '—')}</td>
                                         <td style="padding:6px;">${escapeHtml(r.studentEmail || '—')}</td>
-                                        <td style="padding:6px;">${r.registeredAt ? new Date(r.registeredAt).toLocaleString('it-IT') : '—'}</td>
+                                        <td style="padding:6px;">${eventResponseBadge(r.responseStatus)}</td>
+                                        <td style="padding:6px;">${r.updatedAt ? new Date(r.updatedAt).toLocaleString('it-IT') : (r.registeredAt ? new Date(r.registeredAt).toLocaleString('it-IT') : '—')}</td>
                                         <td style="padding:6px; text-align:right;"><button type="button" class="danger" data-event-reg-del="${id}:${r.id}" style="padding:4px 10px;">Rimuovi</button></td>
                                     </tr>
                                 `).join('')}
@@ -7340,6 +7355,14 @@ Buono studio!</textarea>
                 const office = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(url);
                 return `<iframe src="${escapeHtml(office)}" style="${frameStyle}" title="Anteprima documento"></iframe>
                     <p style="margin-top:10px;color:var(--gray-500);font-size:0.82rem;">Se l'anteprima non si carica, usa "Apri risorsa" qui sotto.</p>`;
+            }
+
+            if (type === 'link') {
+                return `<div style="padding:16px;border:1px solid var(--gray-200);border-radius:12px;background:var(--gray-50);">
+                    <p style="margin:0 0 8px;color:var(--gray-700);font-weight:600;">Link esterno</p>
+                    <p style="margin:0 0 12px;word-break:break-all;">${safeUrl}</p>
+                    <p style="margin:0;color:var(--gray-500);font-size:0.82rem;">Per i link esterni non viene generata anteprima incorporata. Usa "Apri risorsa".</p>
+                </div>`;
             }
 
             if (/^https?:\/\//i.test(url)) {

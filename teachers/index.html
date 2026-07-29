@@ -37,6 +37,8 @@
         .logout-btn { background: var(--red-500); color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
         .student-view-btn { background: var(--blue-600); color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
         .student-view-btn:hover { background: var(--blue-700); }
+        .projects-btn { background: var(--green-700); color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+        .projects-btn:hover { background: var(--green-800); }
         .main-content { padding: 24px; max-width: 1200px; margin: 0 auto; }
         .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
         .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid var(--gray-200); }
@@ -217,6 +219,7 @@
         <header class="header">
             <h1>Pannello Docenti</h1>
             <div class="user-info">
+                <a href="/learn/projects.html?role=teacher" class="projects-btn">Progetti</a>
                 <a href="#" id="student-view-btn" class="student-view-btn">👁️ Vista studenti</a>
                 <span id="user-name"></span>
                 <button id="logout-btn" class="logout-btn">Logout</button>

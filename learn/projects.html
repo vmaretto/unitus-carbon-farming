@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Progetti - Carbon Farming Master</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Libre+Caslon+Display&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --forest:#173f35; --forest-2:#245a3d; --orange:#ef742f; --orange-soft:#fff0e7;
+            --cream:#f5f3ec; --paper:#fffefa; --ink:#17332b; --muted:#697872;
+            --line:#dce3dc; --sage:#dfeadf; --blue:#4f7378; --shadow:0 16px 42px rgba(21,58,48,.09);
+        }
+        * { box-sizing:border-box; }
+        body { margin:0; font-family:'Inter',system-ui,sans-serif; color:var(--ink); background:radial-gradient(circle at 88% 4%,#dfe9dc 0,transparent 28rem),var(--cream); min-height:100vh; }
+        button,input,select,textarea { font:inherit; }
+        button,a { -webkit-tap-highlight-color:transparent; }
+        button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline:3px solid rgba(239,116,47,.28); outline-offset:2px; }
+        .topbar { min-height:76px; display:flex; align-items:center; justify-content:space-between; gap:28px; padding:0 36px; background:rgba(255,254,250,.94); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:30; backdrop-filter:blur(14px); }
+        .brand { display:flex; align-items:center; gap:11px; color:var(--forest); text-decoration:none; min-width:205px; }
+        .brand-mark { width:38px; height:38px; display:grid; place-items:center; border:2px solid var(--forest); border-radius:50% 50% 42% 58%; transform:rotate(-8deg); font-family:Georgia,serif; color:var(--orange); font-size:25px; line-height:1; }
+        .brand strong,.brand small { display:block; letter-spacing:.09em; }
+        .brand strong { font-size:12px; }
+        .brand small { font-size:9px; color:var(--muted); margin-top:3px; letter-spacing:.17em; }
+        .nav-links { display:flex; align-items:stretch; align-self:stretch; gap:25px; }
+        .nav-links a { display:flex; align-items:center; color:#66756f; text-decoration:none; font-size:13px; font-weight:600; position:relative; white-space:nowrap; }
+        .nav-links a:hover,.nav-links a.active { color:var(--forest); }
+        .nav-links a.active::after { content:""; position:absolute; height:3px; background:var(--orange); left:0; right:0; bottom:-1px; border-radius:3px 3px 0 0; }
+        .user-chip { display:flex; align-items:center; gap:9px; min-width:205px; justify-content:flex-end; }
+        .avatar { width:36px; height:36px; display:grid; place-items:center; border-radius:50%; background:var(--forest); color:white; font-size:11px; font-weight:800; }
+        .user-copy strong,.user-copy span { display:block; }
+        .user-copy strong { font-size:11px; }
+        .user-copy span { color:var(--muted); font-size:9px; margin-top:3px; }
+        .logout { border:0; background:none; color:var(--muted); font-size:10px; cursor:pointer; padding:8px; }
+        main { max-width:1390px; margin:0 auto; padding:46px 34px 76px; }
+        .hero { display:flex; align-items:flex-end; justify-content:space-between; gap:32px; }
+        .eyebrow { color:var(--orange); font-size:10px; font-weight:800; letter-spacing:.15em; }
+        h1 { margin:12px 0 11px; max-width:780px; font:400 clamp(42px,5vw,68px)/.98 'Libre Caslon Display',Georgia,serif; letter-spacing:-.035em; }
+        .hero p { max-width:680px; margin:0; color:var(--muted); font-size:14px; line-height:1.6; }
+        .btn { min-height:43px; border-radius:5px 5px 15px 5px; padding:0 17px; border:1px solid var(--line); background:var(--paper); color:var(--ink); font-size:11px; font-weight:700; cursor:pointer; transition:.16s ease; }
+        .btn:hover { transform:translateY(-1px); box-shadow:0 8px 18px rgba(23,63,53,.09); }
+        .btn-primary { color:white; border-color:var(--forest); background:var(--forest); }
+        .btn-primary:hover { background:var(--forest-2); }
+        .btn-orange { color:white; border-color:var(--orange); background:var(--orange); }
+        .btn:disabled { opacity:.55; cursor:default; transform:none; }
+        .metrics { display:grid; grid-template-columns:repeat(3,minmax(120px,175px)) 1fr; gap:18px; align-items:center; margin:34px 0 25px; padding:16px 20px; background:rgba(255,254,250,.8); border:1px solid var(--line); border-radius:5px 5px 18px 5px; }
+        .metric { border-right:1px solid var(--line); }
+        .metric strong { display:block; font:400 27px/1 Georgia,serif; color:var(--forest); }
+        .metric span { display:block; color:var(--muted); font-size:9px; margin-top:4px; }
+        .metrics-note { justify-self:end; color:var(--muted); font-size:10px; }
+        .live-dot { width:7px; height:7px; display:inline-block; border-radius:50%; background:#61a66d; box-shadow:0 0 0 3px rgba(97,166,109,.15); margin-right:7px; }
+        .workspace { display:grid; grid-template-columns:255px minmax(0,1fr); gap:25px; align-items:start; }
+        .sidebar { display:grid; gap:14px; position:sticky; top:96px; }
+        .panel { background:var(--paper); border:1px solid var(--line); border-radius:5px 5px 21px 5px; padding:20px; box-shadow:0 5px 18px rgba(23,63,53,.035); }
+        .profile-panel { background:var(--forest); color:white; border:0; }
+        .profile-panel h2 { margin:13px 0 8px; font:400 24px/1.08 Georgia,serif; }
+        .profile-panel p { color:#c5d5ce; font-size:10px; line-height:1.5; margin:0; }
+        .profile-panel a { display:inline-block; margin-top:16px; color:white; font-size:10px; font-weight:700; text-decoration:none; }
+        .profile-panel a span { color:var(--orange); }
+        .panel h2 { margin:0 0 17px; font-size:13px; }
+        .filter-label { display:block; color:var(--muted); font-size:9px; font-weight:700; letter-spacing:.05em; margin:15px 0 7px; }
+        .panel select,.panel input { width:100%; height:39px; padding:0 10px; background:white; border:1px solid var(--line); border-radius:5px; color:var(--ink); font-size:10px; }
+        .reset { width:100%; border:0; background:none; color:var(--orange); font-size:10px; padding:16px 0 0; cursor:pointer; }
+        .teacher-note { background:#edf5ed; }
+        .teacher-note p { font-size:10px; line-height:1.55; color:var(--muted); }
+        .teacher-note .btn { width:100%; margin-top:8px; }
+        .catalog { min-width:0; }
+        .catalog-toolbar { display:flex; align-items:center; justify-content:space-between; gap:18px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+        .tabs { display:flex; gap:23px; }
+        .tabs button { border:0; background:none; color:#78857f; padding:12px 0; font-size:10px; font-weight:700; cursor:pointer; position:relative; }
+        .tabs button.active { color:var(--forest); }
+        .tabs button.active::after { content:""; position:absolute; height:3px; left:0; right:0; bottom:-13px; background:var(--orange); }
+        .search { width:min(330px,40%); height:38px; display:flex; align-items:center; gap:7px; border:1px solid var(--line); background:var(--paper); border-radius:5px; padding:0 11px; }
+        .search input { width:100%; border:0; outline:0; background:none; color:var(--ink); font-size:10px; }
+        .results { display:flex; justify-content:space-between; gap:16px; align-items:center; margin:18px 0 13px; color:var(--muted); font-size:10px; }
+        .results strong { color:var(--ink); }
+        .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+        .project-card { background:var(--paper); border:1px solid var(--line); border-radius:5px 5px 22px 5px; padding:20px; position:relative; transition:.18s ease; }
+        .project-card:hover { transform:translateY(-2px); box-shadow:var(--shadow); border-color:#c5d1c8; }
+        .project-card.top-match { border-color:rgba(239,116,47,.55); }
+        .top-label { position:absolute; top:-1px; right:17px; background:var(--orange); color:white; font-size:7px; font-weight:800; letter-spacing:.1em; padding:5px 9px; border-radius:0 0 7px 7px; }
+        .company-row { display:flex; align-items:center; gap:10px; }
+        .company-logo { flex:0 0 39px; width:39px; height:39px; display:grid; place-items:center; border-radius:50%; background:var(--forest); color:white; font:400 13px Georgia,serif; }
+        .company-logo.external { background:var(--blue); }
+        .company-logo.university { background:#8b6a45; }
+        .company { flex:1; min-width:0; }
+        .company strong,.company span { display:block; }
+        .company strong { font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .company span { color:var(--muted); font-size:9px; margin-top:4px; }
+        .save { width:34px; height:34px; border:1px solid var(--line); background:white; border-radius:50%; color:#77847e; cursor:pointer; font-size:18px; }
+        .save.active { color:var(--orange); background:var(--orange-soft); }
+        .match-row { display:flex; justify-content:space-between; align-items:center; margin-top:17px; }
+        .org-kind { color:#7b8882; font-size:7px; font-weight:800; letter-spacing:.1em; }
+        .match { color:var(--muted); font-size:8px; }
+        .match strong { color:var(--orange); font-size:14px; }
+        .project-card h2 { margin:10px 0 8px; font:400 21px/1.17 Georgia,serif; }
+        .description { min-height:45px; color:var(--muted); font-size:10px; line-height:1.5; margin:0; }
+        .tags { display:flex; flex-wrap:wrap; gap:5px; margin:14px 0; }
+        .tag { background:#edf1ea; color:#52655d; padding:5px 8px; border-radius:12px; font-size:8px; }
+        .tag.matching { color:#a94c20; background:var(--orange-soft); }
+        .facts { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; border-top:1px solid var(--line); padding:12px 0; }
+        .fact small,.fact strong { display:block; }
+        .fact small { color:#89948f; text-transform:uppercase; font-size:7px; letter-spacing:.05em; }
+        .fact strong { font-size:8px; margin-top:4px; }
+        .card-action { width:100%; display:flex; align-items:center; justify-content:space-between; border:0; border-top:1px solid var(--line); background:none; padding:12px 0 0; color:var(--forest); font-size:10px; font-weight:800; cursor:pointer; }
+        .card-action span { color:var(--orange); font-size:14px; }
+        .draft { display:inline-block; padding:4px 7px; border-radius:10px; background:#fff4d8; color:#9b6510; font-size:7px; font-weight:800; margin-left:6px; }
+        .empty { text-align:center; padding:54px 20px; border:1px dashed #bec9c2; background:rgba(255,254,250,.55); border-radius:5px 5px 20px 5px; color:var(--muted); }
+        .empty h2 { color:var(--ink); font:400 24px Georgia,serif; margin:0 0 7px; }
+        .loading { text-align:center; padding:60px; color:var(--muted); }
+        .modal-backdrop { display:none; position:fixed; inset:0; z-index:80; place-items:center; padding:20px; background:rgba(12,37,30,.57); backdrop-filter:blur(4px); }
+        .modal-backdrop.open { display:grid; }
+        .modal { width:min(570px,100%); max-height:90vh; overflow:auto; background:var(--paper); border-radius:6px 6px 26px 6px; padding:30px; box-shadow:0 30px 80px rgba(10,35,29,.27); position:relative; }
+        .modal.wide { width:min(760px,100%); }
+        .modal-close { position:absolute; top:14px; right:14px; width:32px; height:32px; border:1px solid var(--line); border-radius:50%; background:white; cursor:pointer; font-size:18px; }
+        .modal h2 { font:400 30px/1.1 Georgia,serif; margin:20px 40px 9px 0; }
+        .modal > p { color:var(--muted); font-size:11px; line-height:1.6; }
+        .modal-info { padding:14px; margin:18px 0; background:var(--orange-soft); border-left:3px solid var(--orange); font-size:10px; line-height:1.5; }
+        .form-grid { display:grid; gap:13px; margin-top:18px; }
+        .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        .form-grid label { display:grid; gap:6px; color:var(--muted); font-size:9px; font-weight:700; }
+        .form-grid input,.form-grid select,.form-grid textarea { width:100%; padding:10px 11px; border:1px solid var(--line); border-radius:5px; color:var(--ink); background:white; font-size:11px; }
+        .form-grid textarea { min-height:90px; resize:vertical; line-height:1.5; }
+        .form-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:18px; }
+        .status { min-height:18px; color:var(--muted); font-size:10px; margin-top:9px; }
+        .application-list { display:grid; gap:10px; margin-top:18px; }
+        .application { border:1px solid var(--line); padding:14px; border-radius:10px; }
+        .application-head { display:flex; justify-content:space-between; gap:12px; }
+        .application strong { font-size:11px; }
+        .application p { color:var(--muted); font-size:10px; line-height:1.5; margin:8px 0; }
+        .application-tags { display:flex; flex-wrap:wrap; gap:5px; }
+        .application-actions { display:flex; gap:7px; margin-top:11px; flex-wrap:wrap; }
+        .application-actions button { border:1px solid var(--line); background:white; padding:6px 9px; border-radius:6px; font-size:9px; cursor:pointer; }
+        @media(max-width:1050px) {
+            .topbar { padding:0 22px; }
+            .brand,.user-chip { min-width:auto; }
+            .nav-links { gap:15px; }
+            .workspace { grid-template-columns:220px minmax(0,1fr); }
+            .grid { grid-template-columns:1fr; }
+        }
+        @media(max-width:800px) {
+            .topbar { align-items:flex-start; padding:14px 18px; flex-wrap:wrap; }
+            .nav-links { order:3; width:100%; overflow:auto; padding-top:4px; }
+            .user-copy { display:none; }
+            main { padding:32px 18px 55px; }
+            .hero { display:block; }
+            .hero .btn { margin-top:19px; }
+            .metrics { grid-template-columns:repeat(3,1fr); }
+            .metrics-note { display:none; }
+            .metric:last-of-type { border:0; }
+            .workspace { display:block; }
+            .sidebar { position:static; margin-bottom:18px; grid-template-columns:1fr 1fr; }
+            .filters-panel { grid-column:1/-1; display:grid; grid-template-columns:repeat(3,1fr); gap:8px 12px; }
+            .filters-panel h2,.filters-panel .reset { grid-column:1/-1; }
+        }
+        @media(max-width:560px) {
+            .brand small,.logout { display:none; }
+            .nav-links { gap:17px; }
+            h1 { font-size:42px; }
+            .sidebar { grid-template-columns:1fr; }
+            .filters-panel { display:block; }
+            .catalog-toolbar { align-items:stretch; flex-direction:column-reverse; }
+            .search { width:100%; }
+            .tabs { overflow:auto; }
+            .tabs button { white-space:nowrap; }
+            .form-row { grid-template-columns:1fr; }
+            .modal { padding:24px 18px; }
+        }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="/learn/index.html">
+            <span class="brand-mark" aria-hidden="true">↗</span>
+            <span><strong>CARBON FARMING</strong><small>MASTER UNITUS</small></span>
+        </a>
+        <nav class="nav-links" id="main-nav" aria-label="Navigazione area riservata"></nav>
+        <div class="user-chip">
+            <span class="avatar" id="avatar">CF</span>
+            <span class="user-copy"><strong id="user-name">Area riservata</strong><span id="user-role">Partecipante</span></span>
+            <button class="logout" id="logout-btn">Esci</button>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div>
+                <span class="eyebrow">STUDENTI × DOCENTI × IMPRESE</span>
+                <h1>Progetti che diventano impatto.</h1>
+                <p>Uno spazio riservato per incontrare aziende, competenze e idee. Scopri le sfide aperte, trova il match giusto e costruisci il tuo project work.</p>
+            </div>
+            <button class="btn btn-primary" id="propose-btn" style="display:none">＋ Proponi un progetto</button>
+        </section>
+
+        <section class="metrics" aria-label="Riepilogo progetti">
+            <div class="metric"><strong id="metric-open">—</strong><span>progetti disponibili</span></div>
+            <div class="metric"><strong id="metric-partners">—</strong><span>con aziende partner</span></div>
+            <div class="metric"><strong id="metric-applications">—</strong><span id="application-label">mie candidature</span></div>
+            <div class="metrics-note"><span class="live-dot"></span>Area aggiornata in tempo reale</div>
+        </section>
+
+        <div class="workspace">
+            <aside class="sidebar">
+                <section class="panel profile-panel" id="profile-panel">
+                    <span class="eyebrow" style="color:#b9d0c5">IL TUO MATCHING</span>
+                    <h2>Rendi visibili le tue competenze.</h2>
+                    <p>Completa il profilo Network: useremo competenze e interessi per ordinare i progetti più affini.</p>
+                    <a href="/learn/network.html">Aggiorna profilo <span>→</span></a>
+                </section>
+                <section class="panel teacher-note" id="teacher-panel" style="display:none">
+                    <h2>Area docenti</h2>
+                    <p>Proponi nuove sfide, segui i progetti che supervisioni e valuta le candidature degli studenti.</p>
+                    <button class="btn btn-primary" id="sidebar-propose-btn">Proponi progetto</button>
+                </section>
+                <section class="panel filters-panel">
+                    <h2>Filtra progetti</h2>
+                    <label class="filter-label" for="type-filter">Tipologia</label>
+                    <select id="type-filter">
+                        <option value="">Tutte</option>
+                        <option value="tesi">Tesi</option>
+                        <option value="stage">Stage</option>
+                        <option value="lavoro">Project work</option>
+                        <option value="altro">Altro</option>
+                    </select>
+                    <label class="filter-label" for="organization-filter">Organizzazione</label>
+                    <select id="organization-filter">
+                        <option value="">Tutte</option>
+                        <option value="partner">Azienda partner</option>
+                        <option value="external">Azienda esterna</option>
+                        <option value="university">Università / ricerca</option>
+                    </select>
+                    <label class="filter-label" for="mode-filter">Modalità</label>
+                    <select id="mode-filter">
+                        <option value="">Tutte</option>
+                        <option value="hybrid">Ibrido</option>
+                        <option value="remote">Da remoto</option>
+                        <option value="on_site">In presenza</option>
+                        <option value="flexible">Flessibile</option>
+                    </select>
+                    <button class="reset" id="reset-btn">Azzera filtri</button>
+                </section>
+            </aside>
+
+            <section class="catalog">
+                <div class="catalog-toolbar">
+                    <div class="tabs" role="tablist">
+                        <button class="active" data-view="recommended" role="tab">Per te</button>
+                        <button data-view="all" role="tab">Tutti i progetti</button>
+                        <button data-view="saved" role="tab">Salvati <span id="saved-count">0</span></button>
+                        <button data-view="managed" role="tab" id="managed-tab" style="display:none">Da me seguiti</button>
+                    </div>
+                    <label class="search">
+                        <span aria-hidden="true">⌕</span>
+                        <input id="search-input" type="search" placeholder="Cerca progetto, azienda, competenza…" aria-label="Cerca progetti">
+                    </label>
+                </div>
+                <div class="results">
+                    <span><strong id="results-count">0 progetti</strong> <span id="results-copy">in base al tuo profilo</span></span>
+                    <span id="sort-copy">Ordinati per affinità</span>
+                </div>
+                <div id="project-grid" class="grid"><div class="loading">Caricamento progetti…</div></div>
+            </section>
+        </div>
+    </main>
+
+    <div class="modal-backdrop" id="detail-backdrop">
+        <section class="modal" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+            <button class="modal-close" data-close="detail-backdrop" aria-label="Chiudi">×</button>
+            <span class="eyebrow">DETTAGLIO PROGETTO</span>
+            <div id="detail-content"></div>
+        </section>
+    </div>
+
+    <div class="modal-backdrop" id="proposal-backdrop">
+        <section class="modal wide" role="dialog" aria-modal="true" aria-labelledby="proposal-title">
+            <button class="modal-close" data-close="proposal-backdrop" aria-label="Chiudi">×</button>
+            <span class="eyebrow">NUOVA PROPOSTA</span>
+            <h2 id="proposal-title">Proponi una sfida agli studenti</h2>
+            <p>La proposta verrà salvata in bozza e potrà essere pubblicata dal coordinamento del Master.</p>
+            <form id="proposal-form" class="form-grid">
+                <div class="form-row">
+                    <label>Titolo *<input name="title" maxlength="200" required></label>
+                    <label>Azienda o ente *<input name="organization" maxlength="200" required></label>
+                </div>
+                <div class="form-row">
+                    <label>Tipologia
+                        <select name="type"><option value="lavoro">Project work</option><option value="tesi">Tesi</option><option value="stage">Stage</option><option value="altro">Altro</option></select>
+                    </label>
+                    <label>Organizzazione
+                        <select name="organizationType"><option value="partner">Azienda partner</option><option value="external">Azienda esterna</option><option value="university">Università / ricerca</option></select>
+                    </label>
+                </div>
+                <label>Descrizione della sfida *<textarea name="description" maxlength="4000" required></textarea></label>
+                <div class="form-row">
+                    <label>Competenze richieste<input name="skills" placeholder="MRV, GIS, LCA"></label>
+                    <label>Temi e interessi<input name="interests" placeholder="suolo, biodiversità, crediti carbonio"></label>
+                </div>
+                <div class="form-row">
+                    <label>Settore<input name="sector" maxlength="160" placeholder="Agricoltura, viticoltura…"></label>
+                    <label>Località<input name="location" maxlength="200"></label>
+                </div>
+                <div class="form-row">
+                    <label>Durata<input name="duration" maxlength="120" placeholder="4–6 mesi"></label>
+                    <label>Impegno<input name="commitment" maxlength="120" placeholder="8 ore/settimana"></label>
+                </div>
+                <div class="form-row">
+                    <label>Modalità
+                        <select name="workMode"><option value="hybrid">Ibrido</option><option value="remote">Da remoto</option><option value="on_site">In presenza</option><option value="flexible">Flessibile</option></select>
+                    </label>
+                    <label>Scadenza candidature<input name="deadline" type="date"></label>
+                </div>
+                <label>Email di contatto<input name="contactEmail" type="email"></label>
+                <div class="status" id="proposal-status"></div>
+                <div class="form-actions">
+                    <button type="button" class="btn" data-close="proposal-backdrop">Annulla</button>
+                    <button type="submit" class="btn btn-primary" id="proposal-submit">Salva proposta</button>
+                </div>
+            </form>
+        </section>
+    </div>
+
+    <div class="modal-backdrop" id="applications-backdrop">
+        <section class="modal wide" role="dialog" aria-modal="true" aria-labelledby="applications-title">
+            <button class="modal-close" data-close="applications-backdrop" aria-label="Chiudi">×</button>
+            <span class="eyebrow">CANDIDATURE</span>
+            <h2 id="applications-title">Studenti interessati</h2>
+            <div id="application-list" class="application-list"></div>
+        </section>
+    </div>
+
+    <script>
+        const query = new URLSearchParams(window.location.search);
+        const preferTeacher = query.get('role') === 'teacher';
+        const teacherToken = localStorage.getItem('teacherToken');
+        const learnToken = localStorage.getItem('learnToken');
+        const authToken = preferTeacher ? teacherToken : (learnToken || teacherToken);
+        const authSource = preferTeacher && teacherToken ? 'teacher' : (learnToken ? 'student' : 'teacher');
+
+        if (!authToken) {
+            window.location.href = preferTeacher ? '/teachers/' : '/learn/login.html';
+        }
+
+        let actor = { role: authSource };
+        let profile = null;
+        let projects = [];
+        let currentView = 'recommended';
+        let selectedProject = null;
+        let saved = JSON.parse(localStorage.getItem('savedProjectIds') || '[]');
+
+        const labels = {
+            type: { stage:'Stage', tesi:'Tesi', lavoro:'Project work', altro:'Altro' },
+            organization: { partner:'PARTNER DEL MASTER', external:'AZIENDA ESTERNA', university:'UNITUS / RICERCA' },
+            mode: { remote:'Da remoto', hybrid:'Ibrido', on_site:'In presenza', flexible:'Flessibile' },
+            status: { submitted:'Inviata', reviewed:'In valutazione', accepted:'Accettata', declined:'Non selezionata' }
+        };
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+        }
+
+        function initials(value) {
+            return String(value || 'CF').split(/\s+/).filter(Boolean).slice(0,2).map(part => part[0]).join('').toUpperCase();
+        }
+
+        function list(value) {
+            return String(value || '').split(',').map(item => item.trim()).filter(Boolean);
+        }
+
+        async function api(url, options = {}) {
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    Authorization: `Bearer ${authToken}`,
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {})
+                }
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (response.status === 401) {
+                localStorage.removeItem(authSource === 'teacher' ? 'teacherToken' : 'learnToken');
+                window.location.href = authSource === 'teacher' ? '/teachers/' : '/learn/login.html';
+                return null;
+            }
+            if (!response.ok) throw new Error(payload.error || 'Operazione non riuscita');
+            return payload;
+        }
+
+        function renderNav() {
+            const nav = document.getElementById('main-nav');
+            if (actor.role === 'teacher') {
+                nav.innerHTML = '<a href="/teachers/">Pannello docenti</a><a href="/learn/projects.html?role=teacher" class="active">Progetti</a>';
+            } else {
+                nav.innerHTML = [
+                    ['Dashboard','/learn/index.html'], ['Calendario','/learn/calendar.html'],
+                    ['Risorse','/learn/resources.html'], ['Network','/learn/network.html?v=article-feed'],
+                    ['Progetti','/learn/projects.html'], ['Check-in','/learn/checkin.html'],
+                    ['Documenti','/learn/documents.html'], ['Domande','/learn/questions.html']
+                ].map(([label, href]) => `<a href="${href}"${label === 'Progetti' ? ' class="active"' : ''}>${label}</a>`).join('');
+            }
+        }
+
+        function setIdentity() {
+            const stored = actor.role === 'teacher'
+                ? {}
+                : JSON.parse(localStorage.getItem('learnUser') || '{}');
+            const name = actor.name || [stored.firstName, stored.lastName].filter(Boolean).join(' ') || (actor.role === 'teacher' ? 'Docente' : 'Studente');
+            document.getElementById('user-name').textContent = name;
+            document.getElementById('user-role').textContent = actor.role === 'teacher' ? 'Docente' : 'Studente';
+            document.getElementById('avatar').textContent = initials(name);
+        }
+
+        function filteredProjects() {
+            const search = document.getElementById('search-input').value.trim().toLowerCase();
+            const type = document.getElementById('type-filter').value;
+            const organization = document.getElementById('organization-filter').value;
+            const mode = document.getElementById('mode-filter').value;
+            return projects
+                .filter(project => {
+                    const haystack = [project.title, project.organization, project.description, project.sector, ...(project.skills || []), ...(project.interests || [])].join(' ').toLowerCase();
+                    const viewMatch = currentView === 'saved' ? saved.includes(project.id)
+                        : currentView === 'managed' ? project.canManage
+                        : true;
+                    return viewMatch
+                        && (!search || haystack.includes(search))
+                        && (!type || project.type === type)
+                        && (!organization || project.organizationType === organization)
+                        && (!mode || project.workMode === mode);
+                })
+                .sort((a,b) => currentView === 'recommended' && actor.role === 'student'
+                    ? (b.matchScore || 0) - (a.matchScore || 0)
+                    : Number(b.isPublished) - Number(a.isPublished) || new Date(b.createdAt) - new Date(a.createdAt));
+        }
+
+        function projectCard(project, index) {
+            const matched = new Set(project.matchedSkills || []);
+            const isTop = actor.role === 'student' && index === 0 && project.matchScore >= 70 && currentView === 'recommended';
+            const facts = [
+                ['Durata', project.duration || 'Da definire'],
+                ['Impegno', project.commitment || 'Flessibile'],
+                ['Modalità', labels.mode[project.workMode] || 'Flessibile']
+            ];
+            const action = actor.role === 'teacher' && project.canManage
+                ? `${project.applicationsCount || 0} candidature`
+                : project.hasApplied
+                    ? labels.status[project.applicationStatus] || 'Candidatura inviata'
+                    : 'Scopri il progetto';
+            return `
+                <article class="project-card${isTop ? ' top-match' : ''}">
+                    ${isTop ? '<div class="top-label">MIGLIOR MATCH</div>' : ''}
+                    <div class="company-row">
+                        <div class="company-logo ${escapeHtml(project.organizationType)}">${escapeHtml(initials(project.organization))}</div>
+                        <div class="company"><strong>${escapeHtml(project.organization || 'Organizzazione da definire')}</strong><span>${escapeHtml([project.location, labels.mode[project.workMode]].filter(Boolean).join(' · '))}</span></div>
+                        <button class="save ${saved.includes(project.id) ? 'active' : ''}" data-save="${escapeHtml(project.id)}" aria-label="Salva progetto">${saved.includes(project.id) ? '♥' : '♡'}</button>
+                    </div>
+                    <div class="match-row">
+                        <span class="org-kind">${escapeHtml(labels.organization[project.organizationType] || 'ORGANIZZAZIONE')}</span>
+                        ${actor.role === 'student' && project.matchScore !== null ? `<span class="match"><strong>${project.matchScore}%</strong> match</span>` : ''}
+                    </div>
+                    <h2>${escapeHtml(project.title)}${!project.isPublished ? '<span class="draft">BOZZA</span>' : ''}</h2>
+                    <p class="description">${escapeHtml(project.description || '')}</p>
+                    <div class="tags">${(project.skills || []).slice(0,5).map(skill => `<span class="tag ${matched.has(skill) ? 'matching' : ''}">${escapeHtml(skill)}</span>`).join('') || '<span class="tag">Competenze aperte</span>'}</div>
+                    <div class="facts">${facts.map(([label,value]) => `<div class="fact"><small>${label}</small><strong>${escapeHtml(value)}</strong></div>`).join('')}</div>
+                    <button class="card-action" data-open="${escapeHtml(project.id)}">${escapeHtml(action)}<span>↗</span></button>
+                </article>`;
+        }
+
+        function renderProjects() {
+            const visible = filteredProjects();
+            document.getElementById('results-count').textContent = `${visible.length} ${visible.length === 1 ? 'progetto' : 'progetti'}`;
+            document.getElementById('saved-count').textContent = saved.length;
+            document.getElementById('sort-copy').textContent = actor.role === 'student' && currentView === 'recommended' ? 'Ordinati per affinità' : 'Più recenti';
+            const grid = document.getElementById('project-grid');
+            grid.innerHTML = visible.length
+                ? visible.map(projectCard).join('')
+                : '<div class="empty" style="grid-column:1/-1"><h2>Nessun progetto trovato</h2><p>Prova ad ampliare la ricerca o ad azzerare i filtri.</p></div>';
+            grid.querySelectorAll('[data-save]').forEach(button => button.addEventListener('click', event => {
+                event.stopPropagation();
+                const id = button.dataset.save;
+                saved = saved.includes(id) ? saved.filter(item => item !== id) : [...saved, id];
+                localStorage.setItem('savedProjectIds', JSON.stringify(saved));
+                renderProjects();
+            }));
+            grid.querySelectorAll('[data-open]').forEach(button => button.addEventListener('click', () => openProject(button.dataset.open)));
+        }
+
+        function updateMetrics() {
+            document.getElementById('metric-open').textContent = projects.filter(project => project.isPublished).length;
+            document.getElementById('metric-partners').textContent = projects.filter(project => project.organizationType === 'partner' && project.isPublished).length;
+            if (actor.role === 'teacher') {
+                document.getElementById('metric-applications').textContent = projects.reduce((sum, project) => sum + (project.canManage ? project.applicationsCount : 0), 0);
+                document.getElementById('application-label').textContent = 'candidature da valutare';
+            } else {
+                document.getElementById('metric-applications').textContent = projects.filter(project => project.hasApplied).length;
+            }
+        }
+
+        function openProject(id) {
+            selectedProject = projects.find(project => project.id === id);
+            if (!selectedProject) return;
+            if (actor.role === 'teacher' && selectedProject.canManage) {
+                loadApplications(selectedProject);
+                return;
+            }
+            const project = selectedProject;
+            const canApply = actor.role === 'student' && project.isPublished && project.acceptsApplications && !project.hasApplied;
+            document.getElementById('detail-content').innerHTML = `
+                <h2 id="detail-title">${escapeHtml(project.title)}</h2>
+                <p><strong>${escapeHtml(project.organization || '')}</strong> · ${escapeHtml(labels.organization[project.organizationType] || '')}</p>
+                <p>${escapeHtml(project.description || '')}</p>
+                <div class="tags">${[...(project.skills || []), ...(project.interests || [])].map(item => `<span class="tag">${escapeHtml(item)}</span>`).join('')}</div>
+                ${project.supervisor?.name ? `<div class="modal-info"><strong>Docente supervisore:</strong> ${escapeHtml(project.supervisor.name)}</div>` : ''}
+                ${actor.role === 'student' && project.matchScore !== null ? `<div class="modal-info"><strong>${project.matchScore}% di affinità.</strong> ${project.matchedSkills?.length ? `Competenze in comune: ${escapeHtml(project.matchedSkills.join(', '))}.` : 'Completa il profilo Network per migliorare il matching.'}</div>` : ''}
+                ${canApply ? `<label class="form-grid">Messaggio per la candidatura<textarea id="application-message" maxlength="1000" placeholder="Racconta brevemente perché il progetto ti interessa."></textarea></label>` : ''}
+                <div class="form-actions">
+                    <button class="btn" data-close="detail-backdrop">Chiudi</button>
+                    ${canApply ? '<button class="btn btn-primary" id="apply-btn">Invia candidatura</button>' : project.hasApplied ? `<button class="btn" disabled>${escapeHtml(labels.status[project.applicationStatus] || 'Candidatura inviata')}</button>` : ''}
+                </div>`;
+            bindCloseButtons();
+            document.getElementById('apply-btn')?.addEventListener('click', applyToSelectedProject);
+            openModal('detail-backdrop');
+        }
+
+        async function applyToSelectedProject() {
+            const button = document.getElementById('apply-btn');
+            const message = document.getElementById('application-message')?.value.trim() || '';
+            button.disabled = true;
+            button.textContent = 'Invio…';
+            try {
+                await api(`/api/projects/${encodeURIComponent(selectedProject.id)}/apply`, { method:'POST', body:JSON.stringify({ message }) });
+                selectedProject.hasApplied = true;
+                selectedProject.applicationStatus = 'submitted';
+                closeModal('detail-backdrop');
+                updateMetrics();
+                renderProjects();
+            } catch (error) {
+                button.disabled = false;
+                button.textContent = 'Invia candidatura';
+                window.alert(error.message);
+            }
+        }
+
+        async function loadApplications(project) {
+            document.getElementById('applications-title').textContent = project.title;
+            const container = document.getElementById('application-list');
+            container.innerHTML = '<div class="loading">Caricamento candidature…</div>';
+            openModal('applications-backdrop');
+            try {
+                const applications = await api(`/api/projects/${encodeURIComponent(project.id)}/applications`);
+                container.innerHTML = applications.length ? applications.map(application => `
+                    <article class="application">
+                        <div class="application-head"><strong>${escapeHtml(application.applicant.fullName || 'Studente')}</strong><span class="tag">${escapeHtml(labels.status[application.status] || application.status)}</span></div>
+                        <p>${escapeHtml(application.applicant.email || '')}</p>
+                        ${application.message ? `<p>${escapeHtml(application.message)}</p>` : ''}
+                        <div class="application-tags">${(application.applicant.skills || []).map(skill => `<span class="tag">${escapeHtml(skill)}</span>`).join('')}</div>
+                        <div class="application-actions">
+                            <button data-app="${escapeHtml(application.id)}" data-status="reviewed">In valutazione</button>
+                            <button data-app="${escapeHtml(application.id)}" data-status="accepted">Accetta</button>
+                            <button data-app="${escapeHtml(application.id)}" data-status="declined">Non selezionare</button>
+                        </div>
+                    </article>`).join('') : '<div class="empty"><h2>Nessuna candidatura</h2><p>Le candidature degli studenti compariranno qui.</p></div>';
+                container.querySelectorAll('[data-app]').forEach(button => button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    try {
+                        await api(`/api/projects/applications/${encodeURIComponent(button.dataset.app)}`, { method:'PATCH', body:JSON.stringify({ status:button.dataset.status }) });
+                        await loadApplications(project);
+                    } catch (error) {
+                        button.disabled = false;
+                        window.alert(error.message);
+                    }
+                }));
+            } catch (error) {
+                container.innerHTML = `<div class="empty"><h2>Errore</h2><p>${escapeHtml(error.message)}</p></div>`;
+            }
+        }
+
+        function openModal(id) { document.getElementById(id).classList.add('open'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+        function bindCloseButtons() {
+            document.querySelectorAll('[data-close]').forEach(button => button.onclick = () => closeModal(button.dataset.close));
+        }
+
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.addEventListener('mousedown', event => {
+            if (event.target === backdrop) closeModal(backdrop.id);
+        }));
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') document.querySelectorAll('.modal-backdrop.open').forEach(item => closeModal(item.id));
+        });
+
+        document.getElementById('proposal-form').addEventListener('submit', async event => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            const payload = Object.fromEntries(form.entries());
+            payload.skills = list(payload.skills);
+            payload.interests = list(payload.interests);
+            const button = document.getElementById('proposal-submit');
+            const status = document.getElementById('proposal-status');
+            button.disabled = true;
+            status.textContent = 'Salvataggio in corso…';
+            try {
+                const project = await api('/api/projects', { method:'POST', body:JSON.stringify(payload) });
+                projects.unshift(project);
+                event.currentTarget.reset();
+                status.textContent = '';
+                closeModal('proposal-backdrop');
+                currentView = 'managed';
+                document.querySelectorAll('.tabs button').forEach(item => item.classList.toggle('active', item.dataset.view === currentView));
+                updateMetrics();
+                renderProjects();
+            } catch (error) {
+                status.textContent = error.message;
+            } finally {
+                button.disabled = false;
+            }
+        });
+
+        document.querySelectorAll('.tabs button').forEach(button => button.addEventListener('click', () => {
+            currentView = button.dataset.view;
+            document.querySelectorAll('.tabs button').forEach(item => item.classList.toggle('active', item === button));
+            renderProjects();
+        }));
+        ['search-input','type-filter','organization-filter','mode-filter'].forEach(id => {
+            document.getElementById(id).addEventListener(id === 'search-input' ? 'input' : 'change', renderProjects);
+        });
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            ['search-input','type-filter','organization-filter','mode-filter'].forEach(id => document.getElementById(id).value = '');
+            currentView = 'recommended';
+            document.querySelectorAll('.tabs button').forEach(item => item.classList.toggle('active', item.dataset.view === currentView));
+            renderProjects();
+        });
+        document.getElementById('propose-btn').addEventListener('click', () => openModal('proposal-backdrop'));
+        document.getElementById('sidebar-propose-btn').addEventListener('click', () => openModal('proposal-backdrop'));
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            if (actor.role === 'teacher') localStorage.removeItem('teacherToken');
+            else {
+                localStorage.removeItem('learnToken');
+                localStorage.removeItem('learnUser');
+            }
+            window.location.href = actor.role === 'teacher' ? '/teachers/' : '/learn/login.html';
+        });
+        bindCloseButtons();
+
+        async function init() {
+            try {
+                const data = await api('/api/projects');
+                actor = data.actor || actor;
+                profile = data.profile;
+                projects = Array.isArray(data.projects) ? data.projects : [];
+                renderNav();
+                setIdentity();
+                if (actor.role === 'teacher') {
+                    document.getElementById('propose-btn').style.display = '';
+                    document.getElementById('teacher-panel').style.display = '';
+                    document.getElementById('profile-panel').style.display = 'none';
+                    document.getElementById('managed-tab').style.display = '';
+                    document.getElementById('results-copy').textContent = 'pubblicati e in supervisione';
+                } else if (profile?.isComplete) {
+                    document.querySelector('#profile-panel h2').textContent = 'Profilo pronto per il matching.';
+                    document.querySelector('#profile-panel p').textContent = `${profile.skills.length} competenze e ${profile.interests.length} interessi contribuiscono al tuo punteggio.`;
+                }
+                updateMetrics();
+                renderProjects();
+            } catch (error) {
+                document.getElementById('project-grid').innerHTML = `<div class="empty" style="grid-column:1/-1"><h2>Impossibile caricare i progetti</h2><p>${escapeHtml(error.message)}</p></div>`;
+            }
+        }
+        init();
+    </script>
+</body>
+</html>

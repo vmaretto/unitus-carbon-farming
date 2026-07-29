@@ -2558,6 +2558,27 @@ function requireTeacher(req, res, next) {
   next();
 }
 
+function requireProjectMember(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const payload = verifyToken(authHeader.slice(7));
+  if (!payload || !['student', 'teacher', 'admin'].includes(payload.role)) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  req.projectActor = {
+    role: payload.role,
+    userId: payload.role === 'student' ? payload.userId : null,
+    teacherId: payload.role === 'teacher' ? payload.id : null,
+    email: payload.email || null,
+    name: payload.name || [payload.firstName, payload.lastName].filter(Boolean).join(' ').trim() || null
+  };
+  next();
+}
+
 // Teachers login
 app.post('/api/teachers/login', async (req, res) => {
   res.status(410).json({
@@ -10926,6 +10947,83 @@ function buildNetworkOpportunity(row, options = {}) {
   return base;
 }
 
+const PROJECT_ORGANIZATION_TYPES = ['partner', 'external', 'university'];
+const PROJECT_WORK_MODES = ['remote', 'hybrid', 'on_site', 'flexible'];
+
+function normalizeProjectOrganizationType(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return PROJECT_ORGANIZATION_TYPES.includes(normalized) ? normalized : 'external';
+}
+
+function normalizeProjectWorkMode(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return PROJECT_WORK_MODES.includes(normalized) ? normalized : 'flexible';
+}
+
+function normalizeMatchValue(value) {
+  return String(value || '')
+    .trim()
+    .toLocaleLowerCase('it-IT');
+}
+
+function calculateProjectMatch(project, profile) {
+  if (!profile) return { score: null, matchedSkills: [] };
+
+  const profileSkills = Array.isArray(profile.skills) ? profile.skills : [];
+  const profileInterests = Array.isArray(profile.interests) ? profile.interests : [];
+  const projectSkills = Array.isArray(project.skills) ? project.skills : [];
+  const projectInterests = Array.isArray(project.interests) ? project.interests : [];
+  const skillSet = new Set(profileSkills.map(normalizeMatchValue).filter(Boolean));
+  const interestSet = new Set(profileInterests.map(normalizeMatchValue).filter(Boolean));
+  const matchedSkills = projectSkills.filter((item) => skillSet.has(normalizeMatchValue(item)));
+  const matchedInterests = projectInterests.filter((item) => interestSet.has(normalizeMatchValue(item)));
+
+  if (!projectSkills.length && !projectInterests.length) {
+    return { score: 70, matchedSkills: [] };
+  }
+
+  const skillRatio = projectSkills.length ? matchedSkills.length / projectSkills.length : 0;
+  const interestRatio = projectInterests.length ? matchedInterests.length / projectInterests.length : 0;
+  const score = Math.min(98, Math.round(48 + (skillRatio * 36) + (interestRatio * 14)));
+  return { score, matchedSkills };
+}
+
+function buildProjectHubItem(row, profile = null) {
+  const match = calculateProjectMatch(row, profile);
+  return {
+    id: row.id,
+    title: row.title,
+    type: row.type || 'altro',
+    organization: row.organization || null,
+    organizationType: row.organizationType || 'external',
+    sector: row.sector || null,
+    location: row.location || null,
+    description: row.description || null,
+    skills: Array.isArray(row.skills) ? row.skills : [],
+    interests: Array.isArray(row.interests) ? row.interests : [],
+    duration: row.duration || null,
+    commitment: row.commitment || null,
+    workMode: row.workMode || 'flexible',
+    applyUrl: row.applyUrl || null,
+    contactEmail: row.contactEmail || null,
+    deadline: row.deadline || null,
+    acceptsApplications: row.acceptsApplications !== false,
+    isPublished: Boolean(row.isPublished),
+    hasApplied: Boolean(row.hasApplied),
+    applicationStatus: row.applicationStatus || null,
+    applicationsCount: Number(row.applicationsCount ?? 0),
+    createdAt: row.createdAt || null,
+    updatedAt: row.updatedAt || null,
+    supervisor: row.supervisorId ? {
+      id: row.supervisorId,
+      name: row.supervisorName || null
+    } : null,
+    canManage: Boolean(row.canManage),
+    matchScore: match.score,
+    matchedSkills: match.matchedSkills
+  };
+}
+
 function buildNetworkIntroRequest(row) {
   if (!row) return null;
   return {
@@ -11490,6 +11588,264 @@ app.post('/api/lms/network/opportunities/:id/apply', requireStudent, requireNonG
   } catch (error) {
     console.error('Apply to opportunity error:', error);
     res.status(500).json({ error: 'Errore durante la candidatura' });
+  }
+});
+
+// Hub Progetti — area riservata condivisa tra studenti e docenti.
+// Riutilizza le opportunità esistenti, aggiungendo matching e supervisione.
+app.get('/api/projects', requireProjectMember, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const actor = req.projectActor;
+
+  try {
+    let profile = null;
+    if (actor.role === 'student' && actor.userId) {
+      const profileResult = await pool.query(
+        'SELECT skills, interests FROM network_profiles WHERE user_id = $1 LIMIT 1',
+        [actor.userId]
+      );
+      profile = profileResult.rows[0] || { skills: [], interests: [] };
+    }
+
+    const { rows } = await pool.query(`
+      SELECT o.id, o.title, o.type, o.organization,
+             o.organization_type AS "organizationType", o.sector, o.location, o.description,
+             o.skills, o.interests, o.duration_text AS duration,
+             o.commitment_text AS commitment, o.work_mode AS "workMode",
+             o.apply_url AS "applyUrl", o.contact_email AS "contactEmail",
+             o.deadline, o.accepts_applications AS "acceptsApplications",
+             o.is_published AS "isPublished",
+             o.created_at AS "createdAt", o.updated_at AS "updatedAt",
+             f.id AS "supervisorId",
+             TRIM(CONCAT(COALESCE(f.first_name, ''), ' ', COALESCE(f.last_name, ''))) AS "supervisorName",
+             (a.id IS NOT NULL) AS "hasApplied",
+             a.status AS "applicationStatus",
+             (SELECT COUNT(*)::int
+                FROM network_opportunity_applications count_app
+               WHERE count_app.opportunity_id = o.id) AS "applicationsCount",
+             ($2::uuid IS NOT NULL AND
+               (o.created_by_teacher_id = $2::uuid OR o.supervisor_teacher_id = $2::uuid)
+             ) AS "canManage"
+        FROM network_opportunities o
+        LEFT JOIN faculty f ON f.id = o.supervisor_teacher_id
+        LEFT JOIN network_opportunity_applications a
+          ON a.opportunity_id = o.id AND a.user_id = $1::uuid
+       WHERE o.is_published = TRUE
+          OR $3::boolean = TRUE
+          OR ($2::uuid IS NOT NULL AND
+             (o.created_by_teacher_id = $2::uuid OR o.supervisor_teacher_id = $2::uuid))
+       ORDER BY o.is_published DESC, o.deadline ASC NULLS LAST, o.created_at DESC
+    `, [
+      actor.role === 'student' ? actor.userId : null,
+      actor.role === 'teacher' ? actor.teacherId : null,
+      actor.role === 'admin'
+    ]);
+
+    res.json({
+      actor: { role: actor.role, name: actor.name },
+      profile: actor.role === 'student' ? {
+        skills: profile?.skills || [],
+        interests: profile?.interests || [],
+        isComplete: Boolean((profile?.skills || []).length || (profile?.interests || []).length)
+      } : null,
+      projects: rows.map((row) => buildProjectHubItem(row, actor.role === 'student' ? profile : null))
+    });
+  } catch (error) {
+    console.error('List project hub error:', error);
+    res.status(500).json({ error: 'Errore nel recupero dei progetti' });
+  }
+});
+
+app.post('/api/projects', requireProjectMember, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const actor = req.projectActor;
+  if (actor.role !== 'teacher' || !actor.teacherId) {
+    return res.status(403).json({ error: 'Solo i docenti possono proporre un progetto' });
+  }
+
+  const title = normalizeNetworkText(req.body?.title, 200);
+  const description = normalizeNetworkText(req.body?.description, 4000);
+  const organization = normalizeNetworkText(req.body?.organization, 200);
+  if (!title || !description || !organization) {
+    return res.status(400).json({ error: 'Titolo, azienda/ente e descrizione sono obbligatori' });
+  }
+
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO network_opportunities (
+        title, type, organization, organization_type, sector, location, description,
+        skills, interests, duration_text, commitment_text, work_mode,
+        contact_email, deadline, created_by_teacher_id, supervisor_teacher_id,
+        accepts_applications, is_published
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12,
+        $13, $14, $15, $15, $16, FALSE
+      )
+      RETURNING id, title, type, organization, organization_type AS "organizationType",
+                sector, location, description, skills, interests,
+                duration_text AS duration, commitment_text AS commitment,
+                work_mode AS "workMode", contact_email AS "contactEmail",
+                deadline, accepts_applications AS "acceptsApplications",
+                is_published AS "isPublished", created_at AS "createdAt",
+                updated_at AS "updatedAt", supervisor_teacher_id AS "supervisorId"
+    `, [
+      title,
+      normalizeOpportunityType(req.body?.type),
+      organization,
+      normalizeProjectOrganizationType(req.body?.organizationType),
+      normalizeNetworkText(req.body?.sector, 160),
+      normalizeNetworkText(req.body?.location, 200),
+      description,
+      normalizeNetworkList(req.body?.skills),
+      normalizeNetworkList(req.body?.interests),
+      normalizeNetworkText(req.body?.duration, 120),
+      normalizeNetworkText(req.body?.commitment, 120),
+      normalizeProjectWorkMode(req.body?.workMode),
+      normalizeNetworkText(req.body?.contactEmail, 200),
+      req.body?.deadline || null,
+      actor.teacherId,
+      normalizeBoolean(req.body?.acceptsApplications, true)
+    ]);
+
+    res.status(201).json(buildProjectHubItem({
+      ...rows[0],
+      supervisorName: actor.name,
+      canManage: true
+    }));
+  } catch (error) {
+    console.error('Create teacher project error:', error);
+    res.status(500).json({ error: 'Errore nella creazione del progetto' });
+  }
+});
+
+app.post('/api/projects/:id/apply', requireProjectMember, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const actor = req.projectActor;
+  if (actor.role !== 'student' || !actor.userId) {
+    return res.status(403).json({ error: 'Solo gli studenti possono candidarsi' });
+  }
+
+  try {
+    const { rows: projectRows } = await pool.query(
+      `SELECT id
+         FROM network_opportunities
+        WHERE id = $1 AND is_published = TRUE AND accepts_applications = TRUE
+        LIMIT 1`,
+      [req.params.id]
+    );
+    if (!projectRows.length) {
+      return res.status(404).json({ error: 'Progetto non disponibile per le candidature' });
+    }
+
+    const message = normalizeNetworkText(req.body?.message, 1000);
+    const { rows } = await pool.query(`
+      INSERT INTO network_opportunity_applications (opportunity_id, user_id, message, status)
+      VALUES ($1, $2, $3, 'submitted')
+      ON CONFLICT (opportunity_id, user_id) DO UPDATE SET
+        message = EXCLUDED.message,
+        status = 'submitted',
+        updated_at = NOW()
+      RETURNING id, status, message, created_at AS "createdAt", updated_at AS "updatedAt"
+    `, [req.params.id, actor.userId, message]);
+
+    res.status(201).json({ ...rows[0], hasApplied: true });
+  } catch (error) {
+    console.error('Apply to project error:', error);
+    res.status(500).json({ error: 'Errore durante la candidatura' });
+  }
+});
+
+app.get('/api/projects/:id/applications', requireProjectMember, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const actor = req.projectActor;
+  if (!['teacher', 'admin'].includes(actor.role)) {
+    return res.status(403).json({ error: 'Accesso riservato ai docenti' });
+  }
+
+  try {
+    if (actor.role === 'teacher') {
+      const ownership = await pool.query(
+        `SELECT id FROM network_opportunities
+          WHERE id = $1
+            AND (created_by_teacher_id = $2 OR supervisor_teacher_id = $2)
+          LIMIT 1`,
+        [req.params.id, actor.teacherId]
+      );
+      if (!ownership.rows.length) {
+        return res.status(403).json({ error: 'Non puoi gestire questo progetto' });
+      }
+    }
+
+    const { rows } = await pool.query(`
+      SELECT a.id, a.status, a.message,
+             a.created_at AS "createdAt", a.updated_at AS "updatedAt",
+             u.id AS "userId", u.first_name AS "firstName", u.last_name AS "lastName",
+             u.email AS "userEmail", p.skills, p.interests
+        FROM network_opportunity_applications a
+        JOIN users u ON u.id = a.user_id
+        LEFT JOIN network_profiles p ON p.user_id = u.id
+       WHERE a.opportunity_id = $1
+       ORDER BY a.created_at DESC
+    `, [req.params.id]);
+
+    res.json(rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      message: row.message || null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      applicant: {
+        userId: row.userId,
+        fullName: [row.firstName, row.lastName].filter(Boolean).join(' ').trim(),
+        email: row.userEmail || null,
+        skills: row.skills || [],
+        interests: row.interests || []
+      }
+    })));
+  } catch (error) {
+    console.error('List teacher project applications error:', error);
+    res.status(500).json({ error: 'Errore nel recupero delle candidature' });
+  }
+});
+
+app.patch('/api/projects/applications/:id', requireProjectMember, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const actor = req.projectActor;
+  if (!['teacher', 'admin'].includes(actor.role)) {
+    return res.status(403).json({ error: 'Accesso riservato ai docenti' });
+  }
+
+  const status = String(req.body?.status || '').trim().toLowerCase();
+  if (!['reviewed', 'accepted', 'declined'].includes(status)) {
+    return res.status(400).json({ error: 'Stato candidatura non valido' });
+  }
+
+  try {
+    const params = [req.params.id, status];
+    let ownershipClause = '';
+    if (actor.role === 'teacher') {
+      params.push(actor.teacherId);
+      ownershipClause = `
+        AND EXISTS (
+          SELECT 1 FROM network_opportunities o
+           WHERE o.id = network_opportunity_applications.opportunity_id
+             AND (o.created_by_teacher_id = $3 OR o.supervisor_teacher_id = $3)
+        )`;
+    }
+    const { rows } = await pool.query(`
+      UPDATE network_opportunity_applications
+         SET status = $2, updated_at = NOW()
+       WHERE id = $1
+       ${ownershipClause}
+       RETURNING id, status, updated_at AS "updatedAt"
+    `, params);
+    if (!rows.length) return res.status(404).json({ error: 'Candidatura non trovata' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Update project application error:', error);
+    res.status(500).json({ error: 'Errore nell\'aggiornamento della candidatura' });
   }
 });
 

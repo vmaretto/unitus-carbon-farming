@@ -1566,6 +1566,7 @@
                 <a href="#attendance" data-section="attendance">✅ Presenze</a>
                 <a href="#student-progress" data-section="student-progress">📈 Progressi studenti</a>
                 <a href="#network" data-section="network">🌐 Network</a>
+                <a href="#projects" data-section="projects">💼 Progetti</a>
             </div>
             <div class="sidebar-group">
                 <div class="sidebar-group-title">Produzione</div>
@@ -3435,8 +3436,19 @@ Buono studio!</textarea>
                 </div>
             </div>
 
-            <div style="margin-top:16px; background:white; border:1px solid var(--gray-200); border-radius:12px; padding:18px;">
-                <h3 style="margin:0 0 14px;">Bacheca opportunità (stage / tesi / lavoro)</h3>
+        </section>
+
+        <!-- ============================================ -->
+        <!-- PROGETTI -->
+        <!-- ============================================ -->
+        <section id="projects">
+            <header>
+                <h2>💼 Progetti</h2>
+                <p class="section-description">Crea e pubblica project work, tesi, stage e opportunità. Configura il matching con i profili Network e gestisci le candidature degli studenti.</p>
+            </header>
+
+            <div style="background:white; border:1px solid var(--gray-200); border-radius:12px; padding:18px;">
+                <h3 style="margin:0 0 14px;">Scheda progetto</h3>
                 <form id="opportunity-form" style="display:grid; gap:10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items:end;">
                     <input type="hidden" id="opportunity-id">
                     <label style="display:grid; gap:4px; font-size:13px;">Titolo *
@@ -3450,11 +3462,40 @@ Buono studio!</textarea>
                             <option value="altro">Altro</option>
                         </select>
                     </label>
-                    <label style="display:grid; gap:4px; font-size:13px;">Organizzazione
-                        <input type="text" id="opportunity-organization">
+                    <label style="display:grid; gap:4px; font-size:13px;">Organizzazione *
+                        <input type="text" id="opportunity-organization" required>
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Tipo organizzazione
+                        <select id="opportunity-organization-type">
+                            <option value="external">Ente esterno</option>
+                            <option value="partner">Partner</option>
+                            <option value="university">Università</option>
+                        </select>
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Settore
+                        <input type="text" id="opportunity-sector" placeholder="Es. Agricoltura, energia, MRV">
                     </label>
                     <label style="display:grid; gap:4px; font-size:13px;">Luogo
                         <input type="text" id="opportunity-location">
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Modalità
+                        <select id="opportunity-work-mode">
+                            <option value="flexible">Flessibile</option>
+                            <option value="remote">Da remoto</option>
+                            <option value="hybrid">Ibrida</option>
+                            <option value="on_site">In presenza</option>
+                        </select>
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Durata
+                        <input type="text" id="opportunity-duration" placeholder="Es. 4 mesi">
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Impegno
+                        <input type="text" id="opportunity-commitment" placeholder="Es. 8 ore/settimana">
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Docente supervisore
+                        <select id="opportunity-supervisor">
+                            <option value="">Nessun supervisore</option>
+                        </select>
                     </label>
                     <label style="display:grid; gap:4px; font-size:13px;">Link esterno
                         <input type="url" id="opportunity-apply-url" placeholder="https://...">
@@ -3465,6 +3506,15 @@ Buono studio!</textarea>
                     <label style="display:grid; gap:4px; font-size:13px;">Scadenza
                         <input type="date" id="opportunity-deadline">
                     </label>
+                    <label style="display:grid; gap:4px; font-size:13px; grid-column:1/-1;">Competenze richieste
+                        <input type="text" id="opportunity-skills" placeholder="Separate da virgola: MRV, GIS, LCA, analisi dati">
+                    </label>
+                    <label style="display:grid; gap:4px; font-size:13px; grid-column:1/-1;">Aree di interesse
+                        <input type="text" id="opportunity-interests" placeholder="Separate da virgola: suolo, filiere, carbon accounting">
+                    </label>
+                    <label style="display:flex; gap:8px; align-items:center; font-size:13px;">
+                        <input type="checkbox" id="opportunity-accepts-applications" checked> Accetta candidature interne
+                    </label>
                     <label style="display:flex; gap:8px; align-items:center; font-size:13px;">
                         <input type="checkbox" id="opportunity-published"> Pubblicata (visibile agli studenti)
                     </label>
@@ -3472,11 +3522,18 @@ Buono studio!</textarea>
                         <textarea id="opportunity-description" rows="3" required></textarea>
                     </label>
                     <div style="grid-column:1/-1; display:flex; gap:8px;">
-                        <button type="submit" class="primary" id="opportunity-save">Salva opportunità</button>
+                        <button type="submit" class="primary" id="opportunity-save">Salva progetto</button>
                         <button type="button" class="secondary" id="opportunity-reset" style="display:none;">Annulla modifica</button>
                         <span id="opportunity-status" style="align-self:center; font-size:13px;"></span>
                     </div>
                 </form>
+            </div>
+
+            <div style="margin-top:16px; background:white; border:1px solid var(--gray-200); border-radius:12px; padding:18px;">
+                <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap;">
+                    <h3 style="margin:0;">Progetti e candidature</h3>
+                    <span id="projects-summary" style="font-size:13px; color:var(--gray-500);"></span>
+                </div>
                 <div id="opportunity-list-admin" style="display:grid; gap:12px; margin-top:16px;"></div>
             </div>
         </section>
@@ -4121,7 +4178,8 @@ Buono studio!</textarea>
                     () => typeof loadSurveysSection === 'function' ? loadSurveysSection() : Promise.resolve(),
                     () => typeof loadConferenceRegistrations === 'function' ? loadConferenceRegistrations() : Promise.resolve(),
                     () => typeof loadAdminEvents === 'function' ? loadAdminEvents() : Promise.resolve(),
-                    () => typeof loadNetworkSection === 'function' ? loadNetworkSection() : Promise.resolve()
+                    () => typeof loadNetworkSection === 'function' ? loadNetworkSection() : Promise.resolve(),
+                    () => typeof loadProjectsSection === 'function' ? loadProjectsSection() : Promise.resolve()
                 ];
 
                 for (const task of startupTasks) {
@@ -6169,18 +6227,63 @@ Buono studio!</textarea>
             `).join('');
         }
 
-        const OPPORTUNITY_TYPE_LABELS = { stage: 'Stage', tesi: 'Tesi', lavoro: 'Lavoro', altro: 'Altro' };
+        const OPPORTUNITY_TYPE_LABELS = { stage: 'Stage', tesi: 'Tesi', lavoro: 'Project work', altro: 'Altro' };
+        const PROJECT_ORGANIZATION_LABELS = { partner: 'Partner', university: 'Università', external: 'Ente esterno' };
+        const PROJECT_WORK_MODE_LABELS = { remote: 'Da remoto', hybrid: 'Ibrida', on_site: 'In presenza', flexible: 'Flessibile' };
+        const PROJECT_APPLICATION_STATUS_LABELS = {
+            submitted: 'Ricevuta',
+            reviewed: 'In valutazione',
+            accepted: 'Accettata',
+            declined: 'Rifiutata',
+            withdrawn: 'Ritirata'
+        };
+
+        function populateProjectSupervisorSelect(selectedValue = '') {
+            const select = document.getElementById('opportunity-supervisor');
+            if (!select) return;
+            const current = selectedValue || select.value;
+            select.innerHTML = '<option value="">Nessun supervisore</option>' + (state.faculty || [])
+                .map((teacher) => `<option value="${escapeHtml(teacher.id)}">${escapeHtml(teacher.name || teacher.email || 'Docente')}</option>`)
+                .join('');
+            select.value = current;
+        }
+
+        function projectApplicationStatusOptions(currentStatus) {
+            const statuses = currentStatus === 'withdrawn'
+                ? ['withdrawn']
+                : currentStatus === 'submitted'
+                    ? ['submitted', 'reviewed', 'accepted', 'declined']
+                    : ['reviewed', 'accepted', 'declined'];
+            return statuses.map((status) => {
+                const locked = status === 'submitted' || status === 'withdrawn';
+                return `<option value="${status}" ${currentStatus === status ? 'selected' : ''} ${locked ? 'disabled' : ''}>${escapeHtml(PROJECT_APPLICATION_STATUS_LABELS[status])}</option>`;
+            }).join('');
+        }
 
         function renderNetworkOpportunities() {
             const list = document.getElementById('opportunity-list-admin');
             if (!list) return;
             if (!adminNetworkOpportunities.length) {
-                list.innerHTML = '<div class="empty-state">Nessuna opportunità. Crea la prima con il form qui sopra.</div>';
+                list.innerHTML = '<div class="empty-state">Nessun progetto. Crea il primo con il form qui sopra.</div>';
+                const summary = document.getElementById('projects-summary');
+                if (summary) summary.textContent = '0 progetti';
                 return;
             }
+            const publishedCount = adminNetworkOpportunities.filter((op) => op.isPublished).length;
+            const applicationsCount = adminNetworkOpportunities.reduce((total, op) => total + Number(op.applicationsCount || 0), 0);
+            const summary = document.getElementById('projects-summary');
+            if (summary) summary.textContent = `${adminNetworkOpportunities.length} progetti · ${publishedCount} pubblicati · ${applicationsCount} candidature`;
             list.innerHTML = adminNetworkOpportunities.map((op) => {
-                const meta = [op.organization, op.location].filter(Boolean).join(' · ');
+                const meta = [
+                    op.organization,
+                    PROJECT_ORGANIZATION_LABELS[op.organizationType],
+                    op.sector,
+                    op.location,
+                    PROJECT_WORK_MODE_LABELS[op.workMode]
+                ].filter(Boolean).join(' · ');
                 const deadline = op.deadline ? `Scadenza ${new Date(op.deadline).toLocaleDateString('it-IT')}` : '';
+                const projectDetails = [op.duration, op.commitment, op.supervisor?.name ? `Supervisore: ${op.supervisor.name}` : ''].filter(Boolean).join(' · ');
+                const matchingTags = [...(op.skills || []), ...(op.interests || [])];
                 return `
                     <article style="border:1px solid var(--gray-200); border-radius:12px; padding:12px;">
                         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -6190,7 +6293,9 @@ Buono studio!</textarea>
                             <span style="font-size:12px; color:var(--gray-500);">${escapeHtml(String(op.applicationsCount || 0))} candidature</span>
                         </div>
                         ${meta || deadline ? `<div style="color:var(--gray-500); font-size:12px; margin-top:4px;">${escapeHtml([meta, deadline].filter(Boolean).join(' · '))}</div>` : ''}
+                        ${projectDetails ? `<div style="color:var(--gray-500); font-size:12px; margin-top:4px;">${escapeHtml(projectDetails)}</div>` : ''}
                         <div style="color:var(--gray-700); font-size:13px; white-space:pre-wrap; margin-top:8px;">${escapeHtml(op.description || '')}</div>
+                        ${matchingTags.length ? `<div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:8px;">${matchingTags.map((tag) => `<span style="font-size:11px; background:var(--green-50, #eef7f1); color:var(--green-800, #24543a); border-radius:999px; padding:2px 7px;">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
                         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
                             <button type="button" class="secondary" data-op-edit="${escapeHtml(op.id)}">Modifica</button>
                             <button type="button" class="secondary" data-op-toggle="${escapeHtml(op.id)}">${op.isPublished ? 'Ritira' : 'Pubblica'}</button>
@@ -6216,6 +6321,15 @@ Buono studio!</textarea>
                 applyUrl: document.getElementById('opportunity-apply-url').value.trim(),
                 contactEmail: document.getElementById('opportunity-contact-email').value.trim(),
                 deadline: document.getElementById('opportunity-deadline').value || null,
+                organizationType: document.getElementById('opportunity-organization-type').value,
+                sector: document.getElementById('opportunity-sector').value.trim(),
+                skills: document.getElementById('opportunity-skills').value,
+                interests: document.getElementById('opportunity-interests').value,
+                duration: document.getElementById('opportunity-duration').value.trim(),
+                commitment: document.getElementById('opportunity-commitment').value.trim(),
+                workMode: document.getElementById('opportunity-work-mode').value,
+                supervisorTeacherId: document.getElementById('opportunity-supervisor').value || null,
+                acceptsApplications: document.getElementById('opportunity-accepts-applications').checked,
                 isPublished: document.getElementById('opportunity-published').checked,
                 description: document.getElementById('opportunity-description').value.trim()
             };
@@ -6224,8 +6338,9 @@ Buono studio!</textarea>
         function resetOpportunityForm() {
             document.getElementById('opportunity-id').value = '';
             document.getElementById('opportunity-form').reset();
+            document.getElementById('opportunity-accepts-applications').checked = true;
             document.getElementById('opportunity-reset').style.display = 'none';
-            document.getElementById('opportunity-save').textContent = 'Salva opportunità';
+            document.getElementById('opportunity-save').textContent = 'Salva progetto';
         }
 
         function editOpportunity(id) {
@@ -6239,10 +6354,19 @@ Buono studio!</textarea>
             document.getElementById('opportunity-apply-url').value = op.applyUrl || '';
             document.getElementById('opportunity-contact-email').value = op.contactEmail || '';
             document.getElementById('opportunity-deadline').value = op.deadline ? String(op.deadline).slice(0, 10) : '';
+            document.getElementById('opportunity-organization-type').value = op.organizationType || 'external';
+            document.getElementById('opportunity-sector').value = op.sector || '';
+            document.getElementById('opportunity-skills').value = (op.skills || []).join(', ');
+            document.getElementById('opportunity-interests').value = (op.interests || []).join(', ');
+            document.getElementById('opportunity-duration').value = op.duration || '';
+            document.getElementById('opportunity-commitment').value = op.commitment || '';
+            document.getElementById('opportunity-work-mode').value = op.workMode || 'flexible';
+            populateProjectSupervisorSelect(op.supervisor?.id || '');
+            document.getElementById('opportunity-accepts-applications').checked = op.acceptsApplications !== false;
             document.getElementById('opportunity-published').checked = Boolean(op.isPublished);
             document.getElementById('opportunity-description').value = op.description || '';
             document.getElementById('opportunity-reset').style.display = '';
-            document.getElementById('opportunity-save').textContent = 'Aggiorna opportunità';
+            document.getElementById('opportunity-save').textContent = 'Aggiorna progetto';
             document.getElementById('opportunity-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
@@ -6252,19 +6376,23 @@ Buono studio!</textarea>
             try {
                 await apiRequest(`/api/admin/network/opportunities/${id}`, {
                     method: 'PUT',
-                    body: JSON.stringify({ ...op, isPublished: !op.isPublished })
+                    body: JSON.stringify({
+                        ...op,
+                        supervisorTeacherId: op.supervisor?.id || null,
+                        isPublished: !op.isPublished
+                    })
                 });
-                await loadNetworkSection();
+                await loadProjectsSection();
             } catch (error) {
                 alert(error.message || 'Errore nell\'aggiornamento');
             }
         }
 
         async function deleteOpportunity(id) {
-            if (!confirm('Eliminare questa opportunità e tutte le candidature associate?')) return;
+            if (!confirm('Eliminare questo progetto e tutte le candidature associate?')) return;
             try {
                 await apiRequest(`/api/admin/network/opportunities/${id}`, { method: 'DELETE' });
-                await loadNetworkSection();
+                await loadProjectsSection();
             } catch (error) {
                 alert(error.message || 'Errore nell\'eliminazione');
             }
@@ -6285,9 +6413,30 @@ Buono studio!</textarea>
                 box.innerHTML = apps.map((a) => `
                     <div style="font-size:13px; padding:6px 0; border-bottom:1px solid var(--gray-100);">
                         <strong>${escapeHtml(a.applicant?.fullName || '—')}</strong>
-                        <span style="color:var(--gray-500);"> · ${escapeHtml(a.applicant?.email || '')} · ${escapeHtml(a.status || '')} · ${escapeHtml(formatAdminEventDate(a.createdAt))}</span>
+                        <span style="color:var(--gray-500);"> · ${escapeHtml(a.applicant?.email || '')} · ${escapeHtml(formatAdminEventDate(a.createdAt))}</span>
                         ${a.message ? `<div style="color:var(--gray-700); white-space:pre-wrap; margin-top:2px;">${escapeHtml(a.message)}</div>` : ''}
+                        ${(a.applicant?.skills || []).length ? `<div style="color:var(--gray-500); margin-top:3px;">Competenze: ${escapeHtml(a.applicant.skills.join(', '))}</div>` : ''}
+                        <label style="display:flex; gap:8px; align-items:center; margin-top:6px; font-weight:600;">Stato
+                            <select data-op-application-status="${escapeHtml(a.id)}" style="width:auto; min-width:150px; padding:5px 8px;" ${a.status === 'withdrawn' ? 'disabled' : ''}>
+                                ${projectApplicationStatusOptions(a.status)}
+                            </select>
+                        </label>
                     </div>`).join('');
+                box.querySelectorAll('[data-op-application-status]').forEach((select) => {
+                    select.addEventListener('change', async () => {
+                        select.disabled = true;
+                        try {
+                            await apiRequest(`/api/projects/applications/${select.dataset.opApplicationStatus}`, {
+                                method: 'PATCH',
+                                body: JSON.stringify({ status: select.value })
+                            });
+                        } catch (error) {
+                            alert(error.message || 'Errore nell\'aggiornamento della candidatura');
+                        } finally {
+                            select.disabled = false;
+                        }
+                    });
+                });
             } catch (error) {
                 box.innerHTML = `<div class="empty-state">${escapeHtml(error.message || 'Errore')}</div>`;
             }
@@ -6300,8 +6449,8 @@ Buono studio!</textarea>
                 const status = document.getElementById('opportunity-status');
                 const id = document.getElementById('opportunity-id').value;
                 const data = opportunityFormData();
-                if (!data.title || !data.description) {
-                    if (status) status.textContent = 'Titolo e descrizione sono obbligatori.';
+                if (!data.title || !data.organization || !data.description) {
+                    if (status) status.textContent = 'Titolo, organizzazione e descrizione sono obbligatori.';
                     return;
                 }
                 if (status) status.textContent = 'Salvataggio...';
@@ -6312,7 +6461,7 @@ Buono studio!</textarea>
                     });
                     resetOpportunityForm();
                     if (status) status.textContent = 'Salvato.';
-                    await loadNetworkSection();
+                    await loadProjectsSection();
                 } catch (error) {
                     if (status) status.textContent = error.message || 'Errore nel salvataggio.';
                 }
@@ -6320,30 +6469,42 @@ Buono studio!</textarea>
             document.getElementById('opportunity-reset').addEventListener('click', resetOpportunityForm);
         }
 
+        async function loadProjectsSection() {
+            const list = document.getElementById('opportunity-list-admin');
+            if (!list) return;
+            list.innerHTML = '<div class="empty-state">Caricamento progetti...</div>';
+            populateProjectSupervisorSelect();
+            try {
+                const opportunities = await apiRequest('/api/admin/network/opportunities');
+                adminNetworkOpportunities = Array.isArray(opportunities) ? opportunities : [];
+                renderNetworkOpportunities();
+            } catch (error) {
+                adminNetworkOpportunities = [];
+                list.innerHTML = `<div class="empty-state">${escapeHtml(error.message || 'Errore nel caricamento dei progetti')}</div>`;
+            }
+        }
+
         async function loadNetworkSection() {
             const settingsForm = document.getElementById('network-settings-form');
             if (!settingsForm) return;
             try {
-                const [settings, stats, profiles, posts, requests, opportunities] = await Promise.all([
+                const [settings, stats, profiles, posts, requests] = await Promise.all([
                     apiRequest('/api/admin/network/settings'),
                     apiRequest('/api/admin/network/notifications'),
                     apiRequest('/api/admin/network/profiles'),
                     apiRequest('/api/admin/network/posts'),
-                    apiRequest('/api/admin/network/intro-requests'),
-                    apiRequest('/api/admin/network/opportunities').catch(() => [])
+                    apiRequest('/api/admin/network/intro-requests')
                 ]);
                 adminNetworkSettings = settings || null;
                 adminNetworkStats = stats || null;
                 adminNetworkProfiles = Array.isArray(profiles) ? profiles : [];
                 adminNetworkPosts = Array.isArray(posts) ? posts : [];
                 adminNetworkRequests = Array.isArray(requests) ? requests : [];
-                adminNetworkOpportunities = Array.isArray(opportunities) ? opportunities : [];
                 setNetworkSettingsForm(adminNetworkSettings);
                 renderNetworkStats();
                 renderNetworkProfiles();
                 renderNetworkPosts();
                 renderNetworkRequests();
-                renderNetworkOpportunities();
             } catch (error) {
                 const status = document.getElementById('network-settings-status');
                 if (status) {

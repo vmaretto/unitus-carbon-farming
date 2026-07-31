@@ -2565,14 +2565,16 @@ function requireProjectMember(req, res, next) {
   }
 
   const payload = verifyToken(authHeader.slice(7));
-  if (!payload || !['student', 'teacher', 'admin'].includes(payload.role)) {
+  if (!payload || !['student', 'teacher', 'admin', 'guest'].includes(payload.role)) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
   req.projectActor = {
     role: payload.role,
-    userId: payload.role === 'student' ? payload.userId : null,
-    teacherId: payload.role === 'teacher' ? payload.id : null,
+    userId: ['student', 'guest'].includes(payload.role) ? (payload.userId || null) : null,
+    teacherId: payload.role === 'teacher'
+      ? (payload.id || null)
+      : (payload.role === 'guest' ? (payload.teacherId || null) : null),
     email: payload.email || null,
     name: payload.name || [payload.firstName, payload.lastName].filter(Boolean).join(' ').trim() || null
   };
@@ -10929,17 +10931,29 @@ function buildNetworkOpportunity(row, options = {}) {
     title: row.title,
     type: row.type,
     organization: row.organization || null,
+    organizationType: row.organizationType || 'external',
+    sector: row.sector || null,
     location: row.location || null,
     description: row.description || null,
+    skills: Array.isArray(row.skills) ? row.skills : [],
+    interests: Array.isArray(row.interests) ? row.interests : [],
+    duration: row.duration || null,
+    commitment: row.commitment || null,
+    workMode: row.workMode || 'flexible',
     applyUrl: row.applyUrl || null,
     contactEmail: row.contactEmail || null,
     deadline: row.deadline || null,
+    acceptsApplications: row.acceptsApplications !== false,
     createdAt: row.createdAt || null,
     updatedAt: row.updatedAt || null
   };
   if (options.includeAdminFields) {
     base.isPublished = Boolean(row.isPublished);
     base.applicationsCount = Number(row.applicationsCount ?? 0);
+    base.supervisor = row.supervisorId ? {
+      id: row.supervisorId,
+      name: row.supervisorName || null
+    } : null;
   } else {
     base.hasApplied = Boolean(row.hasApplied);
     base.applicationStatus = row.applicationStatus || null;
@@ -10958,6 +10972,13 @@ function normalizeProjectOrganizationType(value) {
 function normalizeProjectWorkMode(value) {
   const normalized = String(value || '').trim().toLowerCase();
   return PROJECT_WORK_MODES.includes(normalized) ? normalized : 'flexible';
+}
+
+function normalizeProjectTeacherId(value) {
+  const normalized = String(value || '').trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)
+    ? normalized
+    : null;
 }
 
 function normalizeMatchValue(value) {
@@ -11591,7 +11612,7 @@ app.post('/api/lms/network/opportunities/:id/apply', requireStudent, requireNonG
   }
 });
 
-// Hub Progetti — area riservata condivisa tra studenti e docenti.
+// Hub Progetti — area riservata condivisa tra studenti, docenti e ospiti.
 // Riutilizza le opportunità esistenti, aggiungendo matching e supervisione.
 app.get('/api/projects', requireProjectMember, async (req, res) => {
   if (!ensurePool(res)) return;
@@ -11616,15 +11637,18 @@ app.get('/api/projects', requireProjectMember, async (req, res) => {
              o.deadline, o.accepts_applications AS "acceptsApplications",
              o.is_published AS "isPublished",
              o.created_at AS "createdAt", o.updated_at AS "updatedAt",
+             o.created_by_user_id AS "creatorUserId",
+             o.created_by_teacher_id AS "creatorTeacherId",
              f.id AS "supervisorId",
-             TRIM(CONCAT(COALESCE(f.first_name, ''), ' ', COALESCE(f.last_name, ''))) AS "supervisorName",
+             COALESCE(NULLIF(TRIM(CONCAT(COALESCE(f.first_name, ''), ' ', COALESCE(f.last_name, ''))), ''), f.name) AS "supervisorName",
              (a.id IS NOT NULL) AS "hasApplied",
              a.status AS "applicationStatus",
              (SELECT COUNT(*)::int
                 FROM network_opportunity_applications count_app
                WHERE count_app.opportunity_id = o.id) AS "applicationsCount",
-             ($2::uuid IS NOT NULL AND
-               (o.created_by_teacher_id = $2::uuid OR o.supervisor_teacher_id = $2::uuid)
+             (($2::uuid IS NOT NULL AND
+               (o.created_by_teacher_id = $2::uuid OR o.supervisor_teacher_id = $2::uuid))
+              OR ($4::uuid IS NOT NULL AND o.created_by_user_id = $4::uuid)
              ) AS "canManage"
         FROM network_opportunities o
         LEFT JOIN faculty f ON f.id = o.supervisor_teacher_id
@@ -11634,11 +11658,13 @@ app.get('/api/projects', requireProjectMember, async (req, res) => {
           OR $3::boolean = TRUE
           OR ($2::uuid IS NOT NULL AND
              (o.created_by_teacher_id = $2::uuid OR o.supervisor_teacher_id = $2::uuid))
+          OR ($4::uuid IS NOT NULL AND o.created_by_user_id = $4::uuid)
        ORDER BY o.is_published DESC, o.deadline ASC NULLS LAST, o.created_at DESC
     `, [
       actor.role === 'student' ? actor.userId : null,
-      actor.role === 'teacher' ? actor.teacherId : null,
-      actor.role === 'admin'
+      ['teacher', 'guest'].includes(actor.role) ? actor.teacherId : null,
+      actor.role === 'admin',
+      ['student', 'guest'].includes(actor.role) ? actor.userId : null
     ]);
 
     res.json({
@@ -11659,8 +11685,8 @@ app.get('/api/projects', requireProjectMember, async (req, res) => {
 app.post('/api/projects', requireProjectMember, async (req, res) => {
   if (!ensurePool(res)) return;
   const actor = req.projectActor;
-  if (actor.role !== 'teacher' || !actor.teacherId) {
-    return res.status(403).json({ error: 'Solo i docenti possono proporre un progetto' });
+  if (!['student', 'teacher', 'guest'].includes(actor.role) || (!actor.userId && !actor.teacherId)) {
+    return res.status(403).json({ error: 'Il tuo ruolo non può proporre un progetto' });
   }
 
   const title = normalizeNetworkText(req.body?.title, 200);
@@ -11670,18 +11696,23 @@ app.post('/api/projects', requireProjectMember, async (req, res) => {
     return res.status(400).json({ error: 'Titolo, azienda/ente e descrizione sono obbligatori' });
   }
 
+  const creatorUserId = ['student', 'guest'].includes(actor.role) ? actor.userId : null;
+  const teacherBackedGuest = actor.role === 'guest' && !actor.userId && actor.teacherId;
+  const creatorTeacherId = actor.role === 'teacher' || teacherBackedGuest ? actor.teacherId : null;
+  const supervisorTeacherId = actor.role === 'teacher' || teacherBackedGuest ? actor.teacherId : null;
+
   try {
     const { rows } = await pool.query(`
       INSERT INTO network_opportunities (
         title, type, organization, organization_type, sector, location, description,
         skills, interests, duration_text, commitment_text, work_mode,
         contact_email, deadline, created_by_teacher_id, supervisor_teacher_id,
-        accepts_applications, is_published
+        accepts_applications, is_published, created_by_user_id
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11, $12,
-        $13, $14, $15, $15, $16, FALSE
+        $13, $14, $15, $16, $17, FALSE, $18
       )
       RETURNING id, title, type, organization, organization_type AS "organizationType",
                 sector, location, description, skills, interests,
@@ -11705,17 +11736,19 @@ app.post('/api/projects', requireProjectMember, async (req, res) => {
       normalizeProjectWorkMode(req.body?.workMode),
       normalizeNetworkText(req.body?.contactEmail, 200),
       req.body?.deadline || null,
-      actor.teacherId,
-      normalizeBoolean(req.body?.acceptsApplications, true)
+      creatorTeacherId,
+      supervisorTeacherId,
+      normalizeBoolean(req.body?.acceptsApplications, true),
+      creatorUserId
     ]);
 
     res.status(201).json(buildProjectHubItem({
       ...rows[0],
-      supervisorName: actor.name,
+      supervisorName: (actor.role === 'teacher' || teacherBackedGuest) ? actor.name : null,
       canManage: true
     }));
   } catch (error) {
-    console.error('Create teacher project error:', error);
+    console.error('Create project error:', error);
     res.status(500).json({ error: 'Errore nella creazione del progetto' });
   }
 });
@@ -11760,18 +11793,21 @@ app.post('/api/projects/:id/apply', requireProjectMember, async (req, res) => {
 app.get('/api/projects/:id/applications', requireProjectMember, async (req, res) => {
   if (!ensurePool(res)) return;
   const actor = req.projectActor;
-  if (!['teacher', 'admin'].includes(actor.role)) {
-    return res.status(403).json({ error: 'Accesso riservato ai docenti' });
+  if (!['student', 'teacher', 'guest', 'admin'].includes(actor.role)) {
+    return res.status(403).json({ error: 'Ruolo non autorizzato alla gestione delle candidature' });
   }
 
   try {
-    if (actor.role === 'teacher') {
+    if (actor.role !== 'admin') {
       const ownership = await pool.query(
         `SELECT id FROM network_opportunities
           WHERE id = $1
-            AND (created_by_teacher_id = $2 OR supervisor_teacher_id = $2)
+            AND (
+              ($2::uuid IS NOT NULL AND (created_by_teacher_id = $2 OR supervisor_teacher_id = $2))
+              OR ($3::uuid IS NOT NULL AND created_by_user_id = $3)
+            )
           LIMIT 1`,
-        [req.params.id, actor.teacherId]
+        [req.params.id, actor.teacherId, actor.userId]
       );
       if (!ownership.rows.length) {
         return res.status(403).json({ error: 'Non puoi gestire questo progetto' });
@@ -11813,8 +11849,8 @@ app.get('/api/projects/:id/applications', requireProjectMember, async (req, res)
 app.patch('/api/projects/applications/:id', requireProjectMember, async (req, res) => {
   if (!ensurePool(res)) return;
   const actor = req.projectActor;
-  if (!['teacher', 'admin'].includes(actor.role)) {
-    return res.status(403).json({ error: 'Accesso riservato ai docenti' });
+  if (!['student', 'teacher', 'guest', 'admin'].includes(actor.role)) {
+    return res.status(403).json({ error: 'Ruolo non autorizzato alla gestione delle candidature' });
   }
 
   const status = String(req.body?.status || '').trim().toLowerCase();
@@ -11825,13 +11861,17 @@ app.patch('/api/projects/applications/:id', requireProjectMember, async (req, re
   try {
     const params = [req.params.id, status];
     let ownershipClause = '';
-    if (actor.role === 'teacher') {
+    if (actor.role !== 'admin') {
       params.push(actor.teacherId);
+      params.push(actor.userId);
       ownershipClause = `
         AND EXISTS (
           SELECT 1 FROM network_opportunities o
            WHERE o.id = network_opportunity_applications.opportunity_id
-             AND (o.created_by_teacher_id = $3 OR o.supervisor_teacher_id = $3)
+             AND (
+               ($3::uuid IS NOT NULL AND (o.created_by_teacher_id = $3 OR o.supervisor_teacher_id = $3))
+               OR ($4::uuid IS NOT NULL AND o.created_by_user_id = $4)
+             )
         )`;
     }
     const { rows } = await pool.query(`
@@ -12558,12 +12598,19 @@ app.get('/api/admin/network/opportunities', requireAdmin, async (_req, res) => {
   if (!ensurePool(res)) return;
   try {
     const { rows } = await pool.query(`
-      SELECT o.id, o.title, o.type, o.organization, o.location, o.description,
+      SELECT o.id, o.title, o.type, o.organization,
+             o.organization_type AS "organizationType", o.sector, o.location, o.description,
+             o.skills, o.interests, o.duration_text AS duration,
+             o.commitment_text AS commitment, o.work_mode AS "workMode",
              o.apply_url AS "applyUrl", o.contact_email AS "contactEmail",
-             o.deadline, o.is_published AS "isPublished",
+             o.deadline, o.accepts_applications AS "acceptsApplications",
+             o.is_published AS "isPublished",
              o.created_at AS "createdAt", o.updated_at AS "updatedAt",
+             f.id AS "supervisorId",
+             COALESCE(NULLIF(TRIM(CONCAT(COALESCE(f.first_name, ''), ' ', COALESCE(f.last_name, ''))), ''), f.name) AS "supervisorName",
              (SELECT COUNT(*)::int FROM network_opportunity_applications a WHERE a.opportunity_id = o.id) AS "applicationsCount"
       FROM network_opportunities o
+      LEFT JOIN faculty f ON f.id = o.supervisor_teacher_id
       ORDER BY o.created_at DESC
       LIMIT 250
     `);
@@ -12579,29 +12626,60 @@ app.post('/api/admin/network/opportunities', requireAdmin, async (req, res) => {
   try {
     const title = normalizeNetworkText(req.body?.title, 200);
     const description = normalizeNetworkText(req.body?.description, 4000);
-    if (!title || !description) {
-      return res.status(400).json({ error: 'Titolo e descrizione sono obbligatori' });
+    const organization = normalizeNetworkText(req.body?.organization, 200);
+    if (!title || !organization || !description) {
+      return res.status(400).json({ error: 'Titolo, organizzazione e descrizione sono obbligatori' });
     }
     const { rows } = await pool.query(`
-      INSERT INTO network_opportunities
-        (title, type, organization, location, description, apply_url, contact_email, deadline, is_published)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING id, title, type, organization, location, description,
+      INSERT INTO network_opportunities (
+        title, type, organization, organization_type, sector, location, description,
+        skills, interests, duration_text, commitment_text, work_mode,
+        apply_url, contact_email, deadline, supervisor_teacher_id,
+        accepts_applications, is_published
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12,
+        $13, $14, $15, $16, $17, $18
+      )
+      RETURNING id, title, type, organization, organization_type AS "organizationType",
+                sector, location, description, skills, interests,
+                duration_text AS duration, commitment_text AS commitment,
+                work_mode AS "workMode",
                 apply_url AS "applyUrl", contact_email AS "contactEmail",
-                deadline, is_published AS "isPublished",
+                deadline, supervisor_teacher_id AS "supervisorId",
+                accepts_applications AS "acceptsApplications", is_published AS "isPublished",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `, [
       title,
       normalizeOpportunityType(req.body?.type),
-      normalizeNetworkText(req.body?.organization, 200),
+      organization,
+      normalizeProjectOrganizationType(req.body?.organizationType),
+      normalizeNetworkText(req.body?.sector, 160),
       normalizeNetworkText(req.body?.location, 200),
       description,
+      normalizeNetworkList(req.body?.skills),
+      normalizeNetworkList(req.body?.interests),
+      normalizeNetworkText(req.body?.duration, 120),
+      normalizeNetworkText(req.body?.commitment, 120),
+      normalizeProjectWorkMode(req.body?.workMode),
       normalizeNetworkUrl(req.body?.applyUrl),
       normalizeNetworkText(req.body?.contactEmail, 200),
       req.body?.deadline || null,
+      normalizeProjectTeacherId(req.body?.supervisorTeacherId),
+      normalizeBoolean(req.body?.acceptsApplications, true),
       normalizeBoolean(req.body?.isPublished, false)
     ]);
-    res.status(201).json(buildNetworkOpportunity(rows[0], { includeAdminFields: true }));
+    const created = rows[0];
+    if (created.supervisorId) {
+      const supervisor = await pool.query(
+        `SELECT COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))), ''), name) AS name
+           FROM faculty WHERE id = $1 LIMIT 1`,
+        [created.supervisorId]
+      );
+      created.supervisorName = supervisor.rows[0]?.name || null;
+    }
+    res.status(201).json(buildNetworkOpportunity(created, { includeAdminFields: true }));
   } catch (error) {
     console.error('Create opportunity error:', error);
     res.status(500).json({ error: 'Errore nella creazione opportunità' });
@@ -12613,33 +12691,59 @@ app.put('/api/admin/network/opportunities/:id', requireAdmin, async (req, res) =
   try {
     const title = normalizeNetworkText(req.body?.title, 200);
     const description = normalizeNetworkText(req.body?.description, 4000);
-    if (!title || !description) {
-      return res.status(400).json({ error: 'Titolo e descrizione sono obbligatori' });
+    const organization = normalizeNetworkText(req.body?.organization, 200);
+    if (!title || !organization || !description) {
+      return res.status(400).json({ error: 'Titolo, organizzazione e descrizione sono obbligatori' });
     }
     const { rows } = await pool.query(`
       UPDATE network_opportunities SET
-        title = $2, type = $3, organization = $4, location = $5, description = $6,
-        apply_url = $7, contact_email = $8, deadline = $9, is_published = $10,
+        title = $2, type = $3, organization = $4, organization_type = $5,
+        sector = $6, location = $7, description = $8,
+        skills = $9, interests = $10, duration_text = $11, commitment_text = $12,
+        work_mode = $13, apply_url = $14, contact_email = $15, deadline = $16,
+        supervisor_teacher_id = $17, accepts_applications = $18, is_published = $19,
         updated_at = NOW()
       WHERE id = $1
-      RETURNING id, title, type, organization, location, description,
+      RETURNING id, title, type, organization, organization_type AS "organizationType",
+                sector, location, description, skills, interests,
+                duration_text AS duration, commitment_text AS commitment,
+                work_mode AS "workMode",
                 apply_url AS "applyUrl", contact_email AS "contactEmail",
-                deadline, is_published AS "isPublished",
+                deadline, supervisor_teacher_id AS "supervisorId",
+                accepts_applications AS "acceptsApplications", is_published AS "isPublished",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `, [
       req.params.id,
       title,
       normalizeOpportunityType(req.body?.type),
-      normalizeNetworkText(req.body?.organization, 200),
+      organization,
+      normalizeProjectOrganizationType(req.body?.organizationType),
+      normalizeNetworkText(req.body?.sector, 160),
       normalizeNetworkText(req.body?.location, 200),
       description,
+      normalizeNetworkList(req.body?.skills),
+      normalizeNetworkList(req.body?.interests),
+      normalizeNetworkText(req.body?.duration, 120),
+      normalizeNetworkText(req.body?.commitment, 120),
+      normalizeProjectWorkMode(req.body?.workMode),
       normalizeNetworkUrl(req.body?.applyUrl),
       normalizeNetworkText(req.body?.contactEmail, 200),
       req.body?.deadline || null,
+      normalizeProjectTeacherId(req.body?.supervisorTeacherId),
+      normalizeBoolean(req.body?.acceptsApplications, true),
       normalizeBoolean(req.body?.isPublished, false)
     ]);
     if (!rows.length) return res.status(404).json({ error: 'Opportunità non trovata' });
-    res.json(buildNetworkOpportunity(rows[0], { includeAdminFields: true }));
+    const updated = rows[0];
+    if (updated.supervisorId) {
+      const supervisor = await pool.query(
+        `SELECT COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))), ''), name) AS name
+           FROM faculty WHERE id = $1 LIMIT 1`,
+        [updated.supervisorId]
+      );
+      updated.supervisorName = supervisor.rows[0]?.name || null;
+    }
+    res.json(buildNetworkOpportunity(updated, { includeAdminFields: true }));
   } catch (error) {
     console.error('Update opportunity error:', error);
     res.status(500).json({ error: 'Errore nell\'aggiornamento opportunità' });
@@ -12665,9 +12769,10 @@ app.get('/api/admin/network/opportunities/:id/applications', requireAdmin, async
       SELECT a.id, a.status, a.message,
              a.created_at AS "createdAt", a.updated_at AS "updatedAt",
              u.id AS "userId", u.first_name AS "firstName", u.last_name AS "lastName",
-             u.email AS "userEmail"
+             u.email AS "userEmail", p.skills, p.interests
       FROM network_opportunity_applications a
       JOIN users u ON u.id = a.user_id
+      LEFT JOIN network_profiles p ON p.user_id = u.id
       WHERE a.opportunity_id = $1
       ORDER BY a.created_at DESC
     `, [req.params.id]);
@@ -12680,7 +12785,9 @@ app.get('/api/admin/network/opportunities/:id/applications', requireAdmin, async
       applicant: {
         userId: row.userId,
         fullName: [row.firstName, row.lastName].filter(Boolean).join(' ').trim(),
-        email: row.userEmail || null
+        email: row.userEmail || null,
+        skills: row.skills || [],
+        interests: row.interests || []
       }
     })));
   } catch (error) {

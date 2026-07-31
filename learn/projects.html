@@ -210,8 +210,8 @@
                     <a href="/learn/network.html">Aggiorna profilo <span>→</span></a>
                 </section>
                 <section class="panel teacher-note" id="teacher-panel" style="display:none">
-                    <h2>Area docenti</h2>
-                    <p>Proponi nuove sfide, segui i progetti che supervisioni e valuta le candidature degli studenti.</p>
+                    <h2>Gestisci i tuoi progetti</h2>
+                    <p>Proponi nuove sfide e segui le candidature degli studenti interessati.</p>
                     <button class="btn btn-primary" id="sidebar-propose-btn">Proponi progetto</button>
                 </section>
                 <section class="panel filters-panel">
@@ -368,6 +368,14 @@
             return String(value || '').split(',').map(item => item.trim()).filter(Boolean);
         }
 
+        function canProposeProjects() {
+            return ['student', 'teacher', 'guest'].includes(actor.role);
+        }
+
+        function canManageProject(project) {
+            return Boolean(project?.canManage) && canProposeProjects();
+        }
+
         async function api(url, options = {}) {
             const response = await fetch(url, {
                 ...options,
@@ -407,7 +415,9 @@
                 : JSON.parse(localStorage.getItem('learnUser') || '{}');
             const name = actor.name || [stored.firstName, stored.lastName].filter(Boolean).join(' ') || (actor.role === 'teacher' ? 'Docente' : 'Studente');
             document.getElementById('user-name').textContent = name;
-            document.getElementById('user-role').textContent = actor.role === 'teacher' ? 'Docente' : 'Studente';
+            document.getElementById('user-role').textContent = actor.role === 'teacher'
+                ? 'Docente'
+                : actor.role === 'guest' ? 'Referente ospite' : 'Studente';
             document.getElementById('avatar').textContent = initials(name);
         }
 
@@ -441,7 +451,7 @@
                 ['Impegno', project.commitment || 'Flessibile'],
                 ['Modalità', labels.mode[project.workMode] || 'Flessibile']
             ];
-            const action = actor.role === 'teacher' && project.canManage
+            const action = canManageProject(project)
                 ? `${project.applicationsCount || 0} candidature`
                 : project.hasApplied
                     ? labels.status[project.applicationStatus] || 'Candidatura inviata'
@@ -488,7 +498,7 @@
         function updateMetrics() {
             document.getElementById('metric-open').textContent = projects.filter(project => project.isPublished).length;
             document.getElementById('metric-partners').textContent = projects.filter(project => project.organizationType === 'partner' && project.isPublished).length;
-            if (actor.role === 'teacher') {
+            if (canProposeProjects() && actor.role !== 'student') {
                 document.getElementById('metric-applications').textContent = projects.reduce((sum, project) => sum + (project.canManage ? project.applicationsCount : 0), 0);
                 document.getElementById('application-label').textContent = 'candidature da valutare';
             } else {
@@ -499,7 +509,7 @@
         function openProject(id) {
             selectedProject = projects.find(project => project.id === id);
             if (!selectedProject) return;
-            if (actor.role === 'teacher' && selectedProject.canManage) {
+            if (canManageProject(selectedProject)) {
                 loadApplications(selectedProject);
                 return;
             }
@@ -649,12 +659,14 @@
                 projects = Array.isArray(data.projects) ? data.projects : [];
                 renderNav();
                 setIdentity();
-                if (actor.role === 'teacher') {
+                if (canProposeProjects()) {
                     document.getElementById('propose-btn').style.display = '';
                     document.getElementById('teacher-panel').style.display = '';
-                    document.getElementById('profile-panel').style.display = 'none';
                     document.getElementById('managed-tab').style.display = '';
-                    document.getElementById('results-copy').textContent = 'pubblicati e in supervisione';
+                    if (actor.role !== 'student') {
+                        document.getElementById('profile-panel').style.display = 'none';
+                        document.getElementById('results-copy').textContent = 'pubblicati e da te proposti';
+                    }
                 } else if (profile?.isComplete) {
                     document.querySelector('#profile-panel h2').textContent = 'Profilo pronto per il matching.';
                     document.querySelector('#profile-panel p').textContent = `${profile.skills.length} competenze e ${profile.interests.length} interessi contribuiscono al tuo punteggio.`;

@@ -23,6 +23,7 @@ test('il menu admin separa Area riservata / Piattaforma e Sito pubblico', () => 
   assert.match(html, /href="#blog" data-section="blog">📝 Blog</);
   assert.match(html, /href="#partners" data-section="partners">🤝 Partner</);
   assert.match(html, /href="#network" data-section="network">🌐 Network</);
+  assert.match(html, /href="#projects" data-section="projects">💼 Progetti</);
   assert.match(html, /faculty-overview-export/);
   assert.match(html, /<th>Ruolo<\/th>/);
   assert.match(html, /<th>Copertina<\/th>/);
@@ -31,7 +32,7 @@ test('il menu admin separa Area riservata / Piattaforma e Sito pubblico', () => 
   assert.match(html, /Risposte del docente/);
   assert.doesNotMatch(html, /Feedback ricevuti/);
   assert.doesNotMatch(html, /slice\(0, 8\)/);
-  assert.equal((html.match(/<section id="/g) || []).length, 19);
+  assert.equal((html.match(/<section id="/g) || []).length, 20);
 });
 
 test('la sezione LMS admin non contiene debug temporanei e usa cache lezioni per modulo', () => {

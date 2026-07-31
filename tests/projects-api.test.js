@@ -263,6 +263,52 @@ test('POST /api/projects consente a un referente guest di proporre un progetto',
   assert.equal(res.body.canManage, true);
 });
 
+test('POST /api/projects/:id/tutor-requests consente allo studente di chiedere un docente', async (t) => {
+  const studentId = '77777777-7777-4777-8777-777777777777';
+  const teacherId = '88888888-8888-4888-8888-888888888888';
+  const calls = [];
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      calls.push(statement);
+      if (statement.startsWith('SELECT id FROM network_opportunities')) return { rows: [{ id: 'student-project' }] };
+      assert.match(statement, /^INSERT INTO project_tutor_requests/);
+      assert.deepEqual(params.slice(0, 4), ['student-project', teacherId, studentId, 'student_tutor']);
+      return { rows: [{ id: 'tutor-request-1', status: 'pending' }] };
+    }
+  });
+  t.after(() => apiModule.__setPool(null));
+  const layer = findRoute('/api/projects/:id/tutor-requests', 'post');
+  const req = { params: { id: 'student-project' }, headers: tokenHeaders({ userId: studentId, role: 'student' }), body: { teacherId, message: 'Mi aiuti?' } };
+  const res = createJsonRes();
+  await runRoute(layer, req, res);
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.body.status, 'pending');
+  assert.equal(calls.length, 2);
+});
+
+test('PATCH /api/projects/tutor-requests/:id consente al docente di accettare', async (t) => {
+  const teacherId = '99999999-9999-4999-8999-999999999999';
+  let updatedProject = false;
+  apiModule.__setPool({
+    async query(sql) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      if (statement.startsWith('SELECT r.id')) return { rows: [{ id: 'request-1', teacherId, requestType: 'student_tutor', projectId: 'project-1', ownerUserId: 'student-1' }] };
+      if (statement.startsWith('UPDATE project_tutor_requests')) return { rows: [{ id: 'request-1', status: 'accepted' }] };
+      if (statement.startsWith('UPDATE network_opportunities')) { updatedProject = true; return { rows: [] }; }
+      throw new Error(`Query inattesa: ${statement}`);
+    }
+  });
+  t.after(() => apiModule.__setPool(null));
+  const layer = findRoute('/api/projects/tutor-requests/:id', 'patch');
+  const req = { params: { id: 'request-1' }, headers: tokenHeaders({ id: teacherId, role: 'teacher' }), body: { status: 'accepted' } };
+  const res = createJsonRes();
+  await runRoute(layer, req, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.status, 'accepted');
+  assert.equal(updatedProject, true);
+});
+
 test('POST admin opportunità salva tutti i campi del progetto', async (t) => {
   const supervisorId = '33333333-3333-4333-8333-333333333333';
   let insertParams = null;

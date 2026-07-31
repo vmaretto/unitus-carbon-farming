@@ -345,6 +345,7 @@
         let actor = { role: authSource };
         let profile = null;
         let projects = [];
+        let faculty = [];
         let currentView = 'recommended';
         let selectedProject = null;
         let saved = JSON.parse(localStorage.getItem('savedProjectIds') || '[]');
@@ -374,6 +375,10 @@
 
         function canManageProject(project) {
             return Boolean(project?.canManage) && canProposeProjects();
+        }
+
+        function tutorRequestFor(project) {
+            return project?.tutorRequests || [];
         }
 
         async function api(url, options = {}) {
@@ -506,15 +511,19 @@
             }
         }
 
-        function openProject(id) {
+        async function openProject(id) {
             selectedProject = projects.find(project => project.id === id);
             if (!selectedProject) return;
-            if (canManageProject(selectedProject)) {
+            if (canManageProject(selectedProject) && actor.role !== 'student') {
                 loadApplications(selectedProject);
                 return;
             }
             const project = selectedProject;
             const canApply = actor.role === 'student' && project.isPublished && project.acceptsApplications && !project.hasApplied;
+            const ownProject = canManageProject(project);
+            const canAskTutor = actor.role === 'student' && ownProject;
+            const canOfferTutor = actor.role === 'teacher' && project.creator?.role === 'guest' && !ownProject;
+            const teacherOptions = faculty.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || 'Docente')}</option>`).join('');
             document.getElementById('detail-content').innerHTML = `
                 <h2 id="detail-title">${escapeHtml(project.title)}</h2>
                 <p><strong>${escapeHtml(project.organization || '')}</strong> · ${escapeHtml(labels.organization[project.organizationType] || '')}</p>
@@ -523,13 +532,55 @@
                 ${project.supervisor?.name ? `<div class="modal-info"><strong>Docente supervisore:</strong> ${escapeHtml(project.supervisor.name)}</div>` : ''}
                 ${actor.role === 'student' && project.matchScore !== null ? `<div class="modal-info"><strong>${project.matchScore}% di affinità.</strong> ${project.matchedSkills?.length ? `Competenze in comune: ${escapeHtml(project.matchedSkills.join(', '))}.` : 'Completa il profilo Network per migliorare il matching.'}</div>` : ''}
                 ${canApply ? `<label class="form-grid">Messaggio per la candidatura<textarea id="application-message" maxlength="1000" placeholder="Racconta brevemente perché il progetto ti interessa."></textarea></label>` : ''}
+                ${canAskTutor ? `<div class="modal-info"><strong>Chiedi un tutor docente</strong><br><span>Seleziona un docente da invitare a seguire il tuo progetto.</span></div><div class="form-grid"><label>Docente<select id="tutor-teacher">${teacherOptions || '<option value="">Nessun docente disponibile</option>'}</select></label><label>Messaggio<textarea id="tutor-message" maxlength="1000" placeholder="Spiega cosa ti aspetti dal tutoraggio."></textarea></label></div>` : ''}
+                ${canOfferTutor ? `<div class="modal-info"><strong>Proponiti come tutor</strong><br><span>Il referente ospite potrà accettare la tua richiesta.</span></div><label class="form-grid">Messaggio<textarea id="tutor-message" maxlength="1000" placeholder="Presenta brevemente la tua disponibilità."></textarea></label>` : ''}
                 <div class="form-actions">
                     <button class="btn" data-close="detail-backdrop">Chiudi</button>
                     ${canApply ? '<button class="btn btn-primary" id="apply-btn">Invia candidatura</button>' : project.hasApplied ? `<button class="btn" disabled>${escapeHtml(labels.status[project.applicationStatus] || 'Candidatura inviata')}</button>` : ''}
+                    ${canAskTutor ? '<button class="btn btn-orange" id="tutor-request-btn">Chiedi tutor</button>' : ''}
+                    ${canOfferTutor ? '<button class="btn btn-orange" id="tutor-request-btn">Propormi come tutor</button>' : ''}
                 </div>`;
             bindCloseButtons();
             document.getElementById('apply-btn')?.addEventListener('click', applyToSelectedProject);
+            document.getElementById('tutor-request-btn')?.addEventListener('click', sendTutorRequest);
             openModal('detail-backdrop');
+            if (actor.role === 'teacher' && !canManageProject(project)) {
+                try {
+                    const requests = await api(`/api/projects/${encodeURIComponent(project.id)}/tutor-requests`);
+                    const relevant = requests.filter(request => request.requestType === 'student_tutor');
+                    const detail = document.getElementById('detail-content');
+                    detail.insertAdjacentHTML('beforeend', `<div id="teacher-tutor-requests" style="margin-top:22px"><h3 style="font-size:13px">Richieste di tutoraggio</h3>${relevant.length ? relevant.map(request => `<article class="application"><div class="application-head"><strong>${escapeHtml(request.requester?.fullName || 'Studente')}</strong><span class="tag">${escapeHtml(request.status === 'accepted' ? 'Accettata' : request.status === 'declined' ? 'Rifiutata' : 'In attesa')}</span></div>${request.message ? `<p>${escapeHtml(request.message)}</p>` : ''}${request.canRespond && request.status === 'pending' ? `<div class="application-actions"><button data-detail-tutor="${escapeHtml(request.id)}" data-status="accepted">Accetta</button><button data-detail-tutor="${escapeHtml(request.id)}" data-status="declined">Rifiuta</button></div>` : ''}</article>`).join('') : '<p style="color:var(--muted);font-size:10px">Nessuna richiesta ricevuta.</p>'}</div>`);
+                    detail.querySelectorAll('[data-detail-tutor]').forEach(button => button.addEventListener('click', async () => {
+                        button.disabled = true;
+                        try {
+                            await api(`/api/projects/tutor-requests/${encodeURIComponent(button.dataset.detailTutor)}`, { method:'PATCH', body:JSON.stringify({ status:button.dataset.status }) });
+                            await openProject(project.id);
+                        } catch (error) {
+                            button.disabled = false;
+                            window.alert(error.message);
+                        }
+                    }));
+                } catch (error) {
+                    // Il dettaglio del progetto resta utilizzabile anche se le richieste non sono disponibili.
+                }
+            }
+        }
+
+        async function sendTutorRequest() {
+            const button = document.getElementById('tutor-request-btn');
+            const teacherId = actor.role === 'teacher' ? undefined : document.getElementById('tutor-teacher')?.value;
+            const message = document.getElementById('tutor-message')?.value.trim() || '';
+            button.disabled = true;
+            button.textContent = 'Invio…';
+            try {
+                await api(`/api/projects/${encodeURIComponent(selectedProject.id)}/tutor-requests`, { method:'POST', body:JSON.stringify({ teacherId, message }) });
+                closeModal('detail-backdrop');
+                window.alert('Richiesta di tutoraggio inviata.');
+            } catch (error) {
+                button.disabled = false;
+                button.textContent = actor.role === 'teacher' ? 'Propormi come tutor' : 'Chiedi tutor';
+                window.alert(error.message);
+            }
         }
 
         async function applyToSelectedProject() {
@@ -557,8 +608,11 @@
             container.innerHTML = '<div class="loading">Caricamento candidature…</div>';
             openModal('applications-backdrop');
             try {
-                const applications = await api(`/api/projects/${encodeURIComponent(project.id)}/applications`);
-                container.innerHTML = applications.length ? applications.map(application => `
+                const [applications, tutorRequests] = await Promise.all([
+                    api(`/api/projects/${encodeURIComponent(project.id)}/applications`),
+                    api(`/api/projects/${encodeURIComponent(project.id)}/tutor-requests`)
+                ]);
+                const applicationHtml = applications.length ? applications.map(application => `
                     <article class="application">
                         <div class="application-head"><strong>${escapeHtml(application.applicant.fullName || 'Studente')}</strong><span class="tag">${escapeHtml(labels.status[application.status] || application.status)}</span></div>
                         <p>${escapeHtml(application.applicant.email || '')}</p>
@@ -570,10 +624,28 @@
                             <button data-app="${escapeHtml(application.id)}" data-status="declined">Non selezionare</button>
                         </div>
                     </article>`).join('') : '<div class="empty"><h2>Nessuna candidatura</h2><p>Le candidature degli studenti compariranno qui.</p></div>';
+                const tutorHtml = tutorRequests.length ? tutorRequests.map(request => `
+                    <article class="application">
+                        <div class="application-head"><strong>${escapeHtml(request.teacherName || 'Docente')}</strong><span class="tag">${escapeHtml(request.status === 'accepted' ? 'Accettata' : request.status === 'declined' ? 'Rifiutata' : 'In attesa')}</span></div>
+                        <p>${escapeHtml(request.teacherEmail || '')}${request.requester?.fullName ? ` · richiesta da ${escapeHtml(request.requester.fullName)}` : ''}</p>
+                        ${request.message ? `<p>${escapeHtml(request.message)}</p>` : ''}
+                        ${request.canRespond && request.status === 'pending' ? `<div class="application-actions"><button data-tutor="${escapeHtml(request.id)}" data-status="accepted">Accetta tutor</button><button data-tutor="${escapeHtml(request.id)}" data-status="declined">Rifiuta</button></div>` : ''}
+                    </article>`).join('') : '<div class="empty"><h2>Nessuna richiesta tutor</h2><p>Le richieste di tutoraggio compariranno qui.</p></div>';
+                container.innerHTML = `<h3 style="margin:0 0 8px">Candidature studenti</h3>${applicationHtml}<h3 style="margin:28px 0 8px">Tutoraggio docente</h3>${tutorHtml}`;
                 container.querySelectorAll('[data-app]').forEach(button => button.addEventListener('click', async () => {
                     button.disabled = true;
                     try {
                         await api(`/api/projects/applications/${encodeURIComponent(button.dataset.app)}`, { method:'PATCH', body:JSON.stringify({ status:button.dataset.status }) });
+                        await loadApplications(project);
+                    } catch (error) {
+                        button.disabled = false;
+                        window.alert(error.message);
+                    }
+                }));
+                container.querySelectorAll('[data-tutor]').forEach(button => button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    try {
+                        await api(`/api/projects/tutor-requests/${encodeURIComponent(button.dataset.tutor)}`, { method:'PATCH', body:JSON.stringify({ status:button.dataset.status }) });
                         await loadApplications(project);
                     } catch (error) {
                         button.disabled = false;
@@ -657,6 +729,9 @@
                 actor = data.actor || actor;
                 profile = data.profile;
                 projects = Array.isArray(data.projects) ? data.projects : [];
+                if (actor.role === 'student') {
+                    faculty = await api('/api/lms/network/faculty').catch(() => []);
+                }
                 renderNav();
                 setIdentity();
                 if (canProposeProjects()) {

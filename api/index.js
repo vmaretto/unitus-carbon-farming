@@ -11067,6 +11067,11 @@ function buildProjectHubItem(row, profile = null) {
       id: row.supervisorId,
       name: row.supervisorName || null
     } : null,
+    creator: row.creatorUserId || row.creatorTeacherId ? {
+      id: row.creatorUserId || row.creatorTeacherId,
+      role: row.creatorRole || (row.creatorTeacherId ? 'teacher' : null),
+      name: row.creatorName || null
+    } : null,
     canManage: Boolean(row.canManage),
     matchScore: match.score,
     matchedSkills: match.matchedSkills
@@ -11667,6 +11672,9 @@ app.get('/api/projects', requireProjectMember, async (req, res) => {
              o.created_at AS "createdAt", o.updated_at AS "updatedAt",
              o.created_by_user_id AS "creatorUserId",
              o.created_by_teacher_id AS "creatorTeacherId",
+             creator_user.role AS "creatorRole",
+             COALESCE(NULLIF(TRIM(CONCAT(COALESCE(creator_user.first_name, ''), ' ', COALESCE(creator_user.last_name, ''))), ''), creator_user.email) AS "creatorName",
+             COALESCE(NULLIF(TRIM(CONCAT(COALESCE(creator_faculty.first_name, ''), ' ', COALESCE(creator_faculty.last_name, ''))), ''), creator_faculty.name) AS "creatorTeacherName",
              f.id AS "supervisorId",
              COALESCE(NULLIF(TRIM(CONCAT(COALESCE(f.first_name, ''), ' ', COALESCE(f.last_name, ''))), ''), f.name) AS "supervisorName",
              (a.id IS NOT NULL) AS "hasApplied",
@@ -11680,6 +11688,8 @@ app.get('/api/projects', requireProjectMember, async (req, res) => {
              ) AS "canManage"
         FROM network_opportunities o
         LEFT JOIN faculty f ON f.id = o.supervisor_teacher_id
+        LEFT JOIN users creator_user ON creator_user.id = o.created_by_user_id
+        LEFT JOIN faculty creator_faculty ON creator_faculty.id = o.created_by_teacher_id
         LEFT JOIN network_opportunity_applications a
           ON a.opportunity_id = o.id AND a.user_id = $1::uuid
        WHERE o.is_published = TRUE
@@ -11702,7 +11712,10 @@ app.get('/api/projects', requireProjectMember, async (req, res) => {
         interests: profile?.interests || [],
         isComplete: Boolean((profile?.skills || []).length || (profile?.interests || []).length)
       } : null,
-      projects: rows.map((row) => buildProjectHubItem(row, actor.role === 'student' ? profile : null))
+      projects: rows.map((row) => buildProjectHubItem({
+        ...row,
+        creatorName: row.creatorName || row.creatorTeacherName || null
+      }, actor.role === 'student' ? profile : null))
     });
   } catch (error) {
     console.error('List project hub error:', error);
@@ -11815,6 +11828,169 @@ app.post('/api/projects/:id/apply', requireProjectMember, async (req, res) => {
   } catch (error) {
     console.error('Apply to project error:', error);
     res.status(500).json({ error: 'Errore durante la candidatura' });
+  }
+});
+
+// Richieste di tutoraggio: lo studente può chiedere un docente per il proprio
+// progetto; un docente può proporsi per un progetto creato da un ospite.
+app.post('/api/projects/:id/tutor-requests', requireProjectMember, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const actor = req.projectActor;
+  const teacherId = actor.role === 'teacher'
+    ? actor.teacherId
+    : normalizeProjectTeacherId(req.body?.teacherId);
+  const message = normalizeNetworkText(req.body?.message, 1000);
+
+  if (!['student', 'teacher'].includes(actor.role) || !teacherId) {
+    return res.status(403).json({ error: 'Solo studenti e docenti possono inviare una richiesta di tutoraggio' });
+  }
+
+  try {
+    let requestType;
+    let requestedByUserId = null;
+    if (actor.role === 'student') {
+      requestType = 'student_tutor';
+      requestedByUserId = actor.userId;
+      const ownership = await pool.query(
+        `SELECT id FROM network_opportunities
+          WHERE id = $1 AND created_by_user_id = $2
+          LIMIT 1`,
+        [req.params.id, actor.userId]
+      );
+      if (!ownership.rows.length) {
+        return res.status(403).json({ error: 'Puoi chiedere un tutor solo per un tuo progetto' });
+      }
+    } else {
+      requestType = 'teacher_tutor';
+      const guestProject = await pool.query(
+        `SELECT o.id
+           FROM network_opportunities o
+           JOIN users owner ON owner.id = o.created_by_user_id
+          WHERE o.id = $1 AND owner.role = 'guest'
+          LIMIT 1`,
+        [req.params.id]
+      );
+      if (!guestProject.rows.length) {
+        return res.status(403).json({ error: 'Puoi proporti come tutor solo sui progetti degli ospiti' });
+      }
+    }
+
+    const { rows } = await pool.query(`
+      INSERT INTO project_tutor_requests
+        (opportunity_id, teacher_id, requested_by_user_id, request_type, message, status)
+      VALUES ($1, $2, $3, $4, $5, 'pending')
+      ON CONFLICT (opportunity_id, teacher_id, request_type) DO UPDATE SET
+        requested_by_user_id = EXCLUDED.requested_by_user_id,
+        message = EXCLUDED.message,
+        status = 'pending',
+        updated_at = NOW()
+      RETURNING id, opportunity_id AS "projectId", teacher_id AS "teacherId",
+                requested_by_user_id AS "requestedByUserId", request_type AS "requestType",
+                message, status, created_at AS "createdAt", updated_at AS "updatedAt"
+    `, [req.params.id, teacherId, requestedByUserId, requestType, message]);
+
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Create project tutor request error:', error);
+    res.status(500).json({ error: 'Errore nella richiesta di tutoraggio' });
+  }
+});
+
+app.get('/api/projects/:id/tutor-requests', requireProjectMember, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const actor = req.projectActor;
+  try {
+    const { rows } = await pool.query(`
+      SELECT r.id, r.opportunity_id AS "projectId", r.teacher_id AS "teacherId",
+             r.requested_by_user_id AS "requestedByUserId", r.request_type AS "requestType",
+             r.message, r.status, r.created_at AS "createdAt", r.updated_at AS "updatedAt",
+             f.name AS "teacherName", f.email AS "teacherEmail",
+             requester.first_name AS "requesterFirstName", requester.last_name AS "requesterLastName",
+             requester.email AS "requesterEmail",
+             o.created_by_user_id AS "ownerUserId", o.created_by_teacher_id AS "ownerTeacherId"
+        FROM project_tutor_requests r
+        JOIN network_opportunities o ON o.id = r.opportunity_id
+        JOIN faculty f ON f.id = r.teacher_id
+        LEFT JOIN users requester ON requester.id = r.requested_by_user_id
+       WHERE r.opportunity_id = $1
+         AND (
+           $2::boolean = TRUE
+           OR ($3::uuid IS NOT NULL AND (o.created_by_user_id = $3 OR o.created_by_teacher_id = $3))
+           OR ($4::uuid IS NOT NULL AND r.teacher_id = $4)
+         )
+       ORDER BY r.created_at DESC
+    `, [req.params.id, actor.role === 'admin', actor.userId || actor.teacherId || null, actor.teacherId]);
+
+    res.json(rows.map((row) => ({
+      id: row.id,
+      projectId: row.projectId,
+      teacherId: row.teacherId,
+      teacherName: row.teacherName,
+      teacherEmail: row.teacherEmail || null,
+      requestType: row.requestType,
+      message: row.message || null,
+      status: row.status,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      requester: row.requestedByUserId ? {
+        userId: row.requestedByUserId,
+        fullName: [row.requesterFirstName, row.requesterLastName].filter(Boolean).join(' ').trim(),
+        email: row.requesterEmail || null
+      } : null,
+      canRespond: actor.role === 'admin'
+        || (row.requestType === 'student_tutor' && actor.teacherId === row.teacherId)
+        || (row.requestType === 'teacher_tutor' && actor.userId && actor.userId === row.ownerUserId)
+    })));
+  } catch (error) {
+    console.error('List project tutor requests error:', error);
+    res.status(500).json({ error: 'Errore nel recupero delle richieste di tutoraggio' });
+  }
+});
+
+app.patch('/api/projects/tutor-requests/:id', requireProjectMember, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const actor = req.projectActor;
+  const status = String(req.body?.status || '').trim().toLowerCase();
+  if (!['accepted', 'declined'].includes(status)) {
+    return res.status(400).json({ error: 'Stato richiesta non valido' });
+  }
+
+  try {
+    const requestResult = await pool.query(`
+      SELECT r.id, r.teacher_id AS "teacherId", r.request_type AS "requestType",
+             o.id AS "projectId", o.created_by_user_id AS "ownerUserId",
+             o.created_by_teacher_id AS "ownerTeacherId"
+        FROM project_tutor_requests r
+        JOIN network_opportunities o ON o.id = r.opportunity_id
+       WHERE r.id = $1
+       LIMIT 1
+    `, [req.params.id]);
+    const request = requestResult.rows[0];
+    if (!request) return res.status(404).json({ error: 'Richiesta di tutoraggio non trovata' });
+
+    const canRespond = actor.role === 'admin'
+      || (request.requestType === 'student_tutor' && actor.teacherId === request.teacherId)
+      || (request.requestType === 'teacher_tutor' && actor.userId && actor.userId === request.ownerUserId);
+    if (!canRespond) return res.status(403).json({ error: 'Non puoi gestire questa richiesta' });
+
+    const { rows } = await pool.query(`
+      UPDATE project_tutor_requests
+         SET status = $2, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, opportunity_id AS "projectId", teacher_id AS "teacherId",
+                 request_type AS "requestType", status, updated_at AS "updatedAt"
+    `, [req.params.id, status]);
+
+    if (status === 'accepted') {
+      await pool.query(
+        'UPDATE network_opportunities SET supervisor_teacher_id = $2, updated_at = NOW() WHERE id = $1',
+        [request.projectId, request.teacherId]
+      );
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Update project tutor request error:', error);
+    res.status(500).json({ error: 'Errore nell\'aggiornamento della richiesta di tutoraggio' });
   }
 });
 

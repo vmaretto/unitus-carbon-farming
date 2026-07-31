@@ -371,7 +371,7 @@
         }
 
         function canProposeProjects() {
-            return ['student', 'teacher', 'guest'].includes(actor.role);
+            return ['student', 'teacher', 'guest', 'admin'].includes(actor.role);
         }
 
         function canManageProject(project) {
@@ -423,7 +423,7 @@
             document.getElementById('user-name').textContent = name;
             document.getElementById('user-role').textContent = actor.role === 'teacher'
                 ? 'Docente'
-                : actor.role === 'guest' ? 'Referente ospite' : 'Studente';
+                : actor.role === 'guest' ? 'Referente ospite' : actor.role === 'admin' ? 'Amministratore' : 'Studente';
             document.getElementById('avatar').textContent = initials(name);
         }
 

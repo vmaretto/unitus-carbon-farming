@@ -11726,7 +11726,7 @@ app.get('/api/projects', requireProjectMember, async (req, res) => {
 app.post('/api/projects', requireProjectMember, async (req, res) => {
   if (!ensurePool(res)) return;
   const actor = req.projectActor;
-  if (!['student', 'teacher', 'guest'].includes(actor.role) || (!actor.userId && !actor.teacherId)) {
+  if (!['student', 'teacher', 'guest', 'admin'].includes(actor.role) || (actor.role !== 'admin' && !actor.userId && !actor.teacherId)) {
     return res.status(403).json({ error: 'Il tuo ruolo non può proporre un progetto' });
   }
 
@@ -11737,7 +11737,7 @@ app.post('/api/projects', requireProjectMember, async (req, res) => {
     return res.status(400).json({ error: 'Titolo, azienda/ente e descrizione sono obbligatori' });
   }
 
-  const creatorUserId = ['student', 'guest'].includes(actor.role) ? actor.userId : null;
+  const creatorUserId = ['student', 'guest', 'admin'].includes(actor.role) ? actor.userId : null;
   const teacherBackedGuest = actor.role === 'guest' && !actor.userId && actor.teacherId;
   const creatorTeacherId = actor.role === 'teacher' || teacherBackedGuest ? actor.teacherId : null;
   const supervisorTeacherId = actor.role === 'teacher' || teacherBackedGuest ? actor.teacherId : null;

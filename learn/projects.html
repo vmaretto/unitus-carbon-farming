@@ -673,7 +673,8 @@
 
         document.getElementById('proposal-form').addEventListener('submit', async event => {
             event.preventDefault();
-            const form = new FormData(event.currentTarget);
+            const formElement = event.currentTarget;
+            const form = new FormData(formElement);
             const payload = Object.fromEntries(form.entries());
             payload.skills = list(payload.skills);
             payload.interests = list(payload.interests);
@@ -684,7 +685,7 @@
             try {
                 const project = await api('/api/projects', { method:'POST', body:JSON.stringify(payload) });
                 projects.unshift(project);
-                event.currentTarget.reset();
+                formElement.reset();
                 status.textContent = '';
                 closeModal('proposal-backdrop');
                 currentView = 'managed';

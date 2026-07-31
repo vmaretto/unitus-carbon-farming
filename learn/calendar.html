@@ -218,7 +218,9 @@
             }
             const now = new Date();
             const start = lesson.startDatetime ? new Date(lesson.startDatetime) : null;
-            const progress = lesson.lmsLessonId ? state.progressByLmsLesson.get(lesson.lmsLessonId) : null;
+            const progress = (lesson.lmsLessonId && state.progressByLmsLesson.get(lesson.lmsLessonId))
+                || state.progressByLmsLesson.get(lesson.id)
+                || null;
             const attendanceType = progress?.attendanceType || null;
             const completedAt = progress?.completedAt || null;
 
@@ -358,6 +360,7 @@
                 const progressLists = await Promise.all(state.courseIds.map((courseId) => api(`/api/lms/lessons/progress?courseId=${courseId}`)));
                 progressLists.flat().forEach((progress) => {
                     if (progress && progress.lessonId) state.progressByLmsLesson.set(progress.lessonId, progress);
+                    if (progress && progress.calendarLessonId) state.progressByLmsLesson.set(progress.calendarLessonId, progress);
                 });
             }
 

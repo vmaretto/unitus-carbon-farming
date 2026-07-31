@@ -10006,6 +10006,7 @@ app.get('/api/lms/lessons/progress', requireStudent, async (req, res) => {
     // Get all lms_lessons for this course (or all) with progress + attendance
     let query = `
       SELECT ll.id AS "lessonId",
+             ll.calendar_lesson_id AS "calendarLessonId",
              lp.progress_percent AS "progressPercent",
              lp.completed_at AS "completedAt",
              EXISTS (SELECT 1 FROM attendance a2 WHERE a2.lesson_id = ll.calendar_lesson_id AND a2.user_id = $1 AND a2.attendance_type IN ('in_person', 'remote_live')) AS "hasAttendance",
@@ -10024,6 +10025,33 @@ app.get('/api/lms/lessons/progress', requireStudent, async (req, res) => {
       values.push(courseId);
     }
     const { rows } = await pool.query(query, values);
+    // Alcune lezioni calendario possono non avere ancora un contenuto LMS
+    // collegato. Restituiamo comunque il loro stato presenza, così la vista
+    // studente non perde una delle lezioni della giornata.
+    if (courseId) {
+      const { rows: calendarRows } = await pool.query(`
+        SELECT NULL::uuid AS "lessonId",
+               cal.id AS "calendarLessonId",
+               NULL::numeric AS "progressPercent",
+               NULL::timestamptz AS "completedAt",
+               EXISTS (
+                 SELECT 1 FROM attendance a2
+                  WHERE a2.lesson_id = cal.id
+                    AND a2.user_id = $1
+                    AND a2.attendance_type IN ('in_person', 'remote_live')
+               ) AS "hasAttendance",
+               a.attendance_type AS "attendanceType",
+               cal.start_datetime AS "startDatetime"
+          FROM lessons cal
+          JOIN modules cm ON cm.id = cal.module_id
+          LEFT JOIN lms_lessons linked ON linked.calendar_lesson_id = cal.id
+          LEFT JOIN attendance a ON a.lesson_id = cal.id AND a.user_id = $1
+         WHERE cm.course_id = $2
+           AND linked.id IS NULL
+           AND COALESCE(cal.status, 'scheduled') <> 'cancelled'
+      `, [req.user.userId, courseId]);
+      rows.push(...calendarRows);
+    }
     // Filter to only lessons with some data
     res.json(rows);
   } catch (error) {

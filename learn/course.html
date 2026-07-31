@@ -219,7 +219,37 @@
 
                 // Load lessons for this course
                 const lessonsRes = await fetch(`/api/lms/lessons?courseId=${courseId}`);
-                const lessons = lessonsRes.ok ? await lessonsRes.json() : [];
+                let lessons = lessonsRes.ok ? await lessonsRes.json() : [];
+
+                // Most lessons have an LMS record, but attendance is recorded
+                // on the calendar lesson. Include calendar-only lessons too,
+                // otherwise a second class on the same day can disappear from
+                // the student's course view.
+                try {
+                    const calendarRes = await fetch('/api/lessons');
+                    const calendarLessons = calendarRes.ok ? await calendarRes.json() : [];
+                    const moduleIds = new Set(modules.map(module => module.id));
+                    const linkedCalendarIds = new Set(lessons.map(lesson => lesson.calendarLessonId).filter(Boolean));
+                    const calendarOnly = calendarLessons
+                        .filter(lesson => moduleIds.has(lesson.moduleId)
+                            && !linkedCalendarIds.has(lesson.id)
+                            && lesson.status !== 'cancelled')
+                        .map(lesson => ({
+                            id: `calendar-${lesson.id}`,
+                            moduleId: lesson.moduleId,
+                            calendarLessonId: lesson.id,
+                            title: lesson.title,
+                            description: lesson.description,
+                            startDatetime: lesson.startDatetime,
+                            durationMinutes: lesson.durationMinutes,
+                            teacherName: lesson.teacherName,
+                            externalTeacherName: lesson.externalTeacherName,
+                            calendarOnly: true
+                        }));
+                    lessons = lessons.concat(calendarOnly);
+                } catch (calendarError) {
+                    console.warn('Could not load calendar-only lessons', calendarError);
+                }
 
                 // Load individual lesson progress for this student
                 let lessonProgressList = [];
@@ -238,7 +268,10 @@
 
                 const progressMap = {};
                 if (Array.isArray(lessonProgressList)) {
-                    lessonProgressList.forEach(p => { progressMap[p.lessonId || p.lms_lesson_id] = p; });
+                    lessonProgressList.forEach(p => {
+                        if (p.lessonId || p.lms_lesson_id) progressMap[p.lessonId || p.lms_lesson_id] = p;
+                        if (p.calendarLessonId) progressMap[p.calendarLessonId] = p;
+                    });
                 }
 
                 function getLessonStatus(progress, lesson) {
@@ -300,7 +333,7 @@
                 let heldLessonsCount = 0;
 
                 lessons.forEach(lesson => {
-                    const status = getLessonStatus(progressMap[lesson.id], lesson);
+                    const status = getLessonStatus(progressMap[lesson.id] || progressMap[lesson.calendarLessonId], lesson);
                     if (status.key !== 'future') heldLessonsCount += 1;
                     if (status.key === 'in_person') inPersonCount += 1;
                     if (status.key === 'remote_live') remoteLiveCount += 1;
@@ -343,7 +376,7 @@
                     }
 
                     modLessons.forEach((lesson, index) => {
-                        const lProgress = progressMap[lesson.id];
+                        const lProgress = progressMap[lesson.id] || progressMap[lesson.calendarLessonId];
                         const lessonStatus = getLessonStatus(lProgress, lesson);
                         const isCompleted = lessonStatus.isCompleted;
                         const iconClass = isCompleted ? 'completed' : 'available';
@@ -363,9 +396,13 @@
                             </div>
                             ${durationMin ? `<div class="lesson-duration">${durationMin}</div>` : ''}
                         `;
-                        lessonDiv.addEventListener('click', () => {
-                            window.location.href = `/learn/lesson.html?id=${lesson.id}`;
-                        });
+                        if (!lesson.calendarOnly) {
+                            lessonDiv.addEventListener('click', () => {
+                                window.location.href = `/learn/lesson.html?id=${lesson.id}`;
+                            });
+                        } else {
+                            lessonDiv.style.cursor = 'default';
+                        }
                         modDiv.appendChild(lessonDiv);
                     });
 

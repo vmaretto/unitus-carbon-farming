@@ -221,7 +221,7 @@ test('POST /api/projects consente anche a uno studente di proporre un progetto',
 
   assert.equal(res.statusCode, 201);
   assert.equal(insertParams[14], null, 'uno studente non viene registrato come docente creatore');
-  assert.equal(insertParams[17], studentId, 'la proposta viene associata all\'utente');
+  assert.equal(insertParams[18], studentId, 'la proposta viene associata all\'utente');
   assert.equal(res.body.canManage, true);
 });
 
@@ -259,7 +259,7 @@ test('POST /api/projects consente a un referente guest di proporre un progetto',
 
   assert.equal(res.statusCode, 201);
   assert.equal(insertParams[14], null);
-  assert.equal(insertParams[17], guestId);
+  assert.equal(insertParams[18], guestId);
   assert.equal(res.body.canManage, true);
 });
 
@@ -424,6 +424,6 @@ test('la pagina Progetti è integrata nelle aree studenti e docenti', () => {
   assert.match(adminDashboard, /<section id="projects">/);
   assert.match(adminDashboard, /id="opportunity-supervisor"/);
   assert.match(adminDashboard, /\/api\/projects\/applications\/\$\{select\.dataset\.opApplicationStatus\}/);
-  assert.match(projectPage, /\['student', 'teacher', 'guest'\]\.includes\(actor\.role\)/);
+  assert.match(projectPage, /\['student', 'teacher', 'guest', 'admin'\]\.includes\(actor\.role\)/);
   assert.match(projectPage, /Referente ospite/);
 });

@@ -293,6 +293,14 @@
                         <select name="organizationType"><option value="partner">Azienda partner</option><option value="external">Azienda esterna</option><option value="university">Università / ricerca</option></select>
                     </label>
                 </div>
+                <div class="form-row">
+                    <label>Docente tutor richiesto
+                        <select name="supervisorTeacherId" id="proposal-tutor-teacher"><option value="">Nessun docente selezionato</option></select>
+                    </label>
+                    <label>Azienda / partner da coinvolgere
+                        <select name="partnerId" id="proposal-partner"><option value="">Nessun partner selezionato</option></select>
+                    </label>
+                </div>
                 <label>Descrizione della sfida *<textarea name="description" maxlength="4000" required></textarea></label>
                 <div class="form-row">
                     <label>Competenze richieste<input name="skills" placeholder="MRV, GIS, LCA"></label>
@@ -347,6 +355,7 @@
         let profile = null;
         let projects = [];
         let faculty = [];
+        let partners = [];
         let currentView = 'recommended';
         let selectedProject = null;
         let saved = JSON.parse(localStorage.getItem('savedProjectIds') || '[]');
@@ -368,6 +377,13 @@
 
         function list(value) {
             return String(value || '').split(',').map(item => item.trim()).filter(Boolean);
+        }
+
+        function renderProposalOptions() {
+            const teacherSelect = document.getElementById('proposal-tutor-teacher');
+            const partnerSelect = document.getElementById('proposal-partner');
+            if (teacherSelect) teacherSelect.innerHTML = '<option value="">Nessun docente selezionato</option>' + faculty.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || 'Docente')}</option>`).join('');
+            if (partnerSelect) partnerSelect.innerHTML = '<option value="">Nessun partner selezionato</option>' + partners.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}${item.partnerType ? ` · ${escapeHtml(item.partnerType)}` : ''}</option>`).join('');
         }
 
         function canProposeProjects() {
@@ -531,6 +547,7 @@
                 <p>${escapeHtml(project.description || '')}</p>
                 <div class="tags">${[...(project.skills || []), ...(project.interests || [])].map(item => `<span class="tag">${escapeHtml(item)}</span>`).join('')}</div>
                 ${project.supervisor?.name ? `<div class="modal-info"><strong>Docente supervisore:</strong> ${escapeHtml(project.supervisor.name)}</div>` : ''}
+                ${project.partner?.name ? `<div class="modal-info"><strong>Partner coinvolto:</strong> ${escapeHtml(project.partner.name)}${project.partner.partnerType ? ` · ${escapeHtml(project.partner.partnerType)}` : ''}</div>` : ''}
                 ${actor.role === 'student' && project.matchScore !== null ? `<div class="modal-info"><strong>${project.matchScore}% di affinità.</strong> ${project.matchedSkills?.length ? `Competenze in comune: ${escapeHtml(project.matchedSkills.join(', '))}.` : 'Completa il profilo Network per migliorare il matching.'}</div>` : ''}
                 ${canApply ? `<label class="form-grid">Messaggio per la candidatura<textarea id="application-message" maxlength="1000" placeholder="Racconta brevemente perché il progetto ti interessa."></textarea></label>` : ''}
                 ${canAskTutor ? `<div class="modal-info"><strong>Chiedi un tutor docente</strong><br><span>Seleziona un docente da invitare a seguire il tuo progetto.</span></div><div class="form-grid"><label>Docente<select id="tutor-teacher">${teacherOptions || '<option value="">Nessun docente disponibile</option>'}</select></label><label>Messaggio<textarea id="tutor-message" maxlength="1000" placeholder="Spiega cosa ti aspetti dal tutoraggio."></textarea></label></div>` : ''}
@@ -678,6 +695,7 @@
             const payload = Object.fromEntries(form.entries());
             payload.skills = list(payload.skills);
             payload.interests = list(payload.interests);
+            payload.tutorMessage = '';
             const button = document.getElementById('proposal-submit');
             const status = document.getElementById('proposal-status');
             button.disabled = true;
@@ -734,6 +752,13 @@
                 if (actor.role === 'student') {
                     faculty = await api('/api/lms/network/faculty').catch(() => []);
                 }
+                const [facultyOptions, partnerOptions] = await Promise.all([
+                    api('/api/faculty').catch(() => []),
+                    api('/api/partners?published=true').catch(() => [])
+                ]);
+                faculty = Array.isArray(facultyOptions) && facultyOptions.length ? facultyOptions : faculty;
+                partners = Array.isArray(partnerOptions) ? partnerOptions : [];
+                renderProposalOptions();
                 renderNav();
                 setIdentity();
                 if (canProposeProjects()) {

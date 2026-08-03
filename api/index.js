@@ -10960,6 +10960,11 @@ function buildNetworkOpportunity(row, options = {}) {
     type: row.type,
     organization: row.organization || null,
     organizationType: row.organizationType || 'external',
+    partner: row.partnerId ? {
+      id: row.partnerId,
+      name: row.partnerName || null,
+      partnerType: row.partnerType || null
+    } : null,
     sector: row.sector || null,
     location: row.location || null,
     description: row.description || null,
@@ -11664,6 +11669,7 @@ app.get('/api/projects', requireProjectMember, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT o.id, o.title, o.type, o.organization,
              o.organization_type AS "organizationType", o.sector, o.location, o.description,
+             o.partner_id AS "partnerId", p.name AS "partnerName", p.partner_type AS "partnerType",
              o.skills, o.interests, o.duration_text AS duration,
              o.commitment_text AS commitment, o.work_mode AS "workMode",
              o.apply_url AS "applyUrl", o.contact_email AS "contactEmail",
@@ -11688,6 +11694,7 @@ app.get('/api/projects', requireProjectMember, async (req, res) => {
              ) AS "canManage"
         FROM network_opportunities o
         LEFT JOIN faculty f ON f.id = o.supervisor_teacher_id
+        LEFT JOIN partners p ON p.id = o.partner_id
         LEFT JOIN users creator_user ON creator_user.id = o.created_by_user_id
         LEFT JOIN faculty creator_faculty ON creator_faculty.id = o.created_by_teacher_id
         LEFT JOIN network_opportunity_applications a
@@ -11741,19 +11748,22 @@ app.post('/api/projects', requireProjectMember, async (req, res) => {
   const teacherBackedGuest = actor.role === 'guest' && !actor.userId && actor.teacherId;
   const creatorTeacherId = actor.role === 'teacher' || teacherBackedGuest ? actor.teacherId : null;
   const supervisorTeacherId = actor.role === 'teacher' || teacherBackedGuest ? actor.teacherId : null;
+  const selectedTeacherId = normalizeProjectTeacherId(req.body?.supervisorTeacherId);
+  const partnerId = normalizeProjectTeacherId(req.body?.partnerId);
+  const requestedSupervisorId = actor.role === 'student' ? null : (selectedTeacherId || supervisorTeacherId);
 
   try {
     const { rows } = await pool.query(`
       INSERT INTO network_opportunities (
         title, type, organization, organization_type, sector, location, description,
         skills, interests, duration_text, commitment_text, work_mode,
-        contact_email, deadline, created_by_teacher_id, supervisor_teacher_id,
+        contact_email, deadline, created_by_teacher_id, supervisor_teacher_id, partner_id,
         accepts_applications, is_published, created_by_user_id
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11, $12,
-        $13, $14, $15, $16, $17, FALSE, $18
+        $13, $14, $15, $16, $17, $18, FALSE, $19
       )
       RETURNING id, title, type, organization, organization_type AS "organizationType",
                 sector, location, description, skills, interests,
@@ -11778,10 +11788,21 @@ app.post('/api/projects', requireProjectMember, async (req, res) => {
       normalizeNetworkText(req.body?.contactEmail, 200),
       req.body?.deadline || null,
       creatorTeacherId,
-      supervisorTeacherId,
+      requestedSupervisorId,
+      partnerId,
       normalizeBoolean(req.body?.acceptsApplications, true),
       creatorUserId
     ]);
+
+    if (actor.role === 'student' && selectedTeacherId && rows[0]?.id) {
+      await pool.query(`
+        INSERT INTO project_tutor_requests
+          (opportunity_id, teacher_id, requested_by_user_id, request_type, message, status)
+        VALUES ($1, $2, $3, 'student_tutor', $4, 'pending')
+        ON CONFLICT (opportunity_id, teacher_id, request_type) DO UPDATE SET
+          message = EXCLUDED.message, status = 'pending', updated_at = NOW()
+      `, [rows[0].id, selectedTeacherId, actor.userId, normalizeNetworkText(req.body?.tutorMessage, 1000)]);
+    }
 
     res.status(201).json(buildProjectHubItem({
       ...rows[0],

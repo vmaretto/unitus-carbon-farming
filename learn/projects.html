@@ -569,10 +569,6 @@
             }
             const project = selectedProject;
             const canApply = actor.role === 'student' && project.isPublished && project.acceptsApplications && !project.hasApplied;
-            const ownProject = canManageProject(project);
-            const canAskTutor = actor.role === 'student' && ownProject;
-            const canOfferTutor = actor.role === 'teacher' && project.creator?.role === 'guest' && !ownProject;
-            const teacherOptions = faculty.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || 'Docente')}</option>`).join('');
             document.getElementById('detail-content').innerHTML = `
                 <h2 id="detail-title">${escapeHtml(project.title)}</h2>
                 <p><strong>${escapeHtml(project.organization || '')}</strong> · ${escapeHtml(labels.organization[project.organizationType] || '')}</p>
@@ -582,17 +578,12 @@
                 ${project.partner?.name ? `<div class="modal-info"><strong>Partner coinvolto:</strong> ${escapeHtml(project.partner.name)}${project.partner.partnerType ? ` · ${escapeHtml(project.partner.partnerType)}` : ''}</div>` : ''}
                 ${actor.role === 'student' && project.matchScore !== null ? `<div class="modal-info"><strong>${project.matchScore}% di affinità.</strong> ${project.matchedSkills?.length ? `Competenze in comune: ${escapeHtml(project.matchedSkills.join(', '))}.` : 'Completa il profilo Network per migliorare il matching.'}</div>` : ''}
                 ${canApply ? `<label class="form-grid">Messaggio per la candidatura<textarea id="application-message" maxlength="1000" placeholder="Racconta brevemente perché il progetto ti interessa."></textarea></label>` : ''}
-                ${canAskTutor ? `<div class="modal-info"><strong>Chiedi un tutor docente</strong><br><span>Seleziona un docente da invitare a seguire il tuo progetto.</span></div><div class="form-grid"><label>Docente<select id="tutor-teacher">${teacherOptions || '<option value="">Nessun docente disponibile</option>'}</select></label><label>Messaggio<textarea id="tutor-message" maxlength="1000" placeholder="Spiega cosa ti aspetti dal tutoraggio."></textarea></label></div>` : ''}
-                ${canOfferTutor ? `<div class="modal-info"><strong>Proponiti come tutor</strong><br><span>Il referente ospite potrà accettare la tua richiesta.</span></div><label class="form-grid">Messaggio<textarea id="tutor-message" maxlength="1000" placeholder="Presenta brevemente la tua disponibilità."></textarea></label>` : ''}
                 <div class="form-actions">
                     <button class="btn" data-close="detail-backdrop">Chiudi</button>
                     ${canApply ? '<button class="btn btn-primary" id="apply-btn">Invia candidatura</button>' : project.hasApplied ? `<button class="btn" disabled>${escapeHtml(labels.status[project.applicationStatus] || 'Candidatura inviata')}</button>` : ''}
-                    ${canAskTutor ? '<button class="btn btn-orange" id="tutor-request-btn">Chiedi tutor</button>' : ''}
-                    ${canOfferTutor ? '<button class="btn btn-orange" id="tutor-request-btn">Propormi come tutor</button>' : ''}
                 </div>`;
             bindCloseButtons();
             document.getElementById('apply-btn')?.addEventListener('click', applyToSelectedProject);
-            document.getElementById('tutor-request-btn')?.addEventListener('click', sendTutorRequest);
             openModal('detail-backdrop');
             if (actor.role === 'teacher' && !canManageProject(project)) {
                 try {

@@ -3497,6 +3497,11 @@ Buono studio!</textarea>
                             <option value="">Nessun supervisore</option>
                         </select>
                     </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Partner coinvolto
+                        <select id="opportunity-partner">
+                            <option value="">Nessun partner</option>
+                        </select>
+                    </label>
                     <label style="display:grid; gap:4px; font-size:13px;">Link esterno
                         <input type="url" id="opportunity-apply-url" placeholder="https://...">
                     </label>
@@ -3532,7 +3537,16 @@ Buono studio!</textarea>
             <div style="margin-top:16px; background:white; border:1px solid var(--gray-200); border-radius:12px; padding:18px;">
                 <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap;">
                     <h3 style="margin:0;">Progetti e candidature</h3>
-                    <span id="projects-summary" style="font-size:13px; color:var(--gray-500);"></span>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <select id="project-creator-filter" aria-label="Filtra per proponente" style="padding:7px 10px; border:1px solid var(--gray-200); border-radius:8px; font-size:13px;">
+                            <option value="">Tutti i proponenti</option>
+                            <option value="student">Studenti</option>
+                            <option value="teacher">Docenti</option>
+                            <option value="guest">Aziende / ospiti</option>
+                            <option value="admin">Amministrazione</option>
+                        </select>
+                        <span id="projects-summary" style="font-size:13px; color:var(--gray-500);"></span>
+                    </div>
                 </div>
                 <div id="opportunity-list-admin" style="display:grid; gap:12px; margin-top:16px;"></div>
             </div>
@@ -6248,6 +6262,17 @@ Buono studio!</textarea>
             select.value = current;
         }
 
+        function populateProjectPartnerSelect(selectedValue = '') {
+            const select = document.getElementById('opportunity-partner');
+            if (!select) return;
+            const current = selectedValue || select.value;
+            select.innerHTML = '<option value="">Nessun partner</option>' + (state.partners || [])
+                .filter((partner) => partner.isPublished !== false)
+                .map((partner) => `<option value="${escapeHtml(partner.id)}">${escapeHtml(partner.name || 'Partner')}${partner.partnerType ? ` · ${escapeHtml(partner.partnerType)}` : ''}</option>`)
+                .join('');
+            select.value = current;
+        }
+
         function projectApplicationStatusOptions(currentStatus) {
             const statuses = currentStatus === 'withdrawn'
                 ? ['withdrawn']
@@ -6269,11 +6294,15 @@ Buono studio!</textarea>
                 if (summary) summary.textContent = '0 progetti';
                 return;
             }
-            const publishedCount = adminNetworkOpportunities.filter((op) => op.isPublished).length;
-            const applicationsCount = adminNetworkOpportunities.reduce((total, op) => total + Number(op.applicationsCount || 0), 0);
+            const creatorFilter = document.getElementById('project-creator-filter')?.value || '';
+            const visibleProjects = creatorFilter
+                ? adminNetworkOpportunities.filter((op) => (op.creator?.role || 'admin') === creatorFilter)
+                : adminNetworkOpportunities;
+            const publishedCount = visibleProjects.filter((op) => op.isPublished).length;
+            const applicationsCount = visibleProjects.reduce((total, op) => total + Number(op.applicationsCount || 0), 0);
             const summary = document.getElementById('projects-summary');
-            if (summary) summary.textContent = `${adminNetworkOpportunities.length} progetti · ${publishedCount} pubblicati · ${applicationsCount} candidature`;
-            list.innerHTML = adminNetworkOpportunities.map((op) => {
+            if (summary) summary.textContent = `${visibleProjects.length} progetti · ${publishedCount} pubblicati · ${applicationsCount} candidature`;
+            list.innerHTML = visibleProjects.map((op) => {
                 const meta = [
                     op.organization,
                     PROJECT_ORGANIZATION_LABELS[op.organizationType],
@@ -6282,7 +6311,14 @@ Buono studio!</textarea>
                     PROJECT_WORK_MODE_LABELS[op.workMode]
                 ].filter(Boolean).join(' · ');
                 const deadline = op.deadline ? `Scadenza ${new Date(op.deadline).toLocaleDateString('it-IT')}` : '';
-                const projectDetails = [op.duration, op.commitment, op.supervisor?.name ? `Supervisore: ${op.supervisor.name}` : ''].filter(Boolean).join(' · ');
+                const creatorRole = op.creator?.role || 'admin';
+                const creatorLabel = creatorRole === 'student' ? 'Studente' : creatorRole === 'teacher' ? 'Docente' : creatorRole === 'admin' ? 'Amministrazione' : 'Azienda / ospite';
+                const projectDetails = [
+                    `Proposto da: ${creatorLabel}${op.creator?.name ? ` — ${op.creator.name}` : ''}`,
+                    op.duration,
+                    op.commitment,
+                    op.supervisor?.name ? `Supervisore: ${op.supervisor.name}` : ''
+                ].filter(Boolean).join(' · ');
                 const matchingTags = [...(op.skills || []), ...(op.interests || [])];
                 return `
                     <article style="border:1px solid var(--gray-200); border-radius:12px; padding:12px;">
@@ -6329,6 +6365,7 @@ Buono studio!</textarea>
                 commitment: document.getElementById('opportunity-commitment').value.trim(),
                 workMode: document.getElementById('opportunity-work-mode').value,
                 supervisorTeacherId: document.getElementById('opportunity-supervisor').value || null,
+                partnerId: document.getElementById('opportunity-partner').value || null,
                 acceptsApplications: document.getElementById('opportunity-accepts-applications').checked,
                 isPublished: document.getElementById('opportunity-published').checked,
                 description: document.getElementById('opportunity-description').value.trim()
@@ -6362,6 +6399,7 @@ Buono studio!</textarea>
             document.getElementById('opportunity-commitment').value = op.commitment || '';
             document.getElementById('opportunity-work-mode').value = op.workMode || 'flexible';
             populateProjectSupervisorSelect(op.supervisor?.id || '');
+            populateProjectPartnerSelect(op.partner?.id || '');
             document.getElementById('opportunity-accepts-applications').checked = op.acceptsApplications !== false;
             document.getElementById('opportunity-published').checked = Boolean(op.isPublished);
             document.getElementById('opportunity-description').value = op.description || '';
@@ -6474,6 +6512,7 @@ Buono studio!</textarea>
             if (!list) return;
             list.innerHTML = '<div class="empty-state">Caricamento progetti...</div>';
             populateProjectSupervisorSelect();
+            populateProjectPartnerSelect();
             try {
                 const opportunities = await apiRequest('/api/admin/network/opportunities');
                 adminNetworkOpportunities = Array.isArray(opportunities) ? opportunities : [];
@@ -6483,6 +6522,8 @@ Buono studio!</textarea>
                 list.innerHTML = `<div class="empty-state">${escapeHtml(error.message || 'Errore nel caricamento dei progetti')}</div>`;
             }
         }
+
+        document.getElementById('project-creator-filter')?.addEventListener('change', renderNetworkOpportunities);
 
         async function loadNetworkSection() {
             const settingsForm = document.getElementById('network-settings-form');

@@ -309,6 +309,31 @@ test('PATCH /api/projects/tutor-requests/:id consente al docente di accettare', 
   assert.equal(updatedProject, true);
 });
 
+test('GET /api/projects/tutor-requests/inbox espone le richieste al docente', async (t) => {
+  const teacherId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  apiModule.__setPool({
+    async query(sql, params = []) {
+      const statement = String(sql).replace(/\s+/g, ' ').trim();
+      assert.match(statement, /^SELECT r\.id/);
+      assert.deepEqual(params, [teacherId]);
+      return { rows: [{
+        id: 'request-inbox-1', projectId: 'project-1', projectTitle: 'Progetto studente',
+        organization: 'Azienda', message: 'Mi aiuti?', status: 'pending',
+        studentId: 'student-1', studentFirstName: 'Ada', studentLastName: 'Lovelace', studentEmail: 'ada@example.com'
+      }] };
+    }
+  });
+  t.after(() => apiModule.__setPool(null));
+  const layer = findRoute('/api/projects/tutor-requests/inbox', 'get');
+  assert.ok(layer, 'route inbox tutor non trovata');
+  const req = { headers: tokenHeaders({ id: teacherId, role: 'teacher' }) };
+  const res = createJsonRes();
+  await runRoute(layer, req, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body[0].student.fullName, 'Ada Lovelace');
+  assert.equal(res.body[0].canRespond, true);
+});
+
 test('POST admin opportunità salva tutti i campi del progetto', async (t) => {
   const supervisorId = '33333333-3333-4333-8333-333333333333';
   let insertParams = null;

@@ -10980,6 +10980,11 @@ function buildNetworkOpportunity(row, options = {}) {
     createdAt: row.createdAt || null,
     updatedAt: row.updatedAt || null
   };
+  base.creator = row.creatorUserId || row.creatorTeacherId ? {
+    id: row.creatorUserId || row.creatorTeacherId,
+    role: row.creatorRole || (row.creatorTeacherId ? 'teacher' : null),
+    name: row.creatorName || null
+  } : null;
   if (options.includeAdminFields) {
     base.isPublished = Boolean(row.isPublished);
     base.applicationsCount = Number(row.applicationsCount ?? 0);
@@ -11968,6 +11973,50 @@ app.get('/api/projects/:id/tutor-requests', requireProjectMember, async (req, re
   }
 });
 
+// Inbox docente: richieste tutor ricevute da progetti proposti dagli studenti.
+app.get('/api/projects/tutor-requests/inbox', requireProjectMember, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const actor = req.projectActor;
+  if (actor.role !== 'teacher' || !actor.teacherId) {
+    return res.status(403).json({ error: 'Solo i docenti possono vedere questa inbox' });
+  }
+  try {
+    const { rows } = await pool.query(`
+      SELECT r.id, r.opportunity_id AS "projectId", r.teacher_id AS "teacherId",
+             r.request_type AS "requestType", r.message, r.status,
+             r.created_at AS "createdAt", r.updated_at AS "updatedAt",
+             o.title AS "projectTitle", o.organization, o.description,
+             requester.id AS "studentId", requester.first_name AS "studentFirstName",
+             requester.last_name AS "studentLastName", requester.email AS "studentEmail"
+        FROM project_tutor_requests r
+        JOIN network_opportunities o ON o.id = r.opportunity_id
+        LEFT JOIN users requester ON requester.id = r.requested_by_user_id
+       WHERE r.teacher_id = $1 AND r.request_type = 'student_tutor'
+       ORDER BY CASE WHEN r.status = 'pending' THEN 0 ELSE 1 END, r.created_at DESC
+       LIMIT 100
+    `, [actor.teacherId]);
+    res.json(rows.map((row) => ({
+      id: row.id,
+      projectId: row.projectId,
+      projectTitle: row.projectTitle,
+      organization: row.organization || null,
+      message: row.message || null,
+      status: row.status,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      student: {
+        id: row.studentId,
+        fullName: [row.studentFirstName, row.studentLastName].filter(Boolean).join(' ').trim() || 'Studente',
+        email: row.studentEmail || null
+      },
+      canRespond: row.status === 'pending'
+    })));
+  } catch (error) {
+    console.error('List teacher project tutor inbox error:', error);
+    res.status(500).json({ error: 'Errore nel recupero delle richieste tutor' });
+  }
+});
+
 app.patch('/api/projects/tutor-requests/:id', requireProjectMember, async (req, res) => {
   if (!ensurePool(res)) return;
   const actor = req.projectActor;
@@ -12831,15 +12880,26 @@ app.get('/api/admin/network/opportunities', requireAdmin, async (_req, res) => {
              o.deadline, o.accepts_applications AS "acceptsApplications",
              o.is_published AS "isPublished",
              o.created_at AS "createdAt", o.updated_at AS "updatedAt",
+             o.partner_id AS "partnerId", p.name AS "partnerName", p.partner_type AS "partnerType",
+             o.created_by_user_id AS "creatorUserId", o.created_by_teacher_id AS "creatorTeacherId",
+             creator_user.role AS "creatorRole",
+             COALESCE(NULLIF(TRIM(CONCAT(COALESCE(creator_user.first_name, ''), ' ', COALESCE(creator_user.last_name, ''))), ''), creator_user.email) AS "creatorName",
+             COALESCE(NULLIF(TRIM(CONCAT(COALESCE(creator_faculty.first_name, ''), ' ', COALESCE(creator_faculty.last_name, ''))), ''), creator_faculty.name) AS "creatorTeacherName",
              f.id AS "supervisorId",
              COALESCE(NULLIF(TRIM(CONCAT(COALESCE(f.first_name, ''), ' ', COALESCE(f.last_name, ''))), ''), f.name) AS "supervisorName",
              (SELECT COUNT(*)::int FROM network_opportunity_applications a WHERE a.opportunity_id = o.id) AS "applicationsCount"
       FROM network_opportunities o
       LEFT JOIN faculty f ON f.id = o.supervisor_teacher_id
+      LEFT JOIN partners p ON p.id = o.partner_id
+      LEFT JOIN users creator_user ON creator_user.id = o.created_by_user_id
+      LEFT JOIN faculty creator_faculty ON creator_faculty.id = o.created_by_teacher_id
       ORDER BY o.created_at DESC
       LIMIT 250
     `);
-    res.json(rows.map((row) => buildNetworkOpportunity(row, { includeAdminFields: true })));
+    res.json(rows.map((row) => buildNetworkOpportunity({
+      ...row,
+      creatorName: row.creatorName || row.creatorTeacherName || null
+    }, { includeAdminFields: true })));
   } catch (error) {
     console.error('List admin opportunities error:', error);
     res.status(500).json({ error: 'Errore nel recupero opportunità' });
@@ -12859,20 +12919,20 @@ app.post('/api/admin/network/opportunities', requireAdmin, async (req, res) => {
       INSERT INTO network_opportunities (
         title, type, organization, organization_type, sector, location, description,
         skills, interests, duration_text, commitment_text, work_mode,
-        apply_url, contact_email, deadline, supervisor_teacher_id,
+        apply_url, contact_email, deadline, supervisor_teacher_id, partner_id,
         accepts_applications, is_published
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11, $12,
-        $13, $14, $15, $16, $17, $18
+        $13, $14, $15, $16, $17, $18, $19
       )
       RETURNING id, title, type, organization, organization_type AS "organizationType",
                 sector, location, description, skills, interests,
                 duration_text AS duration, commitment_text AS commitment,
                 work_mode AS "workMode",
                 apply_url AS "applyUrl", contact_email AS "contactEmail",
-                deadline, supervisor_teacher_id AS "supervisorId",
+                deadline, supervisor_teacher_id AS "supervisorId", partner_id AS "partnerId",
                 accepts_applications AS "acceptsApplications", is_published AS "isPublished",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `, [
@@ -12892,6 +12952,7 @@ app.post('/api/admin/network/opportunities', requireAdmin, async (req, res) => {
       normalizeNetworkText(req.body?.contactEmail, 200),
       req.body?.deadline || null,
       normalizeProjectTeacherId(req.body?.supervisorTeacherId),
+      normalizeProjectTeacherId(req.body?.partnerId),
       normalizeBoolean(req.body?.acceptsApplications, true),
       normalizeBoolean(req.body?.isPublished, false)
     ]);
@@ -12926,7 +12987,7 @@ app.put('/api/admin/network/opportunities/:id', requireAdmin, async (req, res) =
         sector = $6, location = $7, description = $8,
         skills = $9, interests = $10, duration_text = $11, commitment_text = $12,
         work_mode = $13, apply_url = $14, contact_email = $15, deadline = $16,
-        supervisor_teacher_id = $17, accepts_applications = $18, is_published = $19,
+        supervisor_teacher_id = $17, partner_id = $18, accepts_applications = $19, is_published = $20,
         updated_at = NOW()
       WHERE id = $1
       RETURNING id, title, type, organization, organization_type AS "organizationType",
@@ -12934,7 +12995,7 @@ app.put('/api/admin/network/opportunities/:id', requireAdmin, async (req, res) =
                 duration_text AS duration, commitment_text AS commitment,
                 work_mode AS "workMode",
                 apply_url AS "applyUrl", contact_email AS "contactEmail",
-                deadline, supervisor_teacher_id AS "supervisorId",
+                deadline, supervisor_teacher_id AS "supervisorId", partner_id AS "partnerId",
                 accepts_applications AS "acceptsApplications", is_published AS "isPublished",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `, [
@@ -12955,6 +13016,7 @@ app.put('/api/admin/network/opportunities/:id', requireAdmin, async (req, res) =
       normalizeNetworkText(req.body?.contactEmail, 200),
       req.body?.deadline || null,
       normalizeProjectTeacherId(req.body?.supervisorTeacherId),
+      normalizeProjectTeacherId(req.body?.partnerId),
       normalizeBoolean(req.body?.acceptsApplications, true),
       normalizeBoolean(req.body?.isPublished, false)
     ]);

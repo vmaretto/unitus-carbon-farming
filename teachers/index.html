@@ -265,12 +265,20 @@
             <div class="tabs">
                 <div class="tab" data-tab="calendar">📅 Calendario</div>
                 <div class="tab active" data-tab="lessons">📅 Lezioni</div>
+                <div class="tab" data-tab="tutor-requests">🎓 Richieste tutor <span id="tutor-requests-tab-badge" class="tab-badge" style="display:none;">0</span></div>
                 <div class="tab" data-tab="materials">📁 Materiali</div>
                 <div class="tab" data-tab="all-materials" id="all-materials-tab" style="display:none;">📚 Materiali Master</div>
                 <div class="tab" data-tab="quizzes">🧠 Quiz</div>
                 <div class="tab" data-tab="questions">💬 Domande <span id="questions-tab-badge" class="tab-badge" style="display:none;">0</span></div>
                 <div class="tab" data-tab="documents">📝 Liberatorie <span id="docs-tab-badge" class="tab-badge" style="display:none;">0</span></div>
                 <div class="tab" data-tab="surveys">📋 Questionari <span id="surveys-tab-badge" class="tab-badge" style="display:none;">0</span></div>
+            </div>
+
+            <div class="tab-panel" id="panel-tutor-requests">
+                <div class="section-card">
+                    <div class="section-header"><h2>🎓 Richieste di tutoraggio</h2></div>
+                    <div class="section-body" id="tutor-requests-container"><div class="empty-state">Caricamento...</div></div>
+                </div>
             </div>
 
             <div class="tab-panel" id="panel-calendar">
@@ -626,6 +634,7 @@
                 loadTeacherStats,
                 loadTeacherCalendar,
                 loadTeacherLessons,
+                loadTeacherTutorRequests,
                 loadTeacherMaterials,
                 loadTeacherQuizzes,
                 loadTeacherQuestions,
@@ -636,6 +645,48 @@
                     .then(() => loader())
                     .catch((error) => console.error('Dashboard bootstrap error:', error));
             });
+        }
+
+        async function loadTeacherTutorRequests() {
+            const container = document.getElementById('tutor-requests-container');
+            if (!container) return;
+            try {
+                const requests = await apiCall('/api/projects/tutor-requests/inbox');
+                const pending = requests.filter((request) => request.status === 'pending');
+                const badge = document.getElementById('tutor-requests-tab-badge');
+                if (badge) {
+                    badge.textContent = pending.length;
+                    badge.style.display = pending.length ? 'inline-block' : 'none';
+                }
+                if (!requests.length) {
+                    container.innerHTML = '<div class="empty-state">Nessuna richiesta di tutoraggio ricevuta.</div>';
+                    return;
+                }
+                container.innerHTML = requests.map((request) => `
+                    <article style="border:1px solid var(--gray-200); border-radius:12px; padding:16px; margin-bottom:12px;">
+                        <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
+                            <strong>${escapeHtml(request.projectTitle || 'Progetto')}</strong>
+                            <span class="status-badge ${request.status === 'accepted' ? 'status-approved' : request.status === 'declined' ? 'status-rejected' : 'status-pending'}">${request.status === 'accepted' ? 'Accettata' : request.status === 'declined' ? 'Rifiutata' : 'In attesa'}</span>
+                        </div>
+                        <p style="margin:8px 0; color:var(--gray-600);">Richiesta da <strong>${escapeHtml(request.student.fullName)}</strong>${request.student.email ? ` · ${escapeHtml(request.student.email)}` : ''}</p>
+                        <p style="margin:8px 0; color:var(--gray-700);">${escapeHtml(request.message || 'Lo studente ti ha selezionato come tutor del progetto.')}</p>
+                        <p style="margin:8px 0; color:var(--gray-500); font-size:13px;">${escapeHtml(request.organization || '')}</p>
+                        ${request.canRespond ? `<div style="display:flex; gap:8px; margin-top:12px;"><button class="btn-sm btn-green" data-tutor-response="${escapeHtml(request.id)}" data-status="accepted">Accetta richiesta</button><button class="btn-sm btn-gray" data-tutor-response="${escapeHtml(request.id)}" data-status="declined">Rifiuta</button><a class="btn-sm btn-gray" href="/learn/projects.html?role=teacher" style="text-decoration:none;">Apri progetti</a></div>` : ''}
+                    </article>`).join('');
+                container.querySelectorAll('[data-tutor-response]').forEach((button) => button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    try {
+                        await apiCall(`/api/projects/tutor-requests/${encodeURIComponent(button.dataset.tutorResponse)}`, { method:'PATCH', body:JSON.stringify({ status:button.dataset.status }) });
+                        await loadTeacherTutorRequests();
+                        showToast(button.dataset.status === 'accepted' ? 'Tutoraggio accettato' : 'Richiesta rifiutata', 'success');
+                    } catch (error) {
+                        button.disabled = false;
+                        showToast(error.message || 'Errore nell’aggiornamento', 'error');
+                    }
+                }));
+            } catch (error) {
+                container.innerHTML = `<div class="empty-state">${escapeHtml(error.message || 'Errore nel caricamento delle richieste')}</div>`;
+            }
         }
 
         // === STATS ===

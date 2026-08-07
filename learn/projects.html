@@ -333,6 +333,9 @@
                         <select name="partnerId" id="proposal-partner"><option value="">Nessun partner selezionato</option></select>
                     </label>
                 </div>
+                <label id="partner-user-field" style="display:none">Referente ospite del partner
+                    <select name="partnerUserId" id="proposal-partner-user"><option value="">Seleziona l’email del referente</option></select>
+                </label>
                 <label>Descrizione della sfida *<textarea name="description" maxlength="4000" required></textarea></label>
                 <div class="form-row">
                     <label>Competenze richieste<input name="skills" placeholder="MRV, GIS, LCA"></label>
@@ -416,6 +419,22 @@
             const partnerSelect = document.getElementById('proposal-partner');
             if (teacherSelect) teacherSelect.innerHTML = '<option value="">Nessun docente selezionato</option>' + faculty.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || 'Docente')}</option>`).join('');
             if (partnerSelect) partnerSelect.innerHTML = '<option value="">Nessun partner selezionato</option>' + partners.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}${item.partnerType ? ` · ${escapeHtml(item.partnerType)}` : ''}</option>`).join('');
+        }
+
+        async function loadPartnerUsers(partnerId) {
+            const field = document.getElementById('partner-user-field');
+            const select = document.getElementById('proposal-partner-user');
+            if (!field || !select) return;
+            select.innerHTML = '<option value="">Caricamento referenti…</option>';
+            if (!partnerId) { field.style.display = 'none'; select.innerHTML = '<option value="">Seleziona l’email del referente</option>'; return; }
+            try {
+                const users = await api(`/api/projects/partner-users?partnerId=${encodeURIComponent(partnerId)}`);
+                select.innerHTML = '<option value="">Nessun referente selezionato</option>' + users.map(user => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.email)}${user.firstName || user.lastName ? ` — ${escapeHtml([user.firstName, user.lastName].filter(Boolean).join(' '))}` : ''}</option>`).join('');
+                field.style.display = users.length ? '' : 'none';
+            } catch (error) {
+                field.style.display = 'none';
+                select.innerHTML = '<option value="">Nessun referente disponibile</option>';
+            }
         }
 
         function canProposeProjects() {
@@ -769,6 +788,7 @@
         });
         document.getElementById('propose-btn').addEventListener('click', () => openModal('proposal-backdrop'));
         document.getElementById('sidebar-propose-btn').addEventListener('click', () => openModal('proposal-backdrop'));
+        document.getElementById('proposal-partner').addEventListener('change', (event) => loadPartnerUsers(event.target.value));
         document.getElementById('logout-btn').addEventListener('click', () => {
             if (actor.role === 'teacher') localStorage.removeItem('teacherToken');
             else {

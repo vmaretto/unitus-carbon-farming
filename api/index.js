@@ -11661,6 +11661,33 @@ app.post('/api/lms/network/opportunities/:id/apply', requireStudent, requireNonG
 
 // Hub Progetti — area riservata condivisa tra studenti, docenti e ospiti.
 // Riutilizza le opportunità esistenti, aggiungendo matching e supervisione.
+app.get('/api/projects/partner-users', requireProjectMember, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const partnerId = normalizeProjectTeacherId(req.query.partnerId);
+  if (!partnerId) return res.json([]);
+  try {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT u.id, u.email, u.first_name AS "firstName", u.last_name AS "lastName"
+        FROM users u
+        JOIN partners target ON target.id = $1
+        LEFT JOIN partner_user_memberships membership
+          ON membership.partner_id = target.id AND membership.user_id = u.id
+        LEFT JOIN network_profiles profile ON profile.user_id = u.id
+       WHERE u.role = 'guest' AND u.is_active = TRUE
+         AND (
+           membership.user_id IS NOT NULL
+           OR LOWER(COALESCE(profile.organization, '')) = LOWER(target.name)
+           OR LOWER(COALESCE(profile.organization, '')) LIKE LOWER(target.name) || '%'
+         )
+       ORDER BY u.last_name, u.first_name, u.email
+    `, [partnerId]);
+    res.json(rows);
+  } catch (error) {
+    console.error('List partner guest users error:', error);
+    res.status(500).json({ error: 'Errore nel recupero delle utenze partner' });
+  }
+});
+
 app.get('/api/projects', requireProjectMember, async (req, res) => {
   if (!ensurePool(res)) return;
   const actor = req.projectActor;
@@ -11768,6 +11795,24 @@ app.post('/api/projects', requireProjectMember, async (req, res) => {
   const requestedSupervisorId = actor.role === 'student' ? null : (selectedTeacherId || supervisorTeacherId);
 
   try {
+    if (partnerId && req.body?.partnerUserId) {
+      const partnerUser = await pool.query(`
+        SELECT u.id
+          FROM users u
+          JOIN partners target ON target.id = $1
+          LEFT JOIN partner_user_memberships membership
+            ON membership.partner_id = target.id AND membership.user_id = u.id
+          LEFT JOIN network_profiles profile ON profile.user_id = u.id
+         WHERE u.id = $2 AND u.role = 'guest' AND u.is_active = TRUE
+           AND (membership.user_id IS NOT NULL
+             OR LOWER(COALESCE(profile.organization, '')) = LOWER(target.name)
+             OR LOWER(COALESCE(profile.organization, '')) LIKE LOWER(target.name) || '%')
+         LIMIT 1
+      `, [partnerId, normalizeProjectTeacherId(req.body.partnerUserId)]);
+      if (!partnerUser.rows.length) {
+        return res.status(400).json({ error: 'L’utenza selezionata non appartiene al partner' });
+      }
+    }
     const { rows } = await pool.query(`
       INSERT INTO network_opportunities (
         title, type, organization, organization_type, sector, location, description,
@@ -13011,6 +13056,12 @@ app.post('/api/admin/network/opportunities', requireAdmin, async (req, res) => {
       normalizeBoolean(req.body?.isPublished, false)
     ]);
     const created = rows[0];
+    if (created.partnerId && req.body?.partnerUserId) {
+      await pool.query(`
+        INSERT INTO partner_user_memberships (partner_id, user_id)
+        VALUES ($1, $2) ON CONFLICT DO NOTHING
+      `, [created.partnerId, normalizeProjectTeacherId(req.body.partnerUserId)]);
+    }
     if (created.supervisorId) {
       const supervisor = await pool.query(
         `SELECT COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))), ''), name) AS name
@@ -13077,6 +13128,12 @@ app.put('/api/admin/network/opportunities/:id', requireAdmin, async (req, res) =
     ]);
     if (!rows.length) return res.status(404).json({ error: 'Opportunità non trovata' });
     const updated = rows[0];
+    if (updated.partnerId && req.body?.partnerUserId) {
+      await pool.query(`
+        INSERT INTO partner_user_memberships (partner_id, user_id)
+        VALUES ($1, $2) ON CONFLICT DO NOTHING
+      `, [updated.partnerId, normalizeProjectTeacherId(req.body.partnerUserId)]);
+    }
     if (updated.supervisorId) {
       const supervisor = await pool.query(
         `SELECT COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))), ''), name) AS name

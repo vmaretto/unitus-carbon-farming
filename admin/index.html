@@ -1533,6 +1533,12 @@
             }
         }
     </style>
+    <style>
+        /* La scheda progetto deve restare leggibile anche con nomi partner lunghi. */
+        #opportunity-form { min-width: 0; }
+        #opportunity-form label, #opportunity-form input, #opportunity-form select, #opportunity-form textarea { min-width: 0; max-width: 100%; }
+        #opportunity-form select { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    </style>
 </head>
 <body>
     <!-- Mobile header -->
@@ -1544,7 +1550,7 @@
     <!-- Sidebar -->
     <nav class="admin-sidebar" style="display:none;">
         <div class="sidebar-header">
-            <h1>🌱 Carbon Farming</h1>
+            <h1>↗ Carbon Farming Master</h1>
             <p>Pannello Amministrazione</p>
         </div>
         <div class="sidebar-nav">
@@ -3456,7 +3462,7 @@ Buono studio!</textarea>
                     </label>
                     <label style="display:grid; gap:4px; font-size:13px;">Tipo
                         <select id="opportunity-type">
-                            <option value="lavoro">Lavoro</option>
+                            <option value="lavoro">Project work</option>
                             <option value="stage">Stage</option>
                             <option value="tesi">Tesi</option>
                             <option value="altro">Altro</option>

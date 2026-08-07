@@ -10963,7 +10963,11 @@ function buildNetworkOpportunity(row, options = {}) {
     partner: row.partnerId ? {
       id: row.partnerId,
       name: row.partnerName || null,
-      partnerType: row.partnerType || null
+      partnerType: row.partnerType || null,
+      userId: row.partnerUserId || null,
+      userName: row.partnerUserName || null,
+      status: row.partnerStatus || null,
+      comment: row.partnerComment || null
     } : null,
     sector: row.sector || null,
     location: row.location || null,
@@ -11675,6 +11679,8 @@ app.get('/api/projects', requireProjectMember, async (req, res) => {
       SELECT o.id, o.title, o.type, o.organization,
              o.organization_type AS "organizationType", o.sector, o.location, o.description,
              o.partner_id AS "partnerId", p.name AS "partnerName", p.partner_type AS "partnerType",
+             o.partner_user_id AS "partnerUserId", o.partner_status AS "partnerStatus", o.partner_comment AS "partnerComment",
+             COALESCE(NULLIF(TRIM(CONCAT(COALESCE(partner_user.first_name, ''), ' ', COALESCE(partner_user.last_name, ''))), ''), partner_user.email) AS "partnerUserName",
              o.skills, o.interests, o.duration_text AS duration,
              o.commitment_text AS commitment, o.work_mode AS "workMode",
              o.apply_url AS "applyUrl", o.contact_email AS "contactEmail",
@@ -11696,10 +11702,12 @@ app.get('/api/projects', requireProjectMember, async (req, res) => {
              (($2::uuid IS NOT NULL AND
                (o.created_by_teacher_id = $2::uuid OR o.supervisor_teacher_id = $2::uuid))
               OR ($4::uuid IS NOT NULL AND o.created_by_user_id = $4::uuid)
+              OR ($5::uuid IS NOT NULL AND o.partner_user_id = $5::uuid)
              ) AS "canManage"
         FROM network_opportunities o
         LEFT JOIN faculty f ON f.id = o.supervisor_teacher_id
         LEFT JOIN partners p ON p.id = o.partner_id
+        LEFT JOIN users partner_user ON partner_user.id = o.partner_user_id
         LEFT JOIN users creator_user ON creator_user.id = o.created_by_user_id
         LEFT JOIN faculty creator_faculty ON creator_faculty.id = o.created_by_teacher_id
         LEFT JOIN network_opportunity_applications a
@@ -11708,17 +11716,19 @@ app.get('/api/projects', requireProjectMember, async (req, res) => {
           OR $3::boolean = TRUE
           OR ($2::uuid IS NOT NULL AND
              (o.created_by_teacher_id = $2::uuid OR o.supervisor_teacher_id = $2::uuid))
-          OR ($4::uuid IS NOT NULL AND o.created_by_user_id = $4::uuid)
+              OR ($4::uuid IS NOT NULL AND o.created_by_user_id = $4::uuid)
+              OR ($5::uuid IS NOT NULL AND o.partner_user_id = $5::uuid)
        ORDER BY o.is_published DESC, o.deadline ASC NULLS LAST, o.created_at DESC
     `, [
       actor.role === 'student' ? actor.userId : null,
       ['teacher', 'guest'].includes(actor.role) ? actor.teacherId : null,
       actor.role === 'admin',
       ['student', 'guest'].includes(actor.role) ? actor.userId : null
+      , actor.role === 'guest' ? actor.userId : null
     ]);
 
     res.json({
-      actor: { role: actor.role, name: actor.name },
+      actor: { role: actor.role, name: actor.name, userId: actor.userId || null, teacherId: actor.teacherId || null },
       profile: actor.role === 'student' ? {
         skills: profile?.skills || [],
         interests: profile?.interests || [],
@@ -11941,7 +11951,7 @@ app.get('/api/projects/:id/tutor-requests', requireProjectMember, async (req, re
        WHERE r.opportunity_id = $1
          AND (
            $2::boolean = TRUE
-           OR ($3::uuid IS NOT NULL AND (o.created_by_user_id = $3 OR o.created_by_teacher_id = $3))
+           OR ($3::uuid IS NOT NULL AND (o.created_by_user_id = $3 OR o.partner_user_id = $3 OR o.created_by_teacher_id = $3))
            OR ($4::uuid IS NOT NULL AND r.teacher_id = $4)
          )
        ORDER BY r.created_at DESC
@@ -12078,7 +12088,7 @@ app.get('/api/projects/:id/applications', requireProjectMember, async (req, res)
           WHERE id = $1
             AND (
               ($2::uuid IS NOT NULL AND (created_by_teacher_id = $2 OR supervisor_teacher_id = $2))
-              OR ($3::uuid IS NOT NULL AND created_by_user_id = $3)
+              OR ($3::uuid IS NOT NULL AND (created_by_user_id = $3 OR partner_user_id = $3))
             )
           LIMIT 1`,
         [req.params.id, actor.teacherId, actor.userId]
@@ -12144,7 +12154,7 @@ app.patch('/api/projects/applications/:id', requireProjectMember, async (req, re
            WHERE o.id = network_opportunity_applications.opportunity_id
              AND (
                ($3::uuid IS NOT NULL AND (o.created_by_teacher_id = $3 OR o.supervisor_teacher_id = $3))
-               OR ($4::uuid IS NOT NULL AND o.created_by_user_id = $4)
+               OR ($4::uuid IS NOT NULL AND (o.created_by_user_id = $4 OR o.partner_user_id = $4))
              )
         )`;
     }
@@ -12160,6 +12170,31 @@ app.patch('/api/projects/applications/:id', requireProjectMember, async (req, re
   } catch (error) {
     console.error('Update project application error:', error);
     res.status(500).json({ error: 'Errore nell\'aggiornamento della candidatura' });
+  }
+});
+
+app.patch('/api/projects/:id/partner-response', requireProjectMember, async (req, res) => {
+  if (!ensurePool(res)) return;
+  const actor = req.projectActor;
+  if (actor.role !== 'guest' || !actor.userId) {
+    return res.status(403).json({ error: 'Solo il referente ospite assegnato può rispondere' });
+  }
+  const status = String(req.body?.status || '').trim().toLowerCase();
+  if (!['accepted', 'declined'].includes(status)) {
+    return res.status(400).json({ error: 'Risposta partner non valida' });
+  }
+  try {
+    const { rows } = await pool.query(`
+      UPDATE network_opportunities
+         SET partner_status = $2, partner_comment = $3, partner_responded_at = NOW(), updated_at = NOW()
+       WHERE id = $1 AND partner_user_id = $4
+       RETURNING id, partner_status AS "status", partner_comment AS "comment", partner_responded_at AS "respondedAt"
+    `, [req.params.id, status, normalizeNetworkText(req.body?.comment, 2000), actor.userId]);
+    if (!rows.length) return res.status(404).json({ error: 'Progetto partner non trovato' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Partner project response error:', error);
+    res.status(500).json({ error: 'Errore nella risposta del partner' });
   }
 });
 
@@ -12868,6 +12903,22 @@ app.get('/api/admin/network/notifications', requireAdmin, async (_req, res) => {
 });
 
 // Fase 3a — gestione admin della bacheca opportunità.
+app.get('/api/admin/project-partner-users', requireAdmin, async (_req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, first_name AS "firstName", last_name AS "lastName", email
+        FROM users
+       WHERE role = 'guest' AND is_active = TRUE
+       ORDER BY last_name, first_name, email
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error('List project partner users error:', error);
+    res.status(500).json({ error: 'Errore nel recupero dei referenti partner' });
+  }
+});
+
 app.get('/api/admin/network/opportunities', requireAdmin, async (_req, res) => {
   if (!ensurePool(res)) return;
   try {
@@ -12881,6 +12932,7 @@ app.get('/api/admin/network/opportunities', requireAdmin, async (_req, res) => {
              o.is_published AS "isPublished",
              o.created_at AS "createdAt", o.updated_at AS "updatedAt",
              o.partner_id AS "partnerId", p.name AS "partnerName", p.partner_type AS "partnerType",
+             o.partner_user_id AS "partnerUserId", o.partner_status AS "partnerStatus", o.partner_comment AS "partnerComment",
              o.created_by_user_id AS "creatorUserId", o.created_by_teacher_id AS "creatorTeacherId",
              creator_user.role AS "creatorRole",
              COALESCE(NULLIF(TRIM(CONCAT(COALESCE(creator_user.first_name, ''), ' ', COALESCE(creator_user.last_name, ''))), ''), creator_user.email) AS "creatorName",
@@ -12891,6 +12943,7 @@ app.get('/api/admin/network/opportunities', requireAdmin, async (_req, res) => {
       FROM network_opportunities o
       LEFT JOIN faculty f ON f.id = o.supervisor_teacher_id
       LEFT JOIN partners p ON p.id = o.partner_id
+      LEFT JOIN users partner_user ON partner_user.id = o.partner_user_id
       LEFT JOIN users creator_user ON creator_user.id = o.created_by_user_id
       LEFT JOIN faculty creator_faculty ON creator_faculty.id = o.created_by_teacher_id
       ORDER BY o.created_at DESC
@@ -12919,20 +12972,20 @@ app.post('/api/admin/network/opportunities', requireAdmin, async (req, res) => {
       INSERT INTO network_opportunities (
         title, type, organization, organization_type, sector, location, description,
         skills, interests, duration_text, commitment_text, work_mode,
-        apply_url, contact_email, deadline, supervisor_teacher_id, partner_id,
+        apply_url, contact_email, deadline, supervisor_teacher_id, partner_id, partner_user_id,
         accepts_applications, is_published
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11, $12,
-        $13, $14, $15, $16, $17, $18, $19
+        $13, $14, $15, $16, $17, $18, $19, $20
       )
       RETURNING id, title, type, organization, organization_type AS "organizationType",
                 sector, location, description, skills, interests,
                 duration_text AS duration, commitment_text AS commitment,
                 work_mode AS "workMode",
                 apply_url AS "applyUrl", contact_email AS "contactEmail",
-                deadline, supervisor_teacher_id AS "supervisorId", partner_id AS "partnerId",
+                deadline, supervisor_teacher_id AS "supervisorId", partner_id AS "partnerId", partner_user_id AS "partnerUserId",
                 accepts_applications AS "acceptsApplications", is_published AS "isPublished",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `, [
@@ -12953,6 +13006,7 @@ app.post('/api/admin/network/opportunities', requireAdmin, async (req, res) => {
       req.body?.deadline || null,
       normalizeProjectTeacherId(req.body?.supervisorTeacherId),
       normalizeProjectTeacherId(req.body?.partnerId),
+      normalizeProjectTeacherId(req.body?.partnerUserId),
       normalizeBoolean(req.body?.acceptsApplications, true),
       normalizeBoolean(req.body?.isPublished, false)
     ]);
@@ -12987,7 +13041,7 @@ app.put('/api/admin/network/opportunities/:id', requireAdmin, async (req, res) =
         sector = $6, location = $7, description = $8,
         skills = $9, interests = $10, duration_text = $11, commitment_text = $12,
         work_mode = $13, apply_url = $14, contact_email = $15, deadline = $16,
-        supervisor_teacher_id = $17, partner_id = $18, accepts_applications = $19, is_published = $20,
+        supervisor_teacher_id = $17, partner_id = $18, partner_user_id = $19, accepts_applications = $20, is_published = $21,
         updated_at = NOW()
       WHERE id = $1
       RETURNING id, title, type, organization, organization_type AS "organizationType",
@@ -12995,7 +13049,7 @@ app.put('/api/admin/network/opportunities/:id', requireAdmin, async (req, res) =
                 duration_text AS duration, commitment_text AS commitment,
                 work_mode AS "workMode",
                 apply_url AS "applyUrl", contact_email AS "contactEmail",
-                deadline, supervisor_teacher_id AS "supervisorId", partner_id AS "partnerId",
+                deadline, supervisor_teacher_id AS "supervisorId", partner_id AS "partnerId", partner_user_id AS "partnerUserId",
                 accepts_applications AS "acceptsApplications", is_published AS "isPublished",
                 created_at AS "createdAt", updated_at AS "updatedAt"
     `, [
@@ -13017,6 +13071,7 @@ app.put('/api/admin/network/opportunities/:id', requireAdmin, async (req, res) =
       req.body?.deadline || null,
       normalizeProjectTeacherId(req.body?.supervisorTeacherId),
       normalizeProjectTeacherId(req.body?.partnerId),
+      normalizeProjectTeacherId(req.body?.partnerUserId),
       normalizeBoolean(req.body?.acceptsApplications, true),
       normalizeBoolean(req.body?.isPublished, false)
     ]);

@@ -3502,6 +3502,11 @@ Buono studio!</textarea>
                             <option value="">Nessun partner</option>
                         </select>
                     </label>
+                    <label style="display:grid; gap:4px; font-size:13px;">Referente ospite assegnatario
+                        <select id="opportunity-partner-user">
+                            <option value="">Nessun referente assegnato</option>
+                        </select>
+                    </label>
                     <label style="display:grid; gap:4px; font-size:13px;">Link esterno
                         <input type="url" id="opportunity-apply-url" placeholder="https://...">
                     </label>
@@ -6057,6 +6062,7 @@ Buono studio!</textarea>
         let adminNetworkRequests = [];
         let adminNetworkStats = null;
         let adminNetworkOpportunities = [];
+        let projectPartnerUsers = [];
 
         function formatAdminEventDate(value) {
             if (!value) return 'Data non impostata';
@@ -6273,6 +6279,16 @@ Buono studio!</textarea>
             select.value = current;
         }
 
+        function populateProjectPartnerUserSelect(selectedValue = '') {
+            const select = document.getElementById('opportunity-partner-user');
+            if (!select) return;
+            const current = selectedValue || select.value;
+            select.innerHTML = '<option value="">Nessun referente assegnato</option>' + projectPartnerUsers
+                .map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml([user.firstName, user.lastName].filter(Boolean).join(' ') || user.email)} · ${escapeHtml(user.email || '')}</option>`)
+                .join('');
+            select.value = current;
+        }
+
         function projectApplicationStatusOptions(currentStatus) {
             const statuses = currentStatus === 'withdrawn'
                 ? ['withdrawn']
@@ -6317,6 +6333,8 @@ Buono studio!</textarea>
                     `Proposto da: ${creatorLabel}${op.creator?.name ? ` — ${op.creator.name}` : ''}`,
                     op.duration,
                     op.commitment,
+                    op.partner?.name ? `Partner: ${op.partner.name}` : '',
+                    op.partner?.userName ? `Referente: ${op.partner.userName}` : '',
                     op.supervisor?.name ? `Supervisore: ${op.supervisor.name}` : ''
                 ].filter(Boolean).join(' · ');
                 const matchingTags = [...(op.skills || []), ...(op.interests || [])];
@@ -6366,6 +6384,7 @@ Buono studio!</textarea>
                 workMode: document.getElementById('opportunity-work-mode').value,
                 supervisorTeacherId: document.getElementById('opportunity-supervisor').value || null,
                 partnerId: document.getElementById('opportunity-partner').value || null,
+                partnerUserId: document.getElementById('opportunity-partner-user').value || null,
                 acceptsApplications: document.getElementById('opportunity-accepts-applications').checked,
                 isPublished: document.getElementById('opportunity-published').checked,
                 description: document.getElementById('opportunity-description').value.trim()
@@ -6400,6 +6419,7 @@ Buono studio!</textarea>
             document.getElementById('opportunity-work-mode').value = op.workMode || 'flexible';
             populateProjectSupervisorSelect(op.supervisor?.id || '');
             populateProjectPartnerSelect(op.partner?.id || '');
+            populateProjectPartnerUserSelect(op.partner?.userId || '');
             document.getElementById('opportunity-accepts-applications').checked = op.acceptsApplications !== false;
             document.getElementById('opportunity-published').checked = Boolean(op.isPublished);
             document.getElementById('opportunity-description').value = op.description || '';
@@ -6513,6 +6533,10 @@ Buono studio!</textarea>
             list.innerHTML = '<div class="empty-state">Caricamento progetti...</div>';
             populateProjectSupervisorSelect();
             populateProjectPartnerSelect();
+            if (!projectPartnerUsers.length) {
+                projectPartnerUsers = await apiRequest('/api/admin/project-partner-users').catch(() => []);
+            }
+            populateProjectPartnerUserSelect();
             try {
                 const opportunities = await apiRequest('/api/admin/network/opportunities');
                 adminNetworkOpportunities = Array.isArray(opportunities) ? opportunities : [];

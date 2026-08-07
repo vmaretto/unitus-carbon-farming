@@ -672,7 +672,20 @@
                         ${request.message ? `<p>${escapeHtml(request.message)}</p>` : ''}
                         ${request.canRespond && request.status === 'pending' ? `<div class="application-actions"><button data-tutor="${escapeHtml(request.id)}" data-status="accepted">Accetta tutor</button><button data-tutor="${escapeHtml(request.id)}" data-status="declined">Rifiuta</button></div>` : ''}
                     </article>`).join('') : '<div class="empty"><h2>Nessuna richiesta tutor</h2><p>Le richieste di tutoraggio compariranno qui.</p></div>';
-                container.innerHTML = `<h3 style="margin:0 0 8px">Candidature studenti</h3>${applicationHtml}<h3 style="margin:28px 0 8px">Tutoraggio docente</h3>${tutorHtml}`;
+                const isAssignedPartner = actor.role === 'guest' && project.partner?.userId && project.partner.userId === actor.userId;
+                const partnerHtml = isAssignedPartner ? `<h3 style="margin:28px 0 8px">Risposta del partner</h3><div class="application"><p>Questo progetto è assegnato a <strong>${escapeHtml(project.partner.name || 'partner')}</strong>.</p><span class="tag">${escapeHtml(project.partner.status === 'accepted' ? 'Accettato' : project.partner.status === 'declined' ? 'Rifiutato' : 'In attesa')}</span>${project.partner.status === 'pending' ? '<textarea id="partner-comment" maxlength="2000" placeholder="Commento per lo studente e il coordinamento…" style="width:100%; min-height:90px; margin-top:12px; padding:10px; border:1px solid var(--line); border-radius:6px;"></textarea><div class="application-actions"><button id="partner-accept" class="btn btn-primary">Accetta progetto</button><button id="partner-decline" class="btn">Rifiuta progetto</button></div>' : project.partner.comment ? `<p>${escapeHtml(project.partner.comment)}</p>` : ''}</div>` : '';
+                container.innerHTML = `<h3 style="margin:0 0 8px">Candidature studenti</h3>${applicationHtml}<h3 style="margin:28px 0 8px">Tutoraggio docente</h3>${tutorHtml}${partnerHtml}`;
+                container.querySelectorAll('#partner-accept,#partner-decline').forEach((button) => button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    try {
+                        const status = button.id === 'partner-accept' ? 'accepted' : 'declined';
+                        await api(`/api/projects/${encodeURIComponent(project.id)}/partner-response`, { method:'PATCH', body:JSON.stringify({ status, comment:document.getElementById('partner-comment')?.value.trim() || '' }) });
+                        await loadApplications(project);
+                    } catch (error) {
+                        button.disabled = false;
+                        window.alert(error.message);
+                    }
+                }));
                 container.querySelectorAll('[data-app]').forEach(button => button.addEventListener('click', async () => {
                     button.disabled = true;
                     try {

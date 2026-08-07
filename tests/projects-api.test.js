@@ -361,8 +361,8 @@ test('POST admin opportunità salva tutti i campi del progetto', async (t) => {
             contactEmail: params[13],
             deadline: params[14],
             supervisorId: params[15],
-            acceptsApplications: params[16],
-            isPublished: params[17]
+            acceptsApplications: params[17],
+            isPublished: params[18]
           }]
         };
       }

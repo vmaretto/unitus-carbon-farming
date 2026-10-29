@@ -1061,6 +1061,91 @@
             min-width: 1120px;
         }
 
+        .sp-role-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+
+        .sp-role-badge.is-student {
+            background: var(--green-100);
+            color: var(--green-700);
+            border: 1px solid rgba(44, 122, 75, 0.35);
+        }
+
+        .sp-role-badge.is-guest {
+            background: #fff7e6;
+            color: #92400e;
+            border: 1px dashed #f59e0b;
+        }
+
+        .sp-role-badge.is-other {
+            background: var(--gray-100);
+            color: var(--gray-700);
+            border: 1px dashed var(--gray-500);
+        }
+
+        .student-progress-row-other td {
+            background: #fafaf7;
+            color: var(--gray-500);
+        }
+
+        .student-progress-row-other td:first-child {
+            box-shadow: inset 4px 0 0 #f59e0b;
+        }
+
+        .student-progress-row-real td:first-child {
+            box-shadow: inset 4px 0 0 var(--green-500);
+        }
+
+        .student-progress-group-row td {
+            background: var(--green-100);
+            color: var(--green-900);
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+
+        .student-progress-group-row.is-other td {
+            background: #fff7e6;
+            color: #92400e;
+        }
+
+        .progress-group-heading {
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--green-700);
+            padding-top: 4px;
+            border-bottom: 1px solid var(--green-100);
+        }
+
+        .progress-group-heading.is-other {
+            color: #92400e;
+            border-bottom-color: #fde68a;
+            margin-top: 8px;
+        }
+
+        .progress-bar-row.is-other .progress-bar-head {
+            color: var(--gray-500);
+        }
+
+        .progress-fill.muted {
+            background: repeating-linear-gradient(45deg, #d6d3d1, #d6d3d1 6px, #e7e5e4 6px, #e7e5e4 12px);
+        }
+
+        .sp-group-hint {
+            margin: 0 0 12px;
+            font-size: 0.85rem;
+            color: var(--gray-500);
+        }
+
         .student-progress-row-selected td {
             background: rgba(236, 246, 240, 0.7);
         }
@@ -3295,6 +3380,14 @@ Buono studio!</textarea>
                         </select>
                     </label>
                     <label>
+                        Utenti mostrati
+                        <select id="sp-group-select" style="margin-top: 4px;">
+                            <option value="students">🎓 Solo studenti reali</option>
+                            <option value="all">👥 Tutti (studenti + ospiti)</option>
+                            <option value="others">👁️ Solo ospiti e altri utenti</option>
+                        </select>
+                    </label>
+                    <label>
                         Studente
                         <select id="sp-student-select" style="margin-top: 4px;">
                             <option value="">-- Tutti gli studenti --</option>
@@ -3306,6 +3399,7 @@ Buono studio!</textarea>
                 <div id="sp-empty" class="empty-state">Seleziona un'edizione per visualizzare i progressi.</div>
 
                 <div id="sp-content" style="display: none;">
+                    <p class="sp-group-hint" id="sp-group-hint"></p>
                     <div class="progress-summary-grid" id="sp-summary-grid"></div>
 
                     <div class="progress-grid" style="margin-top: 16px;">
@@ -3328,7 +3422,7 @@ Buono studio!</textarea>
                     </div>
 
                     <div class="progress-chart-card" style="margin-top: 16px;">
-                        <h3 class="progress-chart-title">Studenti monitorati</h3>
+                        <h3 class="progress-chart-title" id="sp-table-title">Studenti monitorati</h3>
                         <div class="table-wrapper student-progress-table-wrapper">
                             <table>
                         <thead>
@@ -12154,7 +12248,8 @@ Buono studio!</textarea>
         state.attendanceReport = [];
         state.studentProgress = {
             students: [],
-            selectedStudentId: ''
+            selectedStudentId: '',
+            group: 'students'
         };
 
         let _attEditionSelectUpdating = false;
@@ -12308,19 +12403,65 @@ Buono studio!</textarea>
             return date.toLocaleString('it-IT');
         }
 
-        function renderProgressSummary(summary) {
+        function isRealProgressStudent(student) {
+            return student?.isRealStudent ?? (student?.role || 'student') === 'student';
+        }
+
+        function progressRoleBadge(student) {
+            if (isRealProgressStudent(student)) return '<span class="sp-role-badge is-student">🎓 Studente</span>';
+            if (student.role === 'guest') return '<span class="sp-role-badge is-guest">👁️ Ospite</span>';
+            return `<span class="sp-role-badge is-other">👤 ${escapeHtml(student.role || 'Altro')}</span>`;
+        }
+
+        // Studenti reali prima, poi ospiti/altri; filtra in base al gruppo selezionato
+        function getProgressGroupStudents(students, group) {
+            const items = Array.isArray(students) ? students : [];
+            const real = items.filter(isRealProgressStudent);
+            const others = items.filter((student) => !isRealProgressStudent(student));
+            if (group === 'students') return real;
+            if (group === 'others') return others;
+            return [...real, ...others];
+        }
+
+        function getProgressGroupSummary(data, group) {
+            if (group === 'all') return data?.summary || {};
+            return data?.summaryByGroup?.[group] || data?.summary || {};
+        }
+
+        function getProgressGroupBreakdown(data, group) {
+            if (group === 'all') return data?.attendanceBreakdown || [];
+            return data?.attendanceBreakdownByGroup?.[group] || data?.attendanceBreakdown || [];
+        }
+
+        function progressGroupLabel(group, count) {
+            if (group === 'students') return `${count} studenti reali`;
+            if (group === 'others') return `${count} ospiti e altri utenti`;
+            return `${count} utenti (studenti + ospiti)`;
+        }
+
+        function renderProgressSummary(summary, group = 'all', fullSummary = summary) {
             const grid = document.getElementById('sp-summary-grid');
             if (!grid) return;
-            const activeTotal = summary.studentsCount || 0;
-            const studentCount = summary.studentRoleCount ?? activeTotal;
-            const guestCount = summary.guestRoleCount || 0;
-            const otherCount = summary.otherRoleCount || 0;
+            const activeTotal = fullSummary.studentsCount || 0;
+            const studentCount = fullSummary.studentRoleCount ?? activeTotal;
+            const guestCount = fullSummary.guestRoleCount || 0;
+            const otherCount = fullSummary.otherRoleCount || 0;
+            const excludedCount = guestCount + otherCount;
             const roleBreakdown = `${studentCount} studenti reali${guestCount ? `, ${guestCount} ospiti` : ''}${otherCount ? `, ${otherCount} altri ruoli` : ''}`;
+            const headCard = group === 'students'
+                ? `<div class="label">🎓 Studenti reali</div>
+                    <div class="value">${studentCount}</div>
+                    <div class="subvalue">${excludedCount ? `Statistiche senza ${excludedCount} ospiti/altri utenti` : 'Nessun ospite iscritto'}</div>`
+                : group === 'others'
+                    ? `<div class="label">👁️ Ospiti e altri utenti</div>
+                    <div class="value">${excludedCount}</div>
+                    <div class="subvalue">Non sono studenti del Master · ${studentCount} studenti reali esclusi</div>`
+                    : `<div class="label">👥 Utenti monitorati</div>
+                    <div class="value">${activeTotal}</div>
+                    <div class="subvalue">${roleBreakdown}</div>`;
             grid.innerHTML = `
                 <div class="progress-summary-card">
-                    <div class="label">Studenti monitorati</div>
-                    <div class="value">${studentCount}</div>
-                    <div class="subvalue">${roleBreakdown}${activeTotal !== studentCount ? ` (${activeTotal} iscrizioni attive)` : ''}</div>
+                    ${headCard}
                 </div>
                 <div class="progress-summary-card">
                     <div class="label">Lezioni completate</div>
@@ -12383,15 +12524,26 @@ Buono studio!</textarea>
                 container.innerHTML = '<div class="empty-state">Nessun dato disponibile.</div>';
                 return;
             }
+            const showHeadings = items.some(isRealProgressStudent) && items.some((student) => !isRealProgressStudent(student));
+            let lastIsReal = null;
             container.innerHTML = items.map((student) => {
                 const name = [student.lastName, student.firstName].filter(Boolean).join(' ') || student.email || 'Studente';
-                return `
-                    <div class="progress-bar-row">
+                const isReal = isRealProgressStudent(student);
+                let heading = '';
+                if (showHeadings && isReal !== lastIsReal) {
+                    const count = items.filter((item) => isRealProgressStudent(item) === isReal).length;
+                    heading = isReal
+                        ? `<div class="progress-group-heading">🎓 Studenti reali (${count})</div>`
+                        : `<div class="progress-group-heading is-other">👁️ Ospiti e altri utenti (${count})</div>`;
+                }
+                lastIsReal = isReal;
+                return `${heading}
+                    <div class="progress-bar-row ${isReal ? '' : 'is-other'}">
                         <div class="progress-bar-head">
-                            <span>${escapeHtml(name)}</span>
+                            <span>${escapeHtml(name)} ${isReal ? '' : progressRoleBadge(student)}</span>
                             <strong>${student.overallPercent || 0}%</strong>
                         </div>
-                        <div class="student-progress-track"><div class="progress-fill" style="width:${student.overallPercent || 0}%"></div></div>
+                        <div class="student-progress-track"><div class="progress-fill ${isReal ? '' : 'muted'}" style="width:${student.overallPercent || 0}%"></div></div>
                     </div>
                 `;
             }).join('');
@@ -12428,7 +12580,7 @@ Buono studio!</textarea>
             `;
         }
 
-        function renderProgressDetail(student, students = [], summary = {}) {
+        function renderProgressDetail(student, students = [], summary = {}, group = 'all') {
             const container = document.getElementById('sp-student-detail');
             if (!container) return;
             if (!student) {
@@ -12452,8 +12604,8 @@ Buono studio!</textarea>
                 container.classList.add('is-summary');
                 container.innerHTML = `
                     <div>
-                        <div class="student-progress-detail-title">Tutti gli studenti</div>
-                        <div class="student-progress-detail-meta">${items.length ? `${items.length} studenti monitorati` : 'Nessun dato disponibile'}</div>
+                        <div class="student-progress-detail-title">${group === 'students' ? '🎓 Tutti gli studenti reali' : group === 'others' ? '👁️ Tutti gli ospiti e altri utenti' : '👥 Tutti gli utenti'}</div>
+                        <div class="student-progress-detail-meta">${items.length ? progressGroupLabel(group, items.length) : 'Nessun dato disponibile'}</div>
                     </div>
                     <div class="student-progress-detail-summary">
                         <div class="student-progress-detail-summary-grid">
@@ -12475,7 +12627,7 @@ Buono studio!</textarea>
             const name = [student.lastName, student.firstName].filter(Boolean).join(' ') || student.email || 'Studente';
             container.innerHTML = `
                 <div>
-                    <div class="student-progress-detail-title">${escapeHtml(name)}</div>
+                    <div class="student-progress-detail-title">${escapeHtml(name)} ${progressRoleBadge(student)}</div>
                     <div class="student-progress-detail-meta">${escapeHtml(student.email || '—')}</div>
                 </div>
                 <div class="student-progress-detail-list">
@@ -12505,14 +12657,26 @@ Buono studio!</textarea>
             }
 
             const selectedId = state.studentProgress.selectedStudentId;
+            const showHeadings = students.some(isRealProgressStudent) && students.some((student) => !isRealProgressStudent(student));
+            let lastIsReal = null;
             tbody.innerHTML = students.map((student) => {
                 const isSelected = selectedId && student.userId === selectedId;
-                return `
-                    <tr data-progress-student="${student.userId}" class="${isSelected ? 'student-progress-row-selected' : ''}">
+                const isReal = isRealProgressStudent(student);
+                let heading = '';
+                if (showHeadings && isReal !== lastIsReal) {
+                    const count = students.filter((item) => isRealProgressStudent(item) === isReal).length;
+                    heading = isReal
+                        ? `<tr class="student-progress-group-row"><td colspan="13">🎓 Studenti reali (${count})</td></tr>`
+                        : `<tr class="student-progress-group-row is-other"><td colspan="13">👁️ Ospiti e altri utenti (${count}) — non sono studenti del Master</td></tr>`;
+                }
+                lastIsReal = isReal;
+                const rowClasses = [isReal ? 'student-progress-row-real' : 'student-progress-row-other', isSelected ? 'student-progress-row-selected' : ''].filter(Boolean).join(' ');
+                return `${heading}
+                    <tr data-progress-student="${student.userId}" class="${rowClasses}">
                         <td>${escapeHtml(student.lastName || '—')}</td>
                         <td>${escapeHtml(student.firstName || '—')}</td>
                         <td>${escapeHtml(student.email || '—')}</td>
-                        <td>${student.role === 'guest' ? '👁️ Ospite' : escapeHtml(student.role || 'student')}</td>
+                        <td>${progressRoleBadge(student)}</td>
                         <td>${student.attendance.total} ${student.attendance.inPerson ? `(${student.attendance.inPerson} in sito)` : ''}</td>
                         <td>${student.lessons.completed}/${student.lessons.total} (${student.lessons.percent}%)</td>
                         <td>L ${student.quizzes.lessonCompleted} · M ${student.quizzes.moduleCompleted}</td>
@@ -12530,7 +12694,6 @@ Buono studio!</textarea>
         function renderStudentProgress(data) {
             const empty = document.getElementById('sp-empty');
             const content = document.getElementById('sp-content');
-            const studentSelect = document.getElementById('sp-student-select');
             const students = data?.students || [];
 
             if (!students.length) {
@@ -12544,28 +12707,68 @@ Buono studio!</textarea>
             if (empty) empty.style.display = 'none';
             if (content) content.style.display = '';
 
-            const previousSelected = state.studentProgress.selectedStudentId;
-            const selectedStudentId = previousSelected && students.some((student) => student.userId === previousSelected)
-                ? previousSelected
-                : '';
             state.studentProgress = {
                 ...data,
                 students,
-                selectedStudentId
+                selectedStudentId: state.studentProgress.selectedStudentId || '',
+                group: state.studentProgress.group || 'students'
             };
+            renderStudentProgressView();
+        }
 
-            studentSelect.innerHTML = '<option value="">-- Tutti gli studenti --</option>' + students.map((student) => {
+        function renderStudentProgressView() {
+            const data = state.studentProgress;
+            const group = data.group || 'students';
+            const allStudents = data.students || [];
+            const students = getProgressGroupStudents(allStudents, group);
+            const fullSummary = data.summary || {};
+            const summary = getProgressGroupSummary(data, group);
+            if (data.selectedStudentId && !students.some((student) => student.userId === data.selectedStudentId)) {
+                data.selectedStudentId = '';
+            }
+            const selectedStudentId = data.selectedStudentId;
+
+            const realCount = allStudents.filter(isRealProgressStudent).length;
+            const otherCount = allStudents.length - realCount;
+            const groupSelect = document.getElementById('sp-group-select');
+            if (groupSelect) {
+                groupSelect.options[0].textContent = `🎓 Solo studenti reali (${realCount})`;
+                groupSelect.options[1].textContent = `👥 Tutti (${allStudents.length})`;
+                groupSelect.options[2].textContent = `👁️ Solo ospiti e altri utenti (${otherCount})`;
+                groupSelect.value = group;
+            }
+
+            const hint = document.getElementById('sp-group-hint');
+            if (hint) {
+                hint.innerHTML = group === 'students'
+                    ? `Grafici, medie e tabella si riferiscono ai <strong>${realCount} studenti reali</strong>${otherCount ? ` (esclusi ${otherCount} ospiti/altri utenti)` : ''}.`
+                    : group === 'others'
+                        ? `Stai vedendo solo <strong>${otherCount} ospiti e altri utenti</strong>: non sono studenti del Master.`
+                        : `Stai vedendo <strong>tutti gli utenti</strong>: ${realCount} studenti reali <span class="sp-role-badge is-student">🎓</span> e ${otherCount} ospiti/altri <span class="sp-role-badge is-guest">👁️</span>. Le medie includono anche gli ospiti.`;
+            }
+            const tableTitle = document.getElementById('sp-table-title');
+            if (tableTitle) {
+                tableTitle.textContent = group === 'students' ? `🎓 Studenti reali (${students.length})` : group === 'others' ? `👁️ Ospiti e altri utenti (${students.length})` : `👥 Utenti monitorati (${students.length})`;
+            }
+
+            const studentSelect = document.getElementById('sp-student-select');
+            const toOption = (student) => {
                 const name = [student.lastName, student.firstName].filter(Boolean).join(' ') || student.email || 'Studente';
                 return `<option value="${student.userId}">${escapeHtml(name)}</option>`;
-            }).join('');
+            };
+            const realOptions = students.filter(isRealProgressStudent);
+            const otherOptions = students.filter((student) => !isRealProgressStudent(student));
+            studentSelect.innerHTML = `<option value="">-- ${group === 'students' ? 'Tutti gli studenti reali' : group === 'others' ? 'Tutti gli ospiti' : 'Tutti gli utenti'} --</option>`
+                + (realOptions.length ? `<optgroup label="🎓 Studenti reali (${realOptions.length})">${realOptions.map(toOption).join('')}</optgroup>` : '')
+                + (otherOptions.length ? `<optgroup label="👁️ Ospiti e altri utenti (${otherOptions.length})">${otherOptions.map(toOption).join('')}</optgroup>` : '');
             studentSelect.value = selectedStudentId || '';
 
-            renderProgressSummary(data.summary || {});
-            renderProgressAttendanceChart(data.attendanceBreakdown || []);
+            renderProgressSummary(summary, group, fullSummary);
+            renderProgressAttendanceChart(getProgressGroupBreakdown(data, group));
             renderProgressOverviewChart(students);
-            renderProgressMiniMetrics(data.summary || {});
+            renderProgressMiniMetrics(summary);
             renderProgressTable(students);
-            renderProgressDetail(students.find((student) => student.userId === selectedStudentId) || null, students, data.summary || {});
+            renderProgressDetail(students.find((student) => student.userId === selectedStudentId) || null, students, summary, group);
         }
 
         async function loadStudentProgress(courseEditionId) {
@@ -12582,7 +12785,7 @@ Buono studio!</textarea>
             if (!editionId) {
                 if (empty) empty.style.display = '';
                 if (content) content.style.display = 'none';
-                document.getElementById('sp-table-body').innerHTML = '<tr><td colspan="10" class="empty-state">Seleziona un\'edizione per visualizzare i progressi.</td></tr>';
+                document.getElementById('sp-table-body').innerHTML = '<tr><td colspan="13" class="empty-state">Seleziona un\'edizione per visualizzare i progressi.</td></tr>';
                 document.getElementById('sp-student-select').innerHTML = '<option value="">-- Tutti gli studenti --</option>';
                 renderProgressDetail(null, [], {});
                 return;
@@ -12596,10 +12799,12 @@ Buono studio!</textarea>
 
         document.getElementById('sp-student-select').addEventListener('change', () => {
             state.studentProgress.selectedStudentId = document.getElementById('sp-student-select').value || '';
-            const students = state.studentProgress.students || [];
-            const student = students.find((row) => row.userId === state.studentProgress.selectedStudentId) || null;
-            renderProgressTable(state.studentProgress.students || []);
-            renderProgressDetail(student, students, state.studentProgress.summary || {});
+            renderStudentProgressView();
+        });
+
+        document.getElementById('sp-group-select').addEventListener('change', (event) => {
+            state.studentProgress.group = event.target.value || 'students';
+            if (state.studentProgress.students?.length) renderStudentProgressView();
         });
 
         document.getElementById('sp-refresh').addEventListener('click', async () => {
@@ -12621,10 +12826,7 @@ Buono studio!</textarea>
             if (!row) return;
             const studentId = row.dataset.progressStudent;
             state.studentProgress.selectedStudentId = studentId;
-            const select = document.getElementById('sp-student-select');
-            if (select) select.value = studentId;
-            renderProgressTable(state.studentProgress.students || []);
-            renderProgressDetail((state.studentProgress.students || []).find((student) => student.userId === studentId) || null, state.studentProgress.students || [], state.studentProgress.summary || {});
+            renderStudentProgressView();
         });
 
         // Import report Teams/Zoom

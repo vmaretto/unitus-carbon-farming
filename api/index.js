@@ -15422,6 +15422,7 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
 
       return {
         ...student,
+        isRealStudent: student.role === 'student',
         attendance: {
           inPerson: Number(attendance.inPerson || 0),
           remoteLive: Number(attendance.remoteLive || 0),
@@ -15467,79 +15468,96 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
       };
     });
 
-    const summary = students.reduce((acc, student) => {
-      acc.studentsCount += 1;
-      if (student.role === 'student') acc.studentRoleCount += 1;
-      else if (student.role === 'guest') acc.guestRoleCount += 1;
-      else acc.otherRoleCount += 1;
-      acc.lessonsCompleted += student.lessons.completed;
-      acc.lessonProgressPercentTotal += student.lessons.percent;
-      acc.inPerson += student.attendance.inPerson;
-      acc.remoteLive += student.attendance.remoteLive;
-      acc.remotePartial += student.attendance.remotePartial;
-      acc.async += student.attendance.async;
-      acc.quizAttempts += student.quizzes.attempts;
-      acc.quizPassed += student.quizzes.passedAttempts;
-      acc.lessonQuizCompleted += student.quizzes.lessonCompleted;
-      acc.moduleQuizCompleted += student.quizzes.moduleCompleted;
-      acc.quizCompleted += student.quizzes.completed;
-      if (student.quizzes.bestScore !== null && student.quizzes.bestScore !== undefined) {
-        acc.quizBestScoreTotal += student.quizzes.bestScore;
-        acc.quizBestScoreCount += 1;
-      }
-      acc.materialsViewed += student.materials.viewed;
-      acc.surveysCompleted += student.surveys.completed;
-      acc.eventsRegistered += student.events.registered;
-      acc.eventsDeclined += student.events.declined;
-      acc.eventsResponded += student.events.responded;
-      acc.questionsAsked += student.questions.asked;
-      acc.repliesReceived += student.questions.repliesReceived;
-      return acc;
-    }, {
-      studentsCount: 0,
-      studentRoleCount: 0,
-      guestRoleCount: 0,
-      otherRoleCount: 0,
-      lessonsCompleted: 0,
-      lessonProgressPercentTotal: 0,
-      inPerson: 0,
-      remoteLive: 0,
-      remotePartial: 0,
-      async: 0,
-      quizAttempts: 0,
-      quizPassed: 0,
-      lessonQuizCompleted: 0,
-      moduleQuizCompleted: 0,
-      quizCompleted: 0,
-      quizBestScoreTotal: 0,
-      quizBestScoreCount: 0,
-      materialsViewed: 0,
-      surveysCompleted: 0,
-      eventsRegistered: 0,
-      eventsDeclined: 0,
-      eventsResponded: 0,
-      questionsAsked: 0,
-      repliesReceived: 0
-    });
+    const buildProgressSummary = (list) => {
+      const summary = list.reduce((acc, student) => {
+        acc.studentsCount += 1;
+        if (student.role === 'student') acc.studentRoleCount += 1;
+        else if (student.role === 'guest') acc.guestRoleCount += 1;
+        else acc.otherRoleCount += 1;
+        acc.lessonsCompleted += student.lessons.completed;
+        acc.lessonProgressPercentTotal += student.lessons.percent;
+        acc.inPerson += student.attendance.inPerson;
+        acc.remoteLive += student.attendance.remoteLive;
+        acc.remotePartial += student.attendance.remotePartial;
+        acc.async += student.attendance.async;
+        acc.quizAttempts += student.quizzes.attempts;
+        acc.quizPassed += student.quizzes.passedAttempts;
+        acc.lessonQuizCompleted += student.quizzes.lessonCompleted;
+        acc.moduleQuizCompleted += student.quizzes.moduleCompleted;
+        acc.quizCompleted += student.quizzes.completed;
+        if (student.quizzes.bestScore !== null && student.quizzes.bestScore !== undefined) {
+          acc.quizBestScoreTotal += student.quizzes.bestScore;
+          acc.quizBestScoreCount += 1;
+        }
+        acc.materialsViewed += student.materials.viewed;
+        acc.surveysCompleted += student.surveys.completed;
+        acc.eventsRegistered += student.events.registered;
+        acc.eventsDeclined += student.events.declined;
+        acc.eventsResponded += student.events.responded;
+        acc.questionsAsked += student.questions.asked;
+        acc.repliesReceived += student.questions.repliesReceived;
+        return acc;
+      }, {
+        studentsCount: 0,
+        studentRoleCount: 0,
+        guestRoleCount: 0,
+        otherRoleCount: 0,
+        lessonsCompleted: 0,
+        lessonProgressPercentTotal: 0,
+        inPerson: 0,
+        remoteLive: 0,
+        remotePartial: 0,
+        async: 0,
+        quizAttempts: 0,
+        quizPassed: 0,
+        lessonQuizCompleted: 0,
+        moduleQuizCompleted: 0,
+        quizCompleted: 0,
+        quizBestScoreTotal: 0,
+        quizBestScoreCount: 0,
+        materialsViewed: 0,
+        surveysCompleted: 0,
+        eventsRegistered: 0,
+        eventsDeclined: 0,
+        eventsResponded: 0,
+        questionsAsked: 0,
+        repliesReceived: 0
+      });
 
-    summary.totalLessons = totalLessons;
-    summary.cohortCompletedLessons = cohortCompletedLessons;
-    summary.totalResources = totalResources;
-    summary.totalQuizzesCompleted = summary.quizCompleted;
-    summary.avgLessonProgress = summary.studentsCount ? Math.round(summary.lessonProgressPercentTotal / summary.studentsCount) : 0;
-    summary.avgQuizBestScore = summary.quizBestScoreCount ? Math.round(summary.quizBestScoreTotal / summary.quizBestScoreCount) : null;
-    summary.quizPassRate = summary.quizAttempts ? Math.round((summary.quizPassed / summary.quizAttempts) * 100) : 0;
+      summary.totalLessons = totalLessons;
+      summary.cohortCompletedLessons = cohortCompletedLessons;
+      summary.totalResources = totalResources;
+      summary.totalQuizzesCompleted = summary.quizCompleted;
+      summary.avgLessonProgress = summary.studentsCount ? Math.round(summary.lessonProgressPercentTotal / summary.studentsCount) : 0;
+      summary.avgQuizBestScore = summary.quizBestScoreCount ? Math.round(summary.quizBestScoreTotal / summary.quizBestScoreCount) : null;
+      summary.quizPassRate = summary.quizAttempts ? Math.round((summary.quizPassed / summary.quizAttempts) * 100) : 0;
+      return summary;
+    };
+
+    const realStudents = students.filter((student) => student.isRealStudent);
+    const otherUsers = students.filter((student) => !student.isRealStudent);
+    const summary = buildProgressSummary(students);
+    const summaryByGroup = {
+      students: buildProgressSummary(realStudents),
+      others: buildProgressSummary(otherUsers)
+    };
+    const buildAttendanceBreakdown = (groupSummary) => [
+      { key: 'inPerson', label: '🏫 In sito', count: groupSummary.inPerson },
+      { key: 'remoteLive', label: '💻 Online', count: groupSummary.remoteLive },
+      { key: 'remotePartial', label: '⏱️ Online parziale', count: groupSummary.remotePartial },
+      { key: 'async', label: '📹 Offline / asincrona', count: groupSummary.async }
+    ];
 
     res.json({
       edition,
       summary,
       students: students.sort((a, b) => (b.overallPercent - a.overallPercent) || String(a.lastName || '').localeCompare(String(b.lastName || ''))),
-      attendanceBreakdown: [
-        { key: 'inPerson', label: '🏫 In sito', count: summary.inPerson },
-        { key: 'remoteLive', label: '💻 Online', count: summary.remoteLive },
-        { key: 'remotePartial', label: '⏱️ Online parziale', count: summary.remotePartial },
-        { key: 'async', label: '📹 Offline / asincrona', count: summary.async }
-      ]
+      summaryByGroup,
+      attendanceBreakdown: buildAttendanceBreakdown(summary),
+      attendanceBreakdownByGroup: {
+        students: buildAttendanceBreakdown(summaryByGroup.students),
+        others: buildAttendanceBreakdown(summaryByGroup.others)
+      }
     });
   } catch (error) {
     console.error('Error fetching student progress admin report', error);

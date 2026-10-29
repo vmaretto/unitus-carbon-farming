@@ -682,6 +682,17 @@ test('GET /api/admin/student-progress aggrega frequenza, quiz, materiali e doman
     { key: 'remotePartial', label: '⏱️ Online parziale', count: 0 },
     { key: 'async', label: '📹 Offline / asincrona', count: 0 }
   ]);
+  assert.equal(res.body.students[0].isRealStudent, true);
+  assert.equal(res.body.students[1].isRealStudent, false);
+  assert.equal(res.body.summaryByGroup.students.studentsCount, 1);
+  assert.equal(res.body.summaryByGroup.others.studentsCount, 1);
+  assert.equal(res.body.summaryByGroup.others.guestRoleCount, 1);
+  assert.equal(
+    res.body.summaryByGroup.students.quizCompleted + res.body.summaryByGroup.others.quizCompleted,
+    res.body.summary.quizCompleted
+  );
+  assert.equal(res.body.attendanceBreakdownByGroup.students[0].count, 1);
+  assert.equal(res.body.attendanceBreakdownByGroup.others[0].count, 0);
 });
 
 test('POST /api/teachers/student-view-token genera un token guest per la consultazione studenti', async () => {

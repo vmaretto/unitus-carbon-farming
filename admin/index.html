@@ -209,6 +209,7 @@
         input[type="url"],
         input[type="number"],
         input[type="datetime-local"],
+        input[type="search"],
         textarea,
         select {
             border-radius: 12px;
@@ -1138,6 +1139,87 @@
 
         .progress-fill.muted {
             background: repeating-linear-gradient(45deg, #d6d3d1, #d6d3d1 6px, #e7e5e4 6px, #e7e5e4 12px);
+        }
+
+        .sp-filter-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            align-items: end;
+            background: white;
+            border: 1px solid rgba(36, 90, 61, 0.08);
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 12px;
+        }
+
+        .sp-filter-bar label {
+            display: grid;
+            gap: 4px;
+            font-size: 0.85rem;
+            min-width: 0;
+        }
+
+        .sp-filter-bar select,
+        .sp-filter-bar input {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .sp-filter-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .sp-segment-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
+        }
+
+        .sp-segment-grid .progress-bars {
+            margin-top: 10px;
+            max-height: 360px;
+            overflow: auto;
+            padding-right: 4px;
+        }
+
+        .sp-segment-row {
+            cursor: pointer;
+            border-radius: 8px;
+            padding: 4px 6px;
+        }
+
+        .sp-segment-row:hover,
+        .sp-segment-row.is-active {
+            background: var(--green-100);
+        }
+
+        .sp-segment-meta {
+            font-size: 0.78rem;
+            color: var(--gray-500);
+        }
+
+        #sp-table-head th[data-sp-sort] {
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        #sp-table-head th[data-sp-sort]:hover {
+            color: var(--green-700);
+        }
+
+        .sp-login-never {
+            color: #b91c1c;
+            font-weight: 600;
+        }
+
+        @media (max-width: 900px) {
+            .sp-segment-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .sp-group-hint {
@@ -3380,7 +3462,7 @@ Buono studio!</textarea>
                         </select>
                     </label>
                     <label>
-                        Utenti mostrati
+                        Ruolo
                         <select id="sp-group-select" style="margin-top: 4px;">
                             <option value="students">🎓 Solo studenti reali</option>
                             <option value="all">👥 Tutti (studenti + ospiti)</option>
@@ -3399,6 +3481,38 @@ Buono studio!</textarea>
                 <div id="sp-empty" class="empty-state">Seleziona un'edizione per visualizzare i progressi.</div>
 
                 <div id="sp-content" style="display: none;">
+                    <div class="sp-filter-bar">
+                        <label>
+                            Modalità
+                            <select id="sp-filter-mode">
+                                <option value="">Tutte</option>
+                            </select>
+                        </label>
+                        <label>
+                            Azienda/Partner
+                            <select id="sp-filter-company">
+                                <option value="">Tutte</option>
+                            </select>
+                        </label>
+                        <label>
+                            Ultimo accesso
+                            <select id="sp-filter-login">
+                                <option value="">Qualsiasi</option>
+                                <option value="7d">Negli ultimi 7 giorni</option>
+                                <option value="30d">Negli ultimi 30 giorni</option>
+                                <option value="older30">Più di 30 giorni fa</option>
+                                <option value="never">Mai effettuato</option>
+                            </select>
+                        </label>
+                        <label>
+                            Cerca
+                            <input type="search" id="sp-filter-search" placeholder="Nome, cognome o email">
+                        </label>
+                        <div class="sp-filter-actions">
+                            <button type="button" class="secondary-button" id="sp-filter-reset">✖ Azzera filtri</button>
+                            <button type="button" class="secondary-button" id="sp-export-csv">⬇️ Esporta CSV</button>
+                        </div>
+                    </div>
                     <p class="sp-group-hint" id="sp-group-hint"></p>
                     <div class="progress-summary-grid" id="sp-summary-grid"></div>
 
@@ -3422,28 +3536,47 @@ Buono studio!</textarea>
                     </div>
 
                     <div class="progress-chart-card" style="margin-top: 16px;">
+                        <h3 class="progress-chart-title">Analisi per segmento</h3>
+                        <p class="sp-group-hint">Numero di utenti, avanzamento medio e quota di chi ha effettuato almeno un accesso. Clicca un segmento per filtrare.</p>
+                        <div class="sp-segment-grid">
+                            <div>
+                                <div class="progress-group-heading">Per modalità</div>
+                                <div class="progress-bars" id="sp-segment-mode"></div>
+                            </div>
+                            <div>
+                                <div class="progress-group-heading">Per azienda/partner</div>
+                                <div class="progress-bars" id="sp-segment-company"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="progress-chart-card" style="margin-top: 16px;">
                         <h3 class="progress-chart-title" id="sp-table-title">Studenti monitorati</h3>
                         <div class="table-wrapper student-progress-table-wrapper">
                             <table>
-                        <thead>
+                        <thead id="sp-table-head">
                             <tr>
-                                <th>Cognome</th>
-                                <th>Nome</th>
-                                <th>Email</th>
-                                <th>Ruolo</th>
-                                <th>Presenza</th>
-                                <th>Lezioni</th>
-                                <th>Quiz L/M</th>
-                                <th>Questionari</th>
-                                <th>Eventi</th>
-                                <th>Materiali</th>
-                                <th>Domande</th>
-                                <th>Risposte</th>
-                                <th>Ultima attività</th>
+                                <th data-sp-sort="lastName">Cognome</th>
+                                <th data-sp-sort="firstName">Nome</th>
+                                <th data-sp-sort="email">Email</th>
+                                <th data-sp-sort="role">Ruolo</th>
+                                <th data-sp-sort="enrollmentType">Modalità</th>
+                                <th data-sp-sort="partnerCompany">Azienda/Partner</th>
+                                <th data-sp-sort="lastLoginAt">Ultimo accesso</th>
+                                <th data-sp-sort="overallPercent">Avanz.</th>
+                                <th data-sp-sort="attendance">Presenza</th>
+                                <th data-sp-sort="lessons">Lezioni</th>
+                                <th data-sp-sort="quizzes">Quiz L/M</th>
+                                <th data-sp-sort="surveys">Questionari</th>
+                                <th data-sp-sort="events">Eventi</th>
+                                <th data-sp-sort="materials">Materiali</th>
+                                <th data-sp-sort="questions">Domande</th>
+                                <th data-sp-sort="replies">Risposte</th>
+                                <th data-sp-sort="lastActivityAt">Ultima attività</th>
                             </tr>
                         </thead>
                         <tbody id="sp-table-body">
-                            <tr><td colspan="13" class="empty-state">Caricamento progressi...</td></tr>
+                            <tr><td colspan="17" class="empty-state">Caricamento progressi...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -12249,7 +12382,9 @@ Buono studio!</textarea>
         state.studentProgress = {
             students: [],
             selectedStudentId: '',
-            group: 'students'
+            group: 'students',
+            filters: {},
+            sort: null
         };
 
         let _attEditionSelectUpdating = false;
@@ -12396,6 +12531,8 @@ Buono studio!</textarea>
         });
 
         // Progressi studenti
+        const SP_NONE = '__none__';
+
         function formatProgressDate(value) {
             if (!value) return '—';
             const date = new Date(value);
@@ -12403,95 +12540,221 @@ Buono studio!</textarea>
             return date.toLocaleString('it-IT');
         }
 
+        function formatProgressLogin(value) {
+            if (!value) return '<span class="sp-login-never">Mai</span>';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '—';
+            return escapeHtml(date.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }));
+        }
+
+        function progressStudentName(student) {
+            return [student.lastName, student.firstName].filter(Boolean).join(' ') || student.email || 'Studente';
+        }
+
         function isRealProgressStudent(student) {
             return student?.isRealStudent ?? (student?.role || 'student') === 'student';
         }
 
+        const PROGRESS_ROLE_LABELS = { student: 'Studente', guest: 'Ospite', teacher: 'Docente', admin: 'Admin' };
+
         function progressRoleBadge(student) {
             if (isRealProgressStudent(student)) return '<span class="sp-role-badge is-student">🎓 Studente</span>';
             if (student.role === 'guest') return '<span class="sp-role-badge is-guest">👁️ Ospite</span>';
-            return `<span class="sp-role-badge is-other">👤 ${escapeHtml(student.role || 'Altro')}</span>`;
+            return `<span class="sp-role-badge is-other">👤 ${escapeHtml(PROGRESS_ROLE_LABELS[student.role] || student.role || 'Altro')}</span>`;
         }
 
-        // Studenti reali prima, poi ospiti/altri; filtra in base al gruppo selezionato
-        function getProgressGroupStudents(students, group) {
-            const items = Array.isArray(students) ? students : [];
-            const real = items.filter(isRealProgressStudent);
-            const others = items.filter((student) => !isRealProgressStudent(student));
-            if (group === 'students') return real;
-            if (group === 'others') return others;
-            return [...real, ...others];
+        // Ruolo: studenti reali / tutti / ospiti+altri / singolo ruolo ("role:guest")
+        function matchesProgressGroup(student, group) {
+            if (group === 'students') return isRealProgressStudent(student);
+            if (group === 'others') return !isRealProgressStudent(student);
+            if (group.startsWith('role:')) return (student.role || 'student') === group.slice(5);
+            return true;
         }
 
-        function getProgressGroupSummary(data, group) {
-            if (group === 'all') return data?.summary || {};
-            return data?.summaryByGroup?.[group] || data?.summary || {};
+        function matchesProgressFilters(student, filters) {
+            const mode = (student.enrollmentType || '').trim();
+            const company = (student.partnerCompany || '').trim();
+            if (filters.mode && (filters.mode === SP_NONE ? mode : mode !== filters.mode)) return false;
+            if (filters.company && (filters.company === SP_NONE ? company : company.toLowerCase() !== filters.company.toLowerCase())) return false;
+            if (filters.login) {
+                const ts = student.lastLoginAt ? new Date(student.lastLoginAt).getTime() : 0;
+                const ageDays = ts ? (Date.now() - ts) / 86400000 : Infinity;
+                if (filters.login === 'never' && ts) return false;
+                if (filters.login === '7d' && ageDays > 7) return false;
+                if (filters.login === '30d' && ageDays > 30) return false;
+                if (filters.login === 'older30' && (!ts || ageDays <= 30)) return false;
+            }
+            if (filters.search) {
+                const haystack = [student.firstName, student.lastName, student.email].filter(Boolean).join(' ').toLowerCase();
+                if (!haystack.includes(filters.search.toLowerCase())) return false;
+            }
+            return true;
         }
 
-        function getProgressGroupBreakdown(data, group) {
-            if (group === 'all') return data?.attendanceBreakdown || [];
-            return data?.attendanceBreakdownByGroup?.[group] || data?.attendanceBreakdown || [];
+        const PROGRESS_SORT_VALUES = {
+            lastName: (s) => (s.lastName || '').toLowerCase(),
+            firstName: (s) => (s.firstName || '').toLowerCase(),
+            email: (s) => (s.email || '').toLowerCase(),
+            role: (s) => s.role || 'student',
+            enrollmentType: (s) => (s.enrollmentType || '').toLowerCase(),
+            partnerCompany: (s) => (s.partnerCompany || '').toLowerCase(),
+            lastLoginAt: (s) => (s.lastLoginAt ? new Date(s.lastLoginAt).getTime() : 0),
+            overallPercent: (s) => s.overallPercent || 0,
+            attendance: (s) => s.attendance.total,
+            lessons: (s) => s.lessons.percent,
+            quizzes: (s) => s.quizzes.completed,
+            surveys: (s) => s.surveys.completed,
+            events: (s) => s.events.responded,
+            materials: (s) => s.materials.percent,
+            questions: (s) => s.questions.asked,
+            replies: (s) => s.questions.repliesReceived,
+            lastActivityAt: (s) => (s.lastActivityAt ? new Date(s.lastActivityAt).getTime() : 0)
+        };
+
+        // Studenti reali prima, poi ospiti/altri; dentro ogni gruppo ordinamento scelto
+        function getVisibleProgressStudents(data) {
+            const group = data.group || 'students';
+            const filters = data.filters || {};
+            const list = (data.students || []).filter((student) => matchesProgressGroup(student, group) && matchesProgressFilters(student, filters));
+            const sort = data.sort;
+            if (sort?.key && PROGRESS_SORT_VALUES[sort.key]) {
+                const getValue = PROGRESS_SORT_VALUES[sort.key];
+                const dir = sort.dir === 'asc' ? 1 : -1;
+                list.sort((a, b) => {
+                    const va = getValue(a);
+                    const vb = getValue(b);
+                    if (va < vb) return -1 * dir;
+                    if (va > vb) return 1 * dir;
+                    return 0;
+                });
+            }
+            return [...list.filter(isRealProgressStudent), ...list.filter((student) => !isRealProgressStudent(student))];
         }
 
-        function progressGroupLabel(group, count) {
-            if (group === 'students') return `${count} studenti reali`;
-            if (group === 'others') return `${count} ospiti e altri utenti`;
-            return `${count} utenti (studenti + ospiti)`;
+        // Ricalcola gli aggregati sul sottoinsieme filtrato (stessa logica di /api/admin/student-progress)
+        function computeProgressSummary(list, base = {}) {
+            const acc = {
+                studentsCount: 0, studentRoleCount: 0, guestRoleCount: 0, otherRoleCount: 0,
+                lessonProgressPercentTotal: 0, inPerson: 0, remoteLive: 0, remotePartial: 0, async: 0,
+                quizAttempts: 0, quizPassed: 0, lessonQuizCompleted: 0, moduleQuizCompleted: 0, quizCompleted: 0,
+                quizBestScoreTotal: 0, quizBestScoreCount: 0, materialsViewed: 0, surveysCompleted: 0,
+                eventsRegistered: 0, eventsDeclined: 0, eventsResponded: 0, questionsAsked: 0, repliesReceived: 0,
+                loggedIn: 0, overallTotal: 0
+            };
+            list.forEach((student) => {
+                acc.studentsCount += 1;
+                if (isRealProgressStudent(student)) acc.studentRoleCount += 1;
+                else if (student.role === 'guest') acc.guestRoleCount += 1;
+                else acc.otherRoleCount += 1;
+                acc.lessonProgressPercentTotal += student.lessons.percent;
+                acc.inPerson += student.attendance.inPerson;
+                acc.remoteLive += student.attendance.remoteLive;
+                acc.remotePartial += student.attendance.remotePartial;
+                acc.async += student.attendance.async;
+                acc.quizAttempts += student.quizzes.attempts || 0;
+                acc.quizPassed += student.quizzes.passedAttempts || 0;
+                acc.lessonQuizCompleted += student.quizzes.lessonCompleted;
+                acc.moduleQuizCompleted += student.quizzes.moduleCompleted;
+                acc.quizCompleted += student.quizzes.completed;
+                if (student.quizzes.bestScore !== null && student.quizzes.bestScore !== undefined) {
+                    acc.quizBestScoreTotal += student.quizzes.bestScore;
+                    acc.quizBestScoreCount += 1;
+                }
+                acc.materialsViewed += student.materials.viewed;
+                acc.surveysCompleted += student.surveys.completed;
+                acc.eventsRegistered += student.events.registered;
+                acc.eventsDeclined += student.events.declined;
+                acc.eventsResponded += student.events.responded;
+                acc.questionsAsked += student.questions.asked;
+                acc.repliesReceived += student.questions.repliesReceived;
+                if (student.lastLoginAt) acc.loggedIn += 1;
+                acc.overallTotal += student.overallPercent || 0;
+            });
+            return {
+                ...acc,
+                totalLessons: base.totalLessons || 0,
+                cohortCompletedLessons: base.cohortCompletedLessons || 0,
+                totalResources: base.totalResources || 0,
+                totalQuizzesCompleted: acc.quizCompleted,
+                avgLessonProgress: acc.studentsCount ? Math.round(acc.lessonProgressPercentTotal / acc.studentsCount) : 0,
+                avgOverall: acc.studentsCount ? Math.round(acc.overallTotal / acc.studentsCount) : 0,
+                avgQuizBestScore: acc.quizBestScoreCount ? Math.round(acc.quizBestScoreTotal / acc.quizBestScoreCount) : null,
+                quizPassRate: acc.quizAttempts ? Math.round((acc.quizPassed / acc.quizAttempts) * 100) : 0
+            };
         }
 
-        function renderProgressSummary(summary, group = 'all', fullSummary = summary) {
+        function progressAttendanceBreakdown(summary) {
+            return [
+                { key: 'inPerson', label: '🏫 In sito', count: summary.inPerson },
+                { key: 'remoteLive', label: '💻 Online', count: summary.remoteLive },
+                { key: 'remotePartial', label: '⏱️ Online parziale', count: summary.remotePartial },
+                { key: 'async', label: '📹 Offline / asincrona', count: summary.async }
+            ];
+        }
+
+        function progressGroupTitle(group) {
+            if (group === 'students') return '🎓 Studenti reali';
+            if (group === 'others') return '👁️ Ospiti e altri utenti';
+            if (group.startsWith('role:')) return `👤 Ruolo: ${PROGRESS_ROLE_LABELS[group.slice(5)] || group.slice(5)}`;
+            return '👥 Tutti gli utenti';
+        }
+
+        function describeProgressFilters(filters) {
+            const parts = [];
+            if (filters.mode) parts.push(`modalità <strong>${filters.mode === SP_NONE ? 'non indicata' : escapeHtml(filters.mode)}</strong>`);
+            if (filters.company) parts.push(`azienda <strong>${filters.company === SP_NONE ? 'non indicata' : escapeHtml(filters.company)}</strong>`);
+            const loginLabels = { '7d': 'accesso negli ultimi 7 giorni', '30d': 'accesso negli ultimi 30 giorni', older30: 'ultimo accesso oltre 30 giorni fa', never: 'mai acceduti' };
+            if (filters.login) parts.push(`<strong>${loginLabels[filters.login]}</strong>`);
+            if (filters.search) parts.push(`ricerca “<strong>${escapeHtml(filters.search)}</strong>”`);
+            return parts;
+        }
+
+        function renderProgressSummary(summary, group, fullCounts) {
             const grid = document.getElementById('sp-summary-grid');
             if (!grid) return;
-            const activeTotal = fullSummary.studentsCount || 0;
-            const studentCount = fullSummary.studentRoleCount ?? activeTotal;
-            const guestCount = fullSummary.guestRoleCount || 0;
-            const otherCount = fullSummary.otherRoleCount || 0;
-            const excludedCount = guestCount + otherCount;
-            const roleBreakdown = `${studentCount} studenti reali${guestCount ? `, ${guestCount} ospiti` : ''}${otherCount ? `, ${otherCount} altri ruoli` : ''}`;
-            const headCard = group === 'students'
-                ? `<div class="label">🎓 Studenti reali</div>
-                    <div class="value">${studentCount}</div>
-                    <div class="subvalue">${excludedCount ? `Statistiche senza ${excludedCount} ospiti/altri utenti` : 'Nessun ospite iscritto'}</div>`
-                : group === 'others'
-                    ? `<div class="label">👁️ Ospiti e altri utenti</div>
-                    <div class="value">${excludedCount}</div>
-                    <div class="subvalue">Non sono studenti del Master · ${studentCount} studenti reali esclusi</div>`
-                    : `<div class="label">👥 Utenti monitorati</div>
-                    <div class="value">${activeTotal}</div>
-                    <div class="subvalue">${roleBreakdown}</div>`;
+            const roleBreakdown = `${summary.studentRoleCount} studenti reali${summary.guestRoleCount ? `, ${summary.guestRoleCount} ospiti` : ''}${summary.otherRoleCount ? `, ${summary.otherRoleCount} altri ruoli` : ''}`;
+            const loggedPct = summary.studentsCount ? Math.round((summary.loggedIn / summary.studentsCount) * 100) : 0;
+            const excluded = fullCounts.total - summary.studentsCount;
             grid.innerHTML = `
                 <div class="progress-summary-card">
-                    ${headCard}
+                    <div class="label">${progressGroupTitle(group)}</div>
+                    <div class="value">${summary.studentsCount}</div>
+                    <div class="subvalue">${group === 'students' ? `Statistiche senza ${excluded} utenti esclusi dai filtri` : roleBreakdown}</div>
+                </div>
+                <div class="progress-summary-card">
+                    <div class="label">Hanno effettuato l'accesso</div>
+                    <div class="value">${summary.loggedIn}/${summary.studentsCount}</div>
+                    <div class="subvalue">${loggedPct}% · ${summary.studentsCount - summary.loggedIn} mai acceduti</div>
+                </div>
+                <div class="progress-summary-card">
+                    <div class="label">Avanzamento medio</div>
+                    <div class="value">${summary.avgOverall}%</div>
+                    <div class="subvalue">Media di lezioni, presenze, quiz e materiali</div>
                 </div>
                 <div class="progress-summary-card">
                     <div class="label">Lezioni completate</div>
-                    <div class="value">${summary.cohortCompletedLessons || 0}/${summary.totalLessons || 0}</div>
-                    <div class="subvalue">${summary.totalLessons || 0} lezioni pubblicate</div>
+                    <div class="value">${summary.cohortCompletedLessons}/${summary.totalLessons}</div>
+                    <div class="subvalue">${summary.totalLessons} lezioni pubblicate · media ${summary.avgLessonProgress}% per utente</div>
                 </div>
                 <div class="progress-summary-card">
                     <div class="label">Quiz completati</div>
-                    <div class="value">${summary.totalQuizzesCompleted || 0}</div>
-                    <div class="subvalue">Lezioni ${summary.lessonQuizCompleted || 0} · Moduli ${summary.moduleQuizCompleted || 0} · ${summary.quizPassRate || 0}% di superamento</div>
+                    <div class="value">${summary.totalQuizzesCompleted}</div>
+                    <div class="subvalue">Lezioni ${summary.lessonQuizCompleted} · Moduli ${summary.moduleQuizCompleted} · ${summary.quizPassRate}% di superamento</div>
                 </div>
                 <div class="progress-summary-card">
                     <div class="label">Questionari compilati</div>
-                    <div class="value">${summary.surveysCompleted || 0}</div>
-                    <div class="subvalue">Compilazioni concluse dagli studenti</div>
+                    <div class="value">${summary.surveysCompleted}</div>
+                    <div class="subvalue">Compilazioni concluse</div>
                 </div>
                 <div class="progress-summary-card">
                     <div class="label">Eventi risposti</div>
-                    <div class="value">${summary.eventsResponded || 0}</div>
-                    <div class="subvalue">${summary.eventsRegistered || 0} parteciperanno · ${summary.eventsDeclined || 0} non parteciperanno</div>
+                    <div class="value">${summary.eventsResponded}</div>
+                    <div class="subvalue">${summary.eventsRegistered} parteciperanno · ${summary.eventsDeclined} non parteciperanno</div>
                 </div>
                 <div class="progress-summary-card">
-                    <div class="label">Domande inviate</div>
-                    <div class="value">${summary.questionsAsked || 0}</div>
-                    <div class="subvalue">Richieste di supporto e chiarimento</div>
-                </div>
-                <div class="progress-summary-card">
-                    <div class="label">Risposte del docente</div>
-                    <div class="value">${summary.repliesReceived || 0}</div>
-                    <div class="subvalue">Commenti e riscontri ai quesiti</div>
+                    <div class="label">Domande / risposte</div>
+                    <div class="value">${summary.questionsAsked} / ${summary.repliesReceived}</div>
+                    <div class="subvalue">Domande inviate e risposte del docente</div>
                 </div>
             `;
         }
@@ -12519,15 +12782,14 @@ Buono studio!</textarea>
         function renderProgressOverviewChart(students) {
             const container = document.getElementById('sp-overview-chart');
             if (!container) return;
-            const items = Array.isArray(students) ? [...students] : [];
+            const items = Array.isArray(students) ? students : [];
             if (!items.length) {
-                container.innerHTML = '<div class="empty-state">Nessun dato disponibile.</div>';
+                container.innerHTML = '<div class="empty-state">Nessun utente corrisponde ai filtri.</div>';
                 return;
             }
             const showHeadings = items.some(isRealProgressStudent) && items.some((student) => !isRealProgressStudent(student));
             let lastIsReal = null;
             container.innerHTML = items.map((student) => {
-                const name = [student.lastName, student.firstName].filter(Boolean).join(' ') || student.email || 'Studente';
                 const isReal = isRealProgressStudent(student);
                 let heading = '';
                 if (showHeadings && isReal !== lastIsReal) {
@@ -12540,7 +12802,7 @@ Buono studio!</textarea>
                 return `${heading}
                     <div class="progress-bar-row ${isReal ? '' : 'is-other'}">
                         <div class="progress-bar-head">
-                            <span>${escapeHtml(name)} ${isReal ? '' : progressRoleBadge(student)}</span>
+                            <span>${escapeHtml(progressStudentName(student))} ${isReal ? '' : progressRoleBadge(student)}</span>
                             <strong>${student.overallPercent || 0}%</strong>
                         </div>
                         <div class="student-progress-track"><div class="progress-fill ${isReal ? '' : 'muted'}" style="width:${student.overallPercent || 0}%"></div></div>
@@ -12555,29 +12817,66 @@ Buono studio!</textarea>
             container.innerHTML = `
                 <div class="progress-mini">
                     <div class="label">Media progressi lezioni</div>
-                    <div class="value">${summary.avgLessonProgress || 0}%</div>
+                    <div class="value">${summary.avgLessonProgress}%</div>
                 </div>
                 <div class="progress-mini">
                     <div class="label">Media miglior quiz</div>
-                    <div class="value">${summary.avgQuizBestScore === null || summary.avgQuizBestScore === undefined ? '—' : `${summary.avgQuizBestScore}%`}</div>
+                    <div class="value">${summary.avgQuizBestScore === null ? '—' : `${summary.avgQuizBestScore}%`}</div>
                 </div>
                 <div class="progress-mini">
                     <div class="label">Quiz completati</div>
-                    <div class="value">${summary.totalQuizzesCompleted || 0}</div>
+                    <div class="value">${summary.totalQuizzesCompleted}</div>
                 </div>
                 <div class="progress-mini">
                     <div class="label">Questionari compilati</div>
-                    <div class="value">${summary.surveysCompleted || 0}</div>
+                    <div class="value">${summary.surveysCompleted}</div>
                 </div>
                 <div class="progress-mini">
                     <div class="label">Eventi risposti</div>
-                    <div class="value">${summary.eventsResponded || 0}</div>
+                    <div class="value">${summary.eventsResponded}</div>
                 </div>
                 <div class="progress-mini">
-                    <div class="label">Materiali consultati</div>
-                    <div class="value">${summary.materialsViewed || 0}/${summary.totalResources || 0}</div>
+                    <div class="label">Materiali consultati (somma)</div>
+                    <div class="value">${summary.materialsViewed}</div>
                 </div>
             `;
+        }
+
+        function renderProgressSegments(students, filters) {
+            const renderSegment = (containerId, field, filterKey) => {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                const groups = new Map();
+                students.forEach((student) => {
+                    const raw = (student[field] || '').trim();
+                    const key = raw ? raw.toLowerCase() : SP_NONE;
+                    if (!groups.has(key)) groups.set(key, { value: raw || SP_NONE, label: raw || 'Non indicata', items: [] });
+                    groups.get(key).items.push(student);
+                });
+                const rows = [...groups.values()].sort((a, b) => b.items.length - a.items.length);
+                if (!rows.length) {
+                    container.innerHTML = '<div class="empty-state">Nessun dato.</div>';
+                    return;
+                }
+                container.innerHTML = rows.map((row) => {
+                    const count = row.items.length;
+                    const avg = Math.round(row.items.reduce((sum, s) => sum + (s.overallPercent || 0), 0) / count);
+                    const logged = row.items.filter((s) => s.lastLoginAt).length;
+                    const real = row.items.filter(isRealProgressStudent).length;
+                    const active = filters[filterKey] && filters[filterKey].toLowerCase() === row.value.toLowerCase();
+                    return `
+                        <div class="progress-bar-row sp-segment-row ${active ? 'is-active' : ''}" data-sp-segment-key="${filterKey}" data-sp-segment-value="${escapeHtml(row.value)}" title="Clicca per filtrare">
+                            <div class="progress-bar-head">
+                                <span>${escapeHtml(row.label)} <span class="sp-segment-meta">· ${count} ${count === 1 ? 'utente' : 'utenti'}${real !== count ? ` (${real} ${real === 1 ? 'studente' : 'studenti'})` : ''} · accesso ${logged}/${count}</span></span>
+                                <strong>${avg}%</strong>
+                            </div>
+                            <div class="student-progress-track"><div class="progress-fill ${row.value === SP_NONE ? 'muted' : ''}" style="width:${avg}%"></div></div>
+                        </div>
+                    `;
+                }).join('');
+            };
+            renderSegment('sp-segment-mode', 'enrollmentType', 'mode');
+            renderSegment('sp-segment-company', 'partnerCompany', 'company');
         }
 
         function renderProgressDetail(student, students = [], summary = {}, group = 'all') {
@@ -12585,18 +12884,6 @@ Buono studio!</textarea>
             if (!container) return;
             if (!student) {
                 const items = Array.isArray(students) ? students : [];
-                const avgOverall = items.length
-                    ? Math.round(items.reduce((sum, item) => sum + Number(item.overallPercent || 0), 0) / items.length)
-                    : 0;
-                const avgLesson = summary.avgLessonProgress ?? 0;
-                const avgQuiz = summary.avgQuizBestScore === null || summary.avgQuizBestScore === undefined ? '—' : `${summary.avgQuizBestScore}%`;
-                const totalQuizzesCompleted = summary.totalQuizzesCompleted ?? 0;
-                const totalSurveysCompleted = summary.surveysCompleted ?? 0;
-                const totalEventsResponded = summary.eventsResponded ?? 0;
-                const totalEventsRegistered = summary.eventsRegistered ?? 0;
-                const totalEventsDeclined = summary.eventsDeclined ?? 0;
-                const totalQuestions = summary.questionsAsked ?? 0;
-                const totalReplies = summary.repliesReceived ?? 0;
                 const latestActivity = items.reduce((latest, item) => {
                     const current = item?.lastActivityAt ? new Date(item.lastActivityAt).getTime() : 0;
                     return current > latest.ts ? { ts: current, value: item.lastActivityAt } : latest;
@@ -12604,18 +12891,18 @@ Buono studio!</textarea>
                 container.classList.add('is-summary');
                 container.innerHTML = `
                     <div>
-                        <div class="student-progress-detail-title">${group === 'students' ? '🎓 Tutti gli studenti reali' : group === 'others' ? '👁️ Tutti gli ospiti e altri utenti' : '👥 Tutti gli utenti'}</div>
-                        <div class="student-progress-detail-meta">${items.length ? progressGroupLabel(group, items.length) : 'Nessun dato disponibile'}</div>
+                        <div class="student-progress-detail-title">${progressGroupTitle(group)}</div>
+                        <div class="student-progress-detail-meta">${items.length ? `${items.length} utenti nel filtro corrente` : 'Nessun dato disponibile'}</div>
                     </div>
                     <div class="student-progress-detail-summary">
                         <div class="student-progress-detail-summary-grid">
-                            <div class="student-progress-detail-summary-item"><span>Media complessiva</span><strong>${avgOverall}%</strong></div>
-                            <div class="student-progress-detail-summary-item"><span>Media lezioni</span><strong>${avgLesson}%</strong></div>
-                            <div class="student-progress-detail-summary-item"><span>Media quiz</span><strong>${avgQuiz}</strong></div>
-                            <div class="student-progress-detail-summary-item"><span>Quiz completati</span><strong>${totalQuizzesCompleted}</strong></div>
-                            <div class="student-progress-detail-summary-item"><span>Questionari compilati</span><strong>${totalSurveysCompleted}</strong></div>
-                            <div class="student-progress-detail-summary-item"><span>Eventi risposti</span><strong>${totalEventsResponded} (${totalEventsRegistered} sì, ${totalEventsDeclined} no)</strong></div>
-                            <div class="student-progress-detail-summary-item"><span>Domande / risposte</span><strong>${totalQuestions} / ${totalReplies}</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Media complessiva</span><strong>${summary.avgOverall ?? 0}%</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Media lezioni</span><strong>${summary.avgLessonProgress ?? 0}%</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Media quiz</span><strong>${summary.avgQuizBestScore === null || summary.avgQuizBestScore === undefined ? '—' : `${summary.avgQuizBestScore}%`}</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Hanno fatto accesso</span><strong>${summary.loggedIn ?? 0}/${summary.studentsCount ?? 0}</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Questionari compilati</span><strong>${summary.surveysCompleted ?? 0}</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Eventi risposti</span><strong>${summary.eventsResponded ?? 0} (${summary.eventsRegistered ?? 0} sì, ${summary.eventsDeclined ?? 0} no)</strong></div>
+                            <div class="student-progress-detail-summary-item"><span>Domande / risposte</span><strong>${summary.questionsAsked ?? 0} / ${summary.repliesReceived ?? 0}</strong></div>
                         </div>
                         <div class="student-progress-detail-summary-item"><span>Ultima attività</span><strong>${escapeHtml(formatProgressDate(latestActivity))}</strong></div>
                     </div>
@@ -12624,13 +12911,16 @@ Buono studio!</textarea>
             }
 
             container.classList.remove('is-summary');
-            const name = [student.lastName, student.firstName].filter(Boolean).join(' ') || student.email || 'Studente';
             container.innerHTML = `
                 <div>
-                    <div class="student-progress-detail-title">${escapeHtml(name)} ${progressRoleBadge(student)}</div>
+                    <div class="student-progress-detail-title">${escapeHtml(progressStudentName(student))} ${progressRoleBadge(student)}</div>
                     <div class="student-progress-detail-meta">${escapeHtml(student.email || '—')}</div>
                 </div>
                 <div class="student-progress-detail-list">
+                    <div class="student-progress-detail-item"><span>Modalità</span><strong>${escapeHtml(student.enrollmentType || '—')}</strong></div>
+                    <div class="student-progress-detail-item"><span>Azienda/Partner</span><strong>${escapeHtml(student.partnerCompany || '—')}</strong></div>
+                    <div class="student-progress-detail-item"><span>Ultimo accesso</span><strong>${formatProgressLogin(student.lastLoginAt)}</strong></div>
+                    <div class="student-progress-detail-item"><span>Avanzamento complessivo</span><strong>${student.overallPercent || 0}%</strong></div>
                     <div class="student-progress-detail-item"><span>Presenze totali</span><strong>${student.attendance.total}</strong></div>
                     <div class="student-progress-detail-item"><span>Lezioni completate</span><strong>${student.lessons.completed}/${student.lessons.total} (${student.lessons.percent}%)</strong></div>
                     <div class="student-progress-detail-item"><span>Quiz lezioni</span><strong>${student.quizzes.lessonCompleted}</strong></div>
@@ -12651,8 +12941,13 @@ Buono studio!</textarea>
         function renderProgressTable(students) {
             const tbody = document.getElementById('sp-table-body');
             if (!tbody) return;
+            const sort = state.studentProgress.sort || {};
+            document.querySelectorAll('#sp-table-head th[data-sp-sort]').forEach((th) => {
+                const base = th.textContent.replace(/ [▲▼]$/, '');
+                th.textContent = sort.key === th.dataset.spSort ? `${base} ${sort.dir === 'asc' ? '▲' : '▼'}` : base;
+            });
             if (!students || !students.length) {
-                tbody.innerHTML = '<tr><td colspan="13" class="empty-state">Nessuno studente trovato per questa edizione.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="17" class="empty-state">Nessun utente corrisponde ai filtri selezionati.</td></tr>';
                 return;
             }
 
@@ -12666,8 +12961,8 @@ Buono studio!</textarea>
                 if (showHeadings && isReal !== lastIsReal) {
                     const count = students.filter((item) => isRealProgressStudent(item) === isReal).length;
                     heading = isReal
-                        ? `<tr class="student-progress-group-row"><td colspan="13">🎓 Studenti reali (${count})</td></tr>`
-                        : `<tr class="student-progress-group-row is-other"><td colspan="13">👁️ Ospiti e altri utenti (${count}) — non sono studenti del Master</td></tr>`;
+                        ? `<tr class="student-progress-group-row"><td colspan="17">🎓 Studenti reali (${count})</td></tr>`
+                        : `<tr class="student-progress-group-row is-other"><td colspan="17">👁️ Ospiti e altri utenti (${count}) — non sono studenti del Master</td></tr>`;
                 }
                 lastIsReal = isReal;
                 const rowClasses = [isReal ? 'student-progress-row-real' : 'student-progress-row-other', isSelected ? 'student-progress-row-selected' : ''].filter(Boolean).join(' ');
@@ -12677,6 +12972,10 @@ Buono studio!</textarea>
                         <td>${escapeHtml(student.firstName || '—')}</td>
                         <td>${escapeHtml(student.email || '—')}</td>
                         <td>${progressRoleBadge(student)}</td>
+                        <td>${escapeHtml(student.enrollmentType || '—')}</td>
+                        <td>${escapeHtml(student.partnerCompany || '—')}</td>
+                        <td>${formatProgressLogin(student.lastLoginAt)}</td>
+                        <td><strong>${student.overallPercent || 0}%</strong></td>
                         <td>${student.attendance.total} ${student.attendance.inPerson ? `(${student.attendance.inPerson} in sito)` : ''}</td>
                         <td>${student.lessons.completed}/${student.lessons.total} (${student.lessons.percent}%)</td>
                         <td>L ${student.quizzes.lessonCompleted} · M ${student.quizzes.moduleCompleted}</td>
@@ -12689,6 +12988,51 @@ Buono studio!</textarea>
                     </tr>
                 `;
             }).join('');
+        }
+
+        function populateProgressFilterOptions(allStudents) {
+            const fill = (selectId, field, current) => {
+                const select = document.getElementById(selectId);
+                if (!select) return;
+                const counts = new Map();
+                let none = 0;
+                allStudents.forEach((student) => {
+                    const raw = (student[field] || '').trim();
+                    if (!raw) { none += 1; return; }
+                    const key = raw.toLowerCase();
+                    const entry = counts.get(key) || { label: raw, count: 0 };
+                    entry.count += 1;
+                    counts.set(key, entry);
+                });
+                const options = [...counts.values()].sort((a, b) => a.label.localeCompare(b.label, 'it'));
+                select.innerHTML = '<option value="">Tutte</option>'
+                    + options.map((o) => `<option value="${escapeHtml(o.label)}">${escapeHtml(o.label)} (${o.count})</option>`).join('')
+                    + (none ? `<option value="${SP_NONE}">— Non indicata (${none})</option>` : '');
+                const match = [...select.options].find((o) => o.value.toLowerCase() === (current || '').toLowerCase());
+                select.value = match ? match.value : '';
+            };
+            const filters = state.studentProgress.filters;
+            fill('sp-filter-mode', 'enrollmentType', filters.mode);
+            fill('sp-filter-company', 'partnerCompany', filters.company);
+            document.getElementById('sp-filter-login').value = filters.login || '';
+            document.getElementById('sp-filter-search').value = filters.search || '';
+
+            const groupSelect = document.getElementById('sp-group-select');
+            if (groupSelect) {
+                const realCount = allStudents.filter(isRealProgressStudent).length;
+                const otherCount = allStudents.length - realCount;
+                const roleCounts = new Map();
+                allStudents.filter((s) => !isRealProgressStudent(s)).forEach((s) => roleCounts.set(s.role, (roleCounts.get(s.role) || 0) + 1));
+                groupSelect.innerHTML = `
+                    <option value="students">🎓 Solo studenti reali (${realCount})</option>
+                    <option value="all">👥 Tutti (${allStudents.length})</option>
+                    <option value="others">👁️ Solo ospiti e altri utenti (${otherCount})</option>
+                    ${[...roleCounts.entries()].map(([role, count]) => `<option value="role:${escapeHtml(role)}">· Solo ${escapeHtml(PROGRESS_ROLE_LABELS[role] || role)} (${count})</option>`).join('')}
+                `;
+                const group = state.studentProgress.group || 'students';
+                groupSelect.value = [...groupSelect.options].some((o) => o.value === group) ? group : 'students';
+                state.studentProgress.group = groupSelect.value;
+            }
         }
 
         function renderStudentProgress(data) {
@@ -12711,62 +13055,56 @@ Buono studio!</textarea>
                 ...data,
                 students,
                 selectedStudentId: state.studentProgress.selectedStudentId || '',
-                group: state.studentProgress.group || 'students'
+                group: state.studentProgress.group || 'students',
+                filters: state.studentProgress.filters || {},
+                sort: state.studentProgress.sort || null
             };
+            populateProgressFilterOptions(students);
             renderStudentProgressView();
         }
 
         function renderStudentProgressView() {
             const data = state.studentProgress;
             const group = data.group || 'students';
+            const filters = data.filters || {};
             const allStudents = data.students || [];
-            const students = getProgressGroupStudents(allStudents, group);
-            const fullSummary = data.summary || {};
-            const summary = getProgressGroupSummary(data, group);
+            const students = getVisibleProgressStudents(data);
+            const summary = computeProgressSummary(students, data.summary || {});
             if (data.selectedStudentId && !students.some((student) => student.userId === data.selectedStudentId)) {
                 data.selectedStudentId = '';
             }
             const selectedStudentId = data.selectedStudentId;
 
-            const realCount = allStudents.filter(isRealProgressStudent).length;
-            const otherCount = allStudents.length - realCount;
-            const groupSelect = document.getElementById('sp-group-select');
-            if (groupSelect) {
-                groupSelect.options[0].textContent = `🎓 Solo studenti reali (${realCount})`;
-                groupSelect.options[1].textContent = `👥 Tutti (${allStudents.length})`;
-                groupSelect.options[2].textContent = `👁️ Solo ospiti e altri utenti (${otherCount})`;
-                groupSelect.value = group;
-            }
-
             const hint = document.getElementById('sp-group-hint');
             if (hint) {
-                hint.innerHTML = group === 'students'
-                    ? `Grafici, medie e tabella si riferiscono ai <strong>${realCount} studenti reali</strong>${otherCount ? ` (esclusi ${otherCount} ospiti/altri utenti)` : ''}.`
-                    : group === 'others'
-                        ? `Stai vedendo solo <strong>${otherCount} ospiti e altri utenti</strong>: non sono studenti del Master.`
-                        : `Stai vedendo <strong>tutti gli utenti</strong>: ${realCount} studenti reali <span class="sp-role-badge is-student">🎓</span> e ${otherCount} ospiti/altri <span class="sp-role-badge is-guest">👁️</span>. Le medie includono anche gli ospiti.`;
+                const filterParts = describeProgressFilters(filters);
+                const realCount = allStudents.filter(isRealProgressStudent).length;
+                const groupText = group === 'students'
+                    ? `<strong>studenti reali</strong> (esclusi ${allStudents.length - realCount} ospiti/altri utenti)`
+                    : group === 'all'
+                        ? '<strong>utenti</strong> (ospiti inclusi)'
+                        : group === 'others'
+                            ? '<strong>ospiti e altri utenti</strong>'
+                            : `utenti con <strong>ruolo ${escapeHtml(PROGRESS_ROLE_LABELS[group.slice(5)] || group.slice(5))}</strong>`;
+                hint.innerHTML = `Grafici, medie e tabella si riferiscono a <strong>${students.length}</strong> ${groupText}${filterParts.length ? ` con ${filterParts.join(', ')}` : ''}.`;
             }
             const tableTitle = document.getElementById('sp-table-title');
-            if (tableTitle) {
-                tableTitle.textContent = group === 'students' ? `🎓 Studenti reali (${students.length})` : group === 'others' ? `👁️ Ospiti e altri utenti (${students.length})` : `👥 Utenti monitorati (${students.length})`;
-            }
+            if (tableTitle) tableTitle.textContent = `${progressGroupTitle(group)} (${students.length})`;
 
             const studentSelect = document.getElementById('sp-student-select');
-            const toOption = (student) => {
-                const name = [student.lastName, student.firstName].filter(Boolean).join(' ') || student.email || 'Studente';
-                return `<option value="${student.userId}">${escapeHtml(name)}</option>`;
-            };
+            const toOption = (student) => `<option value="${student.userId}">${escapeHtml(progressStudentName(student))}</option>`;
             const realOptions = students.filter(isRealProgressStudent);
             const otherOptions = students.filter((student) => !isRealProgressStudent(student));
-            studentSelect.innerHTML = `<option value="">-- ${group === 'students' ? 'Tutti gli studenti reali' : group === 'others' ? 'Tutti gli ospiti' : 'Tutti gli utenti'} --</option>`
+            studentSelect.innerHTML = '<option value="">-- Tutti (filtro corrente) --</option>'
                 + (realOptions.length ? `<optgroup label="🎓 Studenti reali (${realOptions.length})">${realOptions.map(toOption).join('')}</optgroup>` : '')
                 + (otherOptions.length ? `<optgroup label="👁️ Ospiti e altri utenti (${otherOptions.length})">${otherOptions.map(toOption).join('')}</optgroup>` : '');
             studentSelect.value = selectedStudentId || '';
 
-            renderProgressSummary(summary, group, fullSummary);
-            renderProgressAttendanceChart(getProgressGroupBreakdown(data, group));
+            renderProgressSummary(summary, group, { total: allStudents.length });
+            renderProgressAttendanceChart(progressAttendanceBreakdown(summary));
             renderProgressOverviewChart(students);
             renderProgressMiniMetrics(summary);
+            renderProgressSegments(students, filters);
             renderProgressTable(students);
             renderProgressDetail(students.find((student) => student.userId === selectedStudentId) || null, students, summary, group);
         }
@@ -12785,7 +13123,7 @@ Buono studio!</textarea>
             if (!editionId) {
                 if (empty) empty.style.display = '';
                 if (content) content.style.display = 'none';
-                document.getElementById('sp-table-body').innerHTML = '<tr><td colspan="13" class="empty-state">Seleziona un\'edizione per visualizzare i progressi.</td></tr>';
+                document.getElementById('sp-table-body').innerHTML = '<tr><td colspan="17" class="empty-state">Seleziona un\'edizione per visualizzare i progressi.</td></tr>';
                 document.getElementById('sp-student-select').innerHTML = '<option value="">-- Tutti gli studenti --</option>';
                 renderProgressDetail(null, [], {});
                 return;
@@ -12807,6 +13145,74 @@ Buono studio!</textarea>
             if (state.studentProgress.students?.length) renderStudentProgressView();
         });
 
+        const updateProgressFilter = (key, value) => {
+            state.studentProgress.filters = { ...(state.studentProgress.filters || {}), [key]: value };
+            if (state.studentProgress.students?.length) renderStudentProgressView();
+        };
+        document.getElementById('sp-filter-mode').addEventListener('change', (e) => updateProgressFilter('mode', e.target.value));
+        document.getElementById('sp-filter-company').addEventListener('change', (e) => updateProgressFilter('company', e.target.value));
+        document.getElementById('sp-filter-login').addEventListener('change', (e) => updateProgressFilter('login', e.target.value));
+        document.getElementById('sp-filter-search').addEventListener('input', (e) => updateProgressFilter('search', e.target.value.trim()));
+
+        document.getElementById('sp-filter-reset').addEventListener('click', () => {
+            state.studentProgress.filters = {};
+            state.studentProgress.sort = null;
+            ['sp-filter-mode', 'sp-filter-company', 'sp-filter-login', 'sp-filter-search'].forEach((id) => { document.getElementById(id).value = ''; });
+            if (state.studentProgress.students?.length) renderStudentProgressView();
+        });
+
+        // Click su un segmento: attiva/disattiva il filtro corrispondente
+        document.getElementById('sp-content').addEventListener('click', (event) => {
+            const row = event.target.closest('[data-sp-segment-key]');
+            if (!row) return;
+            const key = row.dataset.spSegmentKey;
+            const value = row.dataset.spSegmentValue;
+            const current = state.studentProgress.filters?.[key] || '';
+            const next = current.toLowerCase() === value.toLowerCase() ? '' : value;
+            const select = document.getElementById(key === 'mode' ? 'sp-filter-mode' : 'sp-filter-company');
+            const match = [...select.options].find((o) => o.value.toLowerCase() === next.toLowerCase());
+            select.value = match ? match.value : '';
+            updateProgressFilter(key, select.value);
+        });
+
+        document.getElementById('sp-table-head').addEventListener('click', (event) => {
+            const th = event.target.closest('th[data-sp-sort]');
+            if (!th) return;
+            const key = th.dataset.spSort;
+            const current = state.studentProgress.sort;
+            const textual = ['lastName', 'firstName', 'email', 'role', 'enrollmentType', 'partnerCompany'].includes(key);
+            const dir = current?.key === key ? (current.dir === 'asc' ? 'desc' : 'asc') : (textual ? 'asc' : 'desc');
+            state.studentProgress.sort = { key, dir };
+            if (state.studentProgress.students?.length) renderStudentProgressView();
+        });
+
+        document.getElementById('sp-export-csv').addEventListener('click', () => {
+            const students = getVisibleProgressStudents(state.studentProgress);
+            if (!students.length) { showToast('Nessun dato da esportare', 'error'); return; }
+            const quote = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+            const header = ['cognome', 'nome', 'email', 'ruolo', 'studente_reale', 'modalita', 'azienda_partner', 'ultimo_accesso', 'avanzamento_pct',
+                'presenze_totali', 'presenze_in_sito', 'presenze_online', 'presenze_online_parziali', 'presenze_asincrone',
+                'lezioni_completate', 'lezioni_totali', 'lezioni_pct', 'quiz_lezioni', 'quiz_moduli', 'miglior_quiz_pct',
+                'questionari', 'eventi_si', 'eventi_no', 'materiali_visti', 'materiali_totali', 'domande', 'risposte', 'ultima_attivita'];
+            const rows = students.map((s) => [
+                s.lastName, s.firstName, s.email, s.role, isRealProgressStudent(s) ? 'Sì' : 'No', s.enrollmentType, s.partnerCompany,
+                s.lastLoginAt ? new Date(s.lastLoginAt).toLocaleString('it-IT') : 'Mai', s.overallPercent || 0,
+                s.attendance.total, s.attendance.inPerson, s.attendance.remoteLive, s.attendance.remotePartial, s.attendance.async,
+                s.lessons.completed, s.lessons.total, s.lessons.percent, s.quizzes.lessonCompleted, s.quizzes.moduleCompleted,
+                s.quizzes.bestScore ?? '', s.surveys.completed, s.events.registered, s.events.declined,
+                s.materials.viewed, s.materials.total, s.questions.asked, s.questions.repliesReceived,
+                s.lastActivityAt ? new Date(s.lastActivityAt).toLocaleString('it-IT') : ''
+            ].map(quote).join(','));
+            const csv = '﻿' + header.join(',') + '\n' + rows.join('\n') + '\n';
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'progressi-studenti.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
         document.getElementById('sp-refresh').addEventListener('click', async () => {
             const editionId = document.getElementById('sp-edition-select').value;
             if (!editionId) {
@@ -12824,8 +13230,7 @@ Buono studio!</textarea>
         document.getElementById('sp-table-body').addEventListener('click', (event) => {
             const row = event.target.closest('tr[data-progress-student]');
             if (!row) return;
-            const studentId = row.dataset.progressStudent;
-            state.studentProgress.selectedStudentId = studentId;
+            state.studentProgress.selectedStudentId = row.dataset.progressStudent;
             renderStudentProgressView();
         });
 

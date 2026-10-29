@@ -469,14 +469,20 @@ test('GET /api/admin/student-progress aggrega frequenza, quiz, materiali e doman
               firstName: 'Anna',
               lastName: 'Rossi',
               email: 'anna@example.com',
-              role: 'student'
+              role: 'student',
+              enrollmentType: 'Classica',
+              partnerCompany: null,
+              lastLoginAt: '2026-05-06T09:00:00.000Z'
             },
             {
               userId: 'student-2',
               firstName: 'Luca',
               lastName: 'Bianchi',
               email: 'luca@example.com',
-              role: 'guest'
+              role: 'guest',
+              enrollmentType: 'Partner Uditore',
+              partnerCompany: 'EY',
+              lastLoginAt: null
             }
           ]
         };
@@ -683,6 +689,9 @@ test('GET /api/admin/student-progress aggrega frequenza, quiz, materiali e doman
     { key: 'async', label: '📹 Offline / asincrona', count: 0 }
   ]);
   assert.equal(res.body.students[0].isRealStudent, true);
+  assert.equal(res.body.students[0].enrollmentType, 'Classica');
+  assert.equal(res.body.students[0].lastLoginAt, '2026-05-06T09:00:00.000Z');
+  assert.equal(res.body.students[1].partnerCompany, 'EY');
   assert.equal(res.body.students[1].isRealStudent, false);
   assert.equal(res.body.summaryByGroup.students.studentsCount, 1);
   assert.equal(res.body.summaryByGroup.others.studentsCount, 1);

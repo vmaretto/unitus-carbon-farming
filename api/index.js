@@ -15206,7 +15206,10 @@ app.get('/api/admin/student-progress', requireAdmin, async (req, res) => {
              u.first_name AS "firstName",
              u.last_name AS "lastName",
              u.email,
-             COALESCE(u.role, 'student') AS role
+             COALESCE(u.role, 'student') AS role,
+             e.enrollment_type AS "enrollmentType",
+             e.partner_company AS "partnerCompany",
+             u.last_login_at AS "lastLoginAt"
       FROM enrollments e
       JOIN users u ON u.id = e.user_id
       WHERE e.course_edition_id = $1

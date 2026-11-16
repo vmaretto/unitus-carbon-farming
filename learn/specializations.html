@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moduli specialistici - Carbon Farming Master</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --green-900:#1b3a2d; --green-700:#245a3d; --green-500:#2c7a4b; --green-100:#ecf6f0; --orange-500:#ff7a1a; --gray-900:#1c1c1c; --gray-700:#3d3d3d; --gray-500:#6b6b6b; --gray-200:#d9d9d9; --gray-100:#f3f4f6; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--gray-100); color: var(--gray-900); min-height: 100vh; }
+        header { background: linear-gradient(135deg, rgba(27,58,45,0.94), rgba(44,122,75,0.88)); color: white; padding: 22px 24px; box-shadow: 0 10px 40px rgba(27,58,45,0.25); }
+        .header-content { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+        header h1 { font-size: 1.55rem; margin: 0; letter-spacing: -0.02em; }
+        .nav-links { display: flex; gap: 22px; align-items: center; flex-wrap: nowrap; }
+        .nav-links a { color: white; text-decoration: none; padding: 0 0 6px; font-weight: 600; font-size: 0.95rem; transition: color 0.2s ease; position: relative; white-space: nowrap; }
+        .nav-links a::after { content: ''; position: absolute; left: 0; bottom: 0; width: 0; height: 2px; background: var(--orange-500); transition: width 0.2s ease; }
+        .nav-links a:hover, .nav-links a.active { color: #ffd7c1; }
+        .nav-links a:hover::after, .nav-links a.active::after { width: 100%; }
+        main { max-width: 900px; margin: 24px auto; padding: 0 24px 40px; }
+        .card { background: white; border-radius: 20px; padding: 28px; box-shadow: 0 8px 30px rgba(31,41,55,0.08); border: 1px solid rgba(36,90,61,0.08); margin-bottom: 24px; }
+        .card h2 { font-size: 1.3rem; margin: 0 0 16px; color: var(--green-900); }
+        .card h3 { font-size: 1.1rem; margin: 0 0 8px; }
+        .welcome { font-size: 1.1rem; margin: 0 0 4px; opacity: 0.9; }
+        .progress-bar { background: var(--gray-200); border-radius: 999px; height: 8px; overflow: hidden; margin-top: 8px; }
+        .progress-fill { background: linear-gradient(90deg, var(--green-500), #4ade80); height: 100%; border-radius: 999px; transition: width 0.5s ease; }
+        .course-card { border: 1px solid var(--gray-200); border-radius: 14px; padding: 20px; margin-bottom: 12px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .course-card:hover { border-color: var(--green-500); box-shadow: 0 4px 16px rgba(44,122,75,0.15); background: linear-gradient(90deg, white, #f0fdf4); }
+        .course-card::after { content: '→'; font-size: 1.5rem; color: var(--green-500); opacity: 0.5; transition: all 0.2s; }
+        .course-card:hover::after { opacity: 1; transform: translateX(4px); }
+        .course-card-content { flex: 1; }
+        .course-meta { color: var(--gray-500); font-size: 0.85rem; margin-top: 4px; }
+        .live-banner { background: linear-gradient(120deg, var(--green-700), var(--green-500)); color: white; border-radius: 14px; padding: 20px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .live-banner h3 { margin: 0; color: white; }
+        .live-banner p { margin: 4px 0 0; opacity: 0.9; font-size: 0.9rem; }
+        .live-banner a { background: rgba(255,255,255,0.2); color: white; padding: 10px 20px; border-radius: 999px; text-decoration: none; font-weight: 600; }
+        .zoom-btn { display: inline-block; padding: 10px 20px; border-radius: 999px; font-weight: 600; text-align: center; }
+        .zoom-btn.active { background: rgba(255,255,255,0.2); color: white; text-decoration: none; cursor: pointer; }
+        .zoom-btn.active:hover { background: rgba(255,255,255,0.35); }
+        .zoom-btn.disabled { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); cursor: not-allowed; }
+        .empty { color: var(--gray-500); text-align: center; padding: 32px; }
+        .course-goal { margin-top: 8px; font-size: 0.85rem; font-weight: 600; color: var(--green-700); }
+        .course-goal.reached { color: var(--green-500); }
+        .upcoming-lessons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .upcoming-lesson-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid rgba(36,90,61,0.12);
+            box-shadow: 0 6px 20px rgba(31,41,55,0.06);
+        }
+        .upcoming-lesson-date {
+            font-size: 2.2rem;
+            line-height: 1;
+            font-weight: 700;
+            color: var(--green-500);
+            letter-spacing: -0.04em;
+            margin-bottom: 8px;
+        }
+        .upcoming-lesson-date small {
+            display: block;
+            margin-top: 6px;
+            font-size: 0.82rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--green-700);
+        }
+        .upcoming-lesson-title { font-size: 1rem; font-weight: 600; color: var(--green-900); line-height: 1.4; }
+        .upcoming-lesson-meta { margin-top: 8px; font-size: 0.85rem; color: var(--gray-500); }
+        .upcoming-lesson-placeholder {
+            grid-column: 1 / -1;
+            background: var(--gray-100);
+            border: 1px dashed var(--gray-200);
+            color: var(--gray-500);
+            text-align: center;
+        }
+        @media (max-width: 980px) {
+            .header-content { flex-direction: column; align-items: flex-start; }
+            .nav-links { width: 100%; gap: 16px; flex-wrap: wrap; }
+        }
+        @media (max-width: 720px) {
+            .upcoming-lessons { grid-template-columns: 1fr; }
+        }
+        .header-content { flex-wrap: wrap; }
+        .nav-links { flex-wrap: wrap; }
+        .muted { color:var(--gray-500); line-height:1.6; }
+        fieldset { border:0; padding:0; margin:20px 0; min-width:0; }
+        legend { font-weight:600; margin-bottom:12px; }
+        .module-option { display:flex; gap:14px; align-items:flex-start; padding:20px; border:1px solid var(--gray-200); border-radius:14px; margin:12px 0; cursor:pointer; }
+        .module-option:has(input:checked) { background:var(--green-100); border-color:var(--green-500); }
+        .module-option input { margin-top:4px; accent-color:var(--green-500); }
+        .description { display:block; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.6; margin-top:8px; color:var(--gray-700); }
+        button { background:var(--green-700); color:white; border:0; padding:14px 22px; border-radius:12px; font-family:inherit; font-size:1rem; font-weight:600; cursor:pointer; }
+        button:disabled { opacity:.55; cursor:default; }
+        :focus-visible { outline:3px solid var(--orange-500); outline-offset:4px; }
+        .selection-status { padding:16px; background:var(--green-100); border-radius:12px; font-weight:600; }
+        .form-status { color:var(--green-900); }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div>
+                <h1>Carbon Farming Master</h1>
+                <p class="welcome">Area studenti</p>
+            </div>
+            <div class="nav-links">
+                <a href="/learn/index.html">Dashboard</a>
+                <a href="/learn/calendar.html">Calendario</a>
+                <a href="/learn/resources.html">Risorse</a>
+                <a href="/learn/network.html?v=article-feed">Network</a>
+                <a href="/learn/projects.html">Progetti</a>
+                <a href="/learn/checkin.html">Check-in</a>
+                <a href="/learn/documents.html">Documenti</a>
+                <a href="/learn/questions.html">Domande</a>
+                <a href="/learn/surveys.html">Questionari</a>
+                <a href="#" id="logout-btn">Esci</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <h1>Il tuo modulo specialistico</h1>
+        <p class="muted">Personalizza il tuo percorso scegliendo uno dei moduli proposti per la tua edizione.</p>
+        <div id="specializations-list" aria-live="polite">Caricamento…</div>
+    </main>
+    <script src="/learn/js/guest-guard.js"></script>
+    <script src="/learn/js/specializations.js"></script>
+</body>
+</html>

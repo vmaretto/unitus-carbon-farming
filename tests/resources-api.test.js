@@ -195,6 +195,73 @@ test('GET /api/lms/lessons/:id espone solo materiali pubblicati agli studenti', 
   ]);
 });
 
+test('GET /api/lms/lessons/:id unisce i materiali senza duplicati per ID o URL', async (t) => {
+  const resource = { id: 'resource-1', title: 'Slide', url: 'https://example.com/slides.pdf', resourceType: 'pdf', isPublished: true };
+  const scenarios = [
+    {
+      name: 'stesso URL con spazi esterni',
+      materials: [{ name: 'Slide allegate', url: ' https://example.com/slides.pdf ', isPublished: true }],
+      resources: [resource],
+      expectedNames: ['Slide allegate']
+    },
+    {
+      name: 'stesso resourceId con URL aggiornato',
+      materials: [{ resourceId: 'resource-1', name: 'Slide allegate', url: 'https://example.com/old-slides.pdf', isPublished: true }],
+      resources: [resource],
+      expectedNames: ['Slide allegate']
+    },
+    {
+      name: 'duplicati negli allegati e risorse collegate conservano il primo elemento',
+      materials: [
+        { name: 'Slide originali', url: resource.url, isPublished: true },
+        { name: 'Copia slide', url: resource.url, isPublished: true }
+      ],
+      resources: [resource, { ...resource, id: 'resource-copy' }, { ...resource, id: 'resource-2', title: 'Dispensa', url: 'https://example.com/handout.pdf' }],
+      expectedNames: ['Slide originali', 'Dispensa']
+    },
+    {
+      name: 'alias di una risorsa duplicata non reintroducono il file',
+      materials: [{ name: 'Slide allegate', url: resource.url, isPublished: true }],
+      resources: [resource, { ...resource, url: 'https://example.com/slides.pdf?version=2' }],
+      expectedNames: ['Slide allegate']
+    },
+    {
+      name: 'stesso titolo e parametri URL diversi non eliminano documenti distinti',
+      materials: [
+        { name: 'Slide', url: 'https://example.com/download?id=1', isPublished: true },
+        { name: 'Slide', url: 'https://example.com/download?id=2', isPublished: true },
+        { name: 'Nota uno', isPublished: true },
+        { name: 'Nota due', isPublished: true }
+      ],
+      resources: [resource],
+      expectedNames: ['Slide', 'Slide', 'Nota uno', 'Nota due', 'Slide']
+    }
+  ];
+
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, async (t) => {
+      apiModule.__setPool({
+        async query(sql) {
+          if (String(sql).includes('FROM lms_lessons ll')) {
+            return { rows: [{ id: 'lesson-1', calendarLessonId: 'calendar-1', materials: scenario.materials }] };
+          }
+          assert.match(String(sql), /FROM resources r/);
+          return { rows: scenario.resources };
+        }
+      });
+      t.after(() => apiModule.__setPool(null));
+      const res = createJsonRes();
+      await findGetRoute('/api/lms/lessons/:id').route.stack[0].handle({ params: { id: 'lesson-1' }, headers: {} }, res);
+
+      assert.equal(res.statusCode, 200);
+      assert.deepEqual(res.body.materials.map(material => material.name || material.title), scenario.expectedNames);
+      assert.deepEqual(res.body.publicMaterials, res.body.materials);
+      assert.deepEqual(res.body.materials[0], scenario.materials[0]);
+      assert.deepEqual(res.body.linkedResources, scenario.resources);
+    });
+  }
+});
+
 test('POST /api/lms/lessons rifiuta lezioni senza collegamento calendario', async () => {
   apiModule.__setPool({
     async query() {

@@ -1699,6 +1699,11 @@
                 min-height: 60px;
             }
         }
+        #specializations .specialist-toggle { display:flex; flex-direction:row; align-items:center; gap:10px; margin:12px 0; }
+        #specializations .specialist-toggle input { width:auto; margin:0; flex:none; }
+        #specializations input, #specializations textarea, #specializations select { max-width:100%; }
+        #specializations .form-grid { grid-template-columns:minmax(0, 3fr) minmax(90px, 1fr); }
+        @media (max-width:600px) { #specializations .form-grid { grid-template-columns:minmax(0, 1fr); } }
     </style>
     <style>
         /* La scheda progetto deve restare leggibile anche con nomi partner lunghi. */
@@ -1734,6 +1739,7 @@
                 <div class="sidebar-group-title">Gestione Corsi</div>
                 <a href="#lms-courses" data-section="lms-courses">🎓 Percorsi formativi</a>
                 <a href="#lms-modules" data-section="lms-modules">📦 Moduli e lezioni</a>
+                <a href="#specializations" data-section="specializations">🌱 Moduli specialistici</a>
                 <a href="#lms-enrollments" data-section="lms-enrollments">👥 Iscrizioni</a>
                 <a href="#surveys" data-section="surveys">📋 Questionari</a>
                 <a href="#attendance" data-section="attendance">✅ Presenze</a>
@@ -2877,6 +2883,47 @@ Buono studio!</textarea>
         <!-- ============================================ -->
         <!-- CORSI LMS -->
         <!-- ============================================ -->
+        <section id="specializations">
+            <header>
+                <h2>Moduli specialistici</h2>
+                <p class="section-description">Configura le opzioni per ogni edizione. Ogni studente con iscrizione attiva può scegliere un solo modulo.</p>
+            </header>
+            <label for="specialist-edition">Edizione del corso</label>
+            <select id="specialist-edition"><option value="">Seleziona un’edizione</option></select>
+            <p id="specialist-message" role="status"></p>
+            <div id="specialist-panel" hidden>
+                <form id="specialist-settings">
+                    <h3>Regole della scelta</h3>
+                    <label class="specialist-toggle"><input id="specialist-open" type="checkbox"> Scelte aperte agli studenti</label>
+                    <label class="specialist-toggle"><input id="specialist-changes" type="checkbox" checked> Consenti di modificare una scelta già confermata</label>
+                    <p>Le edizioni inattive non accettano scelte. Chiudere le scelte conserva tutte le preferenze già registrate.</p>
+                    <button class="primary" type="submit">Salva impostazioni</button>
+                </form>
+                <form id="specialist-option-form" style="margin-top:28px;">
+                    <h3>Configura un modulo</h3>
+                    <input id="specialist-option-id" type="hidden">
+                    <div class="form-grid">
+                        <label>Titolo <input id="specialist-title" type="text" required maxlength="200" placeholder="Nome del modulo specialistico"></label>
+                        <label>Ordine <input id="specialist-order" type="number" min="0" max="100000" step="1" value="0" required></label>
+                    </div>
+                    <label>Descrizione <textarea id="specialist-description" maxlength="10000" rows="3" placeholder="Obiettivi e contenuti del modulo"></textarea></label>
+                    <label class="specialist-toggle"><input id="specialist-active" type="checkbox" checked> Disponibile per nuove scelte</label>
+                    <p>Disattiva un modulo per ritirarlo dalle opzioni: le scelte già ricevute resteranno nel riepilogo.</p>
+                    <button class="primary" id="specialist-option-save" type="submit">Aggiungi modulo</button>
+                    <button class="secondary" id="specialist-option-cancel" type="button" hidden>Annulla modifica</button>
+                </form>
+                <div class="table-wrapper" style="overflow:auto;margin-top:24px;">
+                    <table><thead><tr><th>Modulo</th><th>Disponibilità</th><th>Ordine</th><th>Scelte (iscrizioni attive)</th><th>Azioni</th></tr></thead><tbody id="specialist-options"></tbody></table>
+                </div>
+                <h3 style="margin-top:28px;">Scelte degli studenti</h3>
+                <p id="specialist-summary"></p>
+                <button id="specialist-refresh" class="secondary" type="button">Aggiorna riepilogo</button>
+                <div class="table-wrapper" style="overflow:auto;">
+                    <table><thead><tr><th>Studente</th><th>Email</th><th>Iscrizione</th><th>Modulo scelto</th><th>Ultima scelta</th></tr></thead><tbody id="specialist-students"></tbody></table>
+                </div>
+            </div>
+        </section>
+
         <section id="lms-courses">
             <header>
                 <h2>Percorsi Formativi</h2>
@@ -4330,6 +4377,7 @@ Buono studio!</textarea>
         </tr>
     </template>
 
+    <script src="/admin/specializations.js"></script>
     <script>
         // ============================================
         // AUTH MANAGEMENT
@@ -4488,6 +4536,8 @@ Buono studio!</textarea>
             sidebarLinks.forEach((link) => {
                 link.classList.toggle('active', link.dataset.section === sectionId);
             });
+
+            if (sectionId === 'specializations') loadSpecializationsSection();
 
             if (window.innerWidth <= 768) {
                 sidebarEl.classList.remove('open');

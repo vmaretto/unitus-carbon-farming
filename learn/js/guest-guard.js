@@ -20,7 +20,8 @@
         '/learn/documents.html',
         '/learn/questions.html',
         '/learn/quiz.html',
-        '/learn/surveys.html'
+        '/learn/surveys.html',
+        '/learn/specializations.html'
     ]);
 
     if (restrictedPages.has(window.location.pathname)) {
@@ -29,6 +30,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('specializations-entry')?.remove();
         const logoutBtn = document.getElementById('logout-btn');
         if (window.__isTeacherGuestView && logoutBtn) {
             logoutBtn.style.display = 'none';

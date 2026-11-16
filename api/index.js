@@ -9693,6 +9693,152 @@ app.delete('/api/lms/courses/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// --- SPECIALIST MODULE CHOICES ---
+const specialistUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function specialistError(status, message) {
+  return Object.assign(new Error(message), { status });
+}
+function requireSpecialistStudent(req, res, next) {
+  if (req.user?.role !== 'student' || !specialistUuid.test(req.user.userId || '')) {
+    return res.status(403).json({ error: 'Questa sezione è riservata agli studenti iscritti.' });
+  }
+  next();
+}
+const specialistOptionFields = 'id, title, description, is_active AS "isActive", sort_order AS "sortOrder"';
+
+// Tutte le scritture serializzano sulla stessa edizione: chiusure e cambi
+// di disponibilità non possono concorrere con una scelta già in verifica.
+async function specialistMutation(req, res, action) {
+  if (!ensurePool(res)) return;
+  if (!specialistUuid.test(req.params.editionId)) {
+    return res.status(400).json({ error: 'Edizione non valida.' });
+  }
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT id, is_active FROM course_editions WHERE id = $1 FOR UPDATE', [req.params.editionId]);
+    if (!rows.length) throw specialistError(404, 'Edizione non trovata.');
+    const result = await action(client, rows[0]);
+    await client.query('COMMIT');
+    res.json(result);
+  } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    if (!error.status) console.error('Specialist choice error:', error);
+    res.status(error.status || 500).json({ error: error.status ? error.message : 'Impossibile salvare. Riprova.' });
+  } finally {
+    if (client) client.release();
+  }
+}
+
+app.get('/api/lms/specializations', requireStudent, requireSpecialistStudent, async (req, res) => {
+  if (!ensurePool(res)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT ce.id AS "editionId", ce.edition_name AS "editionName", c.title AS "courseTitle",
+        (COALESCE(s.is_open, FALSE) AND ce.is_active) AS "isOpen",
+        COALESCE(s.allow_changes, TRUE) AS "allowChanges",
+        ch.option_id AS "selectedOptionId", chosen.title AS "selectedTitle", ch.updated_at AS "selectedAt",
+        COALESCE((SELECT json_agg(json_build_object('id', o.id, 'title', o.title,
+          'description', o.description) ORDER BY o.sort_order, o.title, o.id)
+          FROM specialist_options o WHERE o.course_edition_id = ce.id AND o.is_active), '[]'::json) AS options
+      FROM enrollments e
+      JOIN users u ON u.id = e.user_id AND u.is_active AND u.role = 'student'
+      JOIN course_editions ce ON ce.id = e.course_edition_id
+      JOIN courses c ON c.id = ce.course_id
+      LEFT JOIN specialist_settings s ON s.course_edition_id = ce.id
+      LEFT JOIN specialist_choices ch ON ch.user_id = e.user_id AND ch.course_edition_id = ce.id
+      LEFT JOIN specialist_options chosen ON chosen.id = ch.option_id
+      WHERE e.user_id = $1 AND e.status = 'active'
+      ORDER BY c.title, ce.edition_name`, [req.user.userId]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error reading specialist modules:', error);
+    res.status(500).json({ error: 'Impossibile caricare i moduli specialistici.' });
+  }
+});
+
+app.put('/api/lms/specializations/:editionId/choice', requireStudent, requireSpecialistStudent, async (req, res) => {
+  if (!specialistUuid.test(req.body?.optionId || '')) return res.status(400).json({ error: 'Scegli un modulo valido.' });
+  await specialistMutation(req, res, async (client, edition) => {
+    const editionId = req.params.editionId;
+    const { rows: enrollments } = await client.query(`SELECT e.id FROM enrollments e
+      JOIN users u ON u.id = e.user_id
+      WHERE e.user_id = $1 AND e.course_edition_id = $2 AND e.status = 'active'
+        AND u.is_active AND u.role = 'student' FOR SHARE OF e, u`, [req.user.userId, editionId]);
+    if (!enrollments.length) throw specialistError(403, 'Non hai un’iscrizione attiva a questa edizione.');
+    const { rows: settings } = await client.query('SELECT is_open, allow_changes FROM specialist_settings WHERE course_edition_id = $1', [editionId]);
+    if (!edition.is_active || !settings[0]?.is_open) throw specialistError(409, 'Le scelte sono chiuse per questa edizione.');
+    const { rows: previous } = await client.query('SELECT option_id FROM specialist_choices WHERE user_id = $1 AND course_edition_id = $2', [req.user.userId, editionId]);
+    if (previous.length && previous[0].option_id !== req.body.optionId && !settings[0].allow_changes) {
+      throw specialistError(409, 'La scelta è già confermata e non può essere modificata.');
+    }
+    const { rows: options } = await client.query('SELECT id FROM specialist_options WHERE id = $1 AND course_edition_id = $2 AND is_active', [req.body.optionId, editionId]);
+    if (!options.length) throw specialistError(409, 'Il modulo non è disponibile in questa edizione.');
+    const { rows } = await client.query(`INSERT INTO specialist_choices (user_id, course_edition_id, option_id)
+      VALUES ($1, $2, $3) ON CONFLICT (user_id, course_edition_id)
+      DO UPDATE SET option_id = EXCLUDED.option_id, updated_at = NOW()
+      RETURNING option_id AS "selectedOptionId", updated_at AS "selectedAt"`, [req.user.userId, editionId, req.body.optionId]);
+    return rows[0];
+  });
+});
+
+app.get('/api/admin/specializations/:editionId', requireAdmin, async (req, res) => {
+  if (!ensurePool(res)) return;
+  if (!specialistUuid.test(req.params.editionId)) return res.status(400).json({ error: 'Edizione non valida.' });
+  try {
+    const id = req.params.editionId;
+    const { rows: editions } = await pool.query(`SELECT ce.id, COALESCE(s.is_open, FALSE) AS "isOpen",
+      COALESCE(s.allow_changes, TRUE) AS "allowChanges" FROM course_editions ce
+      LEFT JOIN specialist_settings s ON s.course_edition_id = ce.id WHERE ce.id = $1`, [id]);
+    if (!editions.length) return res.status(404).json({ error: 'Edizione non trovata.' });
+    const { rows: options } = await pool.query(`SELECT ${specialistOptionFields} FROM specialist_options WHERE course_edition_id = $1 ORDER BY sort_order, title, id`, [id]);
+    const { rows: students } = await pool.query(`SELECT u.first_name AS "firstName", u.last_name AS "lastName", u.email,
+      e.status AS "enrollmentStatus", ch.option_id AS "selectedOptionId", o.title AS "selectedTitle", ch.updated_at AS "selectedAt"
+      FROM enrollments e JOIN users u ON u.id = e.user_id
+      LEFT JOIN specialist_choices ch ON ch.user_id = e.user_id AND ch.course_edition_id = e.course_edition_id
+      LEFT JOIN specialist_options o ON o.id = ch.option_id
+      WHERE e.course_edition_id = $1 AND u.role = 'student'
+      ORDER BY u.last_name, u.first_name, u.email`, [id]);
+    res.json({ ...editions[0], options, students });
+  } catch (error) {
+    console.error('Error reading specialist configuration:', error);
+    res.status(500).json({ error: 'Impossibile caricare la configurazione.' });
+  }
+});
+
+app.put('/api/admin/specializations/:editionId/settings', requireAdmin, async (req, res) => {
+  const { isOpen, allowChanges } = req.body || {};
+  if (typeof isOpen !== 'boolean' || typeof allowChanges !== 'boolean') return res.status(400).json({ error: 'Impostazioni non valide.' });
+  await specialistMutation(req, res, async (client) => {
+    await client.query(`INSERT INTO specialist_settings (course_edition_id, is_open, allow_changes) VALUES ($1, $2, $3)
+      ON CONFLICT (course_edition_id) DO UPDATE SET is_open = EXCLUDED.is_open, allow_changes = EXCLUDED.allow_changes`, [req.params.editionId, isOpen, allowChanges]);
+    return { isOpen, allowChanges };
+  });
+});
+
+async function saveSpecialistOption(req, res) {
+  const { title, description = '', isActive = true, sortOrder = 0 } = req.body || {};
+  if (typeof title !== 'string' || !title.trim() || title.trim().length > 200 ||
+      typeof description !== 'string' || description.length > 10000 || typeof isActive !== 'boolean' ||
+      !Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 100000 ||
+      (req.params.optionId && !specialistUuid.test(req.params.optionId))) {
+    return res.status(400).json({ error: 'Controlla titolo, descrizione, disponibilità e ordine del modulo.' });
+  }
+  await specialistMutation(req, res, async (client) => {
+    const values = [req.params.editionId, title.trim(), description.trim(), isActive, sortOrder];
+    const { rows } = req.params.optionId
+      ? await client.query(`UPDATE specialist_options SET title = $2, description = $3, is_active = $4, sort_order = $5
+          WHERE course_edition_id = $1 AND id = $6 RETURNING ${specialistOptionFields}`, [...values, req.params.optionId])
+      : await client.query(`INSERT INTO specialist_options (course_edition_id, title, description, is_active, sort_order)
+          VALUES ($1, $2, $3, $4, $5) RETURNING ${specialistOptionFields}`, values);
+    if (!rows.length) throw specialistError(404, 'Modulo non trovato in questa edizione.');
+    return rows[0];
+  });
+}
+app.post('/api/admin/specializations/:editionId/options', requireAdmin, saveSpecialistOption);
+app.put('/api/admin/specializations/:editionId/options/:optionId', requireAdmin, saveSpecialistOption);
+
 // --- COURSE EDITIONS ---
 
 app.get('/api/lms/course-editions', async (req, res) => {
@@ -10117,6 +10263,8 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
         return false;
       });
 
+      const seenMaterialIds = new Set();
+      const seenMaterialUrls = new Set();
       const mergedPublicMaterials = [
         ...publicMaterials,
         ...publishedResources.map((resource) => ({
@@ -10130,7 +10278,17 @@ app.get('/api/lms/lessons/:id', async (req, res) => {
           reviewStatus: resource.reviewStatus,
           source: 'calendar_lesson'
         }))
-      ];
+      ].filter((material) => {
+        const id = material.resourceId || material.id;
+        const resourceId = id ? String(id) : '';
+        const url = normalizeMaterialUrl(material.url);
+        const duplicate = (resourceId && seenMaterialIds.has(resourceId)) || (url && seenMaterialUrls.has(url));
+        // Keep the first representation and remember all aliases, including
+        // those on duplicates, so later entries cannot reintroduce the file.
+        if (resourceId) seenMaterialIds.add(resourceId);
+        if (url) seenMaterialUrls.add(url);
+        return !duplicate;
+      });
 
       lesson.publicMaterials = mergedPublicMaterials;
       lesson.materials = mergedPublicMaterials;
